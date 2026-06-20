@@ -1,12 +1,34 @@
 -- ============================================================================
 -- Lead Caller CRM — normalized schema (v2)
 -- Replaces the legacy JSONB-blob tables (leads, call_log, misc_data) with real
--- per-row tables. Legacy tables are left untouched by this migration; run
--- scripts/migrate-legacy-data.ts afterwards to backfill from them, then drop
--- them once verified (see migration 0099_drop_legacy_tables.sql).
+-- per-row tables. The legacy "leads" and "call_log" tables collide on name
+-- with the new ones below, so they're renamed to legacy_leads/legacy_call_log
+-- first; misc_data has no v2 equivalent and is left as-is. Run
+-- scripts/migrate-legacy-data.ts afterwards to backfill from the renamed
+-- legacy tables, then drop them once verified.
 -- ============================================================================
 
 create extension if not exists "pgcrypto";
+
+-- Detect the legacy blob-shaped tables by their "data" column (only the old
+-- schema has it) and move them aside so the v2 tables below can claim the
+-- names. Safe to re-run: once renamed, this no longer matches.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'leads' and column_name = 'data'
+  ) then
+    alter table public.leads rename to legacy_leads;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'call_log' and column_name = 'data'
+  ) then
+    alter table public.call_log rename to legacy_call_log;
+  end if;
+end $$;
 
 -- ── profiles ────────────────────────────────────────────────────────────────
 create table if not exists public.profiles (

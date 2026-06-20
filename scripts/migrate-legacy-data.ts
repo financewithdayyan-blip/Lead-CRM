@@ -82,10 +82,10 @@ const STATUS_SET = new Set([
 async function main() {
   const legacyTags = loadLegacyTagsExport();
 
-  const { data: legacyLeadRows, error: leadsErr } = await db.from('leads').select('user_id, data');
+  const { data: legacyLeadRows, error: leadsErr } = await db.from('legacy_leads').select('user_id, data');
   if (leadsErr) throw leadsErr;
 
-  const { data: legacyCallRows, error: callsErr } = await db.from('call_log').select('user_id, data');
+  const { data: legacyCallRows, error: callsErr } = await db.from('legacy_call_log').select('user_id, data');
   if (callsErr) throw callsErr;
 
   const { data: miscRows, error: miscErr } = await db.from('misc_data').select('user_id, key, data');
