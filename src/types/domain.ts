@@ -18,7 +18,7 @@ export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string }>
   followup: { label: 'Initial Contact', color: '#a78bfa' },
   followup2: { label: 'Follow-Up', color: '#c084fc' },
   followup3: { label: 'Follow-Up (3rd)', color: '#e879f9' },
-  negotiating: { label: 'Negotiating', color: '#fb923c' },
+  negotiating: { label: 'Negotiation', color: '#fb923c' },
   contract: { label: 'Contract', color: '#10b981' },
   dead: { label: 'Dead', color: '#ef4444' },
   declined: { label: 'Declined', color: '#fb923c' },
