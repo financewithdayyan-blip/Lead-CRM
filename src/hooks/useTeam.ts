@@ -38,7 +38,7 @@ export function useFindProfileByCode() {
         .ilike('user_code', code.trim())
         .maybeSingle();
       if (error) throw error;
-      return data as { id: string; user_code: string; caller_name: string | null; email: string } | null;
+      return data as { id: string; user_code: string; full_name: string | null; email: string } | null;
     },
   });
 }

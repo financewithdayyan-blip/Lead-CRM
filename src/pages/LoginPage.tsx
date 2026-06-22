@@ -45,10 +45,10 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue to-[#00b89f] font-display text-xl font-bold text-bg">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-xl font-bold text-white">
             LC
           </div>
-          <h1 className="font-display text-xl font-semibold text-text">Lead Caller CRM</h1>
+          <h1 className="text-xl font-semibold text-text">Lead CRM</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4">
@@ -70,8 +70,8 @@ export function LoginPage() {
             </div>
           )}
 
-          {error && <div className="rounded-md bg-red-dim px-3 py-2 text-[13px] text-red">{error}</div>}
-          {message && <div className="rounded-md bg-green-dim px-3 py-2 text-[13px] text-green">{message}</div>}
+          {error && <div className="rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
+          {message && <div className="rounded-md bg-success-dim px-3 py-2 text-[13px] text-success">{message}</div>}
 
           <button type="submit" disabled={busy} className="btn btn-primary w-full">
             {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset email'}

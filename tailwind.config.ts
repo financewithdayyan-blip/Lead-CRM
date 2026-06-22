@@ -2,29 +2,29 @@ import type { Config } from 'tailwindcss';
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        bg: '#0c0e14',
-        surface: { DEFAULT: '#13161f', 2: '#191d29', 3: '#1f2433', 4: '#252b3b' },
-        border: { DEFAULT: '#232838', 2: '#2a3042', 3: '#343c52' },
-        text: { DEFAULT: '#eef0f5', 2: '#a6acc1', 3: '#6b7184' },
-        blue: { DEFAULT: '#00cfb4', dim: 'rgba(0,207,180,0.12)', bright: '#2ddfc8' },
-        green: { DEFAULT: '#22c97b', dim: 'rgba(34,201,123,0.11)' },
-        red: { DEFAULT: '#f05252', dim: 'rgba(240,82,82,0.11)' },
-        purple: { DEFAULT: '#b08afa', dim: 'rgba(176,138,250,0.12)' },
-        orange: { DEFAULT: '#ff8c4b', dim: 'rgba(255,140,75,0.12)' },
-        amber: { DEFAULT: '#f5a524', dim: 'rgba(245,165,36,0.12)' },
+        bg: '#f8fafc',
+        surface: { DEFAULT: '#ffffff', 2: '#f8fafc', 3: '#f1f5f9' },
+        border: { DEFAULT: '#e2e8f0', 2: '#cbd5e1' },
+        text: { DEFAULT: '#0f172a', 2: '#475569', 3: '#94a3b8' },
+        primary: { DEFAULT: '#4f46e5', dim: '#eef2ff', hover: '#4338ca', text: '#4338ca' },
+        success: { DEFAULT: '#10b981', dim: '#ecfdf5' },
+        warning: { DEFAULT: '#f59e0b', dim: '#fffbeb' },
+        danger: { DEFAULT: '#ef4444', dim: '#fef2f2' },
+        sidebar: { DEFAULT: '#0f172a', 2: '#1e293b', border: '#1e293b', text: '#94a3b8', textActive: '#ffffff' },
       },
       fontFamily: {
-        sans: ['Outfit', 'sans-serif'],
-        display: ['Syne', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['Inter', 'sans-serif'],
       },
       borderRadius: {
-        lg: '14px',
-        md: '10px',
+        lg: '12px',
+        md: '8px',
+      },
+      boxShadow: {
+        card: '0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.06)',
+        popover: '0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.05)',
       },
     },
   },

@@ -1,22 +1,22 @@
 import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { useDeleteLeads } from '@/hooks/useLeads';
-import { STATUS_CONFIG, type Lead, type LeadStatus, type Tag } from '@/types/domain';
+import { STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
 export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags: Tag[]; onClose: () => void }) {
   const deleteLeads = useDeleteLeads();
   const [mode, setMode] = useState<'all' | 'filter'>('all');
-  const [statuses, setStatuses] = useState<Set<LeadStatus>>(new Set());
+  const [stages, setStages] = useState<Set<LeadStage>>(new Set());
   const [tagIds, setTagIds] = useState<Set<string>>(new Set());
   const [confirmText, setConfirmText] = useState('');
 
   const targets = useMemo(() => {
     if (mode === 'all') return leads;
-    return leads.filter((l) => (statuses.size > 0 && statuses.has(l.status)) || (tagIds.size > 0 && l.tagIds.some((t) => tagIds.has(t))));
-  }, [leads, mode, statuses, tagIds]);
+    return leads.filter((l) => (stages.size > 0 && stages.has(l.stage)) || (tagIds.size > 0 && l.tagIds.some((t) => tagIds.has(t))));
+  }, [leads, mode, stages, tagIds]);
 
-  function toggleStatus(s: LeadStatus) {
-    setStatuses((prev) => {
+  function toggleStage(s: LeadStage) {
+    setStages((prev) => {
       const next = new Set(prev);
       next.has(s) ? next.delete(s) : next.add(s);
       return next;
@@ -42,10 +42,10 @@ export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags
     <Modal open onClose={onClose} title="Delete Leads">
       <div className="space-y-4">
         <div className="flex gap-2">
-          <button onClick={() => setMode('all')} className={`btn ${mode === 'all' ? '!border-red !text-red' : ''}`}>
+          <button onClick={() => setMode('all')} className={`btn ${mode === 'all' ? '!border-danger !text-danger' : ''}`}>
             All leads
           </button>
-          <button onClick={() => setMode('filter')} className={`btn ${mode === 'filter' ? '!border-red !text-red' : ''}`}>
+          <button onClick={() => setMode('filter')} className={`btn ${mode === 'filter' ? '!border-danger !text-danger' : ''}`}>
             By filter
           </button>
         </div>
@@ -53,16 +53,16 @@ export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags
         {mode === 'filter' && (
           <div className="space-y-3">
             <div>
-              <div className="label">By status</div>
+              <div className="label">By stage</div>
               <div className="flex flex-wrap gap-1.5">
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-                  const count = leads.filter((l) => l.status === key).length;
+                {Object.entries(STAGE_CONFIG).map(([key, cfg]) => {
+                  const count = leads.filter((l) => l.stage === key).length;
                   if (!count) return null;
                   return (
                     <button
                       key={key}
-                      onClick={() => toggleStatus(key as LeadStatus)}
-                      className={`btn !px-2 !py-1 text-[12px] ${statuses.has(key as LeadStatus) ? '!border-red !text-red' : ''}`}
+                      onClick={() => toggleStage(key as LeadStage)}
+                      className={`btn !px-2 !py-1 text-[12px] ${stages.has(key as LeadStage) ? '!border-danger !text-danger' : ''}`}
                     >
                       {cfg.label} <span className="opacity-60">{count}</span>
                     </button>
@@ -80,7 +80,7 @@ export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags
                       <button
                         key={t.id}
                         onClick={() => toggleTag(t.id)}
-                        className={`btn !px-2 !py-1 text-[12px] ${tagIds.has(t.id) ? '!border-red !text-red' : ''}`}
+                        className={`btn !px-2 !py-1 text-[12px] ${tagIds.has(t.id) ? '!border-danger !text-danger' : ''}`}
                       >
                         {t.name} <span className="opacity-60">{count}</span>
                       </button>
@@ -92,8 +92,8 @@ export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags
           </div>
         )}
 
-        <div className="rounded-md bg-red-dim px-3 py-2 text-[13px] text-red">
-          This will permanently delete <strong>{targets.length}</strong> lead{targets.length !== 1 ? 's' : ''} and all associated call history, comps, and photos.
+        <div className="rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">
+          This will permanently delete <strong>{targets.length}</strong> lead{targets.length !== 1 ? 's' : ''} and all associated activity, comps, and files.
         </div>
 
         <div>

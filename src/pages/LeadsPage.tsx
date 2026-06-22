@@ -1,29 +1,26 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Upload } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
-import { useCallLog } from '@/hooks/useCallLog';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { ScoreBadge } from '@/components/ui/ScoreBadge';
+import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { AddLeadModal } from '@/components/leads/AddLeadModal';
 import { ImportCsvModal } from '@/components/leads/ImportCsvModal';
-import { LeadDetailModal } from '@/components/leads/LeadDetailModal';
 import { DeleteLeadsModal } from '@/components/leads/DeleteLeadsModal';
-import { STATUS_CONFIG, type LeadStatus } from '@/types/domain';
+import { STAGE_CONFIG, type LeadStage } from '@/types/domain';
 import { formatPhone } from '@/lib/utils';
 
 export function LeadsPage() {
+  const navigate = useNavigate();
   const { data: leads = [], isLoading } = useLeads();
   const { data: tags = [] } = useTags();
-  const { data: callLog = [] } = useCallLog();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('');
+  const [stageFilter, setStageFilter] = useState<LeadStage | ''>('');
   const [tagFilter, setTagFilter] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -31,7 +28,7 @@ export function LeadsPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return leads.filter((l) => {
-      if (statusFilter && l.status !== statusFilter) return false;
+      if (stageFilter && l.stage !== stageFilter) return false;
       if (tagFilter && !l.tagIds.includes(tagFilter)) return false;
       if (q) {
         const haystack = `${l.firstName} ${l.lastName} ${l.phone} ${l.address ?? ''}`.toLowerCase();
@@ -39,7 +36,7 @@ export function LeadsPage() {
       }
       return true;
     });
-  }, [leads, search, statusFilter, tagFilter]);
+  }, [leads, search, stageFilter, tagFilter]);
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -56,7 +53,7 @@ export function LeadsPage() {
     <div>
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-text">Leads</h1>
+          <h1 className="text-2xl font-semibold text-text">Leads</h1>
           <p className="text-sm text-text-3">{leads.length} total</p>
         </div>
         <div className="flex gap-2">
@@ -71,9 +68,9 @@ export function LeadsPage() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <input className="input max-w-xs" placeholder="Search name, phone, address…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <select className="input max-w-[180px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as LeadStatus | '')}>
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+        <select className="input max-w-[180px]" value={stageFilter} onChange={(e) => setStageFilter(e.target.value as LeadStage | '')}>
+          <option value="">All stages</option>
+          {Object.entries(STAGE_CONFIG).map(([k, v]) => (
             <option key={k} value={k}>
               {v.label}
             </option>
@@ -110,29 +107,28 @@ export function LeadsPage() {
               <th className="px-3 py-2.5">Name</th>
               <th className="px-3 py-2.5">Phone</th>
               <th className="px-3 py-2.5">Address</th>
-              <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5">Stage</th>
               <th className="px-3 py-2.5">Rating</th>
-              <th className="px-3 py-2.5">Score</th>
               <th className="px-3 py-2.5">Tags</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={8} className="px-3 py-8 text-center text-text-3">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={8} className="px-3 py-8 text-center text-text-3">
                   No leads match your filters.
                 </td>
               </tr>
             )}
             {filtered.map((lead) => (
-              <tr key={lead.id} className="cursor-pointer border-b border-border hover:bg-surface-3" onClick={() => setOpenLeadId(lead.id)}>
+              <tr key={lead.id} className="cursor-pointer border-b border-border hover:bg-surface-3" onClick={() => navigate(`/leads/${lead.id}`)}>
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
                 </td>
@@ -143,13 +139,10 @@ export function LeadsPage() {
                 <td className="px-3 py-2.5 text-text-2">{formatPhone(lead.phone)}</td>
                 <td className="max-w-[220px] truncate px-3 py-2.5 text-text-2">{lead.address}</td>
                 <td className="px-3 py-2.5">
-                  <StatusBadge status={lead.status} />
+                  <StageBadge stage={lead.stage} />
                 </td>
                 <td className="px-3 py-2.5">
                   <StarRating value={lead.rating} size={13} />
-                </td>
-                <td className="px-3 py-2.5">
-                  <ScoreBadge lead={lead} callLog={callLog} compact />
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
@@ -168,7 +161,6 @@ export function LeadsPage() {
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
       {showImport && <ImportCsvModal onClose={() => setShowImport(false)} />}
       {showDelete && <DeleteLeadsModal leads={leads} tags={tags} onClose={() => setShowDelete(false)} />}
-      {openLeadId && <LeadDetailModal leadId={openLeadId} onClose={() => setOpenLeadId(null)} />}
     </div>
   );
 }

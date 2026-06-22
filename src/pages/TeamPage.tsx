@@ -3,7 +3,7 @@ import { Shield, UserPlus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers, useFindProfileByCode, useAddTeamMember, useRemoveTeamMember, useUpdateMemberRole } from '@/hooks/useTeam';
 import { useLeads } from '@/hooks/useLeads';
-import { useCallLog } from '@/hooks/useCallLog';
+import { useActivityFeed } from '@/hooks/useActivities';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Role } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
@@ -12,37 +12,38 @@ const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', manager: 'Manager', 
 
 function MemberStats({ memberId }: { memberId: string }) {
   const { data: leads = [], isLoading: leadsLoading } = useLeads(memberId);
-  const { data: callLog = [], isLoading: logLoading } = useCallLog(memberId);
+  const { data: activities = [], isLoading: activityLoading } = useActivityFeed(memberId);
 
-  if (leadsLoading || logLoading) {
+  if (leadsLoading || activityLoading) {
     return <div className="mt-3 text-[12px] text-text-3">Loading their data…</div>;
   }
 
+  const calls = activities.filter((a) => a.type === 'call');
   const today = localIsoDate(new Date());
-  const callsToday = callLog.filter((c) => c.createdAt.slice(0, 10) === today).length;
-  const contracts = leads.filter((l) => l.status === 'contract').length;
-  const followups = leads.filter((l) => ['followup', 'followup2', 'followup3'].includes(l.status)).length;
+  const callsToday = calls.filter((c) => localIsoDate(new Date(c.createdAt)) === today).length;
+  const contracts = leads.filter((l) => l.stage === 'contract').length;
+  const followups = leads.filter((l) => ['initial_contact', 'followup', 'negotiation'].includes(l.stage)).length;
 
   return (
     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">
-        <div className="font-mono text-lg font-bold text-blue-bright">{leads.length}</div>
+        <div className="font-mono text-lg font-bold text-primary">{leads.length}</div>
         <div className="text-[10px] uppercase tracking-wide text-text-3">Leads</div>
       </div>
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">
-        <div className="font-mono text-lg font-bold text-text">{callLog.length}</div>
+        <div className="font-mono text-lg font-bold text-text">{calls.length}</div>
         <div className="text-[10px] uppercase tracking-wide text-text-3">Total Calls</div>
       </div>
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">
-        <div className="font-mono text-lg font-bold text-amber">{callsToday}</div>
+        <div className="font-mono text-lg font-bold text-warning">{callsToday}</div>
         <div className="text-[10px] uppercase tracking-wide text-text-3">Calls Today</div>
       </div>
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">
-        <div className="font-mono text-lg font-bold text-purple">{followups}</div>
+        <div className="font-mono text-lg font-bold text-[#a78bfa]">{followups}</div>
         <div className="text-[10px] uppercase tracking-wide text-text-3">Follow-Ups</div>
       </div>
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">
-        <div className="font-mono text-lg font-bold text-green">{contracts}</div>
+        <div className="font-mono text-lg font-bold text-success">{contracts}</div>
         <div className="text-[10px] uppercase tracking-wide text-text-3">Contracts</div>
       </div>
     </div>
@@ -60,7 +61,7 @@ export function TeamPage() {
 
   const [code, setCode] = useState('');
   const [lookupError, setLookupError] = useState('');
-  const [found, setFound] = useState<{ id: string; user_code: string; caller_name: string | null; email: string } | null>(null);
+  const [found, setFound] = useState<{ id: string; user_code: string; full_name: string | null; email: string } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -98,16 +99,16 @@ export function TeamPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="font-display text-2xl font-semibold text-text">Team</h1>
-        <p className="text-sm text-text-3">Manage who reports to you and review their calling activity.</p>
+        <h1 className="text-2xl font-semibold text-text">Team</h1>
+        <p className="text-sm text-text-3">Manage who reports to you and review their activity.</p>
       </div>
 
       <div className="card mb-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-text">
-          <Shield size={15} className="text-blue-bright" /> Your role
+          <Shield size={15} className="text-primary" /> Your role
         </div>
         <div className="mt-2 flex items-center gap-3">
-          <span className="rounded-full bg-blue-dim px-2.5 py-1 text-[12px] font-semibold text-blue-bright">{ROLE_LABELS[profile?.role ?? 'rep']}</span>
+          <span className="rounded-full bg-primary-dim px-2.5 py-1 text-[12px] font-semibold text-primary-text">{ROLE_LABELS[profile?.role ?? 'rep']}</span>
           <span className="font-mono text-[12px] text-text-3">Your code: {profile?.userCode}</span>
         </div>
         <p className="mt-2 text-[12px] text-text-3">Share your code with reps, or ask the person you want to oversee for theirs.</p>
@@ -115,7 +116,7 @@ export function TeamPage() {
 
       <div className="card mb-4">
         <div className="text-sm font-semibold text-text">Add team member</div>
-        <p className="mt-1 text-[13px] text-text-2">Look up a user by their account code and add them to your team to view their calling activity.</p>
+        <p className="mt-1 text-[13px] text-text-2">Look up a user by their account code and add them to your team to view their activity.</p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div>
             <label className="label">User code</label>
@@ -136,12 +137,12 @@ export function TeamPage() {
           </button>
         </div>
 
-        {lookupError && <div className="mt-2 text-[12px] text-red">{lookupError}</div>}
+        {lookupError && <div className="mt-2 text-[12px] text-danger">{lookupError}</div>}
 
         {found && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
             <div>
-              <div className="text-[13px] font-medium text-text">{found.caller_name || found.email}</div>
+              <div className="text-[13px] font-medium text-text">{found.full_name || found.email}</div>
               <div className="text-[11px] text-text-3">{found.email}</div>
             </div>
             <button className="btn btn-primary" onClick={handleAdd}>
@@ -160,7 +161,7 @@ export function TeamPage() {
             <div key={m.id} className="rounded-md border border-border-2 bg-surface-3 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[13px] font-medium text-text">{m.member.callerName || m.member.email}</div>
+                  <div className="text-[13px] font-medium text-text">{m.member.fullName || m.member.email}</div>
                   <div className="text-[11px] text-text-3">{m.member.email} · code {m.member.userCode}</div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -175,7 +176,7 @@ export function TeamPage() {
                       <option value="admin">Admin</option>
                     </select>
                   ) : (
-                    <span className="rounded-full bg-surface-4 px-2 py-0.5 text-[11px] text-text-2">{ROLE_LABELS[m.member.role]}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-text-2">{ROLE_LABELS[m.member.role]}</span>
                   )}
                   <button
                     className="btn !px-2 !py-1"
@@ -184,7 +185,7 @@ export function TeamPage() {
                   >
                     {expanded === m.memberId ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>
-                  <button className="btn !px-2 !py-1 text-red hover:border-red" onClick={() => setRemoveTarget(m.id)} title="Remove from team">
+                  <button className="btn !px-2 !py-1 text-danger hover:border-danger" onClick={() => setRemoveTarget(m.id)} title="Remove from team">
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -198,7 +199,7 @@ export function TeamPage() {
       <ConfirmDialog
         open={!!removeTarget}
         title="Remove team member"
-        message="Remove this person from your team? You'll no longer be able to view their calling activity."
+        message="Remove this person from your team? You'll no longer be able to view their activity."
         confirmLabel="Remove"
         danger
         onCancel={() => setRemoveTarget(null)}

@@ -17,7 +17,7 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
   const [parsed, setParsed] = useState<CsvParseResult | null>(null);
   const [mapping, setMapping] = useState<Record<string, number | null>>({});
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [batch, setBatch] = useState('');
+  const [batchSource, setBatchSource] = useState('');
   const [batchState, setBatchState] = useState('');
   const [newTagName, setNewTagName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,10 +39,8 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
   const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, existingLeads);
 
   async function handleImport() {
-    const offset = existingLeads.length;
     await bulkCreate.mutateAsync(
-      unique.map((m, i) => ({
-        leadNum: offset + i + 1,
+      unique.map((m) => ({
         firstName: m.firstName,
         lastName: m.lastName,
         phone: m.phone,
@@ -54,10 +52,9 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
         sqft: m.sqft ? Number(m.sqft) : null,
         lotSize: m.lotSize || null,
         propType: m.propType || null,
-        extra: m.extra || null,
-        batch: batch || null,
+        source: m.source || batchSource || null,
         state: batchState || null,
-        status: 'new' as const,
+        stage: 'new' as const,
         rating: 0,
         tagIds: selectedTagIds,
       })),
@@ -77,7 +74,7 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
     <Modal open onClose={onClose} title="Import Leads from CSV" width="lg">
       {step === 'upload' && (
         <div>
-          <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border-2 text-text-3 hover:border-blue hover:text-blue">
+          <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border-2 text-text-3 hover:border-primary hover:text-primary">
             <Upload size={24} />
             <span className="text-sm">Click to choose a CSV file</span>
             <input
@@ -88,7 +85,7 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
           </label>
-          {error && <div className="mt-3 rounded-md bg-red-dim px-3 py-2 text-[13px] text-red">{error}</div>}
+          {error && <div className="mt-3 rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
         </div>
       )}
 
@@ -99,7 +96,7 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
             {CSV_FIELD_GUESSES.map((field) => (
               <div key={field.key}>
                 <label className="label">
-                  {field.label} {!field.optional && <span className="text-red">*</span>}
+                  {field.label} {!field.optional && <span className="text-danger">*</span>}
                 </label>
                 <select
                   className="input"
@@ -134,8 +131,8 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Batch name</label>
-              <input className="input" value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="e.g. March cold list" />
+              <label className="label">Source (applies to whole import)</label>
+              <input className="input" value={batchSource} onChange={(e) => setBatchSource(e.target.value)} placeholder="e.g. March cold list" />
             </div>
             <div>
               <label className="label">State</label>
@@ -170,7 +167,7 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
             <div className="text-text">
               {unique.length} new lead{unique.length !== 1 ? 's' : ''} will be imported.
             </div>
-            {duplicateCount > 0 && <div className="mt-1 text-amber">{duplicateCount} duplicate(s) skipped (matched by phone number).</div>}
+            {duplicateCount > 0 && <div className="mt-1 text-warning">{duplicateCount} duplicate(s) skipped (matched by phone number).</div>}
           </div>
 
           <div className="flex justify-end gap-2">

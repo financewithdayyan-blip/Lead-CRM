@@ -12,7 +12,7 @@ export function StarRating({ value, onChange, size = 16 }: { value: number; onCh
           onClick={() => onChange?.(n === value ? 0 : n)}
           className={cn('transition-colors', onChange && 'cursor-pointer hover:scale-110')}
         >
-          <Star size={size} className={n <= value ? 'fill-amber text-amber' : 'text-border-3'} />
+          <Star size={size} className={n <= value ? 'fill-warning text-warning' : 'text-border-2'} />
         </button>
       ))}
     </div>

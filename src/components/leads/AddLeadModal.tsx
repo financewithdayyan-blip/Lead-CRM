@@ -12,7 +12,9 @@ export function AddLeadModal({ onClose }: { onClose: () => void }) {
     phone2: '',
     email: '',
     address: '',
+    city: '',
     state: '',
+    source: '',
     beds: '',
     baths: '',
     sqft: '',
@@ -31,11 +33,13 @@ export function AddLeadModal({ onClose }: { onClose: () => void }) {
       phone2: form.phone2 ? formatPhone(form.phone2) : null,
       email: form.email || null,
       address: form.address || '—',
+      city: form.city || null,
       state: form.state || null,
+      source: form.source || null,
       beds: form.beds ? Number(form.beds) : null,
       baths: form.baths ? Number(form.baths) : null,
       sqft: form.sqft ? Number(form.sqft) : null,
-      status: 'new',
+      stage: 'new',
       rating: 0,
     });
     onClose();
@@ -66,12 +70,20 @@ export function AddLeadModal({ onClose }: { onClose: () => void }) {
             <input className="input" required value={form.address} onChange={(e) => set('address', e.target.value)} />
           </div>
           <div>
-            <label className="label">Email</label>
-            <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+            <label className="label">City</label>
+            <input className="input" value={form.city} onChange={(e) => set('city', e.target.value)} />
           </div>
           <div>
             <label className="label">State</label>
             <input className="input" value={form.state} onChange={(e) => set('state', e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Email</label>
+            <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Source</label>
+            <input className="input" placeholder="e.g. Cold Call" value={form.source} onChange={(e) => set('source', e.target.value)} />
           </div>
           <div>
             <label className="label">Beds</label>

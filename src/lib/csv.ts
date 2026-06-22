@@ -35,7 +35,7 @@ export const CSV_FIELD_GUESSES: Array<{ key: string; label: string; patterns: Re
   { key: 'sqft', label: 'Sqft', patterns: [/sqft|sq.?ft|square.?feet|living.?area|size/i], optional: true },
   { key: 'lotsize', label: 'Lot Size', patterns: [/lot.?size|lot.?sqft|lot|acreage|acres/i], optional: true },
   { key: 'proptype', label: 'Property Type', patterns: [/property.?type|prop.?type|type|category/i], optional: true },
-  { key: 'extra', label: 'Extra', patterns: [/extra|misc|other/i], optional: true },
+  { key: 'source', label: 'Source', patterns: [/source|lead.?source|campaign|list/i], optional: true },
 ];
 
 export function guessColumnMapping(headers: string[]): Record<string, number | null> {
@@ -63,7 +63,7 @@ export interface MappedCsvLead {
   sqft: string;
   lotSize: string;
   propType: string;
-  extra: string;
+  source: string;
 }
 
 export function mapRowsToLeads(rows: string[][], mapping: Record<string, number | null>): MappedCsvLead[] {
@@ -85,7 +85,7 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
         sqft: cellAt(r, mapping.sqft),
         lotSize: cellAt(r, mapping.lotsize),
         propType: cellAt(r, mapping.proptype),
-        extra: cellAt(r, mapping.extra),
+        source: cellAt(r, mapping.source),
       };
     });
 }

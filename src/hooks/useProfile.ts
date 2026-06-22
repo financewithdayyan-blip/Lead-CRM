@@ -5,9 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 export function useUpdateProfile() {
   const { session, refreshProfile } = useAuth();
   return useMutation({
-    mutationFn: async (updates: { callerName?: string; dailyGoal?: number; monthlyGoal?: number }) => {
+    mutationFn: async (updates: { fullName?: string; dailyGoal?: number; monthlyGoal?: number }) => {
       const payload: Record<string, unknown> = {};
-      if (updates.callerName !== undefined) payload.caller_name = updates.callerName;
+      if (updates.fullName !== undefined) payload.full_name = updates.fullName;
       if (updates.dailyGoal !== undefined) payload.daily_goal = updates.dailyGoal;
       if (updates.monthlyGoal !== undefined) payload.monthly_goal = updates.monthlyGoal;
       const { error } = await supabase.from('profiles').update(payload).eq('id', session!.user.id);
@@ -23,12 +23,10 @@ export function useEraseAllData() {
   return useMutation({
     mutationFn: async () => {
       const userId = session!.user.id;
+      // lead_tags/lead_comps/lead_files/lead_activities cascade-delete with their parent lead.
       await supabase.from('leads').delete().eq('user_id', userId);
-      await supabase.from('call_log').delete().eq('user_id', userId);
       await supabase.from('tags').delete().eq('user_id', userId);
       await supabase.from('tasks').delete().eq('user_id', userId);
-      await supabase.from('session_log').delete().eq('user_id', userId);
-      await supabase.from('daily_stats').delete().eq('user_id', userId);
     },
     onSuccess: () => qc.invalidateQueries(),
   });

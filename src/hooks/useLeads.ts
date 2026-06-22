@@ -4,7 +4,7 @@ import { dbToLead, leadToDbInsert, leadToDbUpdate } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Lead } from '@/types/domain';
 
-const LEAD_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_photos(*)';
+const LEAD_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 export function useLeads(targetUserId?: string) {
   const { session } = useAuth();
@@ -86,6 +86,7 @@ export function useUpdateLead() {
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['lead', id] });
+      qc.invalidateQueries({ queryKey: ['activities', id] });
     },
   });
 }

@@ -6,9 +6,8 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { LeadsPage } from '@/pages/LeadsPage';
+import { LeadProfilePage } from '@/pages/LeadProfilePage';
 import { KanbanPage } from '@/pages/KanbanPage';
-import { HistoryPage } from '@/pages/HistoryPage';
-import { ScriptPage } from '@/pages/ScriptPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TeamPage } from '@/pages/TeamPage';
 
@@ -27,9 +26,8 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/leads" element={<LeadsPage />} />
+                <Route path="/leads/:id" element={<LeadProfilePage />} />
                 <Route path="/kanban" element={<KanbanPage />} />
-                <Route path="/history" element={<HistoryPage />} />
-                <Route path="/script" element={<ScriptPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route element={<ProtectedRoute requireOverseer />}>
                   <Route path="/team" element={<TeamPage />} />

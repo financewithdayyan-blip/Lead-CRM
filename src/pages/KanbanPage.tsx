@@ -1,41 +1,29 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { Phone, Pencil, Trash2 } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
+import { useAddActivity } from '@/hooks/useActivities';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { LeadDetailModal } from '@/components/leads/LeadDetailModal';
-import { SessionMode } from '@/components/session/SessionMode';
 import { TagPill } from '@/components/ui/TagPill';
 import { formatPhone } from '@/lib/utils';
-import type { Lead, LeadStatus } from '@/types/domain';
+import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage } from '@/types/domain';
 
-const KB_COLUMNS: Array<{ key: string; label: string; color: string; statuses: LeadStatus[]; clearable?: boolean }> = [
-  { key: 'new', label: 'Cold Leads', color: '#2ddfc8', statuses: ['new'], clearable: true },
-  { key: 'voicemail', label: 'Voicemail', color: '#f5a524', statuses: ['voicemail'], clearable: true },
-  { key: 'followup', label: 'Initial Contact', color: '#b08afa', statuses: ['followup'] },
-  { key: 'followups', label: 'Follow-Ups', color: '#c084fc', statuses: ['followup2', 'followup3'] },
-  { key: 'negotiating', label: 'Negotiating', color: '#fb923c', statuses: ['negotiating'] },
-  { key: 'contract', label: 'Contract', color: '#22c97b', statuses: ['contract'] },
-  { key: 'dead', label: 'Dead', color: '#f05252', statuses: ['dead'], clearable: true },
-  { key: 'declined', label: 'Declined', color: '#ff8c4b', statuses: ['declined'], clearable: true },
-  { key: 'onhold', label: 'On Hold', color: '#2dd4bf', statuses: ['onhold'] },
-];
-
-const DELETABLE_STATUSES: LeadStatus[] = ['new', 'voicemail', 'dead', 'declined'];
+const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
+const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 
 function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: () => void; onOpen: () => void; onDelete: () => void }) {
   const { data: tags = [] } = useTags();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
   const stars = lead.rating > 0 ? '★'.repeat(lead.rating) + '☆'.repeat(5 - lead.rating) : '';
-  const dateStr = lead.calledAt ? new Date(lead.calledAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-md border border-border-2 bg-surface-3 p-2.5 text-[12px] ${isDragging ? 'opacity-50' : ''}`}
+      className={`rounded-md border border-border-2 bg-surface p-2.5 text-[12px] shadow-card ${isDragging ? 'opacity-50' : ''}`}
       onDoubleClick={onOpen}
     >
       <div {...listeners} {...attributes} className="cursor-grab active:cursor-grabbing">
@@ -57,18 +45,15 @@ function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: ()
         )}
       </div>
       <div className="mt-1.5 flex items-center justify-between">
-        <div>
-          {stars && <div className="text-amber">{stars}</div>}
-          {dateStr && <div className="text-[10px] text-text-3">{dateStr}</div>}
-        </div>
+        <div>{stars && <div className="text-warning">{stars}</div>}</div>
         <div className="flex gap-1">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onCall();
             }}
-            className="rounded-md border border-border-2 bg-surface-4 p-1 text-blue-bright hover:border-blue"
-            title="Call"
+            className="rounded-md border border-border-2 bg-surface-3 p-1 text-primary hover:border-primary"
+            title="Log a call"
           >
             <Phone size={12} />
           </button>
@@ -77,18 +62,18 @@ function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: ()
               e.stopPropagation();
               onOpen();
             }}
-            className="rounded-md border border-border-2 bg-surface-4 p-1 text-text-2 hover:border-border-3"
+            className="rounded-md border border-border-2 bg-surface-3 p-1 text-text-2 hover:border-border-2"
             title="Edit"
           >
             <Pencil size={12} />
           </button>
-          {DELETABLE_STATUSES.includes(lead.status) && (
+          {DELETABLE_STAGES.includes(lead.stage) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
-              className="rounded-md border border-border-2 bg-surface-4 p-1 text-red hover:border-red"
+              className="rounded-md border border-border-2 bg-surface-3 p-1 text-danger hover:border-danger"
               title="Delete"
             >
               <Trash2 size={12} />
@@ -101,33 +86,34 @@ function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: ()
 }
 
 function KanbanColumn({
-  col,
+  stage,
   leads,
   onCall,
   onOpen,
   onDelete,
   onClear,
 }: {
-  col: (typeof KB_COLUMNS)[number];
+  stage: LeadStage;
   leads: Lead[];
   onCall: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onClear: () => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: col.key });
+  const cfg = STAGE_CONFIG[stage];
+  const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-md border bg-surface ${isOver ? 'border-blue' : 'border-border'}`}
-      style={{ borderTopWidth: 3, borderTopColor: col.color }}
+      className={`flex w-72 shrink-0 flex-col rounded-md border bg-surface-2 ${isOver ? 'border-primary' : 'border-border'}`}
+      style={{ borderTopWidth: 3, borderTopColor: cfg.color }}
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-        <span className="h-2 w-2 rounded-full" style={{ background: col.color }} />
-        <div className="flex-1 text-[13px] font-semibold text-text">{col.label}</div>
+        <span className="h-2 w-2 rounded-full" style={{ background: cfg.color }} />
+        <div className="flex-1 text-[13px] font-semibold text-text">{cfg.label}</div>
         <div className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-3">{leads.length}</div>
-        {col.clearable && leads.length > 0 && (
-          <button onClick={onClear} className="text-text-3 hover:text-red" title={`Delete all ${col.label}`}>
+        {CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
+          <button onClick={onClear} className="text-text-3 hover:text-danger" title={`Delete all ${cfg.label}`}>
             <Trash2 size={13} />
           </button>
         )}
@@ -143,17 +129,18 @@ function KanbanColumn({
 }
 
 export function KanbanPage() {
+  const navigate = useNavigate();
   const { data: leads = [] } = useLeads();
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
   const deleteLeads = useDeleteLeads();
+  const addActivity = useAddActivity();
 
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
-  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
-  const [sessionLeadId, setSessionLeadId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [clearTarget, setClearTarget] = useState<(typeof KB_COLUMNS)[number] | null>(null);
+  const [clearTarget, setClearTarget] = useState<LeadStage | null>(null);
+  const [calledId, setCalledId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -171,28 +158,30 @@ export function KanbanPage() {
     const { active, over } = e;
     if (!over) return;
     const lead = leads.find((l) => l.id === active.id);
-    const col = KB_COLUMNS.find((c) => c.key === over.id);
-    if (!lead || !col) return;
-    const newStatus = col.statuses[0];
-    if (lead.status === newStatus || col.statuses.includes(lead.status)) return;
-    updateLead.mutate({ id: lead.id, status: newStatus, calledAt: new Date().toISOString() });
+    const newStage = over.id as LeadStage;
+    if (!lead || lead.stage === newStage || !STAGE_ORDER.includes(newStage)) return;
+    updateLead.mutate({ id: lead.id, stage: newStage });
   }
 
-  function handleClear(col: (typeof KB_COLUMNS)[number]) {
-    const ids = leads.filter((l) => col.statuses.includes(l.status)).map((l) => l.id);
+  function handleClear(stage: LeadStage) {
+    const ids = leads.filter((l) => l.stage === stage).map((l) => l.id);
     if (ids.length) deleteLeads.mutate(ids);
     setClearTarget(null);
   }
 
-  const sessionLead = sessionLeadId ? leads.filter((l) => l.id === sessionLeadId) : [];
+  function handleCall(id: string) {
+    addActivity.mutate({ leadId: id, type: 'call', body: 'Quick call logged from Kanban board' });
+    setCalledId(id);
+    setTimeout(() => setCalledId((prev) => (prev === id ? null : prev)), 1200);
+  }
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-text">Kanban Board</h1>
+          <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
           <p className="text-sm text-text-3">
-            {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {KB_COLUMNS.length} columns
+            {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {STAGE_ORDER.length} stages
           </p>
         </div>
       </div>
@@ -207,26 +196,24 @@ export function KanbanPage() {
             </option>
           ))}
         </select>
+        {calledId && <span className="text-[12px] text-success">✓ Call logged</span>}
       </div>
 
       <DndContext onDragEnd={handleDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {KB_COLUMNS.map((col) => (
+          {STAGE_ORDER.map((stage) => (
             <KanbanColumn
-              key={col.key}
-              col={col}
-              leads={filtered.filter((l) => col.statuses.includes(l.status))}
-              onCall={setSessionLeadId}
-              onOpen={setOpenLeadId}
+              key={stage}
+              stage={stage}
+              leads={filtered.filter((l) => l.stage === stage)}
+              onCall={handleCall}
+              onOpen={(id) => navigate(`/leads/${id}`)}
               onDelete={setDeleteTarget}
-              onClear={() => setClearTarget(col)}
+              onClear={() => setClearTarget(stage)}
             />
           ))}
         </div>
       </DndContext>
-
-      {openLeadId && <LeadDetailModal leadId={openLeadId} onClose={() => setOpenLeadId(null)} />}
-      {sessionLeadId && sessionLead.length > 0 && <SessionMode leads={sessionLead} startLeadId={sessionLeadId} onClose={() => setSessionLeadId(null)} />}
 
       <ConfirmDialog
         open={!!deleteTarget}
@@ -242,8 +229,8 @@ export function KanbanPage() {
       />
       <ConfirmDialog
         open={!!clearTarget}
-        title={`Clear ${clearTarget?.label ?? ''}`}
-        message={`Permanently delete all leads in "${clearTarget?.label}"? This cannot be undone.`}
+        title={`Clear ${clearTarget ? STAGE_CONFIG[clearTarget].label : ''}`}
+        message={`Permanently delete all leads in "${clearTarget ? STAGE_CONFIG[clearTarget].label : ''}"? This cannot be undone.`}
         confirmLabel="Delete all"
         danger
         onCancel={() => setClearTarget(null)}

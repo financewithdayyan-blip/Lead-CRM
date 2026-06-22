@@ -1,7 +1,7 @@
-import { STATUS_CONFIG, type LeadStatus } from '@/types/domain';
+import { STAGE_CONFIG, type LeadStage } from '@/types/domain';
 
-export function StatusBadge({ status }: { status: LeadStatus }) {
-  const cfg = STATUS_CONFIG[status];
+export function StageBadge({ stage }: { stage: LeadStage }) {
+  const cfg = STAGE_CONFIG[stage];
   return (
     <span
       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold"

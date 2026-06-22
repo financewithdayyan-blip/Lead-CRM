@@ -9,9 +9,9 @@ body,
 }
 
 body {
-  background: #0c0e14;
-  color: #eef0f5;
-  font-family: 'Outfit', sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -27,28 +27,28 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a3042;
+  background: #cbd5e1;
   border-radius: 20px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #343c52;
+  background: #94a3b8;
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-4 hover:border-border-3 disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply bg-gradient-to-br from-blue to-[#00b89f] text-bg border-transparent hover:opacity-90 hover:bg-none hover:bg-blue;
+    @apply border-transparent bg-primary text-white hover:bg-primary-hover;
   }
   .btn-danger {
-    @apply bg-gradient-to-br from-red to-[#d43d3d] text-white border-transparent hover:opacity-90 hover:bg-none hover:bg-red;
+    @apply border-transparent bg-danger text-white hover:opacity-90;
   }
   .card {
-    @apply rounded-lg border border-border bg-surface p-5;
+    @apply rounded-lg border border-border bg-surface p-5 shadow-card;
   }
   .input {
-    @apply w-full rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[13px] text-text outline-none transition-colors focus:border-blue;
+    @apply w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-3 focus:border-primary focus:ring-1 focus:ring-primary/30;
   }
   .label {
     @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-text-3;

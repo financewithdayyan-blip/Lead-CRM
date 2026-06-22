@@ -32,11 +32,11 @@ export function SettingsPage() {
   const updateProfile = useUpdateProfile();
   const eraseAllData = useEraseAllData();
 
-  const [callerName, setCallerName] = useState(profile?.callerName ?? '');
-  const [callerNameSaved, setCallerNameSaved] = useState(false);
-  const [dailyGoal, setDailyGoal] = useState(String(profile?.dailyGoal ?? 150));
+  const [fullName, setFullName] = useState(profile?.fullName ?? '');
+  const [fullNameSaved, setFullNameSaved] = useState(false);
+  const [dailyGoal, setDailyGoal] = useState(String(profile?.dailyGoal ?? 20));
   const [dailyGoalSaved, setDailyGoalSaved] = useState(false);
-  const [monthlyGoal, setMonthlyGoal] = useState(String(profile?.monthlyGoal ?? 3000));
+  const [monthlyGoal, setMonthlyGoal] = useState(String(profile?.monthlyGoal ?? 400));
   const [monthlyGoalSaved, setMonthlyGoalSaved] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [tagDeleteTarget, setTagDeleteTarget] = useState<string | null>(null);
@@ -44,10 +44,10 @@ export function SettingsPage() {
   const [nukeText, setNukeText] = useState('');
   const [nukeDone, setNukeDone] = useState(false);
 
-  function saveCallerName() {
-    const name = callerName.trim();
+  function saveFullName() {
+    const name = fullName.trim();
     if (!name) return;
-    updateProfile.mutate({ callerName: name }, { onSuccess: () => flash(setCallerNameSaved) });
+    updateProfile.mutate({ fullName: name }, { onSuccess: () => flash(setFullNameSaved) });
   }
 
   function saveDailyGoal() {
@@ -95,41 +95,36 @@ export function SettingsPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="font-display text-2xl font-semibold text-text">Settings</h1>
-        <p className="text-sm text-text-3">Manage tags and calling preferences</p>
+        <h1 className="text-2xl font-semibold text-text">Settings</h1>
+        <p className="text-sm text-text-3">Manage your profile, goals, and tags</p>
       </div>
 
       <div className="space-y-4">
         <div className="card">
-          <div className="text-sm font-semibold text-text">👤 Caller Name</div>
-          <p className="mt-1 text-[13px] text-text-2">
-            Your name is used in the call script introduction — e.g. <em>"Hi, this is {callerName || 'Dayyan'}…"</em>. Each user on this app sets
-            their own name.
-          </p>
+          <div className="text-sm font-semibold text-text">Your name</div>
+          <p className="mt-1 text-[13px] text-text-2">Shown to your team and used across the app.</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
-              <label className="label">Your first name</label>
+              <label className="label">Full name</label>
               <input
                 className="input"
-                placeholder="e.g. Dayyan"
-                maxLength={40}
-                value={callerName}
-                onChange={(e) => setCallerName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveCallerName()}
+                placeholder="e.g. Dayyan Khan"
+                maxLength={60}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveFullName()}
               />
             </div>
-            <button className="btn btn-primary" onClick={saveCallerName}>
+            <button className="btn btn-primary" onClick={saveFullName}>
               Save name
             </button>
-            {callerNameSaved && <span className="text-[11px] text-green">✓ Saved</span>}
+            {fullNameSaved && <span className="text-[11px] text-success">✓ Saved</span>}
           </div>
         </div>
 
         <div className="card">
-          <div className="text-sm font-semibold text-text">☀️ Daily Call Goal</div>
-          <p className="mt-1 text-[13px] text-text-2">
-            When you reach this target during a session, you'll be prompted that the goal has been met.
-          </p>
+          <div className="text-sm font-semibold text-text">Daily Call Goal</div>
+          <p className="mt-1 text-[13px] text-text-2">Tracked on your dashboard's daily goal bar.</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
               <label className="label">Daily target</label>
@@ -145,12 +140,12 @@ export function SettingsPage() {
             <button className="btn btn-primary" onClick={saveDailyGoal}>
               Save
             </button>
-            {dailyGoalSaved && <span className="text-[11px] text-green">✓ Saved</span>}
+            {dailyGoalSaved && <span className="text-[11px] text-success">✓ Saved</span>}
           </div>
         </div>
 
         <div className="card">
-          <div className="text-sm font-semibold text-text">🎯 Monthly Call Goal</div>
+          <div className="text-sm font-semibold text-text">Monthly Call Goal</div>
           <p className="mt-1 text-[13px] text-text-2">Target number of calls for the monthly goal bar on your dashboard.</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
@@ -167,7 +162,7 @@ export function SettingsPage() {
             <button className="btn btn-primary" onClick={saveMonthlyGoal}>
               Save
             </button>
-            {monthlyGoalSaved && <span className="text-[11px] text-green">✓ Saved</span>}
+            {monthlyGoalSaved && <span className="text-[11px] text-success">✓ Saved</span>}
           </div>
         </div>
 
@@ -220,25 +215,25 @@ export function SettingsPage() {
           </div>
         </div>
 
-        <div className="card !border-red/25 !bg-red-dim">
-          <div className="flex items-center gap-2 text-sm font-semibold text-red">
+        <div className="card !border-danger/25 !bg-danger-dim">
+          <div className="flex items-center gap-2 text-sm font-semibold text-danger">
             <AlertTriangle size={15} /> Danger Zone
           </div>
           <p className="mt-1 text-[13px] text-text-2">
-            Permanently delete all data in your account — leads, call logs, analytics, tags, and sessions. This cannot be undone.
+            Permanently delete all data in your account — leads, activity, tags, and tasks. This cannot be undone.
           </p>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red/20 bg-red-dim p-4">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-danger/20 bg-danger-dim p-4">
             <div>
               <div className="text-[13px] font-semibold text-text">Reset all data</div>
-              <div className="text-[12px] text-text-2">Removes leads, call logs, sessions, tags, and all analytics. You'll start fresh.</div>
+              <div className="text-[12px] text-text-2">Removes leads, activity, tags, and tasks. You'll start fresh.</div>
             </div>
             <button className="btn btn-danger shrink-0" onClick={() => setNukeConfirmOpen(true)}>
               <Trash2 size={14} /> Erase All Data
             </button>
           </div>
 
-          {nukeDone && <div className="mt-3 text-[12px] text-green">✓ All data erased.</div>}
+          {nukeDone && <div className="mt-3 text-[12px] text-success">✓ All data erased.</div>}
         </div>
       </div>
 
@@ -256,11 +251,11 @@ export function SettingsPage() {
       />
 
       {nukeConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="card max-w-md !border-red/45 !bg-red-dim">
-            <div className="text-sm font-bold text-red">Are you absolutely sure?</div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="card max-w-md !border-danger/45 !bg-danger-dim">
+            <div className="text-sm font-bold text-danger">Are you absolutely sure?</div>
             <p className="mt-2 text-[13px] text-text-2">
-              This will permanently erase every lead, call log, tag, task, and session for your account. There is no undo. Type{' '}
+              This will permanently erase every lead, activity, tag, and task for your account. There is no undo. Type{' '}
               <strong className="text-text">DELETE</strong> to confirm.
             </p>
             <input className="input mt-3" placeholder="Type DELETE" value={nukeText} onChange={(e) => setNukeText(e.target.value)} />
