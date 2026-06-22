@@ -4,7 +4,7 @@ import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed, useRecentActivities } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
-import { STAGE_CONFIG, STAGE_ORDER } from '@/types/domain';
+import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
 import { formatDateTime, localIsoDate } from '@/lib/utils';
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -65,12 +65,21 @@ function GoalBar({ label, done, goal, periodLabel }: { label: string; done: numb
   );
 }
 
-export function DashboardPage() {
-  const { data: leads = [] } = useLeads();
-  const { data: activities = [] } = useActivityFeed();
-  const { data: recent = [] } = useRecentActivities();
-  const { data: tags = [] } = useTags();
-  const { profile } = useAuth();
+export function DashboardView({
+  userId,
+  profile,
+  heading = 'Dashboard',
+  subtitle = 'Your pipeline and activity at a glance',
+}: {
+  userId: string;
+  profile: Profile | null;
+  heading?: string;
+  subtitle?: string;
+}) {
+  const { data: leads = [] } = useLeads(userId);
+  const { data: activities = [] } = useActivityFeed(userId);
+  const { data: recent = [] } = useRecentActivities(userId);
+  const { data: tags = [] } = useTags(userId);
 
   const [trendRange, setTrendRange] = useState<7 | 30>(7);
 
@@ -176,8 +185,8 @@ export function DashboardPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-2xl font-semibold text-text">Dashboard</h1>
-        <p className="text-sm text-text-3">Your pipeline and activity at a glance</p>
+        <h1 className="text-2xl font-semibold text-text">{heading}</h1>
+        <p className="text-sm text-text-3">{subtitle}</p>
       </div>
 
       {leads.length === 0 ? (
@@ -292,4 +301,10 @@ export function DashboardPage() {
       )}
     </div>
   );
+}
+
+export function DashboardPage() {
+  const { session, profile } = useAuth();
+  if (!session) return null;
+  return <DashboardView userId={session.user.id} profile={profile} />;
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Shield, UserPlus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Shield, UserPlus, Trash2, Eye, EyeOff, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers, useFindProfileByCode, useAddTeamMember, useRemoveTeamMember, useUpdateMemberRole } from '@/hooks/useTeam';
 import { useLeads } from '@/hooks/useLeads';
@@ -181,10 +182,13 @@ export function TeamPage() {
                   <button
                     className="btn !px-2 !py-1"
                     onClick={() => setExpanded(expanded === m.memberId ? null : m.memberId)}
-                    title={expanded === m.memberId ? 'Hide activity' : 'View activity'}
+                    title={expanded === m.memberId ? 'Hide quick stats' : 'View quick stats'}
                   >
                     {expanded === m.memberId ? <EyeOff size={13} /> : <Eye size={13} />}
                   </button>
+                  <Link to={`/team/${m.memberId}`} className="btn !px-2.5 !py-1 text-[12px]" title="Open full dashboard">
+                    <LayoutDashboard size={13} /> Dashboard
+                  </Link>
                   <button className="btn !px-2 !py-1 text-danger hover:border-danger" onClick={() => setRemoveTarget(m.id)} title="Remove from team">
                     <Trash2 size={13} />
                   </button>

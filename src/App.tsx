@@ -10,6 +10,7 @@ import { LeadProfilePage } from '@/pages/LeadProfilePage';
 import { KanbanPage } from '@/pages/KanbanPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TeamPage } from '@/pages/TeamPage';
+import { MemberDashboardPage } from '@/pages/MemberDashboardPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -31,6 +32,7 @@ export default function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route element={<ProtectedRoute requireOverseer />}>
                   <Route path="/team" element={<TeamPage />} />
+                  <Route path="/team/:memberId" element={<MemberDashboardPage />} />
                 </Route>
               </Route>
             </Route>
