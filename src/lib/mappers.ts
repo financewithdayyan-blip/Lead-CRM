@@ -94,9 +94,45 @@ export function leadToDbInsert(lead: Partial<Lead>, userId: string) {
   };
 }
 
+const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
+  ['leadNum', 'lead_num'],
+  ['firstName', 'first_name'],
+  ['lastName', 'last_name'],
+  ['phone', 'phone'],
+  ['phone2', 'phone2'],
+  ['email', 'email'],
+  ['address', 'address'],
+  ['city', 'city'],
+  ['state', 'state'],
+  ['zip', 'zip'],
+  ['source', 'source'],
+  ['stage', 'stage'],
+  ['rating', 'rating'],
+  ['propType', 'prop_type'],
+  ['beds', 'beds'],
+  ['baths', 'baths'],
+  ['sqft', 'sqft'],
+  ['lotSize', 'lot_size'],
+  ['yearBuilt', 'year_built'],
+  ['condition', 'condition'],
+  ['motivation', 'motivation'],
+  ['arv', 'arv'],
+  ['asIs', 'as_is'],
+  ['estRepairs', 'est_repairs'],
+  ['minOffer', 'min_offer'],
+  ['maxOffer', 'max_offer'],
+  ['askingPrice', 'asking_price'],
+  ['finalPrice', 'final_price'],
+  ['repairs', 'repairs'],
+  ['notes', 'notes'],
+  ['nextFollowUp', 'next_follow_up'],
+];
+
 export function leadToDbUpdate(lead: Partial<Lead>) {
-  const payload = leadToDbInsert(lead, lead.userId ?? '');
-  if (!lead.userId) delete (payload as any).user_id;
+  const payload: Record<string, unknown> = {};
+  for (const [key, column] of LEAD_UPDATE_FIELDS) {
+    if (key in lead) payload[column] = lead[key];
+  }
   return payload;
 }
 
