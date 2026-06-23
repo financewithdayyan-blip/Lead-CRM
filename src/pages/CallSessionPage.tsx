@@ -249,6 +249,7 @@ export function CallSessionPage() {
       leadId: currentLead.id,
       type: 'call',
       body: notes.trim() || (chosen ? `Call outcome: ${chosen.label}` : 'Call logged from session'),
+      meta: chosen ? { outcome: chosen.key } : {},
     });
     setSessionCallsLogged((n) => n + 1);
     setCurrentIndex((i) => i + 1);
@@ -390,8 +391,8 @@ export function CallSessionPage() {
           </div>
 
           {currentLead.address && (
-            <div className="mt-3 flex items-start gap-2 text-[14px] leading-snug text-slate-300">
-              <MapPin size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+            <div className="mt-3 flex items-start gap-2 text-[16px] font-semibold leading-snug text-amber-300">
+              <MapPin size={17} className="mt-0.5 shrink-0 text-amber-400" />
               <span className="uppercase tracking-wide">{addressLine}</span>
             </div>
           )}

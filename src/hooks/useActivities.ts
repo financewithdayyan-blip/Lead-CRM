@@ -24,10 +24,20 @@ export function useAddActivity() {
   const { session } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ leadId, type, body }: { leadId: string; type: ActivityType; body: string }) => {
+    mutationFn: async ({
+      leadId,
+      type,
+      body,
+      meta = {},
+    }: {
+      leadId: string;
+      type: ActivityType;
+      body: string;
+      meta?: Record<string, unknown>;
+    }) => {
       const { error } = await supabase
         .from('lead_activities')
-        .insert({ lead_id: leadId, user_id: session!.user.id, type, body });
+        .insert({ lead_id: leadId, user_id: session!.user.id, type, body, meta });
       if (error) throw error;
     },
     onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['activities', vars.leadId] }),

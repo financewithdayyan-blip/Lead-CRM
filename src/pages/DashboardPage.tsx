@@ -1,22 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PhoneCall } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useLeads } from '@/hooks/useLeads';
-import { useActivityFeed, useRecentActivities } from '@/hooks/useActivities';
+import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
-import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
-import { formatDateTime, localIsoDate } from '@/lib/utils';
+import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
+import { localIsoDate } from '@/lib/utils';
 
-const ACTIVITY_LABEL: Record<string, string> = {
-  note: 'Note added',
-  call: 'Call logged',
-  email: 'Email sent',
-  meeting: 'Meeting',
-  sms: 'Text sent',
-  stage_change: 'Stage changed',
-};
+const OUTCOME_STAGES: LeadStage[] = ['voicemail', 'initial_contact', 'followup', 'onhold', 'dead_declined'];
 
 function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
@@ -82,7 +75,6 @@ export function DashboardView({
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
-  const { data: recent = [] } = useRecentActivities(userId);
   const { data: tags = [] } = useTags(userId);
 
   const [trendRange, setTrendRange] = useState<7 | 30>(7);
@@ -126,17 +118,19 @@ export function DashboardView({
   }, [leads, calls, tags]);
 
   const dailyTrend = useMemo(() => {
-    const days: Array<{ iso: string; label: string; calls: number; activity: number }> = [];
+    const days: Array<{ iso: string; label: string; calls: number; activity: number } & Record<string, number | string>> = [];
     const today = new Date();
     for (let i = trendRange - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
       const iso = localIsoDate(d);
-      days.push({
+      const row: any = {
         iso,
         label: d.toLocaleDateString([], trendRange <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
         calls: 0,
         activity: 0,
-      });
+      };
+      OUTCOME_STAGES.forEach((s) => (row[s] = 0));
+      days.push(row);
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
     activities.forEach((a) => {
@@ -145,6 +139,12 @@ export function DashboardView({
       if (!day) return;
       day.activity++;
       if (a.type === 'call') day.calls++;
+      if (a.type === 'stage_change') {
+        const to = (a.meta as { to?: unknown })?.to;
+        if (typeof to === 'string' && OUTCOME_STAGES.includes(to as LeadStage)) {
+          day[to] = (day[to] as number) + 1;
+        }
+      }
     });
     return days;
   }, [activities, trendRange]);
@@ -254,6 +254,22 @@ export function DashboardView({
             </ResponsiveContainer>
           </div>
 
+          <div className="card">
+            <h3 className="mb-3 text-sm font-semibold text-text">Daily Call Outcomes</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dailyTrend}>
+                <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+                <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {OUTCOME_STAGES.map((s) => (
+                  <Bar key={s} dataKey={s} name={STAGE_CONFIG[s].label} stackId="outcomes" fill={STAGE_CONFIG[s].color} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             <div className="card">
               <h3 className="mb-2 text-sm font-semibold text-text">Pipeline Breakdown</h3>
@@ -276,36 +292,21 @@ export function DashboardView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <div className="card overflow-x-auto lg:col-span-2">
-              <h3 className="mb-3 text-sm font-semibold text-text">Activity — {new Date().getFullYear()}</h3>
-              <div className="flex gap-[3px]">
-                {heatmap.cols.map((week, wi) => (
-                  <div key={wi} className="flex flex-col gap-[3px]">
-                    {week.map((cell) => (
-                      <div
-                        key={cell.iso}
-                        title={`${cell.iso}: ${cell.count} activit${cell.count !== 1 ? 'ies' : 'y'}`}
-                        className={`h-[11px] w-[11px] rounded-[2px] ${cell.isToday ? 'ring-1 ring-primary' : ''}`}
-                        style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="card">
-              <h3 className="mb-3 text-sm font-semibold text-text">Recent Activity</h3>
-              {recent.length === 0 && <div className="text-[13px] text-text-3">No activity yet.</div>}
-              <div className="space-y-3">
-                {recent.map((a) => (
-                  <div key={a.id} className="text-[12px]">
-                    <div className="font-medium text-text">{ACTIVITY_LABEL[a.type]}{a.leadName ? ` · ${a.leadName}` : ''}</div>
-                    <div className="text-text-3">{formatDateTime(a.createdAt)}</div>
-                  </div>
-                ))}
-              </div>
+          <div className="card overflow-x-auto">
+            <h3 className="mb-3 text-sm font-semibold text-text">Activity — {new Date().getFullYear()}</h3>
+            <div className="flex gap-[3px]">
+              {heatmap.cols.map((week, wi) => (
+                <div key={wi} className="flex flex-col gap-[3px]">
+                  {week.map((cell) => (
+                    <div
+                      key={cell.iso}
+                      title={`${cell.iso}: ${cell.count} activit${cell.count !== 1 ? 'ies' : 'y'}`}
+                      className={`h-[11px] w-[11px] rounded-[2px] ${cell.isToday ? 'ring-1 ring-primary' : ''}`}
+                      style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         </div>

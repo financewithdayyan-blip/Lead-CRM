@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Kanban, Settings, Shield, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, initials } from '@/lib/utils';
 
@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/leads', label: 'Leads', icon: Users },
   { to: '/kanban', label: 'Pipeline', icon: Kanban },
+  { to: '/calls', label: 'Call History', icon: History },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
