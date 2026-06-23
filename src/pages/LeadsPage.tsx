@@ -55,7 +55,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         <div>
           <h1 className="text-2xl font-semibold text-text">Leads</h1>
           <p className="text-sm text-text-3">
-            {leads.length} total{viewOnly && ' · viewing only'}
+            {leads.length} total{viewOnly && ' · you can edit or delete leads here, but not add or import new ones'}
           </p>
         </div>
         {!viewOnly && (
@@ -88,12 +88,12 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
             </option>
           ))}
         </select>
-        {!viewOnly && selected.size > 0 && (
+        {selected.size > 0 && (
           <button className="btn btn-danger ml-auto" onClick={() => setShowDelete(true)}>
             <Trash2 size={14} /> Delete {selected.size}
           </button>
         )}
-        {!viewOnly && selected.size === 0 && leads.length > 0 && (
+        {selected.size === 0 && leads.length > 0 && (
           <button className="btn ml-auto" onClick={() => setShowDelete(true)}>
             <Trash2 size={14} /> Manage / bulk delete
           </button>
@@ -104,11 +104,9 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         <table className="w-full text-left text-[13px]">
           <thead className="border-b border-border bg-surface-3 text-[11px] uppercase tracking-wide text-text-3">
             <tr>
-              {!viewOnly && (
-                <th className="px-3 py-2.5">
-                  <input type="checkbox" checked={selected.size > 0 && selected.size === filtered.length} onChange={toggleSelectAll} />
-                </th>
-              )}
+              <th className="px-3 py-2.5">
+                <input type="checkbox" checked={selected.size > 0 && selected.size === filtered.length} onChange={toggleSelectAll} />
+              </th>
               <th className="px-3 py-2.5">#</th>
               <th className="px-3 py-2.5">Name</th>
               <th className="px-3 py-2.5">Phone</th>
@@ -135,11 +133,9 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
             )}
             {filtered.map((lead) => (
               <tr key={lead.id} className="cursor-pointer border-b border-border hover:bg-surface-3" onClick={() => navigate(`/leads/${lead.id}`)}>
-                {!viewOnly && (
-                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
-                  </td>
-                )}
+                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
+                </td>
                 <td className="px-3 py-2.5 text-text-3">{lead.leadNum}</td>
                 <td className="px-3 py-2.5 font-medium text-text">
                   {lead.firstName} {lead.lastName}
@@ -168,7 +164,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
 
       {!viewOnly && showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
       {!viewOnly && showImport && <ImportCsvModal onClose={() => setShowImport(false)} />}
-      {!viewOnly && showDelete && <DeleteLeadsModal leads={leads} tags={tags} onClose={() => setShowDelete(false)} />}
+      {showDelete && <DeleteLeadsModal leads={leads} tags={tags} onClose={() => setShowDelete(false)} />}
     </div>
   );
 }

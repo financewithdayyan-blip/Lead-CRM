@@ -81,7 +81,7 @@ function KanbanCard({
           >
             <Pencil size={12} />
           </button>
-          {!viewOnly && DELETABLE_STAGES.includes(lead.stage) && (
+          {DELETABLE_STAGES.includes(lead.stage) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -128,7 +128,7 @@ function KanbanColumn({
         <span className="h-2 w-2 rounded-full" style={{ background: cfg.color }} />
         <div className="flex-1 text-[13px] font-semibold text-text">{cfg.label}</div>
         <div className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-3">{leads.length}</div>
-        {!viewOnly && CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
+        {CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
           <button onClick={onClear} className="text-text-3 hover:text-danger" title={`Delete all ${cfg.label}`}>
             <Trash2 size={13} />
           </button>
@@ -205,7 +205,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
           <p className="text-sm text-text-3">
             {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {STAGE_ORDER.length} stages
-            {viewOnly && ' · viewing only, no calls or deletes'}
+            {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
           </p>
         </div>
       </div>
