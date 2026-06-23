@@ -9,7 +9,7 @@ import {
   useRemoveTeamMember,
   useUpdateMemberRole,
   useTeamInvites,
-  useCreateInvite,
+  useSendInvite,
   useRevokeInvite,
 } from '@/hooks/useTeam';
 import { useLeads } from '@/hooks/useLeads';
@@ -69,7 +69,7 @@ export function TeamPage() {
   const addMember = useAddTeamMember();
   const removeMember = useRemoveTeamMember();
   const updateRole = useUpdateMemberRole();
-  const createInvite = useCreateInvite();
+  const sendInvite = useSendInvite();
   const revokeInvite = useRevokeInvite();
 
   const [code, setCode] = useState('');
@@ -81,6 +81,7 @@ export function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<Role>('caller');
   const [inviteError, setInviteError] = useState('');
+  const [inviteSent, setInviteSent] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const pendingInvites = invites.filter((i) => i.status === 'pending');
@@ -91,24 +92,22 @@ export function TeamPage() {
 
   function handleInvite() {
     setInviteError('');
+    setInviteSent('');
     const email = inviteEmail.trim();
     if (!email) return;
     if (members.some((m) => m.member.email.toLowerCase() === email.toLowerCase())) {
       setInviteError('That person is already on your team.');
       return;
     }
-    if (pendingInvites.some((i) => i.email.toLowerCase() === email.toLowerCase())) {
-      setInviteError('There is already a pending invite for that email.');
-      return;
-    }
-    createInvite.mutate(
+    sendInvite.mutate(
       { email, role: inviteRole },
       {
         onSuccess: () => {
+          setInviteSent(`Invite email sent to ${email}.`);
           setInviteEmail('');
           setInviteRole('caller');
         },
-        onError: (err) => setInviteError(err instanceof Error ? err.message : 'Could not create invite.'),
+        onError: (err) => setInviteError(err instanceof Error ? err.message : 'Could not send invite.'),
       },
     );
   }
@@ -174,7 +173,8 @@ export function TeamPage() {
             <Mail size={15} className="text-primary" /> Invite by email
           </div>
           <p className="mt-1 text-[13px] text-text-2">
-            Create an invite and share the link with them - when they sign up with that email, they're added to your team automatically.
+            They'll get an official invite email with a link to set their password - their account is created and added to your team
+            automatically once they do.
           </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
@@ -187,6 +187,7 @@ export function TeamPage() {
                 onChange={(e) => {
                   setInviteEmail(e.target.value);
                   setInviteError('');
+                  setInviteSent('');
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
               />
@@ -198,11 +199,12 @@ export function TeamPage() {
                 <option value="admin">Admin</option>
               </select>
             </div>
-            <button className="btn btn-primary" onClick={handleInvite} disabled={createInvite.isPending}>
-              <UserPlus size={14} /> Create invite
+            <button className="btn btn-primary" onClick={handleInvite} disabled={sendInvite.isPending}>
+              <UserPlus size={14} /> {sendInvite.isPending ? 'Sending…' : 'Send Invite'}
             </button>
           </div>
           {inviteError && <div className="mt-2 text-[12px] text-danger">{inviteError}</div>}
+          {inviteSent && <div className="mt-2 text-[12px] text-success">{inviteSent}</div>}
 
           {pendingInvites.length > 0 && (
             <div className="mt-4 space-y-2">
@@ -214,7 +216,15 @@ export function TeamPage() {
                     <div className="text-[11px] text-text-3">{ROLE_LABELS[inv.role]}</div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => copyLink(inv.id, inv.email)}>
+                    <button
+                      className="btn !px-2.5 !py-1 text-[12px]"
+                      onClick={() => sendInvite.mutate({ email: inv.email, role: inv.role })}
+                      disabled={sendInvite.isPending}
+                      title="Resend the invite email"
+                    >
+                      <Mail size={12} /> Resend
+                    </button>
+                    <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => copyLink(inv.id, inv.email)} title="Copy a manual signup link as a fallback">
                       <Copy size={12} /> {copiedId === inv.id ? 'Copied!' : 'Copy link'}
                     </button>
                     <button

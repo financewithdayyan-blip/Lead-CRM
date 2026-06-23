@@ -95,13 +95,16 @@ export function useTeamInvites() {
   });
 }
 
-export function useCreateInvite() {
-  const { session } = useAuth();
+export function useSendInvite() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ email, role }: { email: string; role: Role }) => {
-      const { error } = await supabase.from('team_invites').insert({ owner_id: session!.user.id, email: email.trim(), role });
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email: email.trim(), role, redirectTo: `${window.location.origin}/accept-invite` },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team_invites'] }),
   });

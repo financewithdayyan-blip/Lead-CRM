@@ -4,6 +4,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/LoginPage';
+import { AcceptInvitePage } from '@/pages/AcceptInvitePage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { LeadsPage } from '@/pages/LeadsPage';
 import { LeadProfilePage } from '@/pages/LeadProfilePage';
@@ -27,6 +28,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/session" element={<CallSessionPage />} />
               <Route element={<AppShell />}>
