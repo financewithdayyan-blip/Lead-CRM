@@ -80,7 +80,7 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
-        {isOverseer && (
+        {isOverseer && !viewingId && (
           <NavLink
             to="/team"
             end
