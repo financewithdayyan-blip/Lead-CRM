@@ -319,6 +319,7 @@ const REPAIR_FLAGS: Array<{ key: keyof Lead['repairs']; label: string }> = [
   { key: 'roof', label: 'Roof' },
   { key: 'foundation', label: 'Foundation' },
   { key: 'electrical', label: 'Electrical' },
+  { key: 'flooring', label: 'Flooring' },
 ];
 
 function PropertyTab({ lead }: { lead: Lead }) {
@@ -333,6 +334,7 @@ function PropertyTab({ lead }: { lead: Lead }) {
     yearBuilt: lead.yearBuilt?.toString() ?? '',
     condition: lead.condition ?? '',
     motivation: lead.motivation ?? '',
+    propertyRating: lead.propertyRating?.toString() ?? '',
     arv: lead.arv?.toString() ?? '',
     asIs: lead.asIs?.toString() ?? '',
     estRepairs: lead.estRepairs?.toString() ?? '',
@@ -363,6 +365,7 @@ function PropertyTab({ lead }: { lead: Lead }) {
         motivation: form.motivation || null,
         arv: form.arv ? Number(form.arv) : null,
         asIs: form.asIs ? Number(form.asIs) : null,
+        propertyRating: form.propertyRating ? Number(form.propertyRating) : null,
         estRepairs: form.estRepairs ? Number(form.estRepairs) : null,
         minOffer: form.minOffer ? Number(form.minOffer) : null,
         maxOffer: form.maxOffer ? Number(form.maxOffer) : null,
@@ -428,6 +431,16 @@ function PropertyTab({ lead }: { lead: Lead }) {
           </Field>
           <Field label="Condition">
             <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
+          </Field>
+          <Field label="Property Rating (1-10)">
+            <select className="input" value={form.propertyRating} onChange={(e) => set('propertyRating', e.target.value)}>
+              <option value="">—</option>
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
           </Field>
           <div className="col-span-2">
             <Field label="Motivation">

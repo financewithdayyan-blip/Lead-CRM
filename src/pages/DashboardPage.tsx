@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { PhoneCall } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed, useRecentActivities } from '@/hooks/useActivities';
@@ -70,11 +72,13 @@ export function DashboardView({
   profile,
   heading = 'Dashboard',
   subtitle = 'Your pipeline and activity at a glance',
+  allowStartSession = false,
 }: {
   userId: string;
   profile: Profile | null;
   heading?: string;
   subtitle?: string;
+  allowStartSession?: boolean;
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
@@ -184,9 +188,16 @@ export function DashboardView({
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-2xl font-semibold text-text">{heading}</h1>
-        <p className="text-sm text-text-3">{subtitle}</p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-text">{heading}</h1>
+          <p className="text-sm text-text-3">{subtitle}</p>
+        </div>
+        {allowStartSession && (
+          <Link to="/session" className="btn btn-primary shrink-0">
+            <PhoneCall size={15} /> Start Session
+          </Link>
+        )}
       </div>
 
       {leads.length === 0 ? (
@@ -306,5 +317,5 @@ export function DashboardView({
 export function DashboardPage() {
   const { session, profile } = useAuth();
   if (!session) return null;
-  return <DashboardView userId={session.user.id} profile={profile} />;
+  return <DashboardView userId={session.user.id} profile={profile} allowStartSession />;
 }

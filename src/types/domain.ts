@@ -69,6 +69,7 @@ export interface RepairFlags {
   roof?: boolean;
   foundation?: boolean;
   electrical?: boolean;
+  flooring?: boolean;
 }
 
 export interface Lead {
@@ -87,6 +88,7 @@ export interface Lead {
   source: string | null;
   stage: LeadStage;
   rating: number;
+  propertyRating: number | null;
   propType: string | null;
   beds: number | null;
   baths: number | null;
