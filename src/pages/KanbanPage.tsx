@@ -13,7 +13,19 @@ import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage } from '@/types/do
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 
-function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: () => void; onOpen: () => void; onDelete: () => void }) {
+function KanbanCard({
+  lead,
+  viewOnly,
+  onCall,
+  onOpen,
+  onDelete,
+}: {
+  lead: Lead;
+  viewOnly: boolean;
+  onCall: () => void;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
   const { data: tags = [] } = useTags();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
@@ -47,16 +59,18 @@ function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: ()
       <div className="mt-1.5 flex items-center justify-between">
         <div>{stars && <div className="text-warning">{stars}</div>}</div>
         <div className="flex gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onCall();
-            }}
-            className="rounded-md border border-border-2 bg-surface-3 p-1 text-primary hover:border-primary"
-            title="Log a call"
-          >
-            <Phone size={12} />
-          </button>
+          {!viewOnly && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCall();
+              }}
+              className="rounded-md border border-border-2 bg-surface-3 p-1 text-primary hover:border-primary"
+              title="Log a call"
+            >
+              <Phone size={12} />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -67,7 +81,7 @@ function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: ()
           >
             <Pencil size={12} />
           </button>
-          {DELETABLE_STAGES.includes(lead.stage) && (
+          {!viewOnly && DELETABLE_STAGES.includes(lead.stage) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -88,6 +102,7 @@ function KanbanCard({ lead, onCall, onOpen, onDelete }: { lead: Lead; onCall: ()
 function KanbanColumn({
   stage,
   leads,
+  viewOnly,
   onCall,
   onOpen,
   onDelete,
@@ -95,6 +110,7 @@ function KanbanColumn({
 }: {
   stage: LeadStage;
   leads: Lead[];
+  viewOnly: boolean;
   onCall: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -112,7 +128,7 @@ function KanbanColumn({
         <span className="h-2 w-2 rounded-full" style={{ background: cfg.color }} />
         <div className="flex-1 text-[13px] font-semibold text-text">{cfg.label}</div>
         <div className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-3">{leads.length}</div>
-        {CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
+        {!viewOnly && CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
           <button onClick={onClear} className="text-text-3 hover:text-danger" title={`Delete all ${cfg.label}`}>
             <Trash2 size={13} />
           </button>
@@ -121,17 +137,24 @@ function KanbanColumn({
       <div className="flex-1 space-y-2 overflow-y-auto p-2" style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}>
         {leads.length === 0 && <div className="py-6 text-center text-[12px] text-text-3">No leads</div>}
         {leads.map((l) => (
-          <KanbanCard key={l.id} lead={l} onCall={() => onCall(l.id)} onOpen={() => onOpen(l.id)} onDelete={() => onDelete(l.id)} />
+          <KanbanCard
+            key={l.id}
+            lead={l}
+            viewOnly={viewOnly}
+            onCall={() => onCall(l.id)}
+            onOpen={() => onOpen(l.id)}
+            onDelete={() => onDelete(l.id)}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-export function KanbanPage() {
+export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
-  const { data: leads = [] } = useLeads();
-  const { data: tags = [] } = useTags();
+  const { data: leads = [] } = useLeads(targetUserId);
+  const { data: tags = [] } = useTags(targetUserId);
   const updateLead = useUpdateLead();
   const deleteLeads = useDeleteLeads();
   const addActivity = useAddActivity();
@@ -182,6 +205,7 @@ export function KanbanPage() {
           <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
           <p className="text-sm text-text-3">
             {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {STAGE_ORDER.length} stages
+            {viewOnly && ' · viewing only, no calls or deletes'}
           </p>
         </div>
       </div>
@@ -206,6 +230,7 @@ export function KanbanPage() {
               key={stage}
               stage={stage}
               leads={filtered.filter((l) => l.stage === stage)}
+              viewOnly={viewOnly}
               onCall={handleCall}
               onOpen={(id) => navigate(`/leads/${id}`)}
               onDelete={setDeleteTarget}
@@ -238,4 +263,8 @@ export function KanbanPage() {
       />
     </div>
   );
+}
+
+export function KanbanPage() {
+  return <KanbanView />;
 }

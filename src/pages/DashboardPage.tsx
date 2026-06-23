@@ -246,10 +246,18 @@ export function DashboardView({
           <h1 className="text-2xl font-semibold text-text">{heading}</h1>
           <p className="text-sm text-text-3">{subtitle}</p>
         </div>
-        {allowStartSession && (
+        {allowStartSession ? (
           <Link to="/session" className="btn btn-primary shrink-0">
             <PhoneCall size={15} /> Start Session
           </Link>
+        ) : (
+          <button
+            disabled
+            title="You can only start a calling session for your own account."
+            className="btn shrink-0 cursor-not-allowed opacity-50"
+          >
+            <PhoneCall size={15} /> Start Session
+          </button>
         )}
       </div>
 
