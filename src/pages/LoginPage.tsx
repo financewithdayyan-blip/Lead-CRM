@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { supabase, setRememberMe } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Mode = 'signin' | 'signup' | 'reset';
@@ -10,6 +10,7 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,6 +24,7 @@ export function LoginPage() {
     setBusy(true);
     try {
       if (mode === 'signin') {
+        setRememberMe(remember);
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else if (mode === 'signup') {
@@ -54,7 +56,14 @@ export function LoginPage() {
         <form onSubmit={handleSubmit} className="card space-y-4">
           <div>
             <label className="label">Email</label>
-            <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              className="input"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
           {mode !== 'reset' && (
             <div>
@@ -62,12 +71,20 @@ export function LoginPage() {
               <input
                 className="input"
                 type="password"
+                autoComplete="current-password"
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+          )}
+
+          {mode === 'signin' && (
+            <label className="flex items-center gap-2 text-[13px] text-text-2">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              Remember me
+            </label>
           )}
 
           {error && <div className="rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}

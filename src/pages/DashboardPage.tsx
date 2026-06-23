@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PhoneCall } from 'lucide-react';
-import { AreaChart, Area, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AreaChart, Area, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
-import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
+import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
-
-const OUTCOME_STAGES: LeadStage[] = ['voicemail', 'initial_contact', 'followup', 'onhold', 'dead_declined'];
 
 function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
@@ -118,32 +116,38 @@ export function DashboardView({
   }, [leads, calls, tags]);
 
   const dailyTrend = useMemo(() => {
-    const days: Array<{ iso: string; label: string; calls: number; activity: number } & Record<string, number | string>> = [];
+    const days: Array<{
+      iso: string;
+      label: string;
+      calls: number;
+      voicemail: number;
+      dead_declined: number;
+      followupCombined: number;
+    }> = [];
     const today = new Date();
     for (let i = trendRange - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
       const iso = localIsoDate(d);
-      const row: any = {
+      days.push({
         iso,
         label: d.toLocaleDateString([], trendRange <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
         calls: 0,
-        activity: 0,
-      };
-      OUTCOME_STAGES.forEach((s) => (row[s] = 0));
-      days.push(row);
+        voicemail: 0,
+        dead_declined: 0,
+        followupCombined: 0,
+      });
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
     activities.forEach((a) => {
       const iso = localIsoDate(new Date(a.createdAt));
       const day = byIso.get(iso);
       if (!day) return;
-      day.activity++;
       if (a.type === 'call') day.calls++;
       if (a.type === 'stage_change') {
         const to = (a.meta as { to?: unknown })?.to;
-        if (typeof to === 'string' && OUTCOME_STAGES.includes(to as LeadStage)) {
-          day[to] = (day[to] as number) + 1;
-        }
+        if (to === 'voicemail') day.voicemail++;
+        else if (to === 'dead_declined') day.dead_declined++;
+        else if (to === 'followup' || to === 'initial_contact') day.followupCombined++;
       }
     });
     return days;
@@ -236,37 +240,38 @@ export function DashboardView({
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={dailyTrend}>
                 <defs>
-                  <linearGradient id="gActivity" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="#4f46e5" stopOpacity={0} />
+                  <linearGradient id="gCalls" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
                 <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
-                <Area type="monotone" dataKey="activity" name="Total Activity" stroke="#4f46e5" fill="url(#gActivity)" strokeWidth={2} />
-                <Area type="monotone" dataKey="calls" name="Calls" stroke="#10b981" fill="transparent" strokeWidth={1.5} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card">
-            <h3 className="mb-3 text-sm font-semibold text-text">Daily Call Outcomes</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={dailyTrend}>
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-                <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {OUTCOME_STAGES.map((s) => (
-                  <Bar key={s} dataKey={s} name={STAGE_CONFIG[s].label} stackId="outcomes" fill={STAGE_CONFIG[s].color} />
-                ))}
-              </BarChart>
+                <Area type="monotone" dataKey="calls" name="Total Calls" stroke="#3b82f6" fill="url(#gCalls)" strokeWidth={2} />
+                <Area type="monotone" dataKey="voicemail" name="Voicemail" stroke="#f59e0b" fill="transparent" strokeWidth={1.5} />
+                <Area
+                  type="monotone"
+                  dataKey="dead_declined"
+                  name="Dead / Declined"
+                  stroke="#ef4444"
+                  fill="transparent"
+                  strokeWidth={1.5}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="followupCombined"
+                  name="Follow-Up + Initial Contact"
+                  stroke="#10b981"
+                  fill="transparent"
+                  strokeWidth={1.5}
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
 

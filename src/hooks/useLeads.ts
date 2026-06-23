@@ -25,6 +25,8 @@ export function useLeads(targetUserId?: string) {
 }
 
 export function useLead(id: string | undefined) {
+  const { session } = useAuth();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['lead', id],
     queryFn: async () => {
@@ -32,6 +34,10 @@ export function useLead(id: string | undefined) {
       if (error) throw error;
       return dbToLead(data);
     },
+    // Most navigations to a lead profile come from a page that already loaded
+    // the full leads list (Leads table, Kanban, Dashboard), so render from that
+    // cache instantly instead of waiting on a fresh network round-trip.
+    initialData: () => qc.getQueryData<Lead[]>(['leads', session?.user.id])?.find((l) => l.id === id),
     enabled: !!id,
   });
 }
