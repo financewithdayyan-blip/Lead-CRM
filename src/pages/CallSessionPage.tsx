@@ -162,7 +162,7 @@ export function CallSessionPage() {
 
   const followUpDays = useMemo(() => {
     const today = new Date();
-    return Array.from({ length: 14 }, (_, i) => {
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
       return {
         iso: localIsoDate(d),
@@ -354,7 +354,7 @@ export function CallSessionPage() {
         />
       </div>
 
-      <div className="grid flex-1 items-start grid-cols-[400px_1fr_340px] gap-4 overflow-hidden p-4">
+      <div className="grid flex-1 grid-cols-[400px_1fr_340px] gap-4 overflow-hidden p-4">
         <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
           <div className="flex items-center gap-4">
             <div
@@ -432,7 +432,7 @@ export function CallSessionPage() {
         <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
           <div className="mx-auto max-w-md">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call Outcome</div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
               {OUTCOMES.map((o) => {
                 const active = outcome === o.key;
                 const Icon = o.icon;
@@ -446,13 +446,13 @@ export function CallSessionPage() {
                         ? { background: STAGE_CONFIG[o.stage].color, boxShadow: `0 8px 18px -8px ${STAGE_CONFIG[o.stage].color}` }
                         : undefined
                     }
-                    className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-[12px] font-semibold transition-all ${
+                    className={`flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-all ${
                       active
                         ? 'scale-[1.03] border-transparent text-slate-950'
                         : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-600 hover:bg-slate-900'
                     }`}
                   >
-                    <Icon size={16} />
+                    <Icon size={13} />
                     {o.label}
                   </button>
                 );
@@ -460,11 +460,11 @@ export function CallSessionPage() {
             </div>
 
             {outcome === 'followup' && (
-              <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  <CalendarDays size={12} /> Follow-Up Date
+              <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/60 p-2">
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  <CalendarDays size={11} /> Follow-Up Date
                 </div>
-                <div className="grid grid-cols-7 gap-1.5">
+                <div className="grid grid-cols-7 gap-1">
                   {followUpDays.map((d) => {
                     const active = followUpDate === d.iso;
                     return (
@@ -472,52 +472,52 @@ export function CallSessionPage() {
                         key={d.iso}
                         type="button"
                         onClick={() => setFollowUpDate(d.iso)}
-                        className={`flex flex-col items-center rounded-lg border px-1 py-1.5 transition-colors ${
+                        className={`flex flex-col items-center rounded-md border py-1 transition-colors ${
                           active
                             ? 'border-emerald-400 bg-emerald-400/10 text-emerald-300'
                             : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-600'
                         }`}
                       >
-                        <span className="text-[9.5px] font-semibold uppercase">{d.weekday}</span>
-                        <span className="text-[14px] font-bold text-slate-100">{d.day}</span>
-                        <span className="text-[9px] uppercase text-slate-500">{d.month}</span>
+                        <span className="text-[8px] font-semibold uppercase">{d.weekday}</span>
+                        <span className="text-[12px] font-bold text-slate-100">{d.day}</span>
+                        <span className="text-[7.5px] uppercase text-slate-500">{d.month}</span>
                       </button>
                     );
                   })}
                 </div>
-                <div className="mt-2.5 flex items-center gap-2">
-                  <span className="text-[11px] text-slate-500">Custom:</span>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-500">Custom:</span>
                   <input
                     type="date"
                     value={followUpDate ?? ''}
                     onChange={(e) => setFollowUpDate(e.target.value || null)}
-                    className="flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-[12px] text-slate-200 outline-none focus:border-emerald-600"
+                    className="flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 outline-none focus:border-emerald-600"
                   />
                   {followUpDate && (
                     <button type="button" onClick={() => setFollowUpDate(null)} className="text-slate-500 hover:text-slate-300">
-                      <X size={14} />
+                      <X size={12} />
                     </button>
                   )}
                 </div>
               </div>
             )}
 
-            <div className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes</div>
+            <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes</div>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="What did they say? Objections, timeline, condition details…"
-              className="mt-2 h-32 w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
+              className="mt-1.5 h-24 w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
             />
 
             <button
               onClick={saveAndNext}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 py-3 text-[13.5px] font-bold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.01] active:scale-[0.99]"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 py-2.5 text-[13.5px] font-bold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.01] active:scale-[0.99]"
             >
               Save & Next <ArrowRight size={15} />
             </button>
 
-            <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+            <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
               {SHORTCUT_LEGEND.map((s) => (
                 <span
                   key={s.key}
