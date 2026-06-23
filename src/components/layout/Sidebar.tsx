@@ -1,6 +1,7 @@
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut } from 'lucide-react';
+import { NavLink, useMatch, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamMembers } from '@/hooks/useTeam';
 import { cn, initials } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -11,9 +12,38 @@ const NAV_ITEMS = [
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
+function ViewingAsSwitcher() {
+  const navigate = useNavigate();
+  const { data: members = [] } = useTeamMembers();
+  const match = useMatch('/team/:memberId');
+  const viewingId = match?.params.memberId;
+
+  if (members.length === 0) return null;
+
+  return (
+    <div className="px-3 pb-2">
+      <div className="px-2 pb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-sidebar-text">
+        <Eye size={11} /> Viewing dashboard
+      </div>
+      <select
+        className="w-full rounded-md border border-sidebar-border bg-sidebar-2 px-2 py-1.5 text-[12px] text-sidebar-textActive outline-none"
+        value={viewingId ?? 'self'}
+        onChange={(e) => navigate(e.target.value === 'self' ? '/' : `/team/${e.target.value}`)}
+      >
+        <option value="self">My Dashboard</option>
+        {members.map((m) => (
+          <option key={m.memberId} value={m.memberId}>
+            {m.member.fullName || m.member.email}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const { profile, signOut } = useAuth();
-  const isOverseer = profile?.role === 'admin' || profile?.role === 'manager';
+  const isOverseer = profile?.role === 'admin';
   const [first, last] = (profile?.fullName ?? '').split(' ');
 
   return (
@@ -24,6 +54,8 @@ export function Sidebar() {
         </div>
         <span className="text-base font-semibold text-sidebar-textActive">Lead CRM</span>
       </div>
+
+      {isOverseer && <ViewingAsSwitcher />}
 
       <nav className="flex-1 space-y-1 px-3">
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (

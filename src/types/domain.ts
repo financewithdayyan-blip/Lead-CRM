@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'manager' | 'rep';
+export type Role = 'admin' | 'caller';
 
 export type LeadStage =
   | 'new'
@@ -154,4 +154,14 @@ export interface TeamMember {
   memberId: string;
   addedAt: string;
   member: Profile;
+}
+
+export interface TeamInvite {
+  id: string;
+  ownerId: string;
+  email: string;
+  role: Role;
+  status: 'pending' | 'accepted' | 'revoked';
+  createdAt: string;
+  acceptedAt: string | null;
 }

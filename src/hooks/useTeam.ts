@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { dbToProfile } from '@/lib/mappers';
+import { dbToProfile, dbToTeamInvite } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Profile, TeamMember } from '@/types/domain';
+import type { Profile, Role, TeamMember } from '@/types/domain';
 
 export function useTeamMembers() {
   const { session } = useAuth();
@@ -74,5 +74,46 @@ export function useUpdateMemberRole() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team_members'] }),
+  });
+}
+
+export function useTeamInvites() {
+  const { session } = useAuth();
+  const ownerId = session?.user.id;
+  return useQuery({
+    queryKey: ['team_invites', ownerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('team_invites')
+        .select('*')
+        .eq('owner_id', ownerId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map(dbToTeamInvite);
+    },
+    enabled: !!ownerId,
+  });
+}
+
+export function useCreateInvite() {
+  const { session } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ email, role }: { email: string; role: Role }) => {
+      const { error } = await supabase.from('team_invites').insert({ owner_id: session!.user.id, email: email.trim(), role });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['team_invites'] }),
+  });
+}
+
+export function useRevokeInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('team_invites').update({ status: 'revoked' }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['team_invites'] }),
   });
 }

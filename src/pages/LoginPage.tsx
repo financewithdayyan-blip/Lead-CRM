@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { supabase, setRememberMe } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -7,8 +7,10 @@ type Mode = 'signin' | 'signup' | 'reset';
 
 export function LoginPage() {
   const { session, loading } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
-  const [email, setEmail] = useState('');
+  const [searchParams] = useSearchParams();
+  const isInvite = searchParams.get('invite') === '1';
+  const [mode, setMode] = useState<Mode>(isInvite ? 'signup' : 'signin');
+  const [email, setEmail] = useState(searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,12 @@ export function LoginPage() {
           </div>
           <h1 className="text-xl font-semibold text-text">Lead CRM</h1>
         </div>
+
+        {isInvite && mode === 'signup' && (
+          <div className="mb-4 rounded-md bg-primary-dim px-3 py-2 text-[13px] text-primary-text">
+            You've been invited to join a team. Create your account with this email to be added automatically.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="card space-y-4">
           <div>
