@@ -112,7 +112,56 @@ export function DashboardView({
       .filter((x) => x.count > 0)
       .sort((a, b) => b.count - a.count);
 
-    return { total, active, contracts, deadDeclined, conversionRate, callsToday, monthCalls, weekCalls, stageCounts, ratingCounts, tagCounts };
+    const callsMade = calls.length;
+    const dialedLeadIds = new Set(calls.map((a) => a.leadId));
+    const dialedPct = total > 0 ? Math.round((dialedLeadIds.size / total) * 100) : 0;
+
+    const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
+    const voicemailCount = outcomeCount('voicemail');
+    const deadDeclinedOutcomeCount = outcomeCount('dead') + outcomeCount('declined');
+    const followupCount = outcomeCount('followup');
+    const conversations = outcomeCount('initial_contact') + followupCount;
+
+    const contactRate = callsMade > 0 ? Math.round((conversations / callsMade) * 100) : 0;
+    const voicemailRate = callsMade > 0 ? Math.round((voicemailCount / callsMade) * 100) : 0;
+    const deadDeclinedRate = callsMade > 0 ? Math.round((deadDeclinedOutcomeCount / callsMade) * 100) : 0;
+    const callsPerFollowup = followupCount > 0 ? (callsMade / followupCount).toFixed(1) : null;
+    const callsPerConversation = conversations > 0 ? (callsMade / conversations).toFixed(1) : null;
+
+    // No dedicated session log exists yet - approximate a "session" as a run of
+    // calls with no gap longer than 20 minutes between consecutive dials.
+    const callTimes = calls.map((a) => new Date(a.createdAt).getTime()).sort((a, b) => a - b);
+    let totalSessions = 0;
+    let lastTime: number | null = null;
+    for (const t of callTimes) {
+      if (lastTime === null || t - lastTime > 20 * 60 * 1000) totalSessions++;
+      lastTime = t;
+    }
+
+    return {
+      total,
+      active,
+      contracts,
+      deadDeclined,
+      conversionRate,
+      callsToday,
+      monthCalls,
+      weekCalls,
+      stageCounts,
+      ratingCounts,
+      tagCounts,
+      callsMade,
+      dialedPct,
+      conversations,
+      contactRate,
+      voicemailCount,
+      voicemailRate,
+      deadDeclinedOutcomeCount,
+      deadDeclinedRate,
+      callsPerFollowup,
+      callsPerConversation,
+      totalSessions,
+    };
   }, [leads, calls, tags]);
 
   const dailyTrend = useMemo(() => {
@@ -209,10 +258,37 @@ export function DashboardView({
       ) : (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Total Leads" value={stats.total} sub={`${stats.active} active in pipeline`} />
+            <StatCard label="Total Leads" value={stats.total} sub={`${stats.dialedPct}% dialed`} />
+            <StatCard label="Calls Made" value={stats.callsMade} sub={`out of ${stats.total} leads`} color="#4f46e5" />
+            <StatCard label="Conversations" value={stats.conversations} sub="initial + follow-ups" color="#a78bfa" />
+            <StatCard
+              label="Contact Rate"
+              value={`${stats.contactRate}%`}
+              sub={`${stats.conversations} contacts of ${stats.callsMade} dialed`}
+              color="#10b981"
+            />
+            <StatCard
+              label="Conversion Rate"
+              value={`${stats.conversionRate}%`}
+              sub={`${stats.contracts} contracts from ${stats.total} leads`}
+              color="#10b981"
+            />
+            <StatCard label="Voicemail Rate" value={`${stats.voicemailRate}%`} sub={`${stats.voicemailCount} voicemails left`} color="#f59e0b" />
+            <StatCard
+              label="Dead / Declined Rate"
+              value={`${stats.deadDeclinedRate}%`}
+              sub={`${stats.deadDeclinedOutcomeCount} not interested`}
+              color="#ef4444"
+            />
+            <StatCard label="Total Sessions" value={stats.totalSessions} sub={`${stats.totalSessions} calling sessions run`} color="#4f46e5" />
             <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#4f46e5" />
-            <StatCard label="Contracts" value={stats.contracts} sub={`${stats.conversionRate}% conversion`} color="#10b981" />
-            <StatCard label="Dead / Declined" value={stats.deadDeclined} sub="not interested" color="#ef4444" />
+            <StatCard label="Calls / Follow-Up" value={stats.callsPerFollowup ?? '—'} sub="avg dials to get a follow-up" color="#f59e0b" />
+            <StatCard
+              label="Calls / Conversation"
+              value={stats.callsPerConversation ?? '—'}
+              sub="avg dials to get a conversation"
+              color="#f59e0b"
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
