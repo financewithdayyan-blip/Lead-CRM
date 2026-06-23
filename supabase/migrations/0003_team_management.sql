@@ -8,13 +8,14 @@
 -- ============================================================================
 
 update public.profiles set role = 'admin' where role = 'manager';
+update public.profiles set role = 'caller' where role not in ('admin', 'caller');
 
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check check (role in ('admin', 'caller'));
 alter table public.profiles alter column role set default 'caller';
 
 -- ── team_invites ────────────────────────────────────────────────────────────
-create table public.team_invites (
+create table if not exists public.team_invites (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
   email text not null,
@@ -23,23 +24,27 @@ create table public.team_invites (
   created_at timestamptz not null default now(),
   accepted_at timestamptz
 );
-create index team_invites_owner_idx on public.team_invites (owner_id);
-create index team_invites_email_idx on public.team_invites (lower(email));
+create index if not exists team_invites_owner_idx on public.team_invites (owner_id);
+create index if not exists team_invites_email_idx on public.team_invites (lower(email));
 -- Only one pending invite per owner+email at a time; past accepted/revoked
 -- rows don't block re-inviting the same address later.
-create unique index team_invites_pending_unique on public.team_invites (owner_id, lower(email)) where (status = 'pending');
+create unique index if not exists team_invites_pending_unique on public.team_invites (owner_id, lower(email)) where (status = 'pending');
 
 alter table public.team_invites enable row level security;
 
+drop policy if exists "team_invites_select" on public.team_invites;
 create policy "team_invites_select" on public.team_invites
   for select using (owner_id = auth.uid());
 
+drop policy if exists "team_invites_insert" on public.team_invites;
 create policy "team_invites_insert" on public.team_invites
   for insert with check (owner_id = auth.uid() and public.current_role() = 'admin');
 
+drop policy if exists "team_invites_update" on public.team_invites;
 create policy "team_invites_update" on public.team_invites
   for update using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
+drop policy if exists "team_invites_delete" on public.team_invites;
 create policy "team_invites_delete" on public.team_invites
   for delete using (owner_id = auth.uid());
 
