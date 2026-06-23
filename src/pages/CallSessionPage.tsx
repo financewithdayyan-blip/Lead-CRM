@@ -309,44 +309,49 @@ export function CallSessionPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call Outcome</div>
-          <div className="mt-2 grid grid-cols-2 gap-2.5">
-            {OUTCOMES.map((o) => {
-              const active = outcome === o.key;
-              return (
-                <button
-                  key={o.key}
-                  type="button"
-                  onClick={() => setOutcome(o.key)}
-                  style={active ? { background: STAGE_CONFIG[o.stage].color } : undefined}
-                  className={`rounded-md border px-4 py-3 text-[14px] font-semibold transition-colors ${
-                    active ? 'border-transparent text-slate-950' : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              );
-            })}
-          </div>
+          <div className="mx-auto max-w-md">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call Outcome</div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {OUTCOMES.map((o) => {
+                const active = outcome === o.key;
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setOutcome(o.key)}
+                    style={active ? { background: STAGE_CONFIG[o.stage].color } : undefined}
+                    className={`rounded-md border px-2 py-2 text-[12.5px] font-semibold transition-colors ${
+                      active ? 'border-transparent text-slate-950' : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
 
-          <div className="mt-6 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes</div>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add call notes…"
-            className="mt-2 h-56 w-full rounded-md border border-slate-700 bg-slate-900 p-3 text-[13px] text-slate-200 outline-none focus:border-emerald-500"
-          />
+            <div className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes</div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add call notes…"
+              className="mt-2 h-32 w-full rounded-md border border-slate-700 bg-slate-900 p-3 text-[13px] text-slate-200 outline-none focus:border-emerald-500"
+            />
 
-          <button onClick={saveAndNext} className="mt-5 w-full rounded-md bg-emerald-500 py-3 text-[14px] font-semibold text-slate-950 hover:bg-emerald-400">
-            Save & Next →
-          </button>
+            <button
+              onClick={saveAndNext}
+              className="mt-4 w-full rounded-md bg-emerald-500 py-2.5 text-[13px] font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              Save & Next →
+            </button>
 
-          <div className="mt-3 flex flex-wrap justify-center gap-4 text-[11px] text-slate-500">
-            {SHORTCUT_LEGEND.map((s) => (
-              <span key={s.key}>
-                <kbd className="rounded border border-slate-700 px-1 py-0.5 text-slate-400">{s.key}</kbd> {s.label}
-              </span>
-            ))}
+            <div className="mt-3 flex flex-wrap justify-center gap-3 text-[11px] text-slate-500">
+              {SHORTCUT_LEGEND.map((s) => (
+                <span key={s.key}>
+                  <kbd className="rounded border border-slate-700 px-1 py-0.5 text-slate-400">{s.key}</kbd> {s.label}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
