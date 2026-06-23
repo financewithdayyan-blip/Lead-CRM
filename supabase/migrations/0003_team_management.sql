@@ -7,10 +7,13 @@
 -- become a plain 'caller' instead).
 -- ============================================================================
 
+-- Drop the old constraint BEFORE migrating data - it only allowed
+-- admin/manager/rep, so writing 'caller' while it's still active fails.
+alter table public.profiles drop constraint if exists profiles_role_check;
+
 update public.profiles set role = 'admin' where role = 'manager';
 update public.profiles set role = 'caller' where role not in ('admin', 'caller');
 
-alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check check (role in ('admin', 'caller'));
 alter table public.profiles alter column role set default 'caller';
 
