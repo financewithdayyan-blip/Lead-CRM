@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Ban,
   CalendarClock,
+  CalendarDays,
   ChevronDown,
   Clock,
   Copy,
@@ -18,6 +19,7 @@ import {
   Trophy,
   Voicemail,
   Wrench,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -155,7 +157,21 @@ export function CallSessionPage() {
   const [notes, setNotes] = useState('');
   const [repairs, setRepairs] = useState<RepairFlags>({});
   const [propertyRating, setPropertyRating] = useState<number | null>(null);
+  const [followUpDate, setFollowUpDate] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const followUpDays = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+      return {
+        iso: localIsoDate(d),
+        weekday: i === 0 ? 'Today' : d.toLocaleDateString([], { weekday: 'short' }),
+        day: d.getDate(),
+        month: d.toLocaleDateString([], { month: 'short' }),
+      };
+    });
+  }, []);
 
   // Snapshot the queue once when leads finish loading so the order/membership
   // stays stable for the rest of the session, even as mutations refetch `leads`.
@@ -188,7 +204,14 @@ export function CallSessionPage() {
     setNotes('');
     setRepairs(currentLead?.repairs ?? {});
     setPropertyRating(currentLead?.propertyRating ?? null);
+    setFollowUpDate(null);
   }, [currentLeadId]);
+
+  useEffect(() => {
+    if (outcome === 'followup' && followUpDate === null) {
+      setFollowUpDate(followUpDays[0].iso);
+    }
+  }, [outcome, followUpDate, followUpDays]);
 
   const todayIso = localIsoDate(new Date());
   const callsTodayBaseline = useMemo(
@@ -218,6 +241,7 @@ export function CallSessionPage() {
     updateLead.mutate({
       id: currentLead.id,
       ...(chosen ? { stage: chosen.stage } : {}),
+      ...(outcome === 'followup' ? { nextFollowUp: followUpDate } : {}),
       repairs,
       propertyRating,
     });
@@ -245,7 +269,7 @@ export function CallSessionPage() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [finished, currentLead, outcome, notes, repairs, propertyRating]);
+  }, [finished, currentLead, outcome, notes, repairs, propertyRating, followUpDate]);
 
   if (queueIds === null) {
     return (
@@ -330,44 +354,44 @@ export function CallSessionPage() {
         />
       </div>
 
-      <div className="grid flex-1 grid-cols-[320px_1fr_360px] gap-4 overflow-hidden p-4">
-        <div className="overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-xl shadow-black/20">
-          <div className="flex items-center gap-3">
+      <div className="grid flex-1 items-start grid-cols-[400px_1fr_340px] gap-4 overflow-hidden p-4">
+        <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
+          <div className="flex items-center gap-4">
             <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-slate-950 shadow-lg"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-bold text-slate-950 shadow-lg"
               style={{ background: STAGE_CONFIG[currentLead.stage].color }}
             >
               {initials(currentLead.firstName, currentLead.lastName)}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-lg font-bold uppercase tracking-wide text-white">{fullName}</div>
-              <div className="mt-1 flex items-center gap-1.5">
+              <div className="truncate text-2xl font-bold uppercase tracking-wide text-white">{fullName}</div>
+              <div className="mt-1.5 flex items-center gap-2">
                 <span
-                  className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold text-slate-950"
+                  className="rounded-full px-2.5 py-1 text-[12px] font-semibold text-slate-950"
                   style={{ background: STAGE_CONFIG[currentLead.stage].color }}
                 >
                   {STAGE_CONFIG[currentLead.stage].label}
                 </span>
-                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10.5px] text-slate-400">#{currentLead.leadNum}</span>
+                <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[12px] text-slate-400">#{currentLead.leadNum}</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
-            <div className="flex items-center gap-2 text-[13px] font-medium text-slate-200">
-              <Phone size={13} className="text-emerald-400" /> {formatPhone(currentLead.phone)}
+          <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3.5">
+            <div className="flex items-center gap-2.5 text-[17px] font-semibold text-slate-100">
+              <Phone size={16} className="text-emerald-400" /> {formatPhone(currentLead.phone)}
             </div>
             <button
               onClick={copyPhone}
-              className="flex items-center gap-1 rounded-full bg-emerald-900/40 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-900/70"
+              className="flex items-center gap-1.5 rounded-full bg-emerald-900/40 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-900/70"
             >
-              <Copy size={11} /> {copied ? 'Copied!' : 'Copy'}
+              <Copy size={13} /> {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
 
           {currentLead.address && (
-            <div className="mt-2.5 flex items-start gap-1.5 text-[12.5px] leading-snug text-slate-400">
-              <MapPin size={13} className="mt-0.5 shrink-0 text-emerald-500" />
+            <div className="mt-3 flex items-start gap-2 text-[14px] leading-snug text-slate-300">
+              <MapPin size={15} className="mt-0.5 shrink-0 text-emerald-500" />
               <span className="uppercase tracking-wide">{addressLine}</span>
             </div>
           )}
@@ -383,16 +407,17 @@ export function CallSessionPage() {
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Property Rating (out of 10)</div>
             <div className="grid grid-cols-5 gap-1.5">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
-                const active = propertyRating === n;
+                const filled = propertyRating !== null && n <= propertyRating;
+                const selected = n === propertyRating;
                 return (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setPropertyRating(n)}
-                    style={active ? { background: ratingColor(n) } : undefined}
+                    style={filled ? { background: ratingColor(n) } : undefined}
                     className={`h-8 rounded-lg border text-[12px] font-semibold transition-all ${
-                      active
-                        ? 'scale-105 border-transparent text-slate-950 shadow-lg'
+                      filled
+                        ? `border-transparent text-slate-950 shadow-md ${selected ? 'scale-110 ring-2 ring-white/60' : ''}`
                         : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-600 hover:text-slate-200'
                     }`}
                   >
@@ -404,7 +429,7 @@ export function CallSessionPage() {
           </div>
         </div>
 
-        <div className="overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
+        <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
           <div className="mx-auto max-w-md">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call Outcome</div>
             <div className="mt-2 grid grid-cols-3 gap-2">
@@ -434,6 +459,49 @@ export function CallSessionPage() {
               })}
             </div>
 
+            {outcome === 'followup' && (
+              <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <CalendarDays size={12} /> Follow-Up Date
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {followUpDays.map((d) => {
+                    const active = followUpDate === d.iso;
+                    return (
+                      <button
+                        key={d.iso}
+                        type="button"
+                        onClick={() => setFollowUpDate(d.iso)}
+                        className={`flex flex-col items-center rounded-lg border px-1 py-1.5 transition-colors ${
+                          active
+                            ? 'border-emerald-400 bg-emerald-400/10 text-emerald-300'
+                            : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-600'
+                        }`}
+                      >
+                        <span className="text-[9.5px] font-semibold uppercase">{d.weekday}</span>
+                        <span className="text-[14px] font-bold text-slate-100">{d.day}</span>
+                        <span className="text-[9px] uppercase text-slate-500">{d.month}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500">Custom:</span>
+                  <input
+                    type="date"
+                    value={followUpDate ?? ''}
+                    onChange={(e) => setFollowUpDate(e.target.value || null)}
+                    className="flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-[12px] text-slate-200 outline-none focus:border-emerald-600"
+                  />
+                  {followUpDate && (
+                    <button type="button" onClick={() => setFollowUpDate(null)} className="text-slate-500 hover:text-slate-300">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes</div>
             <textarea
               value={notes}
@@ -462,7 +530,7 @@ export function CallSessionPage() {
           </div>
         </div>
 
-        <div className="overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-xl shadow-black/20">
+        <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-xl shadow-black/20">
           <div className="mb-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             <FileText size={13} /> Call Script
           </div>
