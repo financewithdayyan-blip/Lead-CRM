@@ -29,7 +29,10 @@ export const CSV_FIELD_GUESSES: Array<{ key: string; label: string; patterns: Re
   { key: 'phone', label: 'Phone', patterns: [/phone|cell|mobile|number|tel/i], optional: false },
   { key: 'phone2', label: 'Phone 2', patterns: [/phone.?2|cell.?2|landline|home.?phone|alt.?phone|second.?phone/i], optional: true },
   { key: 'email', label: 'Email', patterns: [/email|e-mail|mail/i], optional: true },
-  { key: 'address', label: 'Address', patterns: [/address|addr|street|city|location/i], optional: false },
+  { key: 'address', label: 'Address', patterns: [/address|addr|\bstreet\b/i], optional: false },
+  { key: 'city', label: 'City', patterns: [/\bcity\b|\btown\b/i], optional: true },
+  { key: 'state', label: 'State', patterns: [/\bstate\b|\bprovince\b/i], optional: true },
+  { key: 'zip', label: 'Zip', patterns: [/\bzip\b|postal/i], optional: true },
   { key: 'beds', label: 'Beds', patterns: [/beds?|br|bedroom/i], optional: true },
   { key: 'baths', label: 'Baths', patterns: [/baths?|ba|bathroom/i], optional: true },
   { key: 'sqft', label: 'Sqft', patterns: [/sqft|sq.?ft|square.?feet|living.?area|size/i], optional: true },
@@ -58,6 +61,9 @@ export interface MappedCsvLead {
   phone2: string;
   email: string;
   address: string;
+  city: string;
+  state: string;
+  zip: string;
   beds: string;
   baths: string;
   sqft: string;
@@ -80,6 +86,9 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
         phone2: phone2Col ? formatPhone(phone2Col) : phones[1] ?? '',
         email: cellAt(r, mapping.email),
         address: cellAt(r, mapping.address) || '—',
+        city: cellAt(r, mapping.city),
+        state: cellAt(r, mapping.state),
+        zip: cellAt(r, mapping.zip),
         beds: cellAt(r, mapping.beds),
         baths: cellAt(r, mapping.baths),
         sqft: cellAt(r, mapping.sqft),

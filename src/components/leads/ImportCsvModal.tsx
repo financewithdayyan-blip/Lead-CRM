@@ -51,13 +51,15 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
           phone2: m.phone2 || null,
           email: m.email || null,
           address: m.address,
+          city: m.city || null,
+          state: m.state || batchState || null,
+          zip: m.zip || null,
           beds: m.beds ? Number(m.beds) : null,
           baths: m.baths ? Number(m.baths) : null,
           sqft: m.sqft ? Number(m.sqft) : null,
           lotSize: m.lotSize || null,
           propType: m.propType || null,
           source: m.source || batchSource || null,
-          state: batchState || null,
           stage: 'new' as const,
           rating: 0,
           tagIds: selectedTagIds,
@@ -133,6 +135,9 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
           </div>
           <div className="rounded-md border border-border bg-surface-3 p-2 text-[12px] text-text-3">
             Preview: {cellAt(parsed.rows[0], mapping.name)} · {cellAt(parsed.rows[0], mapping.phone)} · {cellAt(parsed.rows[0], mapping.address)}
+            {cellAt(parsed.rows[0], mapping.city) && `, ${cellAt(parsed.rows[0], mapping.city)}`}
+            {cellAt(parsed.rows[0], mapping.state) && `, ${cellAt(parsed.rows[0], mapping.state)}`}
+            {cellAt(parsed.rows[0], mapping.zip) && ` ${cellAt(parsed.rows[0], mapping.zip)}`}
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn" onClick={() => setStep('upload')}>
@@ -153,7 +158,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
               <input className="input" value={batchSource} onChange={(e) => setBatchSource(e.target.value)} placeholder="e.g. March cold list" />
             </div>
             <div>
-              <label className="label">State</label>
+              <label className="label">Fallback state (only used for rows with no State column)</label>
               <input className="input" value={batchState} onChange={(e) => setBatchState(e.target.value)} />
             </div>
           </div>
