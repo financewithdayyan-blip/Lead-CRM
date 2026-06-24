@@ -120,15 +120,19 @@ export function DashboardView({
 
     const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
     const voicemailCount = outcomeCount('voicemail');
-    const deadDeclinedOutcomeCount = outcomeCount('dead') + outcomeCount('declined');
+    const declinedCount = outcomeCount('declined');
+    const deadDeclinedOutcomeCount = outcomeCount('dead') + declinedCount;
+    const initialContactCount = outcomeCount('initial_contact');
     const followupCount = outcomeCount('followup');
-    const conversations = outcomeCount('initial_contact') + followupCount;
+    const conversations = initialContactCount + followupCount;
 
     const contactRate = callsMade > 0 ? Math.round((conversations / callsMade) * 100) : 0;
     const voicemailRate = callsMade > 0 ? Math.round((voicemailCount / callsMade) * 100) : 0;
     const deadDeclinedRate = callsMade > 0 ? Math.round((deadDeclinedOutcomeCount / callsMade) * 100) : 0;
     const callsPerFollowup = followupCount > 0 ? (callsMade / followupCount).toFixed(1) : null;
     const callsPerConversation = conversations > 0 ? (callsMade / conversations).toFixed(1) : null;
+    const pickupDenominator = initialContactCount + followupCount + declinedCount;
+    const pickupRatio = pickupDenominator > 0 ? (callsMade / pickupDenominator).toFixed(1) : null;
 
     // No dedicated session log exists yet - approximate a "session" as a run of
     // calls with no gap longer than 20 minutes between consecutive dials.
@@ -162,6 +166,7 @@ export function DashboardView({
       deadDeclinedRate,
       callsPerFollowup,
       callsPerConversation,
+      pickupRatio,
       totalSessions,
     };
   }, [leads, calls, tags]);
@@ -371,6 +376,12 @@ export function DashboardView({
               value={stats.callsPerConversation ?? '—'}
               sub="avg dials to get a conversation"
               color="#f59e0b"
+            />
+            <StatCard
+              label="Pickup Ratio"
+              value={stats.pickupRatio ?? '—'}
+              sub="calls per initial contact + follow-up + declined"
+              color="#0ea5e9"
             />
           </div>
 
