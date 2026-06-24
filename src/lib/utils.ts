@@ -8,7 +8,7 @@ export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '').slice(-10);
   if (digits.length !== 10) return raw;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `+1${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 export function extractPhones(raw: string | null | undefined): string[] {
@@ -23,7 +23,7 @@ export function extractPhones(raw: string | null | undefined): string[] {
 }
 
 export function normalizePhoneDigits(raw: string | null | undefined): string {
-  return (raw ?? '').replace(/\D/g, '');
+  return (raw ?? '').replace(/\D/g, '').slice(-10);
 }
 
 export function formatCurrency(n: number | null | undefined): string {
