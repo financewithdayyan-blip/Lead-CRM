@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { useCreateLead } from '@/hooks/useLeads';
-import { formatPhone, getErrorMessage } from '@/lib/utils';
+import { expandStreetSuffix, formatPhone, getErrorMessage } from '@/lib/utils';
 
 export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; targetUserId?: string }) {
   const createLead = useCreateLead();
@@ -36,7 +36,7 @@ export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; t
         phone: formatPhone(form.phone),
         phone2: form.phone2 ? formatPhone(form.phone2) : null,
         email: form.email || null,
-        address: form.address || '—',
+        address: expandStreetSuffix(form.address) || '—',
         city: form.city || null,
         state: form.state || null,
         source: form.source || null,

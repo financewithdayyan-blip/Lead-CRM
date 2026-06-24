@@ -56,6 +56,73 @@ export function initials(firstName: string, lastName: string): string {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
 
+const STREET_SUFFIX_MAP: Record<string, string> = {
+  aly: 'Alley',
+  ave: 'Avenue',
+  blvd: 'Boulevard',
+  cir: 'Circle',
+  ct: 'Court',
+  cv: 'Cove',
+  cswy: 'Causeway',
+  dr: 'Drive',
+  est: 'Estate',
+  expy: 'Expressway',
+  ext: 'Extension',
+  fwy: 'Freeway',
+  hwy: 'Highway',
+  is: 'Island',
+  jct: 'Junction',
+  ln: 'Lane',
+  mnr: 'Manor',
+  pkwy: 'Parkway',
+  pl: 'Place',
+  plz: 'Plaza',
+  pt: 'Point',
+  rd: 'Road',
+  rdg: 'Ridge',
+  sq: 'Square',
+  st: 'Street',
+  ter: 'Terrace',
+  trl: 'Trail',
+  tpke: 'Turnpike',
+  vly: 'Valley',
+  xing: 'Crossing',
+};
+
+// Directional suffixes (e.g. "123 Main Dr SW") should stay abbreviated - only
+// the actual street-type word gets expanded.
+const DIRECTIONALS = new Set(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']);
+
+/**
+ * Expands a street suffix abbreviation (Dr -> Drive, Ave -> Avenue, St ->
+ * Street, Ct -> Court, ...) at the end of a street address, skipping over a
+ * trailing directional (SW, NE, ...) if present. Only touches the one
+ * suffix word - everything else in the address is left untouched, so this
+ * is safe to run on a plain street-address value without misreading city
+ * names or state codes elsewhere in a fuller address string.
+ */
+export function expandStreetSuffix(address: string | null | undefined): string {
+  if (!address) return address ?? '';
+  const parts = address.split(/(\s+)/);
+  const wordIndexes: number[] = [];
+  parts.forEach((p, i) => {
+    if (p.trim().length > 0) wordIndexes.push(i);
+  });
+
+  for (let k = wordIndexes.length - 1; k >= 0; k--) {
+    const idx = wordIndexes[k];
+    const match = parts[idx].match(/^([A-Za-z]+)(\W*)$/);
+    if (!match) continue;
+    const [, letters, trailingPunct] = match;
+    const lower = letters.toLowerCase();
+    if (DIRECTIONALS.has(lower)) continue;
+    const expanded = STREET_SUFFIX_MAP[lower];
+    if (expanded) parts[idx] = expanded + trailingPunct;
+    break;
+  }
+  return parts.join('');
+}
+
 /** Supabase/Postgrest errors are plain objects with a `message`, not `Error` instances. */
 export function getErrorMessage(err: unknown, fallback = 'Something went wrong.'): string {
   if (err instanceof Error) return err.message;

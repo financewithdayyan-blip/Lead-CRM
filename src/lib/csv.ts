@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { extractPhones, formatPhone, normalizePhoneDigits } from './utils';
+import { expandStreetSuffix, extractPhones, formatPhone, normalizePhoneDigits } from './utils';
 
 export interface CsvParseResult {
   headers: string[];
@@ -85,7 +85,7 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
         phone: phones[0] ?? '',
         phone2: phone2Col ? formatPhone(phone2Col) : phones[1] ?? '',
         email: cellAt(r, mapping.email),
-        address: cellAt(r, mapping.address) || '—',
+        address: expandStreetSuffix(cellAt(r, mapping.address)) || '—',
         city: cellAt(r, mapping.city),
         state: cellAt(r, mapping.state),
         zip: cellAt(r, mapping.zip),
