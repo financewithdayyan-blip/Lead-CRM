@@ -55,3 +55,12 @@ export function localIsoDate(date: Date): string {
 export function initials(firstName: string, lastName: string): string {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
+
+/** Supabase/Postgrest errors are plain objects with a `message`, not `Error` instances. */
+export function getErrorMessage(err: unknown, fallback = 'Something went wrong.'): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
+    return (err as { message: string }).message;
+  }
+  return fallback;
+}

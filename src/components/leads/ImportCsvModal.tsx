@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useBulkCreateLeads, useLeads } from '@/hooks/useLeads';
 import { useCreateTag, useTags, nextTagColor } from '@/hooks/useTags';
 import { CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, guessColumnMapping, mapRowsToLeads, parseCsvFile, type CsvParseResult } from '@/lib/csv';
+import { getErrorMessage } from '@/lib/utils';
 
 type Step = 'upload' | 'mapping' | 'tags';
 
@@ -31,7 +32,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
       setMapping(guessColumnMapping(result.headers));
       setStep('mapping');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse CSV.');
+      setError(getErrorMessage(err, 'Failed to parse CSV.'));
     }
   }
 
@@ -64,7 +65,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
       );
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import leads.');
+      setError(getErrorMessage(err, 'Failed to import leads.'));
     }
   }
 
@@ -82,7 +83,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
       setSelectedTagIds((prev) => [...prev, tag.id]);
       setNewTagName('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create tag.');
+      setError(getErrorMessage(err, 'Failed to create tag.'));
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { useCreateLead } from '@/hooks/useLeads';
-import { formatPhone } from '@/lib/utils';
+import { formatPhone, getErrorMessage } from '@/lib/utils';
 
 export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; targetUserId?: string }) {
   const createLead = useCreateLead();
@@ -48,7 +48,7 @@ export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; t
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add lead.');
+      setError(getErrorMessage(err, 'Failed to add lead.'));
     }
   }
 

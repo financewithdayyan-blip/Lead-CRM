@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { supabase, setRememberMe } from '@/lib/supabase';
+import { getErrorMessage } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Mode = 'signin' | 'signup' | 'reset';
@@ -39,7 +40,7 @@ export function LoginPage() {
         setMessage('Password reset email sent.');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }

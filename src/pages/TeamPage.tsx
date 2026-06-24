@@ -16,7 +16,7 @@ import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Role } from '@/types/domain';
-import { localIsoDate } from '@/lib/utils';
+import { getErrorMessage, localIsoDate } from '@/lib/utils';
 
 const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', caller: 'Caller' };
 
@@ -107,7 +107,7 @@ export function TeamPage() {
           setInviteEmail('');
           setInviteRole('caller');
         },
-        onError: (err) => setInviteError(err instanceof Error ? err.message : 'Could not send invite.'),
+        onError: (err) => setInviteError(getErrorMessage(err, 'Could not send invite.')),
       },
     );
   }
