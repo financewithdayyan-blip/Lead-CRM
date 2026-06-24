@@ -9,6 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
 
+const WEEKDAY_LABELS = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
+
 function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
   return (
@@ -234,11 +236,14 @@ export function DashboardView({
     const todayTime = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
 
     const cols: Array<Array<{ iso: string; count: number; calls: number; sessions: number; isFuture: boolean; isToday: boolean }>> = [];
+    const monthLabels: Array<string | null> = [];
     for (let w = 0; w < weeksToToday; w++) {
       const cells = [];
+      let monthLabel: string | null = null;
       for (let d = 0; d < 7; d++) {
         const date = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + w * 7 + d);
         const iso = localIsoDate(date);
+        if (date.getDate() === 1) monthLabel = date.toLocaleDateString('en-US', { month: 'short' });
         cells.push({
           iso,
           count: byDay.get(iso) || 0,
@@ -249,6 +254,7 @@ export function DashboardView({
         });
       }
       cols.push(cells);
+      monthLabels.push(monthLabel);
     }
 
     const activeDays = Array.from(byDay.values()).filter((c) => c > 0).length;
@@ -289,7 +295,7 @@ export function DashboardView({
       if ((byDay.get(localIsoDate(d)) ?? 0) > 0) thisWeekActive++;
     }
 
-    return { cols, max, activeDays, currentStreak, bestStreak, thisWeekActive, thisWeekTotal: dayOfWeek + 1 };
+    return { cols, monthLabels, max, activeDays, currentStreak, bestStreak, thisWeekActive, thisWeekTotal: dayOfWeek + 1 };
   }, [activities]);
 
   const maxStage = Math.max(...Object.values(stats.stageCounts), 1);
@@ -519,37 +525,65 @@ export function DashboardView({
           </div>
 
           <div className="card overflow-x-auto">
-            <h3 className="mb-3 text-sm font-semibold text-text">Activity — {new Date().getFullYear()}</h3>
-            <div className="flex gap-[3px]">
-              {heatmap.cols.map((week, wi) => (
-                <div key={wi} className="flex flex-col gap-[3px]">
-                  {week.map((cell) => (
-                    <div key={cell.iso} className="group relative">
-                      <div
-                        className={`h-[11px] w-[11px] rounded-[2px] transition-transform group-hover:scale-125 ${cell.isToday ? 'ring-1 ring-primary' : ''}`}
-                        style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
-                      />
-                      {!cell.isFuture && (
-                        <div className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-20 w-48 -translate-x-1/2 rounded-lg border border-border bg-surface p-3 text-left opacity-0 shadow-popover transition-opacity group-hover:opacity-100">
-                          <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
-                            <MapPin size={12} className="text-primary" />
-                            {formatFullDate(cell.iso)}
-                          </div>
-                          <div className="my-1.5 border-t border-border" />
-                          <div className="flex items-center justify-between text-[11px] text-text-2">
-                            <span>Total Calls</span>
-                            <span className="font-medium text-text">{cell.calls || '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-text-2">
-                            <span>Sessions</span>
-                            <span className="font-medium text-text">{cell.sessions || '—'}</span>
-                          </div>
-                        </div>
-                      )}
+            <div className="mb-4 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-success" />
+              <h3 className="text-sm font-semibold text-text">Activity — {new Date().getFullYear()}</h3>
+            </div>
+            <div className="flex">
+              <div className="mr-2 flex flex-col gap-[3px] pt-[17px] text-[10px] text-text-3">
+                {WEEKDAY_LABELS.map((label, i) => (
+                  <div key={i} className="flex h-3 items-center">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="flex gap-[3px] pb-1">
+                  {heatmap.monthLabels.map((label, wi) => (
+                    <div key={wi} className="w-3 shrink-0 whitespace-nowrap text-[10px] text-text-3">
+                      {label}
                     </div>
                   ))}
                 </div>
-              ))}
+                <div className="flex gap-[3px]">
+                  {heatmap.cols.map((week, wi) => (
+                    <div key={wi} className="flex flex-col gap-[3px]">
+                      {week.map((cell) => (
+                        <div key={cell.iso} className="group relative">
+                          <div
+                            className={`h-3 w-3 rounded-[3px] transition-transform group-hover:scale-125 ${cell.isToday ? 'ring-1 ring-primary ring-offset-1' : ''}`}
+                            style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
+                          />
+                          {!cell.isFuture && (
+                            <div className="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 z-20 w-56 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-surface p-3 text-left opacity-0 shadow-popover transition-opacity group-hover:opacity-100">
+                              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
+                                <MapPin size={12} className="shrink-0 text-primary" />
+                                {formatFullDate(cell.iso)}
+                              </div>
+                              <div className="my-1.5 border-t border-border" />
+                              <div className="flex items-center justify-between gap-4 text-[11px] text-text-2">
+                                <span>Total Calls</span>
+                                <span className="font-medium text-text">{cell.calls || '—'}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-4 text-[11px] text-text-2">
+                                <span>Sessions</span>
+                                <span className="font-medium text-text">{cell.sessions || '—'}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2.5 flex items-center justify-end gap-1 text-[10px] text-text-3">
+                  <span>Less</span>
+                  {[0, 1, 2, 3, 4, 5].map((lvl) => (
+                    <span key={lvl} className="h-2.5 w-2.5 rounded-[2px]" style={{ background: intensity(lvl, 5) }} />
+                  ))}
+                  <span>More</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
