@@ -324,8 +324,8 @@ export function DashboardView({
                 ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={dailyTrend}>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={dailyTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gCalls" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
@@ -335,25 +335,50 @@ export function DashboardView({
                 <CartesianGrid stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-                <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="calls" name="Total Calls" stroke="#3b82f6" fill="url(#gCalls)" strokeWidth={2} />
-                <Area type="monotone" dataKey="voicemail" name="Voicemail" stroke="#f59e0b" fill="transparent" strokeWidth={1.5} />
+                <Tooltip
+                  cursor={{ stroke: '#cbd5e1', strokeDasharray: '3 3' }}
+                  contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
                 <Area
-                  type="monotone"
+                  type="linear"
+                  dataKey="calls"
+                  name="Total Calls"
+                  stroke="#3b82f6"
+                  fill="url(#gCalls)"
+                  strokeWidth={2}
+                  dot={{ r: 3, strokeWidth: 0, fill: '#3b82f6' }}
+                  activeDot={{ r: 5 }}
+                />
+                <Area
+                  type="linear"
+                  dataKey="voicemail"
+                  name="Voicemail"
+                  stroke="#f59e0b"
+                  fill="transparent"
+                  strokeWidth={2}
+                  dot={{ r: 3, strokeWidth: 0, fill: '#f59e0b' }}
+                  activeDot={{ r: 5 }}
+                />
+                <Area
+                  type="linear"
                   dataKey="dead_declined"
                   name="Dead / Declined"
                   stroke="#ef4444"
                   fill="transparent"
-                  strokeWidth={1.5}
+                  strokeWidth={2}
+                  dot={{ r: 3, strokeWidth: 0, fill: '#ef4444' }}
+                  activeDot={{ r: 5 }}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="followupCombined"
                   name="Follow-Up + Initial Contact"
                   stroke="#10b981"
                   fill="transparent"
-                  strokeWidth={1.5}
+                  strokeWidth={2}
+                  dot={{ r: 3, strokeWidth: 0, fill: '#10b981' }}
+                  activeDot={{ r: 5 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
