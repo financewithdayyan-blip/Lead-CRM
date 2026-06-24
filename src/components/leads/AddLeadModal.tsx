@@ -3,7 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useCreateLead } from '@/hooks/useLeads';
 import { formatPhone } from '@/lib/utils';
 
-export function AddLeadModal({ onClose }: { onClose: () => void }) {
+export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; targetUserId?: string }) {
   const createLead = useCreateLead();
   const [form, setForm] = useState({
     firstName: '',
@@ -27,6 +27,7 @@ export function AddLeadModal({ onClose }: { onClose: () => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     await createLead.mutateAsync({
+      ...(targetUserId ? { userId: targetUserId } : {}),
       firstName: form.firstName || '—',
       lastName: form.lastName,
       phone: formatPhone(form.phone),

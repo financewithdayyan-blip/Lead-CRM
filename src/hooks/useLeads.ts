@@ -49,7 +49,7 @@ export function useCreateLead() {
     mutationFn: async (lead: Partial<Lead> & { tagIds?: string[] }) => {
       const { data, error } = await supabase
         .from('leads')
-        .insert(leadToDbInsert(lead, session!.user.id))
+        .insert(leadToDbInsert(lead, lead.userId ?? session!.user.id))
         .select('id')
         .single();
       if (error) throw error;
@@ -67,7 +67,7 @@ export function useBulkCreateLeads() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (leads: Array<Partial<Lead> & { tagIds?: string[] }>) => {
-      const rows = leads.map((l) => leadToDbInsert(l, session!.user.id));
+      const rows = leads.map((l) => leadToDbInsert(l, l.userId ?? session!.user.id));
       const { data, error } = await supabase.from('leads').insert(rows).select('id');
       if (error) throw error;
       const tagRows: Array<{ lead_id: string; tag_id: string }> = [];

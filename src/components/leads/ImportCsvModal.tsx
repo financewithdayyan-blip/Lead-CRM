@@ -7,9 +7,9 @@ import { CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, guessColumnMapping, m
 
 type Step = 'upload' | 'mapping' | 'tags';
 
-export function ImportCsvModal({ onClose }: { onClose: () => void }) {
-  const { data: existingLeads = [] } = useLeads();
-  const { data: tags = [] } = useTags();
+export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void; targetUserId?: string }) {
+  const { data: existingLeads = [] } = useLeads(targetUserId);
+  const { data: tags = [] } = useTags(targetUserId);
   const createTag = useCreateTag();
   const bulkCreate = useBulkCreateLeads();
 
@@ -41,6 +41,7 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
   async function handleImport() {
     await bulkCreate.mutateAsync(
       unique.map((m) => ({
+        ...(targetUserId ? { userId: targetUserId } : {}),
         firstName: m.firstName,
         lastName: m.lastName,
         phone: m.phone,
@@ -65,7 +66,12 @@ export function ImportCsvModal({ onClose }: { onClose: () => void }) {
   async function handleCreateTag() {
     if (!newTagName.trim()) return;
     const color = nextTagColor(tags.length);
-    const tag = await createTag.mutateAsync({ name: newTagName.trim(), colorBg: color.bg, colorText: color.text });
+    const tag = await createTag.mutateAsync({
+      name: newTagName.trim(),
+      colorBg: color.bg,
+      colorText: color.text,
+      ...(targetUserId ? { userId: targetUserId } : {}),
+    });
     setSelectedTagIds((prev) => [...prev, tag.id]);
     setNewTagName('');
   }

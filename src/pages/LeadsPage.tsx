@@ -55,19 +55,17 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         <div>
           <h1 className="text-2xl font-semibold text-text">Leads</h1>
           <p className="text-sm text-text-3">
-            {leads.length} total{viewOnly && ' · you can edit or delete leads here, but not add or import new ones'}
+            {leads.length} total{viewOnly && " · this is their lead list - changes apply to their account"}
           </p>
         </div>
-        {!viewOnly && (
-          <div className="flex gap-2">
-            <button className="btn" onClick={() => setShowImport(true)}>
-              <Upload size={14} /> Import CSV
-            </button>
-            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-              <Plus size={14} /> Add Lead
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <button className="btn" onClick={() => setShowImport(true)}>
+            <Upload size={14} /> Import CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+            <Plus size={14} /> Add Lead
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -162,8 +160,8 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         </table>
       </div>
 
-      {!viewOnly && showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
-      {!viewOnly && showImport && <ImportCsvModal onClose={() => setShowImport(false)} />}
+      {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} targetUserId={targetUserId} />}
+      {showImport && <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />}
       {showDelete && <DeleteLeadsModal leads={leads} tags={tags} onClose={() => setShowDelete(false)} />}
     </div>
   );

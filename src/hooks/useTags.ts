@@ -34,10 +34,20 @@ export function useCreateTag() {
   const { session } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, colorBg, colorText }: { name: string; colorBg: string; colorText: string }) => {
+    mutationFn: async ({
+      name,
+      colorBg,
+      colorText,
+      userId,
+    }: {
+      name: string;
+      colorBg: string;
+      colorText: string;
+      userId?: string;
+    }) => {
       const { data, error } = await supabase
         .from('tags')
-        .insert({ user_id: session!.user.id, name, color_bg: colorBg, color_text: colorText })
+        .insert({ user_id: userId ?? session!.user.id, name, color_bg: colorBg, color_text: colorText })
         .select('*')
         .single();
       if (error) throw error;
