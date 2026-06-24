@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PhoneCall } from 'lucide-react';
+import { MapPin, PhoneCall } from 'lucide-react';
 import { AreaChart, Area, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
@@ -204,10 +204,28 @@ export function DashboardView({
 
   const heatmap = useMemo(() => {
     const byDay = new Map<string, number>();
+    const callTimesByDay = new Map<string, number[]>();
     activities.forEach((a) => {
       const iso = localIsoDate(new Date(a.createdAt));
       byDay.set(iso, (byDay.get(iso) || 0) + 1);
+      if (a.type === 'call') {
+        const arr = callTimesByDay.get(iso) ?? [];
+        arr.push(new Date(a.createdAt).getTime());
+        callTimesByDay.set(iso, arr);
+      }
     });
+
+    function sessionsForDay(iso: string) {
+      const times = callTimesByDay.get(iso);
+      if (!times || times.length === 0) return 0;
+      const sorted = [...times].sort((a, b) => a - b);
+      let sessions = 1;
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] - sorted[i - 1] > 20 * 60 * 1000) sessions++;
+      }
+      return sessions;
+    }
+
     const today = new Date();
     const jan1 = new Date(today.getFullYear(), 0, 1);
     const startDate = new Date(jan1.getFullYear(), jan1.getMonth(), jan1.getDate() - jan1.getDay());
@@ -215,17 +233,63 @@ export function DashboardView({
     const max = Math.max(1, ...Array.from(byDay.values()));
     const todayTime = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
 
-    const cols: Array<Array<{ iso: string; count: number; isFuture: boolean; isToday: boolean }>> = [];
+    const cols: Array<Array<{ iso: string; count: number; calls: number; sessions: number; isFuture: boolean; isToday: boolean }>> = [];
     for (let w = 0; w < weeksToToday; w++) {
       const cells = [];
       for (let d = 0; d < 7; d++) {
         const date = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + w * 7 + d);
         const iso = localIsoDate(date);
-        cells.push({ iso, count: byDay.get(iso) || 0, isFuture: date.getTime() > todayTime, isToday: date.getTime() === todayTime });
+        cells.push({
+          iso,
+          count: byDay.get(iso) || 0,
+          calls: (callTimesByDay.get(iso) ?? []).length,
+          sessions: sessionsForDay(iso),
+          isFuture: date.getTime() > todayTime,
+          isToday: date.getTime() === todayTime,
+        });
       }
       cols.push(cells);
     }
-    return { cols, max };
+
+    const activeDays = Array.from(byDay.values()).filter((c) => c > 0).length;
+
+    let currentStreak = 0;
+    {
+      const cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      while (cursor.getTime() >= jan1.getTime()) {
+        if ((byDay.get(localIsoDate(cursor)) ?? 0) > 0) {
+          currentStreak++;
+          cursor.setDate(cursor.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+
+    let bestStreak = 0;
+    {
+      let run = 0;
+      const cursor = new Date(jan1);
+      while (cursor.getTime() <= todayTime) {
+        if ((byDay.get(localIsoDate(cursor)) ?? 0) > 0) {
+          run++;
+          bestStreak = Math.max(bestStreak, run);
+        } else {
+          run = 0;
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    const dayOfWeek = today.getDay();
+    const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - dayOfWeek);
+    let thisWeekActive = 0;
+    for (let i = 0; i <= dayOfWeek; i++) {
+      const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+      if ((byDay.get(localIsoDate(d)) ?? 0) > 0) thisWeekActive++;
+    }
+
+    return { cols, max, activeDays, currentStreak, bestStreak, thisWeekActive, thisWeekTotal: dayOfWeek + 1 };
   }, [activities]);
 
   const maxStage = Math.max(...Object.values(stats.stageCounts), 1);
@@ -237,6 +301,11 @@ export function DashboardView({
     const level = Math.min(5, Math.max(1, Math.ceil((count / max) * 5)));
     const alpha = 0.15 + level * 0.17;
     return `rgba(79,70,229,${alpha.toFixed(2)})`;
+  }
+
+  function formatFullDate(iso: string) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }
 
   return (
@@ -432,18 +501,52 @@ export function DashboardView({
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard
+              label="Current Streak"
+              value={heatmap.currentStreak}
+              sub={heatmap.currentStreak === 0 ? 'Start today!' : `${heatmap.currentStreak} day${heatmap.currentStreak !== 1 ? 's' : ''} in a row`}
+              color="#f59e0b"
+            />
+            <StatCard label="Active Days" value={heatmap.activeDays} sub="active days this year" color="#10b981" />
+            <StatCard label="Best Streak" value={heatmap.bestStreak} sub="personal best" color="#06b6d4" />
+            <StatCard
+              label="This Week"
+              value={`${heatmap.thisWeekActive}/${heatmap.thisWeekTotal}`}
+              sub="days active so far"
+              color="#a78bfa"
+            />
+          </div>
+
           <div className="card overflow-x-auto">
             <h3 className="mb-3 text-sm font-semibold text-text">Activity — {new Date().getFullYear()}</h3>
             <div className="flex gap-[3px]">
               {heatmap.cols.map((week, wi) => (
                 <div key={wi} className="flex flex-col gap-[3px]">
                   {week.map((cell) => (
-                    <div
-                      key={cell.iso}
-                      title={`${cell.iso}: ${cell.count} activit${cell.count !== 1 ? 'ies' : 'y'}`}
-                      className={`h-[11px] w-[11px] rounded-[2px] ${cell.isToday ? 'ring-1 ring-primary' : ''}`}
-                      style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
-                    />
+                    <div key={cell.iso} className="group relative">
+                      <div
+                        className={`h-[11px] w-[11px] rounded-[2px] transition-transform group-hover:scale-125 ${cell.isToday ? 'ring-1 ring-primary' : ''}`}
+                        style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
+                      />
+                      {!cell.isFuture && (
+                        <div className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-20 w-48 -translate-x-1/2 rounded-lg border border-border bg-surface p-3 text-left opacity-0 shadow-popover transition-opacity group-hover:opacity-100">
+                          <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
+                            <MapPin size={12} className="text-primary" />
+                            {formatFullDate(cell.iso)}
+                          </div>
+                          <div className="my-1.5 border-t border-border" />
+                          <div className="flex items-center justify-between text-[11px] text-text-2">
+                            <span>Total Calls</span>
+                            <span className="font-medium text-text">{cell.calls || '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-text-2">
+                            <span>Sessions</span>
+                            <span className="font-medium text-text">{cell.sessions || '—'}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               ))}
