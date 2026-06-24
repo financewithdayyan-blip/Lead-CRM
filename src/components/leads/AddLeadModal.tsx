@@ -19,6 +19,7 @@ export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; t
     baths: '',
     sqft: '',
   });
+  const [error, setError] = useState<string | null>(null);
 
   function set<K extends keyof typeof form>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -26,28 +27,34 @@ export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; t
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await createLead.mutateAsync({
-      ...(targetUserId ? { userId: targetUserId } : {}),
-      firstName: form.firstName || '—',
-      lastName: form.lastName,
-      phone: formatPhone(form.phone),
-      phone2: form.phone2 ? formatPhone(form.phone2) : null,
-      email: form.email || null,
-      address: form.address || '—',
-      city: form.city || null,
-      state: form.state || null,
-      source: form.source || null,
-      beds: form.beds ? Number(form.beds) : null,
-      baths: form.baths ? Number(form.baths) : null,
-      sqft: form.sqft ? Number(form.sqft) : null,
-      stage: 'new',
-      rating: 0,
-    });
-    onClose();
+    setError(null);
+    try {
+      await createLead.mutateAsync({
+        ...(targetUserId ? { userId: targetUserId } : {}),
+        firstName: form.firstName || '—',
+        lastName: form.lastName,
+        phone: formatPhone(form.phone),
+        phone2: form.phone2 ? formatPhone(form.phone2) : null,
+        email: form.email || null,
+        address: form.address || '—',
+        city: form.city || null,
+        state: form.state || null,
+        source: form.source || null,
+        beds: form.beds ? Number(form.beds) : null,
+        baths: form.baths ? Number(form.baths) : null,
+        sqft: form.sqft ? Number(form.sqft) : null,
+        stage: 'new',
+        rating: 0,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add lead.');
+    }
   }
 
   return (
     <Modal open onClose={onClose} title="Add Lead">
+      {error && <div className="mb-4 rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>

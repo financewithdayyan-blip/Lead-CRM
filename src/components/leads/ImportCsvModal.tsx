@@ -39,45 +39,57 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, existingLeads);
 
   async function handleImport() {
-    await bulkCreate.mutateAsync(
-      unique.map((m) => ({
-        ...(targetUserId ? { userId: targetUserId } : {}),
-        firstName: m.firstName,
-        lastName: m.lastName,
-        phone: m.phone,
-        phone2: m.phone2 || null,
-        email: m.email || null,
-        address: m.address,
-        beds: m.beds ? Number(m.beds) : null,
-        baths: m.baths ? Number(m.baths) : null,
-        sqft: m.sqft ? Number(m.sqft) : null,
-        lotSize: m.lotSize || null,
-        propType: m.propType || null,
-        source: m.source || batchSource || null,
-        state: batchState || null,
-        stage: 'new' as const,
-        rating: 0,
-        tagIds: selectedTagIds,
-      })),
-    );
-    onClose();
+    setError(null);
+    try {
+      await bulkCreate.mutateAsync(
+        unique.map((m) => ({
+          ...(targetUserId ? { userId: targetUserId } : {}),
+          firstName: m.firstName,
+          lastName: m.lastName,
+          phone: m.phone,
+          phone2: m.phone2 || null,
+          email: m.email || null,
+          address: m.address,
+          beds: m.beds ? Number(m.beds) : null,
+          baths: m.baths ? Number(m.baths) : null,
+          sqft: m.sqft ? Number(m.sqft) : null,
+          lotSize: m.lotSize || null,
+          propType: m.propType || null,
+          source: m.source || batchSource || null,
+          state: batchState || null,
+          stage: 'new' as const,
+          rating: 0,
+          tagIds: selectedTagIds,
+        })),
+      );
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import leads.');
+    }
   }
 
   async function handleCreateTag() {
     if (!newTagName.trim()) return;
-    const color = nextTagColor(tags.length);
-    const tag = await createTag.mutateAsync({
-      name: newTagName.trim(),
-      colorBg: color.bg,
-      colorText: color.text,
-      ...(targetUserId ? { userId: targetUserId } : {}),
-    });
-    setSelectedTagIds((prev) => [...prev, tag.id]);
-    setNewTagName('');
+    setError(null);
+    try {
+      const color = nextTagColor(tags.length);
+      const tag = await createTag.mutateAsync({
+        name: newTagName.trim(),
+        colorBg: color.bg,
+        colorText: color.text,
+        ...(targetUserId ? { userId: targetUserId } : {}),
+      });
+      setSelectedTagIds((prev) => [...prev, tag.id]);
+      setNewTagName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create tag.');
+    }
   }
 
   return (
     <Modal open onClose={onClose} title="Import Leads from CSV" width="lg">
+      {error && <div className="mb-4 rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
+
       {step === 'upload' && (
         <div>
           <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border-2 text-text-3 hover:border-primary hover:text-primary">
@@ -91,7 +103,6 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
           </label>
-          {error && <div className="mt-3 rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
         </div>
       )}
 
