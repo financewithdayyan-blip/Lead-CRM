@@ -359,7 +359,7 @@ export function CallSessionPage() {
         />
       </div>
 
-      <div className="grid flex-1 grid-cols-[400px_1fr_340px] gap-4 overflow-hidden p-4">
+      <div className="grid flex-1 grid-cols-[400px_1fr_480px] gap-4 overflow-hidden p-4">
         <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
           <div className="flex items-center gap-4">
             <div
@@ -457,7 +457,7 @@ export function CallSessionPage() {
         </div>
 
         <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-xl shadow-black/20">
-          <div className="mx-auto max-w-md">
+          <div className="mx-auto max-w-sm">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call Outcome</div>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
               {OUTCOMES.map((o) => {
