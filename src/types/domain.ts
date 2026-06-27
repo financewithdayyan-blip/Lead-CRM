@@ -72,6 +72,16 @@ export interface RepairFlags {
   flooring?: boolean;
 }
 
+export interface ScriptAnswers {
+  motivation?: string;
+  condition?: string;
+  timeline?: string;
+  price?: string;
+  decision?: string;
+  photo_request?: string;
+  callback?: string;
+}
+
 export interface Lead {
   id: string;
   userId: string;
@@ -105,6 +115,7 @@ export interface Lead {
   askingPrice: number | null;
   finalPrice: number | null;
   repairs: RepairFlags;
+  scriptAnswers: ScriptAnswers;
   notes: string | null;
   nextFollowUp: string | null;
   createdAt: string;

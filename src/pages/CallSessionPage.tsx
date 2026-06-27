@@ -26,7 +26,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useAddActivity, useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
+import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { TagPill } from '@/components/ui/TagPill';
+import { SCRIPT_STEPS } from '@/lib/callScript';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
 import { formatPhone, initials, localIsoDate } from '@/lib/utils';
 
@@ -193,6 +195,7 @@ export function CallSessionPage() {
 
   const currentLeadId = queueIds?.[currentIndex];
   const currentLead = leads.find((l) => l.id === currentLeadId) ?? null;
+  const script = useScriptAnswers(currentLead);
 
   // If a queued lead disappeared (e.g. deleted mid-session), skip past it.
   useEffect(() => {
@@ -559,8 +562,12 @@ export function CallSessionPage() {
         </div>
 
         <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-xl shadow-black/20">
-          <div className="mb-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            <FileText size={13} /> Call Script
+          <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <FileText size={13} /> Call Script
+            </span>
+            {script.status === 'saving' && <span className="text-slate-500">Saving…</span>}
+            {script.status === 'saved' && <span className="text-emerald-400">Saved</span>}
           </div>
           <ScriptStep index={1} title="Introduction & Permission">
             <ScriptSay>
@@ -581,6 +588,27 @@ export function CallSessionPage() {
               </div>
             </div>
           </ScriptStep>
+          {SCRIPT_STEPS.map((step, i) => (
+            <ScriptStep key={step.key} index={i + 3} title={step.title}>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">{step.prompt}</div>
+              {step.multiline ? (
+                <textarea
+                  value={script.answers[step.key] ?? ''}
+                  onChange={(e) => script.setAnswer(step.key, e.target.value)}
+                  placeholder="Type their answer…"
+                  rows={2}
+                  className="w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
+                />
+              ) : (
+                <input
+                  value={script.answers[step.key] ?? ''}
+                  onChange={(e) => script.setAnswer(step.key, e.target.value)}
+                  placeholder="Type their answer…"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
+                />
+              )}
+            </ScriptStep>
+          ))}
         </div>
       </div>
     </div>

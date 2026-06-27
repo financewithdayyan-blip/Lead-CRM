@@ -38,6 +38,7 @@ export function dbToLead(row: any): Lead {
     askingPrice: row.asking_price,
     finalPrice: row.final_price,
     repairs: row.repairs ?? {},
+    scriptAnswers: row.script_answers ?? {},
     notes: row.notes,
     nextFollowUp: row.next_follow_up,
     createdAt: row.created_at,
@@ -91,6 +92,7 @@ export function leadToDbInsert(lead: Partial<Lead>, userId: string) {
     asking_price: lead.askingPrice ?? null,
     final_price: lead.finalPrice ?? null,
     repairs: lead.repairs ?? {},
+    script_answers: lead.scriptAnswers ?? {},
     notes: lead.notes ?? null,
     next_follow_up: lead.nextFollowUp ?? null,
   };
@@ -127,6 +129,7 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['askingPrice', 'asking_price'],
   ['finalPrice', 'final_price'],
   ['repairs', 'repairs'],
+  ['scriptAnswers', 'script_answers'],
   ['notes', 'notes'],
   ['nextFollowUp', 'next_follow_up'],
 ];

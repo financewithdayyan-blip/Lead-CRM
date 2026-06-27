@@ -6,11 +6,13 @@ import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
 import { useActivities, useAddActivity, useDeleteActivity } from '@/hooks/useActivities';
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl } from '@/hooks/useLeadFiles';
+import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadStage, type Tag } from '@/types/domain';
 import { formatPhone, formatDate, formatDateTime } from '@/lib/utils';
+import { SCRIPT_STEPS } from '@/lib/callScript';
 
 const ACTIVITY_LABEL: Record<ActivityType, string> = {
   note: 'Note',
@@ -21,11 +23,12 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   stage_change: 'Stage changed',
 };
 
-const TABS = ['overview', 'property', 'activity', 'tasks', 'files'] as const;
+const TABS = ['overview', 'property', 'script', 'activity', 'tasks', 'files'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
   property: 'Property Details',
+  script: 'Call Script',
   activity: 'Activity',
   tasks: 'Tasks',
   files: 'Files',
@@ -119,6 +122,7 @@ export function LeadProfilePage() {
 
       {tab === 'overview' && <OverviewTab lead={lead} />}
       {tab === 'property' && <PropertyTab lead={lead} />}
+      {tab === 'script' && <ScriptTab lead={lead} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
       {tab === 'tasks' && <TasksTab leadId={lead.id} />}
       {tab === 'files' && <FilesTab lead={lead} />}
@@ -563,6 +567,68 @@ function PropertyTab({ lead }: { lead: Lead }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function ScriptTab({ lead }: { lead: Lead }) {
+  const { answers, setAnswer, status } = useScriptAnswers(lead);
+  const fullName = `${lead.firstName} ${lead.lastName}`.trim();
+  const addressLine =
+    [lead.address, lead.city, lead.state].filter(Boolean).join(', ') + (lead.zip ? ` ${lead.zip}` : '') || 'the property';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[13px] text-text-3">Answers save automatically as you type.</p>
+        <span className="text-[12px] font-medium">
+          {status === 'saving' && <span className="text-text-3">Saving…</span>}
+          {status === 'saved' && <span className="text-success">✓ Saved</span>}
+        </span>
+      </div>
+
+      <div className="card">
+        <h3 className="mb-3 text-sm font-semibold text-text">Introduction & Permission</h3>
+        <div className="space-y-2 text-[13px] leading-relaxed text-text-2">
+          <p className="rounded-md bg-surface-3 p-3">
+            "Hi, is this <strong className="text-text">{fullName}</strong>? My name is <strong className="text-text">[Your Name]</strong>. I'm
+            calling about the property at <strong className="text-text">{addressLine}</strong>. Do you have a few minutes to talk about it?"
+          </p>
+          <p className="rounded-md bg-surface-3 p-3">
+            "So we are basically fix and flippers and have hired a private investigator to find us properties — he's given us your address and
+            number. We are interested in buying your house."
+          </p>
+          <p className="rounded-md bg-surface-3 p-3">› Are you interested in selling your house for the right price?</p>
+        </div>
+      </div>
+
+      {SCRIPT_STEPS.map((step, i) => (
+        <div key={step.key} className="card">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
+              {i + 3}
+            </span>
+            <h3 className="text-sm font-semibold text-text">{step.title}</h3>
+          </div>
+          <p className="mb-2 text-[13px] text-text-2">{step.prompt}</p>
+          {step.multiline ? (
+            <textarea
+              className="input"
+              rows={3}
+              value={answers[step.key] ?? ''}
+              onChange={(e) => setAnswer(step.key, e.target.value)}
+              placeholder="Type their answer…"
+            />
+          ) : (
+            <input
+              className="input"
+              value={answers[step.key] ?? ''}
+              onChange={(e) => setAnswer(step.key, e.target.value)}
+              placeholder="Type their answer…"
+            />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
