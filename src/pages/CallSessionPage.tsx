@@ -30,7 +30,7 @@ import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { TagPill } from '@/components/ui/TagPill';
 import { SCRIPT_STEPS } from '@/lib/callScript';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
-import { formatPhone, initials, localIsoDate } from '@/lib/utils';
+import { callerDisplayName, formatPhone, initials, localIsoDate } from '@/lib/utils';
 
 const REPAIR_OPTIONS: Array<{ key: keyof RepairFlags; label: string }> = [
   { key: 'plumbing', label: 'Plumbing' },
@@ -323,6 +323,7 @@ export function CallSessionPage() {
   const addressLine =
     [currentLead.address, currentLead.city, currentLead.state].filter(Boolean).join(', ') + (currentLead.zip ? ` ${currentLead.zip}` : '');
   const fullName = `${currentLead.firstName} ${currentLead.lastName}`.trim();
+  const callerName = callerDisplayName(profile?.fullName, session?.user.email);
   const queueProgressPct = Math.min(100, (currentIndex / queueIds.length) * 100);
 
   return (
@@ -571,12 +572,13 @@ export function CallSessionPage() {
           </div>
           <ScriptStep index={1} title="Introduction & Permission">
             <ScriptSay>
-              "Hi, is this <b className="text-white">{fullName}</b>? My name is <b className="text-amber-300">[Your Name]</b>. I'm calling about
-              the property at <b className="text-amber-300">{addressLine}</b>. Do you have a few minutes to talk about it?"
+              "Hi, is this <b className="text-white">{fullName}</b>? My name is <b className="text-amber-300">{callerName}</b>. I'm calling
+              about the property at <b className="text-amber-300">{addressLine}</b>. Do you have a few minutes to talk about it?"
             </ScriptSay>
             <ScriptSay>
-              "So we are basically fix and flippers and have hired a private investigator to find us properties — he's given us your address
-              and number. We are interested in buying your house."
+              "So we are basically an acquisition company — we help homeowners solve problems regarding their properties. We have access to
+              public records and we came across your property there, that's how we got your address and number. We are interested in your
+              house."
             </ScriptSay>
           </ScriptStep>
           <ScriptStep index={2} title="Confirm They Want to Sell">

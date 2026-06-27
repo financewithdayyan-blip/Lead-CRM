@@ -56,6 +56,13 @@ export function initials(firstName: string, lastName: string): string {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
 
+/** The caller's own name for the call script opener: profile full name, else their email username. */
+export function callerDisplayName(fullName: string | null | undefined, email: string | null | undefined): string {
+  if (fullName && fullName.trim()) return fullName.trim();
+  if (email) return email.split('@')[0];
+  return '[Your Name]';
+}
+
 const STREET_SUFFIX_MAP: Record<string, string> = {
   aly: 'Alley',
   ave: 'Avenue',

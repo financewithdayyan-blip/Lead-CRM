@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Upload, ExternalLink } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
 import { useActivities, useAddActivity, useDeleteActivity } from '@/hooks/useActivities';
@@ -11,7 +12,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadStage, type Tag } from '@/types/domain';
-import { formatPhone, formatDate, formatDateTime } from '@/lib/utils';
+import { callerDisplayName, formatPhone, formatDate, formatDateTime } from '@/lib/utils';
 import { SCRIPT_STEPS } from '@/lib/callScript';
 
 const ACTIVITY_LABEL: Record<ActivityType, string> = {
@@ -572,8 +573,10 @@ function PropertyTab({ lead }: { lead: Lead }) {
 }
 
 function ScriptTab({ lead }: { lead: Lead }) {
+  const { profile, session } = useAuth();
   const { answers, setAnswer, status } = useScriptAnswers(lead);
   const fullName = `${lead.firstName} ${lead.lastName}`.trim();
+  const callerName = callerDisplayName(profile?.fullName, session?.user.email);
   const addressLine =
     [lead.address, lead.city, lead.state].filter(Boolean).join(', ') + (lead.zip ? ` ${lead.zip}` : '') || 'the property';
 
@@ -591,12 +594,14 @@ function ScriptTab({ lead }: { lead: Lead }) {
         <h3 className="mb-3 text-sm font-semibold text-text">Introduction & Permission</h3>
         <div className="space-y-2 text-[13px] leading-relaxed text-text-2">
           <p className="rounded-md bg-surface-3 p-3">
-            "Hi, is this <strong className="text-text">{fullName}</strong>? My name is <strong className="text-text">[Your Name]</strong>. I'm
-            calling about the property at <strong className="text-text">{addressLine}</strong>. Do you have a few minutes to talk about it?"
+            "Hi, is this <strong className="text-text">{fullName}</strong>? My name is <strong className="text-text">{callerName}</strong>.
+            I'm calling about the property at <strong className="text-text">{addressLine}</strong>. Do you have a few minutes to talk about
+            it?"
           </p>
           <p className="rounded-md bg-surface-3 p-3">
-            "So we are basically fix and flippers and have hired a private investigator to find us properties — he's given us your address and
-            number. We are interested in buying your house."
+            "So we are basically an acquisition company — we help homeowners solve problems regarding their properties. We have access to
+            public records and we came across your property there, that's how we got your address and number. We are interested in your
+            house."
           </p>
           <p className="rounded-md bg-surface-3 p-3">› Are you interested in selling your house for the right price?</p>
         </div>
