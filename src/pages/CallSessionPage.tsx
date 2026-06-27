@@ -370,7 +370,7 @@ export function CallSessionPage() {
             </div>
             <div className="min-w-0">
               <div className="truncate text-2xl font-bold uppercase tracking-wide text-white">{fullName}</div>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <span
                   className="rounded-full px-2.5 py-1 text-[12px] font-semibold text-slate-950"
                   style={{ background: STAGE_CONFIG[currentLead.stage].color }}
@@ -378,6 +378,10 @@ export function CallSessionPage() {
                   {STAGE_CONFIG[currentLead.stage].label}
                 </span>
                 <span className="rounded-full bg-slate-800 px-2.5 py-1 text-[12px] text-slate-400">#{currentLead.leadNum}</span>
+                {currentLead.tagIds.map((tid) => {
+                  const tag = tags.find((t) => t.id === tid);
+                  return tag ? <TagPill key={tid} tag={tag} /> : null;
+                })}
               </div>
             </div>
           </div>
@@ -416,15 +420,6 @@ export function CallSessionPage() {
             <div className="mt-3 flex items-start gap-2 text-[16px] font-semibold leading-snug text-amber-300">
               <MapPin size={17} className="mt-0.5 shrink-0 text-amber-400" />
               <span className="uppercase tracking-wide">{addressLine}</span>
-            </div>
-          )}
-
-          {currentLead.tagIds.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {currentLead.tagIds.map((tid) => {
-                const tag = tags.find((t) => t.id === tid);
-                return tag ? <TagPill key={tid} tag={tag} /> : null;
-              })}
             </div>
           )}
 
