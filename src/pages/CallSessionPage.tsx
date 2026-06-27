@@ -25,6 +25,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useAddActivity, useActivityFeed } from '@/hooks/useActivities';
+import { useTags } from '@/hooks/useTags';
+import { TagPill } from '@/components/ui/TagPill';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
 import { formatPhone, initials, localIsoDate } from '@/lib/utils';
 
@@ -145,6 +147,7 @@ export function CallSessionPage() {
 
   const { data: leads = [], isLoading } = useLeads();
   const { data: yearActivities = [] } = useActivityFeed(userId);
+  const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
   const addActivity = useAddActivity();
 
@@ -413,6 +416,15 @@ export function CallSessionPage() {
             <div className="mt-3 flex items-start gap-2 text-[16px] font-semibold leading-snug text-amber-300">
               <MapPin size={17} className="mt-0.5 shrink-0 text-amber-400" />
               <span className="uppercase tracking-wide">{addressLine}</span>
+            </div>
+          )}
+
+          {currentLead.tagIds.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {currentLead.tagIds.map((tid) => {
+                const tag = tags.find((t) => t.id === tid);
+                return tag ? <TagPill key={tid} tag={tag} /> : null;
+              })}
             </div>
           )}
 
