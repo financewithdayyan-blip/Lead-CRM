@@ -67,9 +67,8 @@ function formatElapsed(totalSeconds: number) {
 }
 
 function ratingColor(n: number) {
-  if (n <= 3) return '#ef4444';
-  if (n <= 6) return '#f59e0b';
-  if (n <= 8) return '#84cc16';
+  if (n <= 4) return '#ef4444';
+  if (n <= 7) return '#f59e0b';
   return '#10b981';
 }
 
@@ -426,7 +425,7 @@ export function CallSessionPage() {
 
           <div className="mt-5">
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Property Rating (out of 10)</div>
-            <div className="grid grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-10 gap-1">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
                 const filled = propertyRating !== null && n <= propertyRating;
                 const selected = n === propertyRating;
@@ -436,7 +435,7 @@ export function CallSessionPage() {
                     type="button"
                     onClick={() => setPropertyRating(n)}
                     style={filled ? { background: ratingColor(n) } : undefined}
-                    className={`h-8 rounded-lg border text-[12px] font-semibold transition-all ${
+                    className={`h-7 rounded-md border text-[11px] font-semibold transition-all ${
                       filled
                         ? `border-transparent text-slate-950 shadow-md ${selected ? 'scale-110 ring-2 ring-white/60' : ''}`
                         : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-600 hover:text-slate-200'
