@@ -158,7 +158,7 @@ export function CallSessionPage() {
   const [repairs, setRepairs] = useState<RepairFlags>({});
   const [propertyRating, setPropertyRating] = useState<number | null>(null);
   const [followUpDate, setFollowUpDate] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<'phone' | 'phone2' | null>(null);
 
   const followUpDays = useMemo(() => {
     const today = new Date();
@@ -228,11 +228,13 @@ export function CallSessionPage() {
     navigate('/');
   }
 
-  function copyPhone() {
+  function copyPhone(field: 'phone' | 'phone2') {
     if (!currentLead) return;
-    navigator.clipboard.writeText(currentLead.phone);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+    const raw = field === 'phone' ? currentLead.phone : currentLead.phone2;
+    if (!raw) return;
+    navigator.clipboard.writeText(formatPhone(raw));
+    setCopiedField(field);
+    setTimeout(() => setCopiedField((prev) => (prev === field ? null : prev)), 1200);
   }
 
   function saveAndNext() {
@@ -266,7 +268,7 @@ export function CallSessionPage() {
       else if (key === 'd') setOutcome('dead');
       else if (key === 'h') setOutcome('onhold');
       else if (key === 'n') saveAndNext();
-      else if (key === 'c') copyPhone();
+      else if (key === 'c') copyPhone('phone');
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -378,16 +380,34 @@ export function CallSessionPage() {
             </div>
           </div>
 
-          <div className="mt-5 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3.5">
-            <div className="flex items-center gap-2.5 text-[17px] font-semibold text-slate-100">
-              <Phone size={16} className="text-emerald-400" /> {formatPhone(currentLead.phone)}
+          <div className="mt-5 space-y-2">
+            <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3.5">
+              <div className="flex items-center gap-2.5 text-[17px] font-semibold text-slate-100">
+                <Phone size={16} className="text-emerald-400" /> {formatPhone(currentLead.phone)}
+              </div>
+              <button
+                onClick={() => copyPhone('phone')}
+                className="flex items-center gap-1.5 rounded-full bg-emerald-900/40 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-900/70"
+              >
+                <Copy size={13} /> {copiedField === 'phone' ? 'Copied!' : 'Copy'}
+              </button>
             </div>
-            <button
-              onClick={copyPhone}
-              className="flex items-center gap-1.5 rounded-full bg-emerald-900/40 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-900/70"
-            >
-              <Copy size={13} /> {copied ? 'Copied!' : 'Copy'}
-            </button>
+            {currentLead.phone2 && (
+              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                <div className="flex items-center gap-2.5 text-[15px] font-medium text-slate-300">
+                  <Phone size={14} className="text-emerald-400" /> {formatPhone(currentLead.phone2)}
+                  <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                    Alt
+                  </span>
+                </div>
+                <button
+                  onClick={() => copyPhone('phone2')}
+                  className="flex items-center gap-1.5 rounded-full bg-emerald-900/40 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-900/70"
+                >
+                  <Copy size={13} /> {copiedField === 'phone2' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            )}
           </div>
 
           {currentLead.address && (
