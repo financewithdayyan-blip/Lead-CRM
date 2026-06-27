@@ -38,7 +38,7 @@ export function AcceptInvitePage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-xl font-bold text-white">LC</div>
+          <img src="/logo.png" alt="BlueBird CRM" className="h-14 w-auto" />
           <h1 className="text-xl font-semibold text-text">Welcome to the team</h1>
         </div>
 

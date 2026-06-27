@@ -55,10 +55,8 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-60 flex-col bg-sidebar">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-white">
-          LC
-        </div>
-        <span className="text-base font-semibold text-sidebar-textActive">Lead CRM</span>
+        <img src="/logo.png" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
+        <span className="text-base font-semibold text-sidebar-textActive">BlueBird CRM</span>
       </div>
 
       {isOverseer && <ViewingAsSwitcher viewingId={viewingId} />}
