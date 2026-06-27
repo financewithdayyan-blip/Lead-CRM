@@ -55,7 +55,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-60 flex-col bg-sidebar">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <img src="/logo.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
+        <img src="/logo-mark.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
         <span className="text-base font-semibold text-sidebar-textActive">BlueBird CRM</span>
       </div>
 
