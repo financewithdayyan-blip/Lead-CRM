@@ -530,6 +530,12 @@ export function CallSessionPage() {
             )}
 
             <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes</div>
+            {currentLead.notes && (
+              <div className="mt-1.5 rounded-lg border border-slate-800 bg-slate-950/40 p-2.5 text-[12px] leading-relaxed text-slate-400">
+                <span className="font-semibold text-slate-500">From profile: </span>
+                {currentLead.notes}
+              </div>
+            )}
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
