@@ -50,7 +50,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
-          <img src="/logo.png" alt="BlueBird CRM" className="h-14 w-auto" />
+          <img src="/logo.svg" alt="BlueBird CRM" className="h-14 w-auto" />
           <h1 className="text-xl font-semibold text-text">BlueBird CRM</h1>
         </div>
 
