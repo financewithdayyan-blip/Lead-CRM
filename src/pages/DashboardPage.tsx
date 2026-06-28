@@ -194,20 +194,18 @@ export function DashboardView({
       });
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
-    activities.forEach((a) => {
+    calls.forEach((a) => {
       const iso = localIsoDate(new Date(a.createdAt));
       const day = byIso.get(iso);
       if (!day) return;
-      if (a.type === 'call') day.calls++;
-      if (a.type === 'stage_change') {
-        const to = (a.meta as { to?: unknown })?.to;
-        if (to === 'voicemail') day.voicemail++;
-        else if (to === 'dead_declined') day.dead_declined++;
-        else if (to === 'followup' || to === 'initial_contact') day.followupCombined++;
-      }
+      day.calls++;
+      const outcome = (a.meta as { outcome?: string })?.outcome;
+      if (outcome === 'voicemail') day.voicemail++;
+      else if (outcome === 'dead' || outcome === 'declined') day.dead_declined++;
+      else if (outcome === 'followup' || outcome === 'initial_contact') day.followupCombined++;
     });
     return days;
-  }, [activities, trendRange]);
+  }, [calls, trendRange]);
 
   const heatmap = useMemo(() => {
     const byDay = new Map<string, number>();
