@@ -35,8 +35,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   files: 'Files',
 };
 
-export function LeadProfilePage() {
-  const { id } = useParams<{ id: string }>();
+export function LeadProfileView({ id, backTo }: { id: string | undefined; backTo: string }) {
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
   const { data: tags = [] } = useTags();
@@ -49,7 +48,7 @@ export function LeadProfilePage() {
 
   return (
     <div>
-      <button onClick={() => navigate('/leads')} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-text-3 hover:text-text">
+      <button onClick={() => navigate(backTo)} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-text-3 hover:text-text">
         <ArrowLeft size={14} /> Back to Leads
       </button>
 
@@ -797,4 +796,9 @@ function FilesTab({ lead }: { lead: Lead }) {
       </div>
     </div>
   );
+}
+
+export function LeadProfilePage() {
+  const { id } = useParams<{ id: string }>();
+  return <LeadProfileView id={id} backTo="/leads" />;
 }

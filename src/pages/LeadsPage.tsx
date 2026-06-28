@@ -130,7 +130,11 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
               </tr>
             )}
             {filtered.map((lead) => (
-              <tr key={lead.id} className="cursor-pointer border-b border-border hover:bg-surface-3" onClick={() => navigate(`/leads/${lead.id}`)}>
+              <tr
+                key={lead.id}
+                className="cursor-pointer border-b border-border hover:bg-surface-3"
+                onClick={() => navigate(targetUserId ? `/team/${targetUserId}/leads/${lead.id}` : `/leads/${lead.id}`)}
+              >
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
                 </td>

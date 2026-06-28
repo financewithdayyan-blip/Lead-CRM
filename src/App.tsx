@@ -14,6 +14,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { MemberDashboardPage } from '@/pages/MemberDashboardPage';
 import { MemberLeadsPage } from '@/pages/MemberLeadsPage';
+import { MemberLeadProfilePage } from '@/pages/MemberLeadProfilePage';
 import { MemberKanbanPage } from '@/pages/MemberKanbanPage';
 import { CallSessionPage } from '@/pages/CallSessionPage';
 
@@ -42,6 +43,7 @@ export default function App() {
                   <Route path="/team" element={<TeamPage />} />
                   <Route path="/team/:memberId" element={<MemberDashboardPage />} />
                   <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
+                  <Route path="/team/:memberId/leads/:id" element={<MemberLeadProfilePage />} />
                   <Route path="/team/:memberId/kanban" element={<MemberKanbanPage />} />
                 </Route>
               </Route>

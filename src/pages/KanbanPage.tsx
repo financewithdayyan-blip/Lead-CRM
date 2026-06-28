@@ -232,7 +232,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               leads={filtered.filter((l) => l.stage === stage)}
               viewOnly={viewOnly}
               onCall={handleCall}
-              onOpen={(id) => navigate(`/leads/${id}`)}
+              onOpen={(id) => navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`)}
               onDelete={setDeleteTarget}
               onClear={() => setClearTarget(stage)}
             />
