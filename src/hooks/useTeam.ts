@@ -77,6 +77,17 @@ export function useUpdateMemberRole() {
   });
 }
 
+export function useUpdateMemberGoals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, dailyGoal, monthlyGoal }: { id: string; dailyGoal: number; monthlyGoal: number }) => {
+      const { error } = await supabase.from('profiles').update({ daily_goal: dailyGoal, monthly_goal: monthlyGoal }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['team_members'] }),
+  });
+}
+
 export function useTeamInvites() {
   const { session } = useAuth();
   const ownerId = session?.user.id;

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTags, useCreateTag, useDeleteTag, nextTagColor } from '@/hooks/useTags';
-import { useUpdateProfile, useEraseAllData } from '@/hooks/useProfile';
+import { useUpdateProfile } from '@/hooks/useProfile';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -26,11 +25,11 @@ const PRESETS = [
 
 export function SettingsPage() {
   const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const { data: tags = [] } = useTags();
   const createTag = useCreateTag();
   const deleteTag = useDeleteTag();
   const updateProfile = useUpdateProfile();
-  const eraseAllData = useEraseAllData();
 
   const [fullName, setFullName] = useState(profile?.fullName ?? '');
   const [fullNameSaved, setFullNameSaved] = useState(false);
@@ -40,9 +39,6 @@ export function SettingsPage() {
   const [monthlyGoalSaved, setMonthlyGoalSaved] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [tagDeleteTarget, setTagDeleteTarget] = useState<string | null>(null);
-  const [nukeConfirmOpen, setNukeConfirmOpen] = useState(false);
-  const [nukeText, setNukeText] = useState('');
-  const [nukeDone, setNukeDone] = useState(false);
 
   function saveFullName() {
     const name = fullName.trim();
@@ -82,16 +78,6 @@ export function SettingsPage() {
     createTag.mutate({ name, colorBg: c.bg, colorText: c.text });
   }
 
-  function handleNuke() {
-    eraseAllData.mutate(undefined, {
-      onSuccess: () => {
-        setNukeConfirmOpen(false);
-        setNukeText('');
-        setNukeDone(true);
-      },
-    });
-  }
-
   return (
     <div>
       <div className="mb-5">
@@ -124,7 +110,9 @@ export function SettingsPage() {
 
         <div className="card">
           <div className="text-sm font-semibold text-text">Daily Call Goal</div>
-          <p className="mt-1 text-[13px] text-text-2">Tracked on your dashboard's daily goal bar.</p>
+          <p className="mt-1 text-[13px] text-text-2">
+            {isAdmin ? "Tracked on your dashboard's daily goal bar." : 'Set by your admin. Tracked on your dashboard’s daily goal bar.'}
+          </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
               <label className="label">Daily target</label>
@@ -132,21 +120,26 @@ export function SettingsPage() {
                 className="input max-w-[140px]"
                 type="number"
                 min={1}
+                disabled={!isAdmin}
                 value={dailyGoal}
                 onChange={(e) => setDailyGoal(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && saveDailyGoal()}
               />
             </div>
-            <button className="btn btn-primary" onClick={saveDailyGoal}>
-              Save
-            </button>
+            {isAdmin && (
+              <button className="btn btn-primary" onClick={saveDailyGoal}>
+                Save
+              </button>
+            )}
             {dailyGoalSaved && <span className="text-[11px] text-success">✓ Saved</span>}
           </div>
         </div>
 
         <div className="card">
           <div className="text-sm font-semibold text-text">Monthly Call Goal</div>
-          <p className="mt-1 text-[13px] text-text-2">Target number of calls for the monthly goal bar on your dashboard.</p>
+          <p className="mt-1 text-[13px] text-text-2">
+            {isAdmin ? 'Target number of calls for the monthly goal bar on your dashboard.' : 'Set by your admin. Tracked on your dashboard’s monthly goal bar.'}
+          </p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <div>
               <label className="label">Monthly target</label>
@@ -154,14 +147,17 @@ export function SettingsPage() {
                 className="input max-w-[140px]"
                 type="number"
                 min={1}
+                disabled={!isAdmin}
                 value={monthlyGoal}
                 onChange={(e) => setMonthlyGoal(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && saveMonthlyGoal()}
               />
             </div>
-            <button className="btn btn-primary" onClick={saveMonthlyGoal}>
-              Save
-            </button>
+            {isAdmin && (
+              <button className="btn btn-primary" onClick={saveMonthlyGoal}>
+                Save
+              </button>
+            )}
             {monthlyGoalSaved && <span className="text-[11px] text-success">✓ Saved</span>}
           </div>
         </div>
@@ -214,27 +210,6 @@ export function SettingsPage() {
             })}
           </div>
         </div>
-
-        <div className="card !border-danger/25 !bg-danger-dim">
-          <div className="flex items-center gap-2 text-sm font-semibold text-danger">
-            <AlertTriangle size={15} /> Danger Zone
-          </div>
-          <p className="mt-1 text-[13px] text-text-2">
-            Permanently delete all data in your account — leads, activity, tags, and tasks. This cannot be undone.
-          </p>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-danger/20 bg-danger-dim p-4">
-            <div>
-              <div className="text-[13px] font-semibold text-text">Reset all data</div>
-              <div className="text-[12px] text-text-2">Removes leads, activity, tags, and tasks. You'll start fresh.</div>
-            </div>
-            <button className="btn btn-danger shrink-0" onClick={() => setNukeConfirmOpen(true)}>
-              <Trash2 size={14} /> Erase All Data
-            </button>
-          </div>
-
-          {nukeDone && <div className="mt-3 text-[12px] text-success">✓ All data erased.</div>}
-        </div>
       </div>
 
       <ConfirmDialog
@@ -249,33 +224,6 @@ export function SettingsPage() {
           setTagDeleteTarget(null);
         }}
       />
-
-      {nukeConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="card max-w-md !border-danger/45 !bg-danger-dim">
-            <div className="text-sm font-bold text-danger">Are you absolutely sure?</div>
-            <p className="mt-2 text-[13px] text-text-2">
-              This will permanently erase every lead, activity, tag, and task for your account. There is no undo. Type{' '}
-              <strong className="text-text">DELETE</strong> to confirm.
-            </p>
-            <input className="input mt-3" placeholder="Type DELETE" value={nukeText} onChange={(e) => setNukeText(e.target.value)} />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                className="btn"
-                onClick={() => {
-                  setNukeConfirmOpen(false);
-                  setNukeText('');
-                }}
-              >
-                Cancel
-              </button>
-              <button className="btn btn-danger" disabled={nukeText !== 'DELETE'} onClick={handleNuke}>
-                Erase everything
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

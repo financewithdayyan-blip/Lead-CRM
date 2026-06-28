@@ -16,6 +16,7 @@ import { MemberDashboardPage } from '@/pages/MemberDashboardPage';
 import { MemberLeadsPage } from '@/pages/MemberLeadsPage';
 import { MemberLeadProfilePage } from '@/pages/MemberLeadProfilePage';
 import { MemberKanbanPage } from '@/pages/MemberKanbanPage';
+import { MemberSettingsPage } from '@/pages/MemberSettingsPage';
 import { CallSessionPage } from '@/pages/CallSessionPage';
 
 const queryClient = new QueryClient({
@@ -45,6 +46,7 @@ export default function App() {
                   <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
                   <Route path="/team/:memberId/leads/:id" element={<MemberLeadProfilePage />} />
                   <Route path="/team/:memberId/kanban" element={<MemberKanbanPage />} />
+                  <Route path="/team/:memberId/settings" element={<MemberSettingsPage />} />
                 </Route>
               </Route>
             </Route>

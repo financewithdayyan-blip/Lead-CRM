@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -14,20 +14,5 @@ export function useUpdateProfile() {
       if (error) throw error;
     },
     onSuccess: () => refreshProfile(),
-  });
-}
-
-export function useEraseAllData() {
-  const { session } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const userId = session!.user.id;
-      // lead_tags/lead_comps/lead_files/lead_activities cascade-delete with their parent lead.
-      await supabase.from('leads').delete().eq('user_id', userId);
-      await supabase.from('tags').delete().eq('user_id', userId);
-      await supabase.from('tasks').delete().eq('user_id', userId);
-    },
-    onSuccess: () => qc.invalidateQueries(),
   });
 }
