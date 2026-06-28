@@ -1043,13 +1043,20 @@ section{ padding: 120px 0; position:relative; }
   justify-content:center;
   width: 100%;
 }
-.map-visual svg{ width:100%; max-width:620px; height:auto; filter: drop-shadow(0 20px 40px rgba(0,0,0,0.4)); }
+.map-visual svg{ width:100%; max-width:620px; height:auto; overflow:visible; filter: drop-shadow(0 20px 40px rgba(0,0,0,0.4)); }
 .map-state{
   fill: var(--ink-soft);
   stroke: rgba(246,243,236,0.22);
   stroke-width: 1;
   stroke-linejoin: round;
-  transition: fill 0.4s var(--ease);
+  cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: fill 0.4s var(--ease), transform 0.35s var(--ease), filter 0.35s var(--ease);
+}
+.map-state:hover{
+  transform: scale(1.08) translateY(-6px);
+  filter: drop-shadow(0 14px 18px rgba(0,0,0,0.55));
 }
 .map-state.active{
   fill: var(--sky-deep);
@@ -2113,6 +2120,7 @@ async function loadRealMap() {
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = (STATE_NAMES[abbr] || abbr || 'State');
       path.appendChild(title);
+      path.addEventListener('mouseenter', () => g.appendChild(path));
       g.appendChild(path);
 
       if (isActive) {
