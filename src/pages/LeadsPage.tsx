@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Upload } from 'lucide-react';
+import { Plus, Trash2, Upload, UserPlus } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
+import { useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AddLeadModal } from '@/components/leads/AddLeadModal';
 import { ImportCsvModal } from '@/components/leads/ImportCsvModal';
 import { DeleteLeadsModal } from '@/components/leads/DeleteLeadsModal';
@@ -16,6 +18,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
   const navigate = useNavigate();
   const { data: leads = [], isLoading } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
+  const transferLead = useTransferLeadToAdmin();
 
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<LeadStage | ''>('');
@@ -24,6 +27,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [takeTarget, setTakeTarget] = useState<{ id: string; name: string } | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -112,19 +116,20 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
               <th className="px-3 py-2.5">Stage</th>
               <th className="px-3 py-2.5">Rating</th>
               <th className="px-3 py-2.5">Tags</th>
+              {targetUserId && <th className="px-3 py-2.5" />}
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={targetUserId ? 9 : 8} className="px-3 py-8 text-center text-text-3">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={targetUserId ? 9 : 8} className="px-3 py-8 text-center text-text-3">
                   No leads match your filters.
                 </td>
               </tr>
@@ -158,6 +163,17 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                     })}
                   </div>
                 </td>
+                {targetUserId && (
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="btn !px-2.5 !py-1 text-[12px]"
+                      title="Take this lead into your own pipeline"
+                      onClick={() => setTakeTarget({ id: lead.id, name: `${lead.firstName} ${lead.lastName}` })}
+                    >
+                      <UserPlus size={13} /> Take
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -167,6 +183,18 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} targetUserId={targetUserId} />}
       {showImport && <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />}
       {showDelete && <DeleteLeadsModal leads={leads} tags={tags} onClose={() => setShowDelete(false)} />}
+
+      <ConfirmDialog
+        open={!!takeTarget}
+        title="Take this lead?"
+        message={`${takeTarget?.name} will move into your own pipeline and out of theirs, keeping its current stage and full history.`}
+        confirmLabel="Take lead"
+        onCancel={() => setTakeTarget(null)}
+        onConfirm={() => {
+          if (takeTarget) transferLead.mutate(takeTarget.id);
+          setTakeTarget(null);
+        }}
+      />
     </div>
   );
 }

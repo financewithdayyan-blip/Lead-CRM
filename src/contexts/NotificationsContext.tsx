@@ -3,7 +3,8 @@ import { useAuth } from './AuthContext';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useLeads } from '@/hooks/useLeads';
 import { useTeamTodaySummaries } from '@/hooks/useDailySummaries';
-import type { DailySummary, Lead, Task } from '@/types/domain';
+import { useAcceptLeadShare, useDeclineLeadShare, usePendingLeadShares } from '@/hooks/useLeadShares';
+import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
 
@@ -13,7 +14,10 @@ interface NotificationsContextValue {
   dueTasks: Task[];
   dueFollowUps: Lead[];
   teamSummaries: (DailySummary & { memberName: string })[];
+  pendingShares: (LeadShare & { leadName: string; fromName: string })[];
   toggleTask: ReturnType<typeof useToggleTask>;
+  acceptShare: ReturnType<typeof useAcceptLeadShare>;
+  declineShare: ReturnType<typeof useDeclineLeadShare>;
   readIds: Set<string>;
   unreadCount: number;
   markRead: (ids: string[]) => void;
@@ -33,7 +37,10 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: tasks = [] } = useTasks();
   const { data: leads = [] } = useLeads();
   const { data: teamSummaries = [] } = useTeamTodaySummaries();
+  const { data: pendingShares = [] } = usePendingLeadShares();
   const toggleTask = useToggleTask();
+  const acceptShare = useAcceptLeadShare();
+  const declineShare = useDeclineLeadShare();
 
   const dueTasks = useMemo(
     () =>
@@ -58,7 +65,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     ],
     [dueTasks, dueFollowUps, teamSummaries, isAdmin],
   );
-  const unreadCount = allIds.filter((id) => !readIds.has(id)).length;
+  const unreadCount = allIds.filter((id) => !readIds.has(id)).length + (isAdmin ? pendingShares.length : 0);
 
   function markRead(ids: string[]) {
     setReadIds((prev) => {
@@ -75,7 +82,21 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationsContext.Provider
-      value={{ isAdmin, todayIso, dueTasks, dueFollowUps, teamSummaries, toggleTask, readIds, unreadCount, markRead, markAllRead }}
+      value={{
+        isAdmin,
+        todayIso,
+        dueTasks,
+        dueFollowUps,
+        teamSummaries,
+        pendingShares,
+        toggleTask,
+        acceptShare,
+        declineShare,
+        readIds,
+        unreadCount,
+        markRead,
+        markAllRead,
+      }}
     >
       {children}
     </NotificationsContext.Provider>

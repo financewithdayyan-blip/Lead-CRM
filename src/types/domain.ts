@@ -155,6 +155,17 @@ export interface DailySummary {
   createdAt: string;
 }
 
+export interface LeadShare {
+  id: string;
+  leadId: string;
+  fromUserId: string;
+  toUserId: string | null;
+  stageAtShare: LeadStage;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface Profile {
   id: string;
   email: string;

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarClock, CheckSquare, ChevronDown, FileText } from 'lucide-react';
+import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
+import { STAGE_CONFIG } from '@/types/domain';
 import { formatDate } from '@/lib/utils';
 
 const NOTIF_TYPE_CONFIG = {
   summary: { label: 'Daily Summary', color: '#4f46e5' },
   followup: { label: 'Follow-Up', color: '#a78bfa' },
   task: { label: 'Task', color: '#f59e0b' },
+  share: { label: 'Shared Lead', color: '#10b981' },
 };
 
 function NotifTag({ type }: { type: keyof typeof NOTIF_TYPE_CONFIG }) {
@@ -24,17 +26,31 @@ function NotifTag({ type }: { type: keyof typeof NOTIF_TYPE_CONFIG }) {
 
 export function NotificationsPage() {
   const [expandedSummaryId, setExpandedSummaryId] = useState<string | null>(null);
-  const { isAdmin, todayIso, dueTasks, dueFollowUps, teamSummaries, toggleTask, readIds, unreadCount, markRead, markAllRead } =
-    useNotificationsContext();
+  const {
+    isAdmin,
+    todayIso,
+    dueTasks,
+    dueFollowUps,
+    teamSummaries,
+    pendingShares,
+    toggleTask,
+    acceptShare,
+    declineShare,
+    readIds,
+    unreadCount,
+    markRead,
+    markAllRead,
+  } = useNotificationsContext();
 
-  const empty = dueTasks.length === 0 && dueFollowUps.length === 0 && (!isAdmin || teamSummaries.length === 0);
+  const empty =
+    dueTasks.length === 0 && dueFollowUps.length === 0 && (!isAdmin || (teamSummaries.length === 0 && pendingShares.length === 0));
 
   return (
     <div>
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-text">Notifications</h1>
-          <p className="text-sm text-text-3">Daily summaries, follow-ups, and tasks that need your attention.</p>
+          <p className="text-sm text-text-3">Shared leads, daily summaries, follow-ups, and tasks that need your attention.</p>
         </div>
         {unreadCount > 0 && (
           <button className="btn shrink-0" onClick={markAllRead}>
@@ -47,6 +63,44 @@ export function NotificationsPage() {
         <div className="card text-center text-text-3">You're all caught up — nothing due today.</div>
       ) : (
         <div className="space-y-5">
+          {isAdmin && pendingShares.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                <Share2 size={12} /> Shared Leads ({pendingShares.length})
+              </div>
+              <div className="space-y-1.5">
+                {pendingShares.map((s) => (
+                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                      <div className="min-w-0 text-[13px] text-text">
+                        <span className="font-medium">{s.fromName}</span> shared <span className="font-medium">{s.leadName}</span> with
+                        you, while in <span className="font-medium">{STAGE_CONFIG[s.stageAtShare].label}</span> stage
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <NotifTag type="share" />
+                      <button
+                        className="btn btn-primary !px-2.5 !py-1 text-[12px]"
+                        disabled={acceptShare.isPending}
+                        onClick={() => acceptShare.mutate(s.id)}
+                      >
+                        <Check size={13} /> Accept
+                      </button>
+                      <button
+                        className="btn !px-2.5 !py-1 text-[12px] text-danger hover:border-danger"
+                        disabled={declineShare.isPending}
+                        onClick={() => declineShare.mutate(s.id)}
+                      >
+                        <X size={13} /> Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isAdmin && teamSummaries.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">

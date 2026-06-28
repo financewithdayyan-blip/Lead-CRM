@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Upload, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload, ExternalLink, Share2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -8,12 +8,43 @@ import { useActivities, useAddActivity, useDeleteActivity } from '@/hooks/useAct
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl } from '@/hooks/useLeadFiles';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
+import { useMyPendingShareForLead, useShareLead } from '@/hooks/useLeadShares';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadStage, type Tag } from '@/types/domain';
 import { callerDisplayName, formatPhone, formatDate, formatDateTime } from '@/lib/utils';
 import { SCRIPT_STEPS } from '@/lib/callScript';
+
+function ShareLeadButton({ leadId, stage }: { leadId: string; stage: LeadStage }) {
+  const { data: pendingShare } = useMyPendingShareForLead(leadId);
+  const shareLead = useShareLead();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  if (pendingShare) {
+    return <span className="text-[12px] font-medium text-warning">Pending admin approval</span>;
+  }
+
+  return (
+    <>
+      <button className="btn !py-1.5 text-[12px]" onClick={() => setConfirmOpen(true)}>
+        <Share2 size={13} /> Share with Admin
+      </button>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Share this lead?"
+        message={`Your admin will be notified and can accept or decline. If accepted, this lead (currently in ${STAGE_CONFIG[stage].label} stage) moves into their pipeline.`}
+        confirmLabel="Share"
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          shareLead.mutate({ leadId, stage });
+          setConfirmOpen(false);
+        }}
+      />
+    </>
+  );
+}
 
 const ACTIVITY_LABEL: Record<ActivityType, string> = {
   note: 'Note',
@@ -35,7 +66,7 @@ const TAB_LABELS: Record<TabKey, string> = {
   files: 'Files',
 };
 
-export function LeadProfileView({ id, backTo }: { id: string | undefined; backTo: string }) {
+export function LeadProfileView({ id, backTo, allowShare = false }: { id: string | undefined; backTo: string; allowShare?: boolean }) {
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
   const { data: tags = [] } = useTags();
@@ -88,6 +119,7 @@ export function LeadProfileView({ id, backTo }: { id: string | undefined; backTo
                 </option>
               ))}
             </select>
+            {allowShare && <ShareLeadButton leadId={lead.id} stage={lead.stage} />}
           </div>
         </div>
 
@@ -800,5 +832,5 @@ function FilesTab({ lead }: { lead: Lead }) {
 
 export function LeadProfilePage() {
   const { id } = useParams<{ id: string }>();
-  return <LeadProfileView id={id} backTo="/leads" />;
+  return <LeadProfileView id={id} backTo="/leads" allowShare />;
 }
