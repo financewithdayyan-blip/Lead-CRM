@@ -108,11 +108,6 @@ export function LoginPage() {
               Sign in
             </button>
           )}
-          {mode !== 'signup' && (
-            <button onClick={() => setMode('signup')} className="hover:text-text">
-              Create account
-            </button>
-          )}
           {mode !== 'reset' && (
             <button onClick={() => setMode('reset')} className="hover:text-text">
               Forgot password?
