@@ -1,4 +1,4 @@
-import type { Lead, LeadActivity, LeadFile, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import type { DailySummary, Lead, LeadActivity, LeadFile, Profile, Tag, TeamInvite, Task } from '@/types/domain';
 
 export function dbToTag(row: any): Tag {
   return { id: row.id, userId: row.user_id, name: row.name, colorBg: row.color_bg, colorText: row.color_text };
@@ -174,6 +174,16 @@ export function dbToTask(row: any): Task {
     title: row.title,
     dueDate: row.due_date,
     completed: row.completed,
+    createdAt: row.created_at,
+  };
+}
+
+export function dbToDailySummary(row: any): DailySummary {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    summaryDate: row.summary_date,
+    summary: row.summary,
     createdAt: row.created_at,
   };
 }

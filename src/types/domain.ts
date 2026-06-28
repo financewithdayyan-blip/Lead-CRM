@@ -147,6 +147,14 @@ export interface Task {
   createdAt: string;
 }
 
+export interface DailySummary {
+  id: string;
+  userId: string;
+  summaryDate: string;
+  summary: string;
+  createdAt: string;
+}
+
 export interface Profile {
   id: string;
   email: string;

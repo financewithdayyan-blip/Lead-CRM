@@ -14,6 +14,7 @@ import {
   PauseCircle,
   Phone,
   PhoneIncoming,
+  Send,
   Square,
   Target,
   Trophy,
@@ -27,6 +28,7 @@ import { useLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useAddActivity, useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
+import { useMyTodaySummary, useSubmitDailySummary } from '@/hooks/useDailySummaries';
 import { TagPill } from '@/components/ui/TagPill';
 import { SCRIPT_STEPS } from '@/lib/callScript';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
@@ -152,6 +154,8 @@ export function CallSessionPage() {
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
   const addActivity = useAddActivity();
+  const { data: todaySummary } = useMyTodaySummary();
+  const submitSummary = useSubmitDailySummary();
 
   const [queueIds, setQueueIds] = useState<string[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -162,6 +166,8 @@ export function CallSessionPage() {
   const [repairs, setRepairs] = useState<RepairFlags>({});
   const [propertyRating, setPropertyRating] = useState<number | null>(null);
   const [followUpDate, setFollowUpDate] = useState<string | null>(null);
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryJustSubmitted, setSummaryJustSubmitted] = useState(false);
   const [copiedField, setCopiedField] = useState<'phone' | 'phone2' | null>(null);
 
   const followUpDays = useMemo(() => {
@@ -228,9 +234,17 @@ export function CallSessionPage() {
   const goalReached = callsToday >= dailyGoal;
   const queueExhausted = queueIds !== null && currentIndex >= queueIds.length;
   const finished = goalReached || queueExhausted;
+  const summaryWordCount = summaryText.trim() ? summaryText.trim().split(/\s+/).length : 0;
+  const needsSummary = goalReached && !todaySummary && !summaryJustSubmitted;
 
   function endSession() {
     navigate('/');
+  }
+
+  function handleSubmitSummary() {
+    const text = summaryText.trim();
+    if (!text || summaryWordCount > 200) return;
+    submitSummary.mutate(text, { onSuccess: () => setSummaryJustSubmitted(true) });
   }
 
   function copyPhone(field: 'phone' | 'phone2') {
@@ -300,12 +314,41 @@ export function CallSessionPage() {
         <div className="text-slate-400">
           {sessionCallsLogged} call{sessionCallsLogged !== 1 ? 's' : ''} logged this session · {callsToday}/{dailyGoal} today
         </div>
-        <button
-          onClick={endSession}
-          className="mt-2 flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.02]"
-        >
-          Back to Dashboard
-        </button>
+
+        {needsSummary ? (
+          <div className="mt-2 w-full max-w-md text-left">
+            <div className="mb-1.5 text-[13px] font-semibold text-slate-200">
+              Write a quick summary of your day before you go (required)
+            </div>
+            <textarea
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-[13px] text-slate-200 outline-none focus:border-emerald-500"
+              rows={5}
+              placeholder="What went well, what came up, anything your admin should know…"
+              value={summaryText}
+              onChange={(e) => setSummaryText(e.target.value)}
+            />
+            <div className={`mt-1 text-right text-[12px] ${summaryWordCount > 200 ? 'text-danger' : 'text-slate-500'}`}>
+              {summaryWordCount} / 200 words
+            </div>
+            <button
+              onClick={handleSubmitSummary}
+              disabled={!summaryText.trim() || summaryWordCount > 200 || submitSummary.isPending}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send size={15} /> {submitSummary.isPending ? 'Submitting…' : 'Submit summary'}
+            </button>
+          </div>
+        ) : (
+          <>
+            {summaryJustSubmitted && <div className="text-[13px] text-emerald-400">✓ Summary submitted</div>}
+            <button
+              onClick={endSession}
+              className="mt-2 flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.02]"
+            >
+              Back to Dashboard
+            </button>
+          </>
+        )}
       </div>
     );
   }
