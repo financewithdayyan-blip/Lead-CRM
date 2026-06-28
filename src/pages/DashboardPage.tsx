@@ -118,20 +118,28 @@ export function DashboardView({
     const dialedLeadIds = new Set(calls.map((a) => a.leadId));
     const dialedPct = total > 0 ? Math.round((dialedLeadIds.size / total) * 100) : 0;
 
-    const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
-    const voicemailCount = outcomeCount('voicemail');
-    const declinedCount = outcomeCount('declined');
-    const deadDeclinedOutcomeCount = outcomeCount('dead') + declinedCount;
-    const initialContactCount = outcomeCount('initial_contact');
-    const followupCount = outcomeCount('followup');
-    const conversations = initialContactCount + followupCount;
+    // Pipeline snapshot (matches the Pipeline Breakdown panel) - very few real
+    // calls have an outcome logged yet, so these rate cards read off each
+    // lead's current stage rather than the sparse per-call outcome data.
+    const voicemailCount = leads.filter((l) => l.stage === 'voicemail').length;
+    const deadDeclinedOutcomeCount = leads.filter((l) => l.stage === 'dead_declined').length;
+    const pipelineInitialContactCount = leads.filter((l) => l.stage === 'initial_contact').length;
+    const pipelineFollowupCount = leads.filter((l) => l.stage === 'followup').length;
+    const conversations = pipelineInitialContactCount + pipelineFollowupCount;
 
-    const contactRate = callsMade > 0 ? Math.round((conversations / callsMade) * 100) : 0;
-    const voicemailRate = callsMade > 0 ? Math.round((voicemailCount / callsMade) * 100) : 0;
-    const deadDeclinedRate = callsMade > 0 ? Math.round((deadDeclinedOutcomeCount / callsMade) * 100) : 0;
+    const contactRate = total > 0 ? Math.round((conversations / total) * 100) : 0;
+    const voicemailRate = total > 0 ? Math.round((voicemailCount / total) * 100) : 0;
+    const deadDeclinedRate = total > 0 ? Math.round((deadDeclinedOutcomeCount / total) * 100) : 0;
+
+    // Calling efficiency (dials per outcome) stays based on actual logged
+    // call outcomes, so it stays blank until enough real calls are logged.
+    const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
+    const followupCount = outcomeCount('followup');
+    const callConversations = outcomeCount('initial_contact') + followupCount;
+    const declinedCount = outcomeCount('declined');
     const callsPerFollowup = followupCount > 0 ? (callsMade / followupCount).toFixed(1) : null;
-    const callsPerConversation = conversations > 0 ? (callsMade / conversations).toFixed(1) : null;
-    const pickupDenominator = initialContactCount + followupCount + declinedCount;
+    const callsPerConversation = callConversations > 0 ? (callsMade / callConversations).toFixed(1) : null;
+    const pickupDenominator = outcomeCount('initial_contact') + followupCount + declinedCount;
     const pickupRatio = pickupDenominator > 0 ? (callsMade / pickupDenominator).toFixed(1) : null;
 
     // No dedicated session log exists yet - approximate a "session" as a run of
@@ -353,7 +361,7 @@ export function DashboardView({
             <StatCard
               label="Contact Rate"
               value={`${stats.contactRate}%`}
-              sub={`${stats.conversations} contacts of ${stats.callsMade} dialed`}
+              sub={`${stats.conversations} contacts of ${stats.total} leads`}
               color="#10b981"
             />
             <StatCard
