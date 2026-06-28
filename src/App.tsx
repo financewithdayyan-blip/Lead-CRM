@@ -29,7 +29,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <PresenceProvider>
-          <BrowserRouter basename="/app">
+          <BrowserRouter basename="/crm">
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/accept-invite" element={<AcceptInvitePage />} />

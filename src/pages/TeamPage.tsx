@@ -89,7 +89,7 @@ export function TeamPage() {
   const pendingInvites = invites.filter((i) => i.status === 'pending');
 
   function inviteLink(email: string) {
-    return `${window.location.origin}/app/login?invite=1&email=${encodeURIComponent(email)}`;
+    return `${window.location.origin}/crm/login?invite=1&email=${encodeURIComponent(email)}`;
   }
 
   function handleInvite() {

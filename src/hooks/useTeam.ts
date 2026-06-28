@@ -111,7 +111,7 @@ export function useSendInvite() {
   return useMutation({
     mutationFn: async ({ email, role }: { email: string; role: Role }) => {
       const { data, error } = await supabase.functions.invoke('invite-user', {
-        body: { email: email.trim(), role, redirectTo: `${window.location.origin}/app/accept-invite` },
+        body: { email: email.trim(), role, redirectTo: `${window.location.origin}/crm/accept-invite` },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

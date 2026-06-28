@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/app/:path*", "destination": "/app/index.html" }
+    { "source": "/crm/:path*", "destination": "/crm/index.html" }
   ]
 }

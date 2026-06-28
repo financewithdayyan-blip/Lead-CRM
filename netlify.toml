@@ -3,6 +3,6 @@
   publish = "dist"
 
 [[redirects]]
-  from = "/app/*"
-  to = "/app/index.html"
+  from = "/crm/*"
+  to = "/crm/index.html"
   status = 200
