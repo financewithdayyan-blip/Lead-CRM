@@ -15,6 +15,7 @@ import {
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useOnlineUserIds } from '@/contexts/PresenceContext';
 import type { Role } from '@/types/domain';
 import { getErrorMessage, localIsoDate } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ export function TeamPage() {
   const isAdmin = profile?.role === 'admin';
   const { data: members = [] } = useTeamMembers();
   const { data: invites = [] } = useTeamInvites();
+  const onlineIds = useOnlineUserIds();
   const findByCode = useFindProfileByCode();
   const addMember = useAddTeamMember();
   const removeMember = useRemoveTeamMember();
@@ -291,7 +293,13 @@ export function TeamPage() {
             <div key={m.id} className="rounded-md border border-border-2 bg-surface-3 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[13px] font-medium text-text">{m.member.fullName || m.member.email}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${onlineIds.has(m.memberId) ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                      title={onlineIds.has(m.memberId) ? 'Online' : 'Offline'}
+                    />
+                    <div className="text-[13px] font-medium text-text">{m.member.fullName || m.member.email}</div>
+                  </div>
                   <div className="text-[11px] text-text-3">{m.member.email} · code {m.member.userCode}</div>
                 </div>
                 <div className="flex items-center gap-2">

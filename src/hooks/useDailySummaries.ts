@@ -39,7 +39,7 @@ export function useSubmitDailySummary() {
 }
 
 export function useTeamTodaySummaries() {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const ownerId = session?.user.id;
   const todayIso = localIsoDate(new Date());
   return useQuery({
@@ -47,13 +47,16 @@ export function useTeamTodaySummaries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('daily_summaries')
-        .select('*')
+        .select('*, member:profiles!daily_summaries_user_id_fkey(full_name, email)')
         .eq('summary_date', todayIso)
         .neq('user_id', ownerId)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data.map(dbToDailySummary);
+      return data.map((row: any) => ({
+        ...dbToDailySummary(row),
+        memberName: row.member?.full_name || row.member?.email || 'A team member',
+      }));
     },
-    enabled: !!ownerId,
+    enabled: !!ownerId && profile?.role === 'admin',
   });
 }
