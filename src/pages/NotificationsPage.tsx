@@ -4,6 +4,24 @@ import { CalendarClock, CheckSquare, ChevronDown, FileText } from 'lucide-react'
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { formatDate } from '@/lib/utils';
 
+const NOTIF_TYPE_CONFIG = {
+  summary: { label: 'Daily Summary', color: '#4f46e5' },
+  followup: { label: 'Follow-Up', color: '#a78bfa' },
+  task: { label: 'Task', color: '#f59e0b' },
+};
+
+function NotifTag({ type }: { type: keyof typeof NOTIF_TYPE_CONFIG }) {
+  const cfg = NOTIF_TYPE_CONFIG[type];
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={{ backgroundColor: `${cfg.color}1f`, color: cfg.color }}
+    >
+      {cfg.label}
+    </span>
+  );
+}
+
 export function NotificationsPage() {
   const [expandedSummaryId, setExpandedSummaryId] = useState<string | null>(null);
   const { isAdmin, todayIso, dueTasks, dueFollowUps, teamSummaries, toggleTask, readIds, unreadCount, markRead, markAllRead } =
@@ -54,7 +72,10 @@ export function NotificationsPage() {
                             <span className="font-medium">{s.memberName}</span> submitted their daily summary
                           </span>
                         </div>
-                        <ChevronDown size={14} className={`shrink-0 text-text-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <NotifTag type="summary" />
+                          <ChevronDown size={14} className={`shrink-0 text-text-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                        </div>
                       </button>
                       {expanded && <p className="mt-2 whitespace-pre-wrap text-[13px] text-text-2">{s.summary}</p>}
                     </div>
@@ -92,6 +113,7 @@ export function NotificationsPage() {
                           </div>
                         </div>
                       </div>
+                      <NotifTag type="followup" />
                     </Link>
                   );
                 })}
@@ -128,11 +150,14 @@ export function NotificationsPage() {
                           </div>
                         </div>
                       </label>
-                      {t.leadId && (
-                        <Link to={`/leads/${t.leadId}`} onClick={() => markRead([id])} className="shrink-0 text-[12px] text-primary hover:underline">
-                          View lead
-                        </Link>
-                      )}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <NotifTag type="task" />
+                        {t.leadId && (
+                          <Link to={`/leads/${t.leadId}`} onClick={() => markRead([id])} className="text-[12px] text-primary hover:underline">
+                            View lead
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
