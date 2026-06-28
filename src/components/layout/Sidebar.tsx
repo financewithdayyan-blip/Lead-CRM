@@ -1,32 +1,87 @@
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
+import { ChevronUp, LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
+import { useOnlineUserIds } from '@/contexts/PresenceContext';
 import { cn, initials } from '@/lib/utils';
 
-function ViewingAsSwitcher({ viewingId }: { viewingId?: string }) {
+function ViewingPullUp({ viewingId }: { viewingId?: string }) {
   const navigate = useNavigate();
   const { data: members = [] } = useTeamMembers();
+  const onlineIds = useOnlineUserIds();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
 
   if (members.length === 0) return null;
 
+  const current = viewingId ? members.find((m) => m.memberId === viewingId) : null;
+  const currentLabel = current ? current.member.fullName || current.member.email : 'My Dashboard';
+
+  function select(id: string | null) {
+    setOpen(false);
+    navigate(id ? `/team/${id}` : '/');
+  }
+
   return (
-    <div className="px-3 pb-2">
-      <div className="flex items-center gap-1.5 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-sidebar-text">
-        <Eye size={11} /> Viewing
-      </div>
-      <select
-        className="w-full rounded-md border border-sidebar-border bg-sidebar-2 px-2 py-1.5 text-[12px] text-sidebar-textActive outline-none"
-        value={viewingId ?? 'self'}
-        onChange={(e) => navigate(e.target.value === 'self' ? '/' : `/team/${e.target.value}`)}
+    <div ref={containerRef} className="relative px-3 pb-2">
+      {open && (
+        <div className="absolute bottom-full left-3 right-3 mb-2 max-h-64 overflow-y-auto rounded-md border border-sidebar-border bg-sidebar-2 p-1.5 shadow-popover">
+          <button
+            onClick={() => select(null)}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors',
+              !viewingId ? 'bg-sidebar text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive',
+            )}
+          >
+            My Dashboard
+          </button>
+          {members.map((m) => {
+            const isOnline = onlineIds.has(m.memberId);
+            const isSelected = viewingId === m.memberId;
+            return (
+              <button
+                key={m.memberId}
+                onClick={() => select(m.memberId)}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors',
+                  isSelected ? 'bg-sidebar text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive',
+                )}
+              >
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', isOnline ? 'bg-emerald-500' : 'bg-slate-500')} title={isOnline ? 'Online' : 'Offline'} />
+                <span className="truncate">{m.member.fullName || m.member.email}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-sidebar-border bg-sidebar-2 px-2.5 py-2 text-[12px] text-sidebar-textActive"
       >
-        <option value="self">My Dashboard</option>
-        {members.map((m) => (
-          <option key={m.memberId} value={m.memberId}>
-            {m.member.fullName || m.member.email}
-          </option>
-        ))}
-      </select>
+        <span className="flex items-center gap-1.5 truncate">
+          <Eye size={12} className="shrink-0 text-sidebar-text" />
+          <span className="truncate">{currentLabel}</span>
+        </span>
+        <ChevronUp size={14} className={cn('shrink-0 text-sidebar-text transition-transform', open && 'rotate-180')} />
+      </button>
     </div>
   );
 }
@@ -59,8 +114,6 @@ export function Sidebar() {
         <img src="/logo-mark.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
         <span className="text-base font-semibold text-sidebar-textActive">BlueBird CRM</span>
       </div>
-
-      {isOverseer && <ViewingAsSwitcher viewingId={viewingId} />}
 
       <nav className="flex-1 space-y-1 px-3">
         {navItems.map(({ to, label, icon: Icon }) => (
@@ -95,6 +148,8 @@ export function Sidebar() {
           </NavLink>
         )}
       </nav>
+
+      {isOverseer && <ViewingPullUp viewingId={viewingId} />}
 
       <div className="border-t border-sidebar-border px-3 py-3">
         <div className="mb-2 flex items-center gap-2.5 px-2">
