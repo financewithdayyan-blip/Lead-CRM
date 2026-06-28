@@ -11,6 +11,7 @@ import { LeadsPage } from '@/pages/LeadsPage';
 import { LeadProfilePage } from '@/pages/LeadProfilePage';
 import { KanbanPage } from '@/pages/KanbanPage';
 import { CallHistoryPage } from '@/pages/CallHistoryPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TeamPage } from '@/pages/TeamPage';
 import { MemberDashboardPage } from '@/pages/MemberDashboardPage';
@@ -41,6 +42,7 @@ export default function App() {
                   <Route path="/leads/:id" element={<LeadProfilePage />} />
                   <Route path="/kanban" element={<KanbanPage />} />
                   <Route path="/calls" element={<CallHistoryPage />} />
+                  <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route element={<ProtectedRoute requireOverseer />}>
                     <Route path="/team" element={<TeamPage />} />

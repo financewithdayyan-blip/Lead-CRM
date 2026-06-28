@@ -6,7 +6,6 @@ import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
-import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
 
@@ -336,22 +335,19 @@ export function DashboardView({
           <h1 className="text-2xl font-semibold text-text">{heading}</h1>
           <p className="text-sm text-text-3">{subtitle}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {allowStartSession && <NotificationsBell />}
-          {allowStartSession ? (
-            <Link to="/session" className="btn btn-primary shrink-0">
-              <PhoneCall size={15} /> Start Session
-            </Link>
-          ) : (
-            <button
-              disabled
-              title="You can only start a calling session for your own account."
-              className="btn shrink-0 cursor-not-allowed opacity-50"
-            >
-              <PhoneCall size={15} /> Start Session
-            </button>
-          )}
-        </div>
+        {allowStartSession ? (
+          <Link to="/session" className="btn btn-primary shrink-0">
+            <PhoneCall size={15} /> Start Session
+          </Link>
+        ) : (
+          <button
+            disabled
+            title="You can only start a calling session for your own account."
+            className="btn shrink-0 cursor-not-allowed opacity-50"
+          >
+            <PhoneCall size={15} /> Start Session
+          </button>
+        )}
       </div>
 
       {leads.length === 0 ? (

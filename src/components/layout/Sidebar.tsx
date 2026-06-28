@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
-import { ChevronUp, LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
+import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useOnlineUserIds } from '@/contexts/PresenceContext';
+import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { cn, initials } from '@/lib/utils';
 
 function ViewingPullUp({ viewingId }: { viewingId?: string }) {
@@ -92,6 +93,7 @@ export function Sidebar() {
   const [first, last] = (profile?.fullName ?? '').split(' ');
   const match = useMatch('/team/:memberId/*');
   const viewingId = match?.params.memberId;
+  const { unreadCount } = useNotificationsContext();
 
   const navItems = viewingId
     ? [
@@ -116,6 +118,23 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-3">
+        <NavLink
+          to="/notifications"
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+            )
+          }
+        >
+          <Bell size={16} />
+          Notifications
+          {unreadCount > 0 && (
+            <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </NavLink>
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
