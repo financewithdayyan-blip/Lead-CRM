@@ -24,7 +24,12 @@ export function useAttendanceSessions(userId: string | undefined) {
   });
 }
 
-/** Today's online total per team member, for the always-visible badge next to each member's online dot. */
+export interface TodayAttendance {
+  seconds: number;
+  lastSeenAt: string;
+}
+
+/** Today's online total + last-seen time per team member, for the always-visible badge on each member's card. */
 export function useTeamTodayAttendance() {
   const { session, profile } = useAuth();
   const ownerId = session?.user.id;
@@ -40,10 +45,14 @@ export function useTeamTodayAttendance() {
         .gte('started_at', start.toISOString())
         .neq('user_id', ownerId);
       if (error) throw error;
-      const totals: Record<string, number> = {};
+      const totals: Record<string, TodayAttendance> = {};
       for (const row of data) {
-        const seconds = (new Date(row.ended_at).getTime() - new Date(row.started_at).getTime()) / 1000;
-        totals[row.user_id] = (totals[row.user_id] ?? 0) + Math.max(0, seconds);
+        const seconds = Math.max(0, (new Date(row.ended_at).getTime() - new Date(row.started_at).getTime()) / 1000);
+        const prev = totals[row.user_id];
+        totals[row.user_id] = {
+          seconds: (prev?.seconds ?? 0) + seconds,
+          lastSeenAt: !prev || row.ended_at > prev.lastSeenAt ? row.ended_at : prev.lastSeenAt,
+        };
       }
       return totals;
     },

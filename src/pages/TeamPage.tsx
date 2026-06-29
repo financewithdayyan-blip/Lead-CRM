@@ -1,24 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, UserPlus, Trash2, Eye, EyeOff, LayoutDashboard, Mail, Copy, Clock, X } from 'lucide-react';
+import { Shield, UserPlus, Trash2, ChevronDown, LayoutDashboard, Mail, Copy, Clock, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  useTeamMembers,
-  useFindProfileByCode,
-  useAddTeamMember,
-  useRemoveTeamMember,
-  useUpdateMemberRole,
-  useTeamInvites,
-  useSendInvite,
-  useRevokeInvite,
-} from '@/hooks/useTeam';
+import { useTeamMembers, useRemoveTeamMember, useUpdateMemberRole, useTeamInvites, useSendInvite, useRevokeInvite } from '@/hooks/useTeam';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useAttendanceSessions, useTeamTodayAttendance } from '@/hooks/useAttendance';
+import { nextTagColor } from '@/hooks/useTags';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useOnlineUserIds } from '@/contexts/PresenceContext';
 import type { Role } from '@/types/domain';
-import { formatDuration, formatTime, getErrorMessage, localIsoDate } from '@/lib/utils';
+import { formatDuration, formatTime, getErrorMessage, initials, localIsoDate } from '@/lib/utils';
 
 const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', caller: 'Caller' };
 
@@ -118,16 +110,11 @@ export function TeamPage() {
   const { data: invites = [] } = useTeamInvites();
   const onlineIds = useOnlineUserIds();
   const { data: todayAttendance = {} } = useTeamTodayAttendance();
-  const findByCode = useFindProfileByCode();
-  const addMember = useAddTeamMember();
   const removeMember = useRemoveTeamMember();
   const updateRole = useUpdateMemberRole();
   const sendInvite = useSendInvite();
   const revokeInvite = useRevokeInvite();
 
-  const [code, setCode] = useState('');
-  const [lookupError, setLookupError] = useState('');
-  const [found, setFound] = useState<{ id: string; user_code: string; full_name: string | null; email: string } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -169,37 +156,6 @@ export function TeamPage() {
     navigator.clipboard.writeText(inviteLink(email));
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
-  }
-
-  async function handleLookup() {
-    setLookupError('');
-    setFound(null);
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    const result = await findByCode.mutateAsync(trimmed);
-    if (!result) {
-      setLookupError('No user found with that code.');
-      return;
-    }
-    if (members.some((m) => m.memberId === result.id)) {
-      setLookupError('That user is already on your team.');
-      return;
-    }
-    if (result.id === profile?.id) {
-      setLookupError("That's your own code.");
-      return;
-    }
-    setFound(result);
-  }
-
-  function handleAdd() {
-    if (!found) return;
-    addMember.mutate(found.id, {
-      onSuccess: () => {
-        setFound(null);
-        setCode('');
-      },
-    });
   }
 
   return (
@@ -295,105 +251,92 @@ export function TeamPage() {
         </div>
       )}
 
-      <div className="card mb-4">
-        <div className="text-sm font-semibold text-text">Add by code</div>
-        <p className="mt-1 text-[13px] text-text-2">
-          Already have an account? Look up by account code and add them to your team to view their activity.
-        </p>
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="label">User code</label>
-            <input
-              className="input max-w-[160px] uppercase"
-              placeholder="e.g. A1B2C3"
-              value={code}
-              onChange={(e) => {
-                setCode(e.target.value);
-                setFound(null);
-                setLookupError('');
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
-            />
-          </div>
-          <button className="btn" onClick={handleLookup} disabled={findByCode.isPending}>
-            Look up
-          </button>
-        </div>
-
-        {lookupError && <div className="mt-2 text-[12px] text-danger">{lookupError}</div>}
-
-        {found && (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
-            <div>
-              <div className="text-[13px] font-medium text-text">{found.full_name || found.email}</div>
-              <div className="text-[11px] text-text-3">{found.email}</div>
-            </div>
-            <button className="btn btn-primary" onClick={handleAdd}>
-              <UserPlus size={14} /> Add to team
-            </button>
-          </div>
-        )}
-      </div>
-
       <div className="card">
         <div className="text-sm font-semibold text-text">Your team ({members.length})</div>
         {members.length === 0 && <div className="mt-3 text-[13px] text-text-3">You aren't overseeing anyone yet.</div>}
 
-        <div className="mt-3 space-y-2">
-          {members.map((m) => (
-            <div key={m.id} className="rounded-md border border-border-2 bg-surface-3 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${onlineIds.has(m.memberId) ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                      title={onlineIds.has(m.memberId) ? 'Online' : 'Offline'}
-                    />
-                    <div className="text-[13px] font-medium text-text">{m.member.fullName || m.member.email}</div>
-                    {(todayAttendance[m.memberId] ?? 0) > 0 && (
-                      <span className="flex items-center gap-1 rounded-full bg-primary-dim px-2 py-0.5 text-[11px] font-medium text-primary-text" title="Online today">
-                        <Clock size={10} /> {formatDuration(todayAttendance[m.memberId])} today
-                      </span>
-                    )}
+        <div className="mt-3 space-y-2.5">
+          {members.map((m, i) => {
+            const isOnline = onlineIds.has(m.memberId);
+            const today = todayAttendance[m.memberId];
+            const [mFirst, mLast] = (m.member.fullName ?? '').split(' ');
+            const avatarColor = nextTagColor(i);
+            const isExpanded = expanded === m.memberId;
+
+            return (
+              <div
+                key={m.id}
+                className="rounded-lg border border-border-2 bg-surface-3 p-3.5 transition-colors hover:border-border"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="relative shrink-0">
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-semibold"
+                        style={{ backgroundColor: avatarColor.bg, color: avatarColor.text }}
+                      >
+                        {initials(mFirst || m.member.email, mLast ?? '')}
+                      </div>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface-3 ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        title={isOnline ? 'Online' : 'Offline'}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-[14px] font-semibold text-text">{m.member.fullName || m.member.email}</span>
+                        <select
+                          className={`rounded-full border-0 py-0.5 pl-2.5 pr-6 text-[10px] font-semibold uppercase tracking-wide outline-none ${
+                            m.member.role === 'admin' ? 'bg-primary-dim text-primary-text' : 'bg-surface-2 text-text-2'
+                          }`}
+                          value={m.member.role}
+                          onChange={(e) => updateRole.mutate({ id: m.memberId, role: e.target.value as Role })}
+                        >
+                          <option value="caller">Caller</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                      <div className="mt-0.5 truncate text-[12px] text-text-3">
+                        {m.member.email} · code {m.member.userCode}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className={`text-[12px] font-medium ${isOnline ? 'text-emerald-600' : 'text-text-3'}`}>
+                          {isOnline ? 'Online now' : today ? `Offline · last seen ${formatTime(today.lastSeenAt)}` : 'Offline'}
+                        </span>
+                        {today && today.seconds > 0 && (
+                          <span className="flex items-center gap-1 rounded-full bg-primary-dim px-2 py-0.5 text-[11px] font-medium text-primary-text">
+                            <Clock size={10} /> {formatDuration(today.seconds)} today
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-text-3">{m.member.email} · code {m.member.userCode}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isAdmin ? (
-                    <select
-                      className="input !w-auto !py-1 text-[12px]"
-                      value={m.member.role}
-                      onChange={(e) => updateRole.mutate({ id: m.memberId, role: e.target.value as Role })}
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Link to={`/team/${m.memberId}`} className="btn !px-2.5 !py-1 text-[12px]" title="Open full dashboard">
+                      <LayoutDashboard size={13} /> Dashboard
+                    </Link>
+                    <button
+                      className="btn !px-2 !py-1"
+                      onClick={() => setExpanded(isExpanded ? null : m.memberId)}
+                      title={isExpanded ? 'Hide stats & attendance' : 'View stats & attendance'}
                     >
-                      <option value="caller">Caller</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  ) : (
-                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-text-2">{ROLE_LABELS[m.member.role]}</span>
-                  )}
-                  <button
-                    className="btn !px-2 !py-1"
-                    onClick={() => setExpanded(expanded === m.memberId ? null : m.memberId)}
-                    title={expanded === m.memberId ? 'Hide quick stats' : 'View quick stats'}
-                  >
-                    {expanded === m.memberId ? <EyeOff size={13} /> : <Eye size={13} />}
-                  </button>
-                  <Link to={`/team/${m.memberId}`} className="btn !px-2.5 !py-1 text-[12px]" title="Open full dashboard">
-                    <LayoutDashboard size={13} /> Dashboard
-                  </Link>
-                  <button className="btn !px-2 !py-1 text-danger hover:border-danger" onClick={() => setRemoveTarget(m.id)} title="Remove from team">
-                    <Trash2 size={13} />
-                  </button>
+                      <ChevronDown size={14} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    <button className="btn !px-2 !py-1 text-danger hover:border-danger" onClick={() => setRemoveTarget(m.id)} title="Remove from team">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
+                {isExpanded && (
+                  <div className="mt-3 border-t border-border-2 pt-3">
+                    <MemberStats memberId={m.memberId} />
+                    <MemberAttendance memberId={m.memberId} />
+                  </div>
+                )}
               </div>
-              {expanded === m.memberId && (
-                <>
-                  <MemberStats memberId={m.memberId} />
-                  <MemberAttendance memberId={m.memberId} />
-                </>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

@@ -29,32 +29,6 @@ export function useTeamMembers() {
   });
 }
 
-export function useFindProfileByCode() {
-  return useMutation({
-    mutationFn: async (code: string) => {
-      const { data, error } = await supabase
-        .from('profile_directory')
-        .select('*')
-        .ilike('user_code', code.trim())
-        .maybeSingle();
-      if (error) throw error;
-      return data as { id: string; user_code: string; full_name: string | null; email: string } | null;
-    },
-  });
-}
-
-export function useAddTeamMember() {
-  const { session } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (memberId: string) => {
-      const { error } = await supabase.from('team_members').insert({ owner_id: session!.user.id, member_id: memberId });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['team_members'] }),
-  });
-}
-
 export function useRemoveTeamMember() {
   const qc = useQueryClient();
   return useMutation({
