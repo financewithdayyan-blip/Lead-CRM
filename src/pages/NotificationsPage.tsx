@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Share2, X } from 'lucide-react';
+import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
 import { formatDate } from '@/lib/utils';
@@ -10,6 +10,7 @@ const NOTIF_TYPE_CONFIG = {
   followup: { label: 'Follow-Up', color: '#a78bfa' },
   task: { label: 'Task', color: '#f59e0b' },
   share: { label: 'Shared Lead', color: '#10b981' },
+  auction: { label: 'Auction', color: '#ef4444' },
 };
 
 function NotifTag({ type }: { type: keyof typeof NOTIF_TYPE_CONFIG }) {
@@ -33,9 +34,11 @@ export function NotificationsPage() {
     dueFollowUps,
     teamSummaries,
     pendingShares,
+    auctionAlerts,
     toggleTask,
     acceptShare,
     declineShare,
+    acknowledgeAuctionAlert,
     readIds,
     unreadCount,
     markRead,
@@ -43,7 +46,10 @@ export function NotificationsPage() {
   } = useNotificationsContext();
 
   const empty =
-    dueTasks.length === 0 && dueFollowUps.length === 0 && (!isAdmin || (teamSummaries.length === 0 && pendingShares.length === 0));
+    dueTasks.length === 0 &&
+    dueFollowUps.length === 0 &&
+    auctionAlerts.length === 0 &&
+    (!isAdmin || (teamSummaries.length === 0 && pendingShares.length === 0));
 
   return (
     <div>
@@ -97,6 +103,46 @@ export function NotificationsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {auctionAlerts.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                <Gavel size={12} /> Auction Reminders ({auctionAlerts.length})
+              </div>
+              <div className="space-y-1.5">
+                {auctionAlerts.map((a) => {
+                  const id = `auction:${a.lead.id}:${a.milestone}`;
+                  const unread = !readIds.has(id);
+                  return (
+                    <div key={id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        <div className="min-w-0 text-[13px] text-text">
+                          <span className="font-medium">
+                            {a.lead.firstName} {a.lead.lastName}
+                          </span>{' '}
+                          — {a.daysRemaining} day{a.daysRemaining !== 1 ? 's' : ''} until auction. Time for a follow-up call.
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <NotifTag type="auction" />
+                        <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => acknowledgeAuctionAlert(a.lead.id, a.milestone)}>
+                          Got it
+                        </button>
+                        <Link
+                          to={`/leads/${a.lead.id}`}
+                          onClick={() => acknowledgeAuctionAlert(a.lead.id, a.milestone)}
+                          className="text-[12px] text-primary hover:underline"
+                        >
+                          View lead
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

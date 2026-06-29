@@ -106,6 +106,7 @@ export interface Lead {
   lotSize: string | null;
   yearBuilt: number | null;
   auctionDate: string | null;
+  auctionMilestonesNotified: number[];
   condition: string | null;
   motivation: string | null;
   arv: number | null;

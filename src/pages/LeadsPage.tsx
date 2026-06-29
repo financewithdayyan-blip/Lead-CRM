@@ -8,6 +8,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { AddLeadModal } from '@/components/leads/AddLeadModal';
 import { ImportCsvModal } from '@/components/leads/ImportCsvModal';
 import { DeleteLeadsModal } from '@/components/leads/DeleteLeadsModal';
@@ -116,20 +117,21 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
               <th className="px-3 py-2.5">Stage</th>
               <th className="px-3 py-2.5">Rating</th>
               <th className="px-3 py-2.5">Tags</th>
+              <th className="px-3 py-2.5">Auction</th>
               {targetUserId && <th className="px-3 py-2.5" />}
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={targetUserId ? 9 : 8} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={targetUserId ? 10 : 9} className="px-3 py-8 text-center text-text-3">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={targetUserId ? 9 : 8} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={targetUserId ? 10 : 9} className="px-3 py-8 text-center text-text-3">
                   No leads match your filters.
                 </td>
               </tr>
@@ -163,6 +165,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                     })}
                   </div>
                 </td>
+                <td className="px-3 py-2.5">{lead.auctionDate ? <AuctionCountdown auctionDate={lead.auctionDate} /> : <span className="text-text-3">—</span>}</td>
                 {targetUserId && (
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <button

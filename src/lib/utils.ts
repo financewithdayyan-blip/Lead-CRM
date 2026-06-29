@@ -60,6 +60,14 @@ export function parseFlexibleDate(raw: string | null | undefined): string | null
   return localIsoDate(d);
 }
 
+export function daysUntil(dateIso: string): number {
+  const [y, m, d] = dateIso.split('-').map(Number);
+  const target = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
 export function initials(firstName: string, lastName: string): string {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
