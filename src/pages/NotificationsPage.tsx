@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Share2, X } from 'lucide-react';
+import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Radio, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatTime } from '@/lib/utils';
 
 const NOTIF_TYPE_CONFIG = {
   summary: { label: 'Daily Summary', color: '#4f46e5' },
@@ -11,6 +11,8 @@ const NOTIF_TYPE_CONFIG = {
   task: { label: 'Task', color: '#f59e0b' },
   share: { label: 'Shared Lead', color: '#10b981' },
   auction: { label: 'Auction', color: '#ef4444' },
+  online: { label: 'Online', color: '#22c55e' },
+  offline: { label: 'Offline', color: '#94a3b8' },
 };
 
 function NotifTag({ type }: { type: keyof typeof NOTIF_TYPE_CONFIG }) {
@@ -35,6 +37,7 @@ export function NotificationsPage() {
     teamSummaries,
     pendingShares,
     auctionAlerts,
+    presenceEvents,
     toggleTask,
     acceptShare,
     declineShare,
@@ -49,7 +52,7 @@ export function NotificationsPage() {
     dueTasks.length === 0 &&
     dueFollowUps.length === 0 &&
     auctionAlerts.length === 0 &&
-    (!isAdmin || (teamSummaries.length === 0 && pendingShares.length === 0));
+    (!isAdmin || (teamSummaries.length === 0 && pendingShares.length === 0 && presenceEvents.length === 0));
 
   return (
     <div>
@@ -179,6 +182,38 @@ export function NotificationsPage() {
                       </button>
                       {expanded && <p className="mt-2 whitespace-pre-wrap text-[13px] text-text-2">{s.summary}</p>}
                     </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {presenceEvents.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                <Radio size={12} /> Team Activity ({presenceEvents.length})
+              </div>
+              <div className="space-y-1.5">
+                {presenceEvents.map((p) => {
+                  const unread = !readIds.has(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => markRead([p.id])}
+                      className="flex w-full items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3 text-left hover:border-primary"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium text-text">
+                            {p.memberName} {p.type === 'online' ? 'came online' : 'went offline'}
+                          </div>
+                          <div className="text-[11px] text-text-3">{formatTime(p.at)}</div>
+                        </div>
+                      </div>
+                      <NotifTag type={p.type} />
+                    </button>
                   );
                 })}
               </div>

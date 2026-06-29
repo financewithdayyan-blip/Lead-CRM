@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, UserPlus, Trash2, ChevronDown, LayoutDashboard, Mail, Copy, Clock, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers, useRemoveTeamMember, useUpdateMemberRole, useTeamInvites, useSendInvite, useRevokeInvite } from '@/hooks/useTeam';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
-import { useAttendanceSessions, useTeamTodayAttendance } from '@/hooks/useAttendance';
+import { aggregateTodayAttendance, useAttendanceSessions, useTeamTodaySessions } from '@/hooks/useAttendance';
 import { nextTagColor } from '@/hooks/useTags';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useOnlineUserIds } from '@/contexts/PresenceContext';
@@ -109,7 +109,8 @@ export function TeamPage() {
   const { data: members = [] } = useTeamMembers();
   const { data: invites = [] } = useTeamInvites();
   const onlineIds = useOnlineUserIds();
-  const { data: todayAttendance = {} } = useTeamTodayAttendance();
+  const { data: todaySessions = [] } = useTeamTodaySessions();
+  const todayAttendance = useMemo(() => aggregateTodayAttendance(todaySessions), [todaySessions]);
   const removeMember = useRemoveTeamMember();
   const updateRole = useUpdateMemberRole();
   const sendInvite = useSendInvite();

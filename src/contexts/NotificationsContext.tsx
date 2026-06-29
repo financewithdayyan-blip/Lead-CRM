@@ -1,9 +1,12 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { useOnlineUserIds } from './PresenceContext';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTeamTodaySummaries } from '@/hooks/useDailySummaries';
 import { useAcceptLeadShare, useDeclineLeadShare, usePendingLeadShares } from '@/hooks/useLeadShares';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useTeamTodaySessions } from '@/hooks/useAttendance';
 import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
 import { daysUntil, localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
@@ -16,6 +19,13 @@ interface AuctionAlert {
   milestone: number;
 }
 
+interface PresenceEvent {
+  id: string;
+  type: 'online' | 'offline';
+  memberName: string;
+  at: string;
+}
+
 interface NotificationsContextValue {
   isAdmin: boolean;
   todayIso: string;
@@ -24,6 +34,7 @@ interface NotificationsContextValue {
   teamSummaries: (DailySummary & { memberName: string })[];
   pendingShares: (LeadShare & { leadName: string; fromName: string })[];
   auctionAlerts: AuctionAlert[];
+  presenceEvents: PresenceEvent[];
   toggleTask: ReturnType<typeof useToggleTask>;
   acceptShare: ReturnType<typeof useAcceptLeadShare>;
   declineShare: ReturnType<typeof useDeclineLeadShare>;
@@ -48,6 +59,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: leads = [] } = useLeads();
   const { data: teamSummaries = [] } = useTeamTodaySummaries();
   const { data: pendingShares = [] } = usePendingLeadShares();
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { data: teamSessions = [] } = useTeamTodaySessions();
+  const onlineIds = useOnlineUserIds();
   const toggleTask = useToggleTask();
   const acceptShare = useAcceptLeadShare();
   const declineShare = useDeclineLeadShare();
@@ -80,14 +94,28 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
   }, [leads]);
 
+  const presenceEvents = useMemo(() => {
+    const events: PresenceEvent[] = [];
+    for (const s of teamSessions) {
+      const member = teamMembers.find((m) => m.memberId === s.userId);
+      const memberName = member ? member.member.fullName || member.member.email : 'A team member';
+      events.push({ id: `presence_on:${s.id}`, type: 'online', memberName, at: s.startedAt });
+      if (!onlineIds.has(s.userId)) {
+        events.push({ id: `presence_off:${s.id}`, type: 'offline', memberName, at: s.endedAt });
+      }
+    }
+    return events.sort((a, b) => b.at.localeCompare(a.at));
+  }, [teamSessions, teamMembers, onlineIds]);
+
   const allIds = useMemo(
     () => [
       ...dueTasks.map((t) => `task:${t.id}`),
       ...dueFollowUps.map((l) => `followup:${l.id}`),
       ...auctionAlerts.map((a) => `auction:${a.lead.id}:${a.milestone}`),
+      ...presenceEvents.map((p) => p.id),
       ...(isAdmin ? teamSummaries.map((s) => `summary:${s.id}`) : []),
     ],
-    [dueTasks, dueFollowUps, auctionAlerts, teamSummaries, isAdmin],
+    [dueTasks, dueFollowUps, auctionAlerts, presenceEvents, teamSummaries, isAdmin],
   );
   const unreadCount = allIds.filter((id) => !readIds.has(id)).length + (isAdmin ? pendingShares.length : 0);
 
@@ -123,6 +151,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         teamSummaries,
         pendingShares,
         auctionAlerts,
+        presenceEvents,
         toggleTask,
         acceptShare,
         declineShare,

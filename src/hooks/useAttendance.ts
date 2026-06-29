@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToAttendanceSession } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
+import type { AttendanceSession } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
 
 /** Recent clock-in/out history for one user, newest first - powers the detailed attendance log on their team card. */
@@ -24,13 +25,8 @@ export function useAttendanceSessions(userId: string | undefined) {
   });
 }
 
-export interface TodayAttendance {
-  seconds: number;
-  lastSeenAt: string;
-}
-
-/** Today's online total + last-seen time per team member, for the always-visible badge on each member's card. */
-export function useTeamTodayAttendance() {
+/** Today's attendance_sessions rows across the whole team - shared by the Team page badges and the presence notifications. */
+export function useTeamTodaySessions() {
   const { session, profile } = useAuth();
   const ownerId = session?.user.id;
   const todayIso = localIsoDate(new Date());
@@ -39,24 +35,30 @@ export function useTeamTodayAttendance() {
     queryFn: async () => {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
-      const { data, error } = await supabase
-        .from('attendance_sessions')
-        .select('user_id, started_at, ended_at')
-        .gte('started_at', start.toISOString())
-        .neq('user_id', ownerId);
+      const { data, error } = await supabase.from('attendance_sessions').select('*').gte('started_at', start.toISOString()).neq('user_id', ownerId);
       if (error) throw error;
-      const totals: Record<string, TodayAttendance> = {};
-      for (const row of data) {
-        const seconds = Math.max(0, (new Date(row.ended_at).getTime() - new Date(row.started_at).getTime()) / 1000);
-        const prev = totals[row.user_id];
-        totals[row.user_id] = {
-          seconds: (prev?.seconds ?? 0) + seconds,
-          lastSeenAt: !prev || row.ended_at > prev.lastSeenAt ? row.ended_at : prev.lastSeenAt,
-        };
-      }
-      return totals;
+      return data.map(dbToAttendanceSession);
     },
     enabled: !!ownerId && profile?.role === 'admin',
     refetchInterval: 60_000,
   });
+}
+
+export interface TodayAttendance {
+  seconds: number;
+  lastSeenAt: string;
+}
+
+/** Reduces today's sessions into a per-member online total + last-seen time. */
+export function aggregateTodayAttendance(sessions: AttendanceSession[]): Record<string, TodayAttendance> {
+  const totals: Record<string, TodayAttendance> = {};
+  for (const s of sessions) {
+    const seconds = Math.max(0, (new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()) / 1000);
+    const prev = totals[s.userId];
+    totals[s.userId] = {
+      seconds: (prev?.seconds ?? 0) + seconds,
+      lastSeenAt: !prev || s.endedAt > prev.lastSeenAt ? s.endedAt : prev.lastSeenAt,
+    };
+  }
+  return totals;
 }
