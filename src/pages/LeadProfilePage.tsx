@@ -156,7 +156,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       {tab === 'property' && <PropertyTab lead={lead} />}
       {tab === 'script' && <ScriptTab lead={lead} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
-      {tab === 'tasks' && <TasksTab leadId={lead.id} />}
+      {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}
       {tab === 'files' && <FilesTab lead={lead} />}
     </div>
   );
@@ -734,8 +734,8 @@ function ActivityTab({ leadId }: { leadId: string }) {
   );
 }
 
-function TasksTab({ leadId }: { leadId: string }) {
-  const { data: allTasks = [] } = useTasks();
+function TasksTab({ leadId, ownerId }: { leadId: string; ownerId: string }) {
+  const { data: allTasks = [] } = useTasks(ownerId);
   const tasks = allTasks.filter((t) => t.leadId === leadId);
   const createTask = useCreateTask();
   const toggleTask = useToggleTask();
@@ -745,7 +745,10 @@ function TasksTab({ leadId }: { leadId: string }) {
 
   function handleAdd() {
     if (!title.trim()) return;
-    createTask.mutate({ leadId, title: title.trim(), dueDate: dueDate || null }, { onSuccess: () => { setTitle(''); setDueDate(''); } });
+    createTask.mutate(
+      { leadId, title: title.trim(), dueDate: dueDate || null, userId: ownerId },
+      { onSuccess: () => { setTitle(''); setDueDate(''); } },
+    );
   }
 
   return (

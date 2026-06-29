@@ -3,9 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { dbToTask } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
 
-export function useTasks() {
+export function useTasks(targetUserId?: string) {
   const { session } = useAuth();
-  const userId = session?.user.id;
+  const userId = targetUserId ?? session?.user.id;
   return useQuery({
     queryKey: ['tasks', userId],
     queryFn: async () => {
@@ -21,10 +21,20 @@ export function useCreateTask() {
   const { session } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ leadId, title, dueDate }: { leadId: string | null; title: string; dueDate: string | null }) => {
+    mutationFn: async ({
+      leadId,
+      title,
+      dueDate,
+      userId,
+    }: {
+      leadId: string | null;
+      title: string;
+      dueDate: string | null;
+      userId?: string;
+    }) => {
       const { error } = await supabase
         .from('tasks')
-        .insert({ user_id: session!.user.id, lead_id: leadId, title, due_date: dueDate });
+        .insert({ user_id: userId ?? session!.user.id, lead_id: leadId, title, due_date: dueDate });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
