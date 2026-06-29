@@ -11,6 +11,7 @@ import {
   FileText,
   Loader2,
   MapPin,
+  MessageSquare,
   PauseCircle,
   Phone,
   PhoneIncoming,
@@ -54,6 +55,9 @@ const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: 
   { key: 'dead', label: 'Dead', stage: 'dead_declined', icon: XCircle },
   { key: 'declined', label: 'Declined', stage: 'dead_declined', icon: Ban },
 ];
+
+const VOICEMAIL_SMS =
+  "Hi. I tried reaching you today regarding your property. I'd love to connect when you have a moment — feel free to call or text me back at . Thank you!";
 
 const SHORTCUT_LEGEND: Array<{ key: string; label: string }> = [
   { key: 'V', label: 'Voicemail' },
@@ -169,6 +173,7 @@ export function CallSessionPage() {
   const [summaryText, setSummaryText] = useState('');
   const [summaryJustSubmitted, setSummaryJustSubmitted] = useState(false);
   const [copiedField, setCopiedField] = useState<'phone' | 'phone2' | null>(null);
+  const [smsCopied, setSmsCopied] = useState(false);
 
   const followUpDays = useMemo(() => {
     const today = new Date();
@@ -254,6 +259,12 @@ export function CallSessionPage() {
     navigator.clipboard.writeText(formatPhone(raw));
     setCopiedField(field);
     setTimeout(() => setCopiedField((prev) => (prev === field ? null : prev)), 1200);
+  }
+
+  function copySmsMessage() {
+    navigator.clipboard.writeText(VOICEMAIL_SMS);
+    setSmsCopied(true);
+    setTimeout(() => setSmsCopied(false), 1500);
   }
 
   function saveAndNext() {
@@ -533,6 +544,16 @@ export function CallSessionPage() {
                 );
               })}
             </div>
+
+            {outcome === 'voicemail' && (
+              <button
+                type="button"
+                onClick={copySmsMessage}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 py-2 text-[12px] font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-900"
+              >
+                <MessageSquare size={13} /> {smsCopied ? 'Copied!' : 'Copy Text Message'}
+              </button>
+            )}
 
             {outcome === 'followup' && (
               <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/60 p-2">
