@@ -45,6 +45,21 @@ export function formatDateTime(iso: string | null | undefined): string {
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+export function formatTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Renders a duration in seconds as "3h 24m", "45m", or "<1m". */
+export function formatDuration(totalSeconds: number): string {
+  if (totalSeconds < 60) return '<1m';
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.round((totalSeconds % 3600) / 60);
+  return h === 0 ? `${m}m` : `${h}h ${m}m`;
+}
+
 export function localIsoDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');

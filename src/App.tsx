@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
+import { AttendanceProvider } from '@/contexts/AttendanceContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/LoginPage';
@@ -29,34 +30,36 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <PresenceProvider>
-          <BrowserRouter basename="/crm">
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/accept-invite" element={<AcceptInvitePage />} />
-              <Route element={<ProtectedRoute />}>
-                <Route path="/session" element={<CallSessionPage />} />
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/leads" element={<LeadsPage />} />
-                  <Route path="/leads/:id" element={<LeadProfilePage />} />
-                  <Route path="/kanban" element={<KanbanPage />} />
-                  <Route path="/calls" element={<CallHistoryPage />} />
-                  <Route path="/notifications" element={<NotificationsPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route element={<ProtectedRoute requireOverseer />}>
-                    <Route path="/team" element={<TeamPage />} />
-                    <Route path="/team/:memberId" element={<MemberDashboardPage />} />
-                    <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
-                    <Route path="/team/:memberId/leads/:id" element={<MemberLeadProfilePage />} />
-                    <Route path="/team/:memberId/kanban" element={<MemberKanbanPage />} />
-                    <Route path="/team/:memberId/settings" element={<MemberSettingsPage />} />
+        <AttendanceProvider>
+          <PresenceProvider>
+            <BrowserRouter basename="/crm">
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/accept-invite" element={<AcceptInvitePage />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/session" element={<CallSessionPage />} />
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/leads" element={<LeadsPage />} />
+                    <Route path="/leads/:id" element={<LeadProfilePage />} />
+                    <Route path="/kanban" element={<KanbanPage />} />
+                    <Route path="/calls" element={<CallHistoryPage />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route element={<ProtectedRoute requireOverseer />}>
+                      <Route path="/team" element={<TeamPage />} />
+                      <Route path="/team/:memberId" element={<MemberDashboardPage />} />
+                      <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
+                      <Route path="/team/:memberId/leads/:id" element={<MemberLeadProfilePage />} />
+                      <Route path="/team/:memberId/kanban" element={<MemberKanbanPage />} />
+                      <Route path="/team/:memberId/settings" element={<MemberSettingsPage />} />
+                    </Route>
                   </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </PresenceProvider>
+              </Routes>
+            </BrowserRouter>
+          </PresenceProvider>
+        </AttendanceProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

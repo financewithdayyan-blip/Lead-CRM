@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Shield, UserPlus, Trash2, Eye, EyeOff, LayoutDashboard, Mail, Copy, X } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Eye, EyeOff, LayoutDashboard, Mail, Copy, Clock, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useTeamMembers,
@@ -14,10 +14,11 @@ import {
 } from '@/hooks/useTeam';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
+import { useAttendanceSessions, useTeamTodayAttendance } from '@/hooks/useAttendance';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useOnlineUserIds } from '@/contexts/PresenceContext';
 import type { Role } from '@/types/domain';
-import { getErrorMessage, localIsoDate } from '@/lib/utils';
+import { formatDuration, formatTime, getErrorMessage, localIsoDate } from '@/lib/utils';
 
 const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', caller: 'Caller' };
 
@@ -61,12 +62,62 @@ function MemberStats({ memberId }: { memberId: string }) {
   );
 }
 
+function formatDayLabel(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function MemberAttendance({ memberId }: { memberId: string }) {
+  const { data: sessions = [], isLoading } = useAttendanceSessions(memberId);
+
+  if (isLoading) return <div className="mt-3 text-[12px] text-text-3">Loading attendance…</div>;
+  if (sessions.length === 0) return <div className="mt-3 text-[12px] text-text-3">No attendance recorded yet.</div>;
+
+  const days = new Map<string, typeof sessions>();
+  for (const s of sessions) {
+    const day = localIsoDate(new Date(s.startedAt));
+    days.set(day, [...(days.get(day) ?? []), s]);
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+        <Clock size={12} /> Attendance (last 14 days)
+      </div>
+      <div className="space-y-1.5">
+        {Array.from(days.entries()).map(([day, daySessions]) => {
+          const totalSeconds = daySessions.reduce(
+            (sum, s) => sum + (new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()) / 1000,
+            0,
+          );
+          const ordered = [...daySessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+          return (
+            <div key={day} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-3 p-2 text-[12px]">
+              <div className="font-medium text-text">{formatDayLabel(day)}</div>
+              <div className="text-text-2">
+                {ordered.map((s, i) => (
+                  <span key={s.id}>
+                    {i > 0 && ', '}
+                    {formatTime(s.startedAt)}–{formatTime(s.endedAt)}
+                  </span>
+                ))}
+              </div>
+              <div className="font-mono font-semibold text-primary">{formatDuration(totalSeconds)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function TeamPage() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const { data: members = [] } = useTeamMembers();
   const { data: invites = [] } = useTeamInvites();
   const onlineIds = useOnlineUserIds();
+  const { data: todayAttendance = {} } = useTeamTodayAttendance();
   const findByCode = useFindProfileByCode();
   const addMember = useAddTeamMember();
   const removeMember = useRemoveTeamMember();
@@ -299,6 +350,11 @@ export function TeamPage() {
                       title={onlineIds.has(m.memberId) ? 'Online' : 'Offline'}
                     />
                     <div className="text-[13px] font-medium text-text">{m.member.fullName || m.member.email}</div>
+                    {(todayAttendance[m.memberId] ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 rounded-full bg-primary-dim px-2 py-0.5 text-[11px] font-medium text-primary-text" title="Online today">
+                        <Clock size={10} /> {formatDuration(todayAttendance[m.memberId])} today
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-text-3">{m.member.email} · code {m.member.userCode}</div>
                 </div>
@@ -330,7 +386,12 @@ export function TeamPage() {
                   </button>
                 </div>
               </div>
-              {expanded === m.memberId && <MemberStats memberId={m.memberId} />}
+              {expanded === m.memberId && (
+                <>
+                  <MemberStats memberId={m.memberId} />
+                  <MemberAttendance memberId={m.memberId} />
+                </>
+              )}
             </div>
           ))}
         </div>

@@ -157,6 +157,13 @@ export interface DailySummary {
   createdAt: string;
 }
 
+export interface AttendanceSession {
+  id: string;
+  userId: string;
+  startedAt: string;
+  endedAt: string;
+}
+
 export interface LeadShare {
   id: string;
   leadId: string;
