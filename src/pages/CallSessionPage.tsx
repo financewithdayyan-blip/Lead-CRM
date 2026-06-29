@@ -56,9 +56,6 @@ const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: 
   { key: 'declined', label: 'Declined', stage: 'dead_declined', icon: Ban },
 ];
 
-const VOICEMAIL_SMS =
-  "Hi. I tried reaching you today regarding your property. I'd love to connect when you have a moment — feel free to call or text me back at . Thank you!";
-
 const SHORTCUT_LEGEND: Array<{ key: string; label: string }> = [
   { key: 'V', label: 'Voicemail' },
   { key: 'F', label: 'Follow-Up' },
@@ -262,7 +259,8 @@ export function CallSessionPage() {
   }
 
   function copySmsMessage() {
-    navigator.clipboard.writeText(VOICEMAIL_SMS);
+    const message = `Hi. I tried reaching you today regarding your property at ${addressLine}. I'd love to connect when you have a moment — feel free to call or text me back at . Thank you!`;
+    navigator.clipboard.writeText(message);
     setSmsCopied(true);
     setTimeout(() => setSmsCopied(false), 1500);
   }
