@@ -86,10 +86,13 @@ export function DashboardView({
 
   const stats = useMemo(() => {
     const total = leads.length;
+    // Leads still sitting at 'new' haven't had a call outcome selected yet,
+    // so they shouldn't dilute rate KPIs like voicemail/dead/contact rate.
+    const calledLeadsCount = leads.filter((l) => l.stage !== 'new').length;
     const active = leads.filter((l) => ['initial_contact', 'followup', 'negotiation'].includes(l.stage)).length;
     const contracts = leads.filter((l) => l.stage === 'contract').length;
     const deadDeclined = leads.filter((l) => l.stage === 'dead_declined').length;
-    const conversionRate = total > 0 ? Math.round((contracts / total) * 100) : 0;
+    const conversionRate = calledLeadsCount > 0 ? Math.round((contracts / calledLeadsCount) * 100) : 0;
 
     const todayIso = localIsoDate(new Date());
     const callsToday = calls.filter((a) => localIsoDate(new Date(a.createdAt)) === todayIso).length;
@@ -130,9 +133,9 @@ export function DashboardView({
     const pipelineFollowupCount = leads.filter((l) => l.stage === 'followup').length;
     const conversations = pipelineInitialContactCount + pipelineFollowupCount;
 
-    const contactRate = total > 0 ? Math.round((conversations / total) * 100) : 0;
-    const voicemailRate = total > 0 ? Math.round((voicemailCount / total) * 100) : 0;
-    const deadDeclinedRate = total > 0 ? Math.round((deadDeclinedOutcomeCount / total) * 100) : 0;
+    const contactRate = calledLeadsCount > 0 ? Math.round((conversations / calledLeadsCount) * 100) : 0;
+    const voicemailRate = calledLeadsCount > 0 ? Math.round((voicemailCount / calledLeadsCount) * 100) : 0;
+    const deadDeclinedRate = calledLeadsCount > 0 ? Math.round((deadDeclinedOutcomeCount / calledLeadsCount) * 100) : 0;
 
     // Calling efficiency (dials per outcome) stays based on actual logged
     // call outcomes, so it stays blank until enough real calls are logged.
@@ -157,6 +160,7 @@ export function DashboardView({
 
     return {
       total,
+      calledLeadsCount,
       active,
       contracts,
       deadDeclined,
@@ -364,20 +368,25 @@ export function DashboardView({
             <StatCard
               label="Contact Rate"
               value={`${stats.contactRate}%`}
-              sub={`${stats.conversations} contacts of ${stats.total} leads`}
+              sub={`${stats.conversations} contacts of ${stats.calledLeadsCount} called`}
               color="#10b981"
             />
             <StatCard
               label="Conversion Rate"
               value={`${stats.conversionRate}%`}
-              sub={`${stats.contracts} contracts from ${stats.total} leads`}
+              sub={`${stats.contracts} contracts of ${stats.calledLeadsCount} called`}
               color="#10b981"
             />
-            <StatCard label="Voicemail Rate" value={`${stats.voicemailRate}%`} sub={`${stats.voicemailCount} voicemails left`} color="#f59e0b" />
+            <StatCard
+              label="Voicemail Rate"
+              value={`${stats.voicemailRate}%`}
+              sub={`${stats.voicemailCount} of ${stats.calledLeadsCount} called`}
+              color="#f59e0b"
+            />
             <StatCard
               label="Dead / Declined Rate"
               value={`${stats.deadDeclinedRate}%`}
-              sub={`${stats.deadDeclinedOutcomeCount} not interested`}
+              sub={`${stats.deadDeclinedOutcomeCount} of ${stats.calledLeadsCount} called`}
               color="#ef4444"
             />
             <StatCard label="Total Sessions" value={stats.totalSessions} sub={`${stats.totalSessions} calling sessions run`} color="#4f46e5" />
