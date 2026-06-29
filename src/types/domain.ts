@@ -105,6 +105,7 @@ export interface Lead {
   sqft: number | null;
   lotSize: string | null;
   yearBuilt: number | null;
+  auctionDate: string | null;
   condition: string | null;
   motivation: string | null;
   arv: number | null;

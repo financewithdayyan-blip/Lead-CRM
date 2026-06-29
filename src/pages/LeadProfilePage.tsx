@@ -368,6 +368,7 @@ function PropertyTab({ lead }: { lead: Lead }) {
     sqft: lead.sqft?.toString() ?? '',
     lotSize: lead.lotSize ?? '',
     yearBuilt: lead.yearBuilt?.toString() ?? '',
+    auctionDate: lead.auctionDate ?? '',
     condition: lead.condition ?? '',
     motivation: lead.motivation ?? '',
     propertyRating: lead.propertyRating?.toString() ?? '',
@@ -397,6 +398,7 @@ function PropertyTab({ lead }: { lead: Lead }) {
         sqft: form.sqft ? Number(form.sqft) : null,
         lotSize: form.lotSize || null,
         yearBuilt: form.yearBuilt ? Number(form.yearBuilt) : null,
+        auctionDate: form.auctionDate || null,
         condition: form.condition || null,
         motivation: form.motivation || null,
         arv: form.arv ? Number(form.arv) : null,
@@ -464,6 +466,9 @@ function PropertyTab({ lead }: { lead: Lead }) {
           </Field>
           <Field label="Year Built">
             <input className="input" type="number" value={form.yearBuilt} onChange={(e) => set('yearBuilt', e.target.value)} />
+          </Field>
+          <Field label="Auction Date">
+            <input className="input" type="date" value={form.auctionDate} onChange={(e) => set('auctionDate', e.target.value)} />
           </Field>
           <Field label="Condition">
             <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />

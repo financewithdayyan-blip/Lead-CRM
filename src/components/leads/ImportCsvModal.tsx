@@ -59,6 +59,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
           sqft: m.sqft ? Number(m.sqft) : null,
           lotSize: m.lotSize || null,
           propType: m.propType || null,
+          auctionDate: m.auctionDate || null,
           source: m.source || batchSource || null,
           stage: 'new' as const,
           rating: 0,

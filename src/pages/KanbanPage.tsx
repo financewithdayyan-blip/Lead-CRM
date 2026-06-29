@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core';
-import { Phone, Pencil, Trash2 } from 'lucide-react';
+import { Gavel, Phone, Pencil, Trash2 } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useAddActivity } from '@/hooks/useActivities';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TagPill } from '@/components/ui/TagPill';
-import { formatPhone } from '@/lib/utils';
+import { formatDate, formatPhone, localIsoDate } from '@/lib/utils';
 import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage } from '@/types/domain';
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
+
+function isAuctionSoon(auctionDate: string) {
+  const todayIso = localIsoDate(new Date());
+  const in14Days = localIsoDate(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
+  return auctionDate <= in14Days || auctionDate < todayIso;
+}
 
 function KanbanCard({
   lead,
@@ -47,6 +53,11 @@ function KanbanCard({
         </div>
         <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
         {lead.address && <div className="mt-0.5 truncate text-text-3" title={lead.address}>📍 {lead.address}</div>}
+        {lead.auctionDate && (
+          <div className={`mt-0.5 flex items-center gap-1 font-medium ${isAuctionSoon(lead.auctionDate) ? 'text-danger' : 'text-text-3'}`}>
+            <Gavel size={11} /> Auction: {formatDate(lead.auctionDate)}
+          </div>
+        )}
         {lead.tagIds.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {lead.tagIds.slice(0, 2).map((tid) => {

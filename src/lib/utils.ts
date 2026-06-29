@@ -52,6 +52,14 @@ export function localIsoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export function parseFlexibleDate(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return null;
+  const d = new Date(trimmed);
+  if (isNaN(d.getTime())) return null;
+  return localIsoDate(d);
+}
+
 export function initials(firstName: string, lastName: string): string {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
