@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core';
-import { Phone, Pencil, Trash2 } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2 } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
+import { useReceivedLeadShares } from '@/hooks/useLeadShares';
 import { useAddActivity } from '@/hooks/useActivities';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TagPill } from '@/components/ui/TagPill';
@@ -28,6 +29,8 @@ function KanbanCard({
   onDelete: () => void;
 }) {
   const { data: tags = [] } = useTags();
+  const { data: receivedShares = {} } = useReceivedLeadShares();
+  const sharedFrom = receivedShares[lead.id];
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
   const stars = lead.rating > 0 ? '★'.repeat(lead.rating) + '☆'.repeat(5 - lead.rating) : '';
@@ -36,7 +39,9 @@ function KanbanCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-md border border-border-2 bg-surface p-2.5 text-[12px] shadow-card ${isDragging ? 'opacity-50' : ''}`}
+      className={`rounded-md border p-2.5 text-[12px] shadow-card ${isDragging ? 'opacity-50' : ''} ${
+        sharedFrom ? 'border-info/30 bg-info-dim' : 'border-border-2 bg-surface'
+      }`}
       onDoubleClick={onOpen}
     >
       <div {...listeners} {...attributes} className="cursor-grab active:cursor-grabbing">
@@ -49,6 +54,11 @@ function KanbanCard({
         <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
         {lead.address && <div className="mt-0.5 truncate text-text-3" title={lead.address}>📍 {lead.address}</div>}
         {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
+        {sharedFrom && (
+          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
+            <Share2 size={9} /> Shared by {sharedFrom}
+          </div>
+        )}
         {lead.tagIds.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {lead.tagIds.slice(0, 2).map((tid) => {

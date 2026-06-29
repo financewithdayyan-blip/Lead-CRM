@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Upload, UserPlus } from 'lucide-react';
+import { Plus, Share2, Trash2, Upload, UserPlus } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
-import { useTransferLeadToAdmin } from '@/hooks/useLeadShares';
+import { useReceivedLeadShares, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
@@ -19,6 +19,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
   const navigate = useNavigate();
   const { data: leads = [], isLoading } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
+  const { data: receivedShares = {} } = useReceivedLeadShares();
   const transferLead = useTransferLeadToAdmin();
 
   const [search, setSearch] = useState('');
@@ -136,49 +137,61 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                 </td>
               </tr>
             )}
-            {filtered.map((lead) => (
-              <tr
-                key={lead.id}
-                className="cursor-pointer border-b border-border hover:bg-surface-3"
-                onClick={() => navigate(targetUserId ? `/team/${targetUserId}/leads/${lead.id}` : `/leads/${lead.id}`)}
-              >
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
-                </td>
-                <td className="px-3 py-2.5 text-text-3">{lead.leadNum}</td>
-                <td className="px-3 py-2.5 font-medium text-text">
-                  {lead.firstName} {lead.lastName}
-                </td>
-                <td className="px-3 py-2.5 text-text-2">{formatPhone(lead.phone)}</td>
-                <td className="max-w-[220px] truncate px-3 py-2.5 text-text-2">{lead.address}</td>
-                <td className="px-3 py-2.5">
-                  <StageBadge stage={lead.stage} />
-                </td>
-                <td className="px-3 py-2.5">
-                  <StarRating value={lead.rating} size={13} />
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex flex-wrap gap-1">
-                    {lead.tagIds.map((tid) => {
-                      const tag = tags.find((t) => t.id === tid);
-                      return tag ? <TagPill key={tid} tag={tag} /> : null;
-                    })}
-                  </div>
-                </td>
-                <td className="px-3 py-2.5">{lead.auctionDate ? <AuctionCountdown auctionDate={lead.auctionDate} /> : <span className="text-text-3">—</span>}</td>
-                {targetUserId && (
+            {filtered.map((lead) => {
+              const sharedFrom = receivedShares[lead.id];
+              return (
+                <tr
+                  key={lead.id}
+                  className={`cursor-pointer border-b border-border ${sharedFrom ? 'bg-info-dim hover:bg-info/15' : 'hover:bg-surface-3'}`}
+                  onClick={() => navigate(targetUserId ? `/team/${targetUserId}/leads/${lead.id}` : `/leads/${lead.id}`)}
+                >
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="btn !px-2.5 !py-1 text-[12px]"
-                      title="Take this lead into your own pipeline"
-                      onClick={() => setTakeTarget({ id: lead.id, name: `${lead.firstName} ${lead.lastName}` })}
-                    >
-                      <UserPlus size={13} /> Take
-                    </button>
+                    <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="px-3 py-2.5 text-text-3">{lead.leadNum}</td>
+                  <td className="px-3 py-2.5 font-medium text-text">
+                    <div>
+                      {lead.firstName} {lead.lastName}
+                    </div>
+                    {sharedFrom && (
+                      <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
+                        <Share2 size={9} /> Shared by {sharedFrom}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-text-2">{formatPhone(lead.phone)}</td>
+                  <td className="max-w-[220px] truncate px-3 py-2.5 text-text-2">{lead.address}</td>
+                  <td className="px-3 py-2.5">
+                    <StageBadge stage={lead.stage} />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <StarRating value={lead.rating} size={13} />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {lead.tagIds.map((tid) => {
+                        const tag = tags.find((t) => t.id === tid);
+                        return tag ? <TagPill key={tid} tag={tag} /> : null;
+                      })}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {lead.auctionDate ? <AuctionCountdown auctionDate={lead.auctionDate} /> : <span className="text-text-3">—</span>}
+                  </td>
+                  {targetUserId && (
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="btn !px-2.5 !py-1 text-[12px]"
+                        title="Take this lead into your own pipeline"
+                        onClick={() => setTakeTarget({ id: lead.id, name: `${lead.firstName} ${lead.lastName}` })}
+                      >
+                        <UserPlus size={13} /> Take
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

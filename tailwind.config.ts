@@ -10,6 +10,7 @@ export default {
         border: { DEFAULT: '#e2e8f0', 2: '#cbd5e1' },
         text: { DEFAULT: '#0f172a', 2: '#475569', 3: '#94a3b8' },
         primary: { DEFAULT: '#4f46e5', dim: '#eef2ff', hover: '#4338ca', text: '#4338ca' },
+        info: { DEFAULT: '#0ea5e9', dim: '#f0f9ff', text: '#0369a1' },
         success: { DEFAULT: '#10b981', dim: '#ecfdf5' },
         warning: { DEFAULT: '#f59e0b', dim: '#fffbeb' },
         danger: { DEFAULT: '#ef4444', dim: '#fef2f2' },

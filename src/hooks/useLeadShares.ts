@@ -64,6 +64,29 @@ export function usePendingLeadShares() {
   });
 }
 
+/** Maps leadId -> who shared it, for leads currently in my pipeline via an accepted share - powers the "Shared by" highlight. */
+export function useReceivedLeadShares() {
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  return useQuery({
+    queryKey: ['lead_shares', 'received', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_shares')
+        .select('lead_id, from_profile:profiles!lead_shares_from_user_id_fkey(full_name, email)')
+        .eq('to_user_id', userId)
+        .eq('status', 'accepted');
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data as any[]) {
+        map[row.lead_id] = row.from_profile?.full_name || row.from_profile?.email || 'a teammate';
+      }
+      return map;
+    },
+    enabled: !!userId,
+  });
+}
+
 export function useAcceptLeadShare() {
   const qc = useQueryClient();
   return useMutation({
