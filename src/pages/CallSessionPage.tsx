@@ -268,7 +268,7 @@ export function CallSessionPage() {
   }
 
   function saveAndNext() {
-    if (!currentLead) return;
+    if (!currentLead || !outcome) return;
     const chosen = OUTCOMES.find((o) => o.key === outcome);
     updateLead.mutate({
       id: currentLead.id,
@@ -545,15 +545,13 @@ export function CallSessionPage() {
               })}
             </div>
 
-            {outcome === 'voicemail' && (
-              <button
-                type="button"
-                onClick={copySmsMessage}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 py-2 text-[12px] font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-900"
-              >
-                <MessageSquare size={13} /> {smsCopied ? 'Copied!' : 'Copy Text Message'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={copySmsMessage}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 py-2 text-[12px] font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-900"
+            >
+              <MessageSquare size={13} /> {smsCopied ? 'Copied!' : 'Copy Text Message'}
+            </button>
 
             {outcome === 'followup' && (
               <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/60 p-2">
@@ -608,7 +606,9 @@ export function CallSessionPage() {
 
             <button
               onClick={saveAndNext}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 py-2.5 text-[13.5px] font-bold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.01] active:scale-[0.99]"
+              disabled={!outcome}
+              title={!outcome ? 'Select a call outcome first' : undefined}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 py-2.5 text-[13.5px] font-bold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
             >
               Save & Next <ArrowRight size={15} />
             </button>
