@@ -19,6 +19,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// Hardcoded rather than trusting the caller's window.location.origin - the
+// site moved off Netlify, and a stale browser tab/bookmark on the old domain
+// would otherwise send a redirect Supabase Auth's allow-list rejects.
+const INVITE_REDIRECT_TO = 'https://www.bluebirdacquisition.com/crm/accept-invite';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -56,7 +60,6 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const role = body.role === 'admin' ? 'admin' : 'caller';
-    const redirectTo = typeof body.redirectTo === 'string' && body.redirectTo ? body.redirectTo : undefined;
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return json({ error: 'A valid email is required.' }, 400);
@@ -84,7 +87,7 @@ Deno.serve(async (req) => {
     }
 
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    const { error: sendError } = await adminClient.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined);
+    const { error: sendError } = await adminClient.auth.admin.inviteUserByEmail(email, { redirectTo: INVITE_REDIRECT_TO });
     if (sendError) {
       // Don't leave a pending row with no email actually sent for a brand-new invite.
       if (!existing) {

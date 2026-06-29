@@ -85,9 +85,14 @@ export function useSendInvite() {
   return useMutation({
     mutationFn: async ({ email, role }: { email: string; role: Role }) => {
       const { data, error } = await supabase.functions.invoke('invite-user', {
-        body: { email: email.trim(), role, redirectTo: `${window.location.origin}/crm/accept-invite` },
+        body: { email: email.trim(), role },
       });
-      if (error) throw error;
+      if (error) {
+        // supabase-js's FunctionsHttpError.message is just a generic
+        // "non-2xx status code" - the actual reason is in the response body.
+        const body = await error.context?.json?.().catch(() => null);
+        throw new Error(body?.error || error.message);
+      }
       if (data?.error) throw new Error(data.error);
       return data;
     },
