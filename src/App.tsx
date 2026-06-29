@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
 import { AttendanceProvider } from '@/contexts/AttendanceContext';
@@ -58,6 +59,7 @@ export default function App() {
                 </Route>
               </Routes>
             </BrowserRouter>
+            <SpeedInsights />
           </PresenceProvider>
         </AttendanceProvider>
       </AuthProvider>
