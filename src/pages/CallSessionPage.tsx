@@ -161,6 +161,7 @@ export function CallSessionPage() {
   const [queueIds, setQueueIds] = useState<string[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionCallsLogged, setSessionCallsLogged] = useState(0);
+  const [sessionLeadIdsCalled, setSessionLeadIdsCalled] = useState<Set<string>>(new Set());
   const [elapsed, setElapsed] = useState(0);
   const [outcome, setOutcome] = useState<OutcomeKey | null>(null);
   const [notes, setNotes] = useState('');
@@ -227,11 +228,19 @@ export function CallSessionPage() {
   }, [outcome, followUpDate, followUpDays]);
 
   const todayIso = localIsoDate(new Date());
-  const callsTodayBaseline = useMemo(
-    () => yearActivities.filter((a) => a.type === 'call' && localIsoDate(new Date(a.createdAt)) === todayIso).length,
-    [yearActivities, todayIso],
-  );
-  const callsToday = callsTodayBaseline + sessionCallsLogged;
+  // Daily goal counts distinct leads actually called today, not call attempts/retries.
+  const leadsCalledTodayBaseline = useMemo(() => {
+    const ids = new Set<string>();
+    yearActivities.forEach((a) => {
+      if (a.type === 'call' && localIsoDate(new Date(a.createdAt)) === todayIso) ids.add(a.leadId);
+    });
+    return ids;
+  }, [yearActivities, todayIso]);
+  const callsToday = useMemo(() => {
+    const merged = new Set(leadsCalledTodayBaseline);
+    sessionLeadIdsCalled.forEach((id) => merged.add(id));
+    return merged.size;
+  }, [leadsCalledTodayBaseline, sessionLeadIdsCalled]);
   const dailyGoal = profile?.dailyGoal ?? 20;
   const goalReached = callsToday >= dailyGoal;
   const queueExhausted = queueIds !== null && currentIndex >= queueIds.length;
@@ -283,6 +292,7 @@ export function CallSessionPage() {
       meta: chosen ? { outcome: chosen.key } : {},
     });
     setSessionCallsLogged((n) => n + 1);
+    setSessionLeadIdsCalled((prev) => new Set(prev).add(currentLead.id));
     setCurrentIndex((i) => i + 1);
   }
 
@@ -376,7 +386,6 @@ export function CallSessionPage() {
     [currentLead.address, currentLead.city, currentLead.state].filter(Boolean).join(', ') + (currentLead.zip ? ` ${currentLead.zip}` : '');
   const fullName = `${currentLead.firstName} ${currentLead.lastName}`.trim();
   const callerName = callerDisplayName(profile?.fullName, session?.user.email);
-  const queueProgressPct = Math.min(100, (currentIndex / queueIds.length) * 100);
 
   return (
     <div className="flex h-screen flex-col bg-gradient-to-br from-slate-900 via-slate-950 to-black text-slate-200">
@@ -384,16 +393,11 @@ export function CallSessionPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[12.5px] text-slate-300">
-              <span className="font-semibold text-white">Lead {currentIndex + 1}</span>
-              <span className="text-slate-600">/</span>
-              <span>{queueIds.length}</span>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-[12.5px] text-slate-300">
               <Target size={13} className={goalReached ? 'text-emerald-400' : 'text-slate-500'} />
-              <span>
-                {callsToday}/{dailyGoal}
+              <span className="text-slate-500">Leads Called Today:</span>
+              <span className="font-semibold text-white">
+                {callsToday} / {dailyGoal}
               </span>
-              <span className="text-slate-500">today</span>
             </div>
           </div>
 
@@ -408,12 +412,6 @@ export function CallSessionPage() {
             <Square size={10} className="fill-current" /> End Session
           </button>
         </div>
-      </div>
-      <div className="h-[3px] w-full bg-slate-900">
-        <div
-          className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
-          style={{ width: `${queueProgressPct}%` }}
-        />
       </div>
 
       <div className="grid flex-1 grid-cols-[400px_1fr_480px] gap-4 overflow-hidden p-4">
