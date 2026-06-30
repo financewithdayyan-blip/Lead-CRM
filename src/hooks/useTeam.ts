@@ -5,25 +5,43 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { Profile, Role, TeamMember } from '@/types/domain';
 
 export function useTeamMembers() {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const ownerId = session?.user.id;
+  const isAdmin = profile?.role === 'admin';
   return useQuery({
-    queryKey: ['team_members', ownerId],
+    queryKey: ['team_members', ownerId, isAdmin],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Admins see the whole shared team roster (RLS allows it after migration 0016).
+      // Callers only need their own row (used by Sidebar ViewingPullUp — but callers
+      // don't see that component anyway, so this is just a safety guard).
+      let query = supabase
         .from('team_members')
-        .select('id, owner_id, member_id, added_at, member:profiles!team_members_member_id_fkey(*)')
-        .eq('owner_id', ownerId);
+        .select('id, owner_id, member_id, added_at, member:profiles!team_members_member_id_fkey(*)');
+
+      if (!isAdmin) {
+        query = query.eq('owner_id', ownerId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      return data.map(
-        (row: any): TeamMember => ({
-          id: row.id,
-          ownerId: row.owner_id,
-          memberId: row.member_id,
-          addedAt: row.added_at,
-          member: dbToProfile(row.member),
-        }),
-      );
+
+      // Deduplicate by member_id in case a caller was invited by multiple admins.
+      const seen = new Set<string>();
+      return data
+        .filter((row: any) => {
+          if (seen.has(row.member_id)) return false;
+          seen.add(row.member_id);
+          return true;
+        })
+        .map(
+          (row: any): TeamMember => ({
+            id: row.id,
+            ownerId: row.owner_id,
+            memberId: row.member_id,
+            addedAt: row.added_at,
+            member: dbToProfile(row.member),
+          }),
+        );
     },
     enabled: !!ownerId,
   });
@@ -32,8 +50,10 @@ export function useTeamMembers() {
 export function useRemoveTeamMember() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('team_members').delete().eq('id', id);
+    // Delete by member_id so all rows for that caller are removed regardless of
+    // which admin originally invited them.
+    mutationFn: async (memberId: string) => {
+      const { error } = await supabase.from('team_members').delete().eq('member_id', memberId);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team_members'] }),

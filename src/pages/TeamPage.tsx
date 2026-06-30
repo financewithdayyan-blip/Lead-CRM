@@ -326,7 +326,7 @@ export function TeamPage() {
                     >
                       <ChevronDown size={14} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     </button>
-                    <button className="btn !px-2 !py-1 text-danger hover:border-danger" onClick={() => setRemoveTarget(m.id)} title="Remove from team">
+                    <button className="btn !px-2 !py-1 text-danger hover:border-danger" onClick={() => setRemoveTarget(m.memberId)} title="Remove from team">
                       <Trash2 size={13} />
                     </button>
                   </div>
