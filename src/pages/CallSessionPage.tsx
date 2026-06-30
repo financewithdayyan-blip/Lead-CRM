@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
-import { useAddActivity, useActivityFeed } from '@/hooks/useActivities';
+import { useAddActivity, useTodayCalledLeadIds } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { useMyTodaySummary, useSubmitDailySummary } from '@/hooks/useDailySummaries';
@@ -156,7 +156,7 @@ export function CallSessionPage() {
   const callingSessionIdRef = useRef<string | null>(null);
 
   const { data: leads = [], isLoading } = useLeads();
-  const { data: yearActivities = [] } = useActivityFeed(userId);
+  const { data: todayCalledIds = new Set<string>() } = useTodayCalledLeadIds(userId);
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
   const addActivity = useAddActivity();
@@ -166,7 +166,9 @@ export function CallSessionPage() {
   const [queueIds, setQueueIds] = useState<string[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionCallsLogged, setSessionCallsLogged] = useState(0);
-  const [sessionLeadIdsCalled, setSessionLeadIdsCalled] = useState<Set<string>>(new Set());
+  // Map<leadId, dateIso> — tracks which date each in-session call was logged on,
+  // so calls made before midnight don't bleed into the next day's count.
+  const [sessionLeadIdsCalled, setSessionLeadIdsCalled] = useState<Map<string, string>>(new Map());
   const [elapsed, setElapsed] = useState(0);
   const [outcome, setOutcome] = useState<OutcomeKey | null>(null);
   const [notes, setNotes] = useState('');
@@ -267,19 +269,15 @@ export function CallSessionPage() {
   }, [outcome, followUpDate, followUpDays]);
 
   const todayIso = localIsoDate(new Date());
-  // Daily goal counts distinct leads actually called today, not call attempts/retries.
-  const leadsCalledTodayBaseline = useMemo(() => {
-    const ids = new Set<string>();
-    yearActivities.forEach((a) => {
-      if (a.type === 'call' && localIsoDate(new Date(a.createdAt)) === todayIso) ids.add(a.leadId);
-    });
-    return ids;
-  }, [yearActivities, todayIso]);
+  // Merge DB-backed today count with in-session leads logged on today's date.
+  // Using a Map<leadId, dateIso> for session state means midnight crossings don't bleed over.
   const callsToday = useMemo(() => {
-    const merged = new Set(leadsCalledTodayBaseline);
-    sessionLeadIdsCalled.forEach((id) => merged.add(id));
+    const merged = new Set(todayCalledIds);
+    sessionLeadIdsCalled.forEach((dateIso, leadId) => {
+      if (dateIso === todayIso) merged.add(leadId);
+    });
     return merged.size;
-  }, [leadsCalledTodayBaseline, sessionLeadIdsCalled]);
+  }, [todayCalledIds, sessionLeadIdsCalled, todayIso]);
   const dailyGoal = profile?.dailyGoal ?? 20;
   const goalReached = callsToday >= dailyGoal;
   const queueExhausted = queueIds !== null && currentIndex >= queueIds.length;
@@ -338,7 +336,7 @@ export function CallSessionPage() {
         .then(() => {});
     }
     setSessionCallsLogged((n) => n + 1);
-    setSessionLeadIdsCalled((prev) => new Set(prev).add(currentLead.id));
+    setSessionLeadIdsCalled((prev) => new Map(prev).set(currentLead.id, localIsoDate(new Date())));
     setCurrentIndex((i) => i + 1);
   }
 

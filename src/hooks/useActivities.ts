@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToActivity } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
+import { localIsoDate } from '@/lib/utils';
 import type { ActivityType } from '@/types/domain';
 
 export function useActivities(leadId: string | undefined) {
@@ -40,7 +41,11 @@ export function useAddActivity() {
         .insert({ lead_id: leadId, user_id: session!.user.id, type, body, meta });
       if (error) throw error;
     },
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['activities', vars.leadId] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
+      qc.invalidateQueries({ queryKey: ['today_calls'] });
+      qc.invalidateQueries({ queryKey: ['activity_feed'] });
+    },
   });
 }
 
@@ -71,6 +76,30 @@ export function useActivityFeed(targetUserId?: string, sinceIso?: string) {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data.map(dbToActivity);
+    },
+    enabled: !!userId,
+  });
+}
+
+/**
+ * Set of distinct lead IDs that have a 'call' activity logged today (local date).
+ * Query key includes todayIso so the query resets automatically after midnight.
+ */
+export function useTodayCalledLeadIds(userId: string | undefined) {
+  const todayIso = localIsoDate(new Date());
+  return useQuery({
+    queryKey: ['today_calls', userId, todayIso],
+    queryFn: async () => {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from('lead_activities')
+        .select('lead_id')
+        .eq('user_id', userId)
+        .eq('type', 'call')
+        .gte('created_at', todayStart.toISOString());
+      if (error) throw error;
+      return new Set(data.map((r: any) => r.lead_id as string));
     },
     enabled: !!userId,
   });
