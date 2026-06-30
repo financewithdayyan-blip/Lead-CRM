@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Upload, ExternalLink, Share2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload, ExternalLink, Share2, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -9,6 +9,7 @@ import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/u
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl } from '@/hooks/useLeadFiles';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { useMyPendingShareForLead, useShareLead } from '@/hooks/useLeadShares';
+import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
@@ -16,6 +17,72 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadStage, type Tag } from '@/types/domain';
 import { callerDisplayName, formatPhone, formatDate, formatDateTime } from '@/lib/utils';
 import { SCRIPT_STEPS } from '@/lib/callScript';
+
+function scoreColor(score: number) {
+  if (score >= 85) return { ring: 'ring-emerald-500', bg: 'bg-emerald-500', text: 'text-emerald-400', label: 'High' };
+  if (score >= 65) return { ring: 'ring-blue-500', bg: 'bg-blue-500', text: 'text-blue-400', label: 'Good' };
+  if (score >= 45) return { ring: 'ring-amber-500', bg: 'bg-amber-500', text: 'text-amber-400', label: 'Moderate' };
+  if (score >= 25) return { ring: 'ring-orange-500', bg: 'bg-orange-500', text: 'text-orange-400', label: 'Low' };
+  return { ring: 'ring-red-500', bg: 'bg-red-500', text: 'text-red-400', label: 'Dead' };
+}
+
+function AiScoreCard({ lead }: { lead: Lead }) {
+  const scoreLead = useScoreLead();
+  const [error, setError] = useState('');
+
+  function handleScore() {
+    setError('');
+    scoreLead.mutate(lead.id, {
+      onError: (err) => setError(err instanceof Error ? err.message : 'Scoring failed.'),
+    });
+  }
+
+  const hasScore = lead.aiScore !== null;
+  const colors = hasScore ? scoreColor(lead.aiScore!) : null;
+  const scoredDate = lead.aiScoredAt ? new Date(lead.aiScoredAt).toLocaleDateString() : null;
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <div className="flex flex-wrap items-start gap-4">
+        {hasScore && colors ? (
+          <>
+            <div className="flex items-center gap-3">
+              <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-2 ${colors.ring} bg-surface-2`}>
+                <span className={`text-xl font-bold ${colors.text}`}>{lead.aiScore}</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+                  <Sparkles size={13} className={colors.text} />
+                  AI Lead Score
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} text-white`}>{colors.label}</span>
+                </div>
+                {scoredDate && <div className="text-[11px] text-text-3">Scored {scoredDate}</div>}
+              </div>
+            </div>
+            <p className="flex-1 text-[13px] leading-relaxed text-text-2">{lead.aiScoreReasoning}</p>
+          </>
+        ) : (
+          <div className="flex items-center gap-2 text-[13px] text-text-3">
+            <Sparkles size={14} className="text-primary" />
+            <span>No AI score yet — click to analyze this lead.</span>
+          </div>
+        )}
+        <button
+          onClick={handleScore}
+          disabled={scoreLead.isPending}
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-[12px] font-semibold text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {scoreLead.isPending ? (
+            <><RefreshCw size={12} className="animate-spin" /> Scoring…</>
+          ) : (
+            <><Sparkles size={12} /> {hasScore ? 'Re-score' : 'Score with AI'}</>
+          )}
+        </button>
+      </div>
+      {error && <div className="mt-2 text-[12px] text-danger">{error}</div>}
+    </div>
+  );
+}
 
 function ShareLeadButton({ leadId, stage }: { leadId: string; stage: LeadStage }) {
   const { data: pendingShare } = useMyPendingShareForLead(leadId);
@@ -136,6 +203,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           })}
           <TagPicker lead={lead} tags={tags} />
         </div>
+        <AiScoreCard lead={lead} />
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-border">

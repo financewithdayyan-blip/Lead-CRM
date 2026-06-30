@@ -125,6 +125,9 @@ export interface Lead {
   tagIds: string[];
   comps?: Comp[];
   files?: LeadFile[];
+  aiScore: number | null;
+  aiScoreReasoning: string | null;
+  aiScoredAt: string | null;
 }
 
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';

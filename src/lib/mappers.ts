@@ -58,6 +58,9 @@ export function dbToLead(row: any): Lead {
       notes: c.notes,
     })),
     files: row.lead_files?.map(dbToLeadFile),
+    aiScore: row.ai_score ?? null,
+    aiScoreReasoning: row.ai_score_reasoning ?? null,
+    aiScoredAt: row.ai_scored_at ?? null,
   };
 }
 
