@@ -100,7 +100,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       const member = teamMembers.find((m) => m.memberId === s.userId);
       const memberName = member ? member.member.fullName || member.member.email : 'A team member';
       events.push({ id: `presence_on:${s.id}`, type: 'online', memberName, at: s.startedAt });
-      if (!onlineIds.has(s.userId)) {
+      if (!onlineIds.has(s.userId) && s.endedAt) {
         events.push({ id: `presence_off:${s.id}`, type: 'offline', memberName, at: s.endedAt });
       }
     }

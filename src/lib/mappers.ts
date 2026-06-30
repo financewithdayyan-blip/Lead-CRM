@@ -1,4 +1,4 @@
-import type { AttendanceSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import type { CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, Profile, Tag, TeamInvite, Task } from '@/types/domain';
 
 export function dbToTag(row: any): Tag {
   return { id: row.id, userId: row.user_id, name: row.name, colorBg: row.color_bg, colorText: row.color_text };
@@ -193,8 +193,14 @@ export function dbToDailySummary(row: any): DailySummary {
   };
 }
 
-export function dbToAttendanceSession(row: any): AttendanceSession {
-  return { id: row.id, userId: row.user_id, startedAt: row.started_at, endedAt: row.ended_at };
+export function dbToCallingSession(row: any): CallingSession {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    startedAt: row.started_at,
+    endedAt: row.ended_at ?? null,
+    callsLogged: row.calls_logged ?? 0,
+  };
 }
 
 export function dbToLeadShare(row: any): LeadShare {

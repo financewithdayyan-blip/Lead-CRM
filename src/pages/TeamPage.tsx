@@ -8,7 +8,7 @@ import { useActivityFeed } from '@/hooks/useActivities';
 import { aggregateTodayAttendance, useAttendanceSessions, useTeamTodaySessions } from '@/hooks/useAttendance';
 import { nextTagColor } from '@/hooks/useTags';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useOnlineUserIds } from '@/contexts/PresenceContext';
+import { usePresence } from '@/contexts/PresenceContext';
 import type { Role } from '@/types/domain';
 import { formatDuration, formatTime, getErrorMessage, initials, localIsoDate } from '@/lib/utils';
 
@@ -78,8 +78,9 @@ function MemberAttendance({ memberId }: { memberId: string }) {
       </div>
       <div className="space-y-1.5">
         {Array.from(days.entries()).map(([day, daySessions]) => {
+          const now = new Date().toISOString();
           const totalSeconds = daySessions.reduce(
-            (sum, s) => sum + (new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()) / 1000,
+            (sum, s) => sum + (new Date(s.endedAt ?? now).getTime() - new Date(s.startedAt).getTime()) / 1000,
             0,
           );
           const ordered = [...daySessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
@@ -90,7 +91,7 @@ function MemberAttendance({ memberId }: { memberId: string }) {
                 {ordered.map((s, i) => (
                   <span key={s.id}>
                     {i > 0 && ', '}
-                    {formatTime(s.startedAt)}–{formatTime(s.endedAt)}
+                    {formatTime(s.startedAt)}–{s.endedAt ? formatTime(s.endedAt) : 'ongoing'}
                   </span>
                 ))}
               </div>
@@ -108,7 +109,7 @@ export function TeamPage() {
   const isAdmin = profile?.role === 'admin';
   const { data: members = [] } = useTeamMembers();
   const { data: invites = [] } = useTeamInvites();
-  const onlineIds = useOnlineUserIds();
+  const { onlineIds, statusMap } = usePresence();
   const { data: todaySessions = [] } = useTeamTodaySessions();
   const todayAttendance = useMemo(() => aggregateTodayAttendance(todaySessions), [todaySessions]);
   const removeMember = useRemoveTeamMember();
@@ -259,6 +260,7 @@ export function TeamPage() {
         <div className="mt-3 space-y-2.5">
           {members.map((m, i) => {
             const isOnline = onlineIds.has(m.memberId);
+            const inSession = statusMap[m.memberId] === 'session';
             const today = todayAttendance[m.memberId];
             const [mFirst, mLast] = (m.member.fullName ?? '').split(' ');
             const avatarColor = nextTagColor(i);
@@ -279,8 +281,8 @@ export function TeamPage() {
                         {initials(mFirst || m.member.email, mLast ?? '')}
                       </div>
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface-3 ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                        title={isOnline ? 'Online' : 'Offline'}
+                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface-3 ${inSession ? 'bg-red-500' : isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        title={inSession ? 'In session' : isOnline ? 'Online' : 'Offline'}
                       />
                     </div>
                     <div className="min-w-0">
@@ -301,8 +303,8 @@ export function TeamPage() {
                         {m.member.email} · code {m.member.userCode}
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <span className={`text-[12px] font-medium ${isOnline ? 'text-emerald-600' : 'text-text-3'}`}>
-                          {isOnline ? 'Online now' : today ? `Offline · last seen ${formatTime(today.lastSeenAt)}` : 'Offline'}
+                        <span className={`text-[12px] font-medium ${inSession ? 'text-red-500' : isOnline ? 'text-emerald-600' : 'text-text-3'}`}>
+                          {inSession ? 'In session' : isOnline ? 'Online now' : today ? `Offline · last seen ${formatTime(today.lastSeenAt)}` : 'Offline'}
                         </span>
                         {today && today.seconds > 0 && (
                           <span className="flex items-center gap-1 rounded-full bg-primary-dim px-2 py-0.5 text-[11px] font-medium text-primary-text">

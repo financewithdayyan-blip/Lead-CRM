@@ -157,11 +157,12 @@ export interface DailySummary {
   createdAt: string;
 }
 
-export interface AttendanceSession {
+export interface CallingSession {
   id: string;
   userId: string;
   startedAt: string;
-  endedAt: string;
+  endedAt: string | null; // null while the session is still open
+  callsLogged: number;
 }
 
 export interface LeadShare {

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { usePresence } from '@/contexts/PresenceContext';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -150,6 +152,9 @@ export function CallSessionPage() {
   const { session, profile } = useAuth();
   const userId = session!.user.id;
 
+  const { setMyStatus } = usePresence();
+  const callingSessionIdRef = useRef<string | null>(null);
+
   const { data: leads = [], isLoading } = useLeads();
   const { data: yearActivities = [] } = useActivityFeed(userId);
   const { data: tags = [] } = useTags();
@@ -201,6 +206,40 @@ export function CallSessionPage() {
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Track the active calling session in DB and flip presence dot to red.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let insertedId: string | null = null;
+    let unmounted = false;
+
+    supabase
+      .from('calling_sessions')
+      .insert({ user_id: userId })
+      .select('id')
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data && !unmounted) {
+          insertedId = data.id;
+          callingSessionIdRef.current = data.id;
+        }
+      });
+
+    setMyStatus('session');
+
+    return () => {
+      unmounted = true;
+      setMyStatus('online');
+      const id = insertedId ?? callingSessionIdRef.current;
+      if (id) {
+        supabase
+          .from('calling_sessions')
+          .update({ ended_at: new Date().toISOString() })
+          .eq('id', id)
+          .then(() => {});
+      }
+    };
+  }, []); // runs once on mount / cleanup on unmount
 
   const currentLeadId = queueIds?.[currentIndex];
   const currentLead = leads.find((l) => l.id === currentLeadId) ?? null;
@@ -291,6 +330,13 @@ export function CallSessionPage() {
       body: notes.trim() || (chosen ? `Call outcome: ${chosen.label}` : 'Call logged from session'),
       meta: chosen ? { outcome: chosen.key } : {},
     });
+    if (callingSessionIdRef.current) {
+      supabase
+        .from('calling_sessions')
+        .update({ calls_logged: sessionCallsLogged + 1 })
+        .eq('id', callingSessionIdRef.current)
+        .then(() => {});
+    }
     setSessionCallsLogged((n) => n + 1);
     setSessionLeadIdsCalled((prev) => new Set(prev).add(currentLead.id));
     setCurrentIndex((i) => i + 1);

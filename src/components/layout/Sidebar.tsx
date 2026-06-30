@@ -3,14 +3,14 @@ import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { useOnlineUserIds } from '@/contexts/PresenceContext';
+import { usePresence } from '@/contexts/PresenceContext';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { cn, initials } from '@/lib/utils';
 
 function ViewingPullUp({ viewingId }: { viewingId?: string }) {
   const navigate = useNavigate();
   const { data: members = [] } = useTeamMembers();
-  const onlineIds = useOnlineUserIds();
+  const { onlineIds, statusMap } = usePresence();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -65,7 +65,10 @@ function ViewingPullUp({ viewingId }: { viewingId?: string }) {
                   isSelected ? 'bg-sidebar text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive',
                 )}
               >
-                <span className={cn('h-2 w-2 shrink-0 rounded-full', isOnline ? 'bg-emerald-500' : 'bg-slate-500')} title={isOnline ? 'Online' : 'Offline'} />
+                <span
+                  className={cn('h-2 w-2 shrink-0 rounded-full', statusMap[m.memberId] === 'session' ? 'bg-red-500' : isOnline ? 'bg-emerald-500' : 'bg-slate-500')}
+                  title={statusMap[m.memberId] === 'session' ? 'In session' : isOnline ? 'Online' : 'Offline'}
+                />
                 <span className="truncate">{m.member.fullName || m.member.email}</span>
               </button>
             );
