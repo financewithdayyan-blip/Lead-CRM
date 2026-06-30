@@ -1,34 +1,68 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Radio, Share2, X } from 'lucide-react';
+import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Phone, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
-import { formatDate, formatTime } from '@/lib/utils';
+import { formatDate, formatTime, localIsoDate } from '@/lib/utils';
 
-const NOTIF_TYPE_CONFIG = {
-  summary: { label: 'Daily Summary', color: '#4f46e5' },
-  followup: { label: 'Follow-Up', color: '#a78bfa' },
-  task: { label: 'Task', color: '#f59e0b' },
-  share: { label: 'Shared Lead', color: '#10b981' },
-  auction: { label: 'Auction', color: '#ef4444' },
-  online: { label: 'Online', color: '#22c55e' },
-  offline: { label: 'Offline', color: '#94a3b8' },
-};
+// ── Filter chip config ─────────────────────────────────────────────────────
 
-function NotifTag({ type }: { type: keyof typeof NOTIF_TYPE_CONFIG }) {
-  const cfg = NOTIF_TYPE_CONFIG[type];
+type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'auction';
+
+const FILTER_CONFIG: { key: FilterKey; label: string }[] = [
+  { key: 'all',     label: 'All' },
+  { key: 'session', label: 'Calling Sessions' },
+  { key: 'summary', label: 'Daily Summaries' },
+  { key: 'followup',label: 'Follow-Ups' },
+  { key: 'task',    label: 'Tasks' },
+  { key: 'share',   label: 'Shared Leads' },
+  { key: 'auction', label: 'Auctions' },
+];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function NotifTag({ label, color }: { label: string; color: string }) {
   return (
     <span
       className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-      style={{ backgroundColor: `${cfg.color}1f`, color: cfg.color }}
+      style={{ backgroundColor: `${color}22`, color }}
     >
-      {cfg.label}
+      {label}
     </span>
   );
 }
 
+function UnreadDot() {
+  return <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />;
+}
+
+function formatEventTime(at: string, todayIso: string): string {
+  const dateIso = localIsoDate(new Date(at));
+  if (dateIso === todayIso) return formatTime(at);
+  const d = new Date(at);
+  return `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${formatTime(at)}`;
+}
+
+function followUpLabel(nextFollowUp: string, todayIso: string): string {
+  if (nextFollowUp < todayIso) return `${formatDate(nextFollowUp)} · Overdue`;
+  if (nextFollowUp === todayIso) return `${formatDate(nextFollowUp)} · Today`;
+  return `${formatDate(nextFollowUp)} · Upcoming`;
+}
+
+function ScrollList({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="max-h-80 overflow-y-auto space-y-1.5 pr-0.5">
+      {children}
+    </div>
+  );
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
+
 export function NotificationsPage() {
+  const [filter, setFilter] = useState<FilterKey>('all');
   const [expandedSummaryId, setExpandedSummaryId] = useState<string | null>(null);
+
   const {
     isAdmin,
     todayIso,
@@ -37,7 +71,7 @@ export function NotificationsPage() {
     teamSummaries,
     pendingShares,
     auctionAlerts,
-    presenceEvents,
+    sessionEvents,
     toggleTask,
     acceptShare,
     declineShare,
@@ -48,18 +82,28 @@ export function NotificationsPage() {
     markAllRead,
   } = useNotificationsContext();
 
-  const empty =
-    dueTasks.length === 0 &&
-    dueFollowUps.length === 0 &&
-    auctionAlerts.length === 0 &&
-    (!isAdmin || (teamSummaries.length === 0 && pendingShares.length === 0 && presenceEvents.length === 0));
+  const counts: Record<FilterKey, number> = {
+    all:      dueTasks.length + dueFollowUps.length + auctionAlerts.length +
+              (isAdmin ? teamSummaries.length + pendingShares.length + sessionEvents.length : 0),
+    session:  sessionEvents.length,
+    summary:  teamSummaries.length,
+    followup: dueFollowUps.length,
+    task:     dueTasks.length,
+    share:    pendingShares.length,
+    auction:  auctionAlerts.length,
+  };
+
+  const show = (key: FilterKey) => filter === 'all' || filter === key;
+
+  const empty = counts.all === 0;
 
   return (
     <div>
+      {/* Header */}
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-text">Notifications</h1>
-          <p className="text-sm text-text-3">Shared leads, daily summaries, follow-ups, and tasks that need your attention.</p>
+          <p className="text-sm text-text-3">Shared leads, daily summaries, follow-ups, tasks, and session activity — last 7 days.</p>
         </div>
         {unreadCount > 0 && (
           <button className="btn shrink-0" onClick={markAllRead}>
@@ -68,27 +112,57 @@ export function NotificationsPage() {
         )}
       </div>
 
+      {/* Filter chips */}
+      <div className="mb-5 flex flex-wrap gap-2">
+        {FILTER_CONFIG.map(({ key, label }) => {
+          const active = filter === key;
+          const count = counts[key];
+          if (key !== 'all' && !isAdmin && (key === 'session' || key === 'summary' || key === 'share')) return null;
+          return (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-colors ${
+                active
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border-2 bg-surface-2 text-text-3 hover:border-primary/50 hover:text-text'
+              }`}
+            >
+              {label}
+              {count > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${active ? 'bg-primary text-white' : 'bg-border-2 text-text-3'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {empty ? (
-        <div className="card text-center text-text-3">You're all caught up — nothing due today.</div>
+        <div className="card text-center text-text-3">You're all caught up — nothing this week.</div>
       ) : (
         <div className="space-y-5">
-          {isAdmin && pendingShares.length > 0 && (
+
+          {/* Shared Leads */}
+          {isAdmin && show('share') && pendingShares.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
                 <Share2 size={12} /> Shared Leads ({pendingShares.length})
               </div>
-              <div className="space-y-1.5">
+              <ScrollList>
                 {pendingShares.map((s) => (
                   <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                       <div className="min-w-0 text-[13px] text-text">
-                        <span className="font-medium">{s.fromName}</span> shared <span className="font-medium">{s.leadName}</span> with
-                        you, while in <span className="font-medium">{STAGE_CONFIG[s.stageAtShare].label}</span> stage
+                        <span className="font-medium">{s.fromName}</span> shared{' '}
+                        <span className="font-medium">{s.leadName}</span> with you, while in{' '}
+                        <span className="font-medium">{STAGE_CONFIG[s.stageAtShare].label}</span> stage
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <NotifTag type="share" />
+                      <NotifTag label="Shared Lead" color="#10b981" />
                       <button
                         className="btn btn-primary !px-2.5 !py-1 text-[12px]"
                         disabled={acceptShare.isPending}
@@ -106,32 +180,31 @@ export function NotificationsPage() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </ScrollList>
             </div>
           )}
 
-          {auctionAlerts.length > 0 && (
+          {/* Auctions */}
+          {show('auction') && auctionAlerts.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
                 <Gavel size={12} /> Auction Reminders ({auctionAlerts.length})
               </div>
-              <div className="space-y-1.5">
+              <ScrollList>
                 {auctionAlerts.map((a) => {
                   const id = `auction:${a.lead.id}:${a.milestone}`;
                   const unread = !readIds.has(id);
                   return (
                     <div key={id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
                       <div className="flex min-w-0 items-center gap-2">
-                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        {unread && <UnreadDot />}
                         <div className="min-w-0 text-[13px] text-text">
-                          <span className="font-medium">
-                            {a.lead.firstName} {a.lead.lastName}
-                          </span>{' '}
-                          — {a.daysRemaining} day{a.daysRemaining !== 1 ? 's' : ''} until auction. Time for a follow-up call.
+                          <span className="font-medium">{a.lead.firstName} {a.lead.lastName}</span>
+                          {' '}— {a.daysRemaining} day{a.daysRemaining !== 1 ? 's' : ''} until auction.
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <NotifTag type="auction" />
+                        <NotifTag label="Auction" color="#ef4444" />
                         <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => acknowledgeAuctionAlert(a.lead.id, a.milestone)}>
                           Got it
                         </button>
@@ -146,16 +219,50 @@ export function NotificationsPage() {
                     </div>
                   );
                 })}
-              </div>
+              </ScrollList>
             </div>
           )}
 
-          {isAdmin && teamSummaries.length > 0 && (
+          {/* Calling Sessions */}
+          {isAdmin && show('session') && sessionEvents.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                <Phone size={12} /> Calling Sessions ({sessionEvents.length})
+              </div>
+              <ScrollList>
+                {sessionEvents.map((e) => {
+                  const unread = !readIds.has(e.id);
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => markRead([e.id])}
+                      className="flex w-full items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3 text-left hover:border-primary"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        {unread && <UnreadDot />}
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium text-text">
+                            {e.memberName} started a calling session
+                          </div>
+                          <div className="text-[11px] text-text-3">{formatEventTime(e.at, todayIso)}</div>
+                        </div>
+                      </div>
+                      <NotifTag label="Session" color="#6366f1" />
+                    </button>
+                  );
+                })}
+              </ScrollList>
+            </div>
+          )}
+
+          {/* Daily Summaries */}
+          {isAdmin && show('summary') && teamSummaries.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
                 <FileText size={12} /> Daily Summaries ({teamSummaries.length})
               </div>
-              <div className="space-y-1.5">
+              <ScrollList>
                 {teamSummaries.map((s) => {
                   const id = `summary:${s.id}`;
                   const expanded = expandedSummaryId === s.id;
@@ -170,62 +277,33 @@ export function NotificationsPage() {
                         }}
                       >
                         <div className="flex min-w-0 items-center gap-2 text-[13px] text-text">
-                          {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                          {unread && <UnreadDot />}
                           <span>
                             <span className="font-medium">{s.memberName}</span> submitted their daily summary
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <NotifTag type="summary" />
+                          <NotifTag label="Summary" color="#4f46e5" />
                           <ChevronDown size={14} className={`shrink-0 text-text-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
-                      {expanded && <p className="mt-2 whitespace-pre-wrap text-[13px] text-text-2">{s.summary}</p>}
+                      {expanded && (
+                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-text-2">{s.summary}</p>
+                      )}
                     </div>
                   );
                 })}
-              </div>
+              </ScrollList>
             </div>
           )}
 
-          {presenceEvents.length > 0 && (
+          {/* Follow-Ups */}
+          {show('followup') && dueFollowUps.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <Radio size={12} /> Team Activity ({presenceEvents.length})
+                <CalendarClock size={12} /> Follow-Ups ({dueFollowUps.length})
               </div>
-              <div className="space-y-1.5">
-                {presenceEvents.map((p) => {
-                  const unread = !readIds.has(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => markRead([p.id])}
-                      className="flex w-full items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3 text-left hover:border-primary"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
-                        <div className="min-w-0">
-                          <div className="truncate text-[13px] font-medium text-text">
-                            {p.memberName} {p.type === 'online' ? 'came online' : 'went offline'}
-                          </div>
-                          <div className="text-[11px] text-text-3">{formatTime(p.at)}</div>
-                        </div>
-                      </div>
-                      <NotifTag type={p.type} />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {dueFollowUps.length > 0 && (
-            <div className="card">
-              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <CalendarClock size={12} /> Follow-Ups Due ({dueFollowUps.length})
-              </div>
-              <div className="space-y-1.5">
+              <ScrollList>
                 {dueFollowUps.map((l) => {
                   const id = `followup:${l.id}`;
                   const unread = !readIds.has(id);
@@ -237,37 +315,35 @@ export function NotificationsPage() {
                       className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3 hover:border-primary"
                     >
                       <div className="flex min-w-0 items-center gap-2">
-                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        {unread && <UnreadDot />}
                         <div className="min-w-0">
                           <div className="truncate text-[13px] font-medium text-text">
                             {l.firstName} {l.lastName}
                           </div>
-                          <div className="text-[11px] text-text-3">
-                            {formatDate(l.nextFollowUp)}
-                            {l.nextFollowUp! < todayIso ? ' · Overdue' : ' · Today'}
-                          </div>
+                          <div className="text-[11px] text-text-3">{followUpLabel(l.nextFollowUp!, todayIso)}</div>
                         </div>
                       </div>
-                      <NotifTag type="followup" />
+                      <NotifTag label="Follow-Up" color="#a78bfa" />
                     </Link>
                   );
                 })}
-              </div>
+              </ScrollList>
             </div>
           )}
 
-          {dueTasks.length > 0 && (
+          {/* Tasks */}
+          {show('task') && dueTasks.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <CheckSquare size={12} /> Tasks Due ({dueTasks.length})
+                <CheckSquare size={12} /> Tasks ({dueTasks.length})
               </div>
-              <div className="space-y-1.5">
+              <ScrollList>
                 {dueTasks.map((t) => {
                   const id = `task:${t.id}`;
                   const unread = !readIds.has(id);
                   return (
                     <div key={t.id} className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
-                      <label className="flex min-w-0 items-center gap-2.5">
+                      <label className="flex min-w-0 cursor-pointer items-center gap-2.5">
                         <input
                           type="checkbox"
                           checked={t.completed}
@@ -276,17 +352,14 @@ export function NotificationsPage() {
                             markRead([id]);
                           }}
                         />
-                        {unread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        {unread && <UnreadDot />}
                         <div className="min-w-0">
                           <div className="truncate text-[13px] font-medium text-text">{t.title}</div>
-                          <div className="text-[11px] text-text-3">
-                            {formatDate(t.dueDate)}
-                            {t.dueDate! < todayIso ? ' · Overdue' : ' · Today'}
-                          </div>
+                          <div className="text-[11px] text-text-3">{followUpLabel(t.dueDate!, todayIso)}</div>
                         </div>
                       </label>
                       <div className="flex shrink-0 items-center gap-2">
-                        <NotifTag type="task" />
+                        <NotifTag label="Task" color="#f59e0b" />
                         {t.leadId && (
                           <Link to={`/leads/${t.leadId}`} onClick={() => markRead([id])} className="text-[12px] text-primary hover:underline">
                             View lead
@@ -296,9 +369,10 @@ export function NotificationsPage() {
                     </div>
                   );
                 })}
-              </div>
+              </ScrollList>
             </div>
           )}
+
         </div>
       )}
     </div>

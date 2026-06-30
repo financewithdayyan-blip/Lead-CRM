@@ -25,7 +25,7 @@ export function useAttendanceSessions(userId: string | undefined) {
   });
 }
 
-/** Today's calling_sessions rows across the whole team - shared by the Team page badges. */
+/** Today's calling_sessions rows across the whole team - used for the Team page attendance badges. */
 export function useTeamTodaySessions() {
   const { session, profile } = useAuth();
   const ownerId = session?.user.id;
@@ -40,6 +40,30 @@ export function useTeamTodaySessions() {
         .select('*')
         .gte('started_at', start.toISOString())
         .neq('user_id', ownerId);
+      if (error) throw error;
+      return data.map(dbToCallingSession);
+    },
+    enabled: !!ownerId && profile?.role === 'admin',
+    refetchInterval: 60_000,
+  });
+}
+
+/** Last 7 days of calling_sessions across the whole team - used by the Notifications page. */
+export function useTeamWeeklySessions() {
+  const { session, profile } = useAuth();
+  const ownerId = session?.user.id;
+  return useQuery({
+    queryKey: ['calling_sessions', 'team_weekly', ownerId],
+    queryFn: async () => {
+      const since = new Date();
+      since.setDate(since.getDate() - 7);
+      since.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from('calling_sessions')
+        .select('*')
+        .gte('started_at', since.toISOString())
+        .neq('user_id', ownerId)
+        .order('started_at', { ascending: false });
       if (error) throw error;
       return data.map(dbToCallingSession);
     },

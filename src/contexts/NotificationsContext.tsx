@@ -1,12 +1,11 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { useOnlineUserIds } from './PresenceContext';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
-import { useTeamTodaySummaries } from '@/hooks/useDailySummaries';
+import { useTeamWeeklySummaries } from '@/hooks/useDailySummaries';
 import { useAcceptLeadShare, useDeclineLeadShare, usePendingLeadShares } from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { useTeamTodaySessions } from '@/hooks/useAttendance';
+import { useTeamWeeklySessions } from '@/hooks/useAttendance';
 import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
 import { daysUntil, localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
@@ -19,9 +18,8 @@ interface AuctionAlert {
   milestone: number;
 }
 
-interface PresenceEvent {
+interface SessionEvent {
   id: string;
-  type: 'online' | 'offline';
   memberName: string;
   at: string;
 }
@@ -29,12 +27,13 @@ interface PresenceEvent {
 interface NotificationsContextValue {
   isAdmin: boolean;
   todayIso: string;
+  weekFromNowIso: string;
   dueTasks: Task[];
   dueFollowUps: Lead[];
   teamSummaries: (DailySummary & { memberName: string })[];
   pendingShares: (LeadShare & { leadName: string; fromName: string })[];
   auctionAlerts: AuctionAlert[];
-  presenceEvents: PresenceEvent[];
+  sessionEvents: SessionEvent[];
   toggleTask: ReturnType<typeof useToggleTask>;
   acceptShare: ReturnType<typeof useAcceptLeadShare>;
   declineShare: ReturnType<typeof useDeclineLeadShare>;
@@ -52,35 +51,41 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const isAdmin = profile?.role === 'admin';
   const userId = session?.user.id ?? '';
   const todayIso = localIsoDate(new Date());
+  const weekFromNow = new Date();
+  weekFromNow.setDate(weekFromNow.getDate() + 7);
+  const weekFromNowIso = localIsoDate(weekFromNow);
 
   const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds(userId, todayIso));
 
   const { data: tasks = [] } = useTasks();
   const { data: leads = [] } = useLeads();
-  const { data: teamSummaries = [] } = useTeamTodaySummaries();
+  const { data: teamSummaries = [] } = useTeamWeeklySummaries();
   const { data: pendingShares = [] } = usePendingLeadShares();
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: teamSessions = [] } = useTeamTodaySessions();
-  const onlineIds = useOnlineUserIds();
+  const { data: teamSessions = [] } = useTeamWeeklySessions();
   const toggleTask = useToggleTask();
   const acceptShare = useAcceptLeadShare();
   const declineShare = useDeclineLeadShare();
   const updateLead = useUpdateLead();
 
+  // Tasks due within 7 days (overdue + today + this week)
   const dueTasks = useMemo(
     () =>
       tasks
-        .filter((t) => !t.completed && t.dueDate && t.dueDate <= todayIso)
+        .filter((t) => !t.completed && t.dueDate && t.dueDate <= weekFromNowIso)
         .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
-    [tasks, todayIso],
+    [tasks, weekFromNowIso],
   );
+
+  // Follow-ups due within 7 days (overdue + today + this week)
   const dueFollowUps = useMemo(
     () =>
       leads
-        .filter((l) => l.nextFollowUp && l.nextFollowUp <= todayIso)
+        .filter((l) => l.nextFollowUp && l.nextFollowUp <= weekFromNowIso)
         .sort((a, b) => (a.nextFollowUp ?? '').localeCompare(b.nextFollowUp ?? '')),
-    [leads, todayIso],
+    [leads, weekFromNowIso],
   );
+
   const auctionAlerts = useMemo(() => {
     const alerts: AuctionAlert[] = [];
     for (const lead of leads) {
@@ -94,28 +99,24 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
   }, [leads]);
 
-  const presenceEvents = useMemo(() => {
-    const events: PresenceEvent[] = [];
-    for (const s of teamSessions) {
+  // Only show session-start events (no online/offline spam)
+  const sessionEvents = useMemo(() => {
+    return teamSessions.map((s) => {
       const member = teamMembers.find((m) => m.memberId === s.userId);
       const memberName = member ? member.member.fullName || member.member.email : 'A team member';
-      events.push({ id: `presence_on:${s.id}`, type: 'online', memberName, at: s.startedAt });
-      if (!onlineIds.has(s.userId) && s.endedAt) {
-        events.push({ id: `presence_off:${s.id}`, type: 'offline', memberName, at: s.endedAt });
-      }
-    }
-    return events.sort((a, b) => b.at.localeCompare(a.at));
-  }, [teamSessions, teamMembers, onlineIds]);
+      return { id: `session:${s.id}`, memberName, at: s.startedAt };
+    });
+  }, [teamSessions, teamMembers]);
 
   const allIds = useMemo(
     () => [
       ...dueTasks.map((t) => `task:${t.id}`),
       ...dueFollowUps.map((l) => `followup:${l.id}`),
       ...auctionAlerts.map((a) => `auction:${a.lead.id}:${a.milestone}`),
-      ...presenceEvents.map((p) => p.id),
+      ...sessionEvents.map((e) => e.id),
       ...(isAdmin ? teamSummaries.map((s) => `summary:${s.id}`) : []),
     ],
-    [dueTasks, dueFollowUps, auctionAlerts, presenceEvents, teamSummaries, isAdmin],
+    [dueTasks, dueFollowUps, auctionAlerts, sessionEvents, teamSummaries, isAdmin],
   );
   const unreadCount = allIds.filter((id) => !readIds.has(id)).length + (isAdmin ? pendingShares.length : 0);
 
@@ -146,12 +147,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       value={{
         isAdmin,
         todayIso,
+        weekFromNowIso,
         dueTasks,
         dueFollowUps,
         teamSummaries,
         pendingShares,
         auctionAlerts,
-        presenceEvents,
+        sessionEvents,
         toggleTask,
         acceptShare,
         declineShare,
