@@ -1,55 +1,66 @@
 import type { ScriptAnswers } from '@/types/domain';
 
-export interface ScriptStepDef {
+export interface ScriptSubQuestion {
   key: keyof ScriptAnswers;
-  title: string;
   prompt: string;
-  multiline: boolean;
+}
+
+export interface ScriptStepDef {
+  title: string;
+  questions: ScriptSubQuestion[];
 }
 
 export const SCRIPT_STEPS: ScriptStepDef[] = [
   {
-    key: 'motivation',
     title: 'Motivation',
-    prompt: "Tell me a little about the property. How long have you owned it? What's prompting you to sell? Why are you looking to sell now?",
-    multiline: true,
+    questions: [
+      { key: 'motivation_owned', prompt: 'How long have you owned it?' },
+      { key: 'motivation_reason', prompt: "What's the motivation for you to sell?" },
+      { key: 'motivation_now', prompt: 'Why are you looking to sell now?' },
+    ],
   },
   {
-    key: 'condition',
     title: 'Condition',
-    prompt:
-      'Tell me a bit more about the condition of your property. Any plumbing, electrical, HVAC, foundational, or roof issues? How old is the roof?',
-    multiline: true,
+    questions: [
+      { key: 'condition_general', prompt: 'Tell me a bit more about the condition of your property.' },
+      { key: 'condition_rating', prompt: 'What would you rate it out of 10 if you were in my shoes?' },
+      { key: 'condition_issues', prompt: 'Any major issues that I should know about?' },
+      { key: 'condition_hvac', prompt: 'What about HVAC?' },
+      { key: 'condition_plumbing', prompt: 'Is Plumbing PVC or Iron Cast?' },
+      { key: 'condition_roof', prompt: 'How old is the Roof?' },
+    ],
   },
   {
-    key: 'timeline',
     title: 'Timeline',
-    prompt: 'When would you like to close? Is there a specific date you are working toward?',
-    multiline: true,
+    questions: [
+      { key: 'timeline', prompt: 'When would you like to close? Is there a specific date you are working toward?' },
+    ],
   },
   {
-    key: 'price',
     title: 'Price',
-    prompt: 'What are you hoping to get for the property? How did you arrive at that number?',
-    multiline: true,
+    questions: [
+      { key: 'price_asking', prompt: 'What are you hoping to get for the property?' },
+      { key: 'price_reasoning', prompt: 'How did you arrive at that number?' },
+    ],
   },
   {
-    key: 'decision',
     title: 'Decision',
-    prompt: 'Is anyone else involved in making the decision?',
-    multiline: true,
+    questions: [
+      { key: 'decision', prompt: 'Is anyone else involved in making the decision?' },
+    ],
   },
   {
-    key: 'photo_request',
     title: 'Photo Request',
-    prompt:
-      "Great, I really appreciate your time today. So our team can evaluate the property properly, could you send a few photos of the interior and exterior? You can send them to me — any photos of interior and exterior from your phone work great.",
-    multiline: true,
+    questions: [
+      {
+        key: 'photo_request',
+        prompt:
+          'Great, I really appreciate your time today. So our team can evaluate the property properly, could you send a few photos of the interior and exterior? You can send them to me — any photos of interior and exterior from your phone work great.',
+      },
+    ],
   },
   {
-    key: 'callback',
     title: 'Callback',
-    prompt: 'When is a good time to call you back?',
-    multiline: false,
+    questions: [{ key: 'callback', prompt: 'When is a good time to call you back?' }],
   },
 ];

@@ -73,12 +73,27 @@ export interface RepairFlags {
 }
 
 export interface ScriptAnswers {
-  motivation?: string;
-  condition?: string;
+  // Motivation
+  motivation_owned?: string;
+  motivation_reason?: string;
+  motivation_now?: string;
+  // Condition
+  condition_general?: string;
+  condition_rating?: string;
+  condition_issues?: string;
+  condition_hvac?: string;
+  condition_plumbing?: string;
+  condition_roof?: string;
+  // Timeline
   timeline?: string;
-  price?: string;
+  // Price
+  price_asking?: string;
+  price_reasoning?: string;
+  // Decision
   decision?: string;
+  // Photo request
   photo_request?: string;
+  // Callback
   callback?: string;
 }
 

@@ -777,30 +777,26 @@ function ScriptTab({ lead }: { lead: Lead }) {
       </div>
 
       {SCRIPT_STEPS.map((step, i) => (
-        <div key={step.key} className="card">
-          <div className="mb-2 flex items-center gap-2">
+        <div key={step.title} className="card">
+          <div className="mb-3 flex items-center gap-2">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
               {i + 3}
             </span>
             <h3 className="text-sm font-semibold text-text">{step.title}</h3>
           </div>
-          <p className="mb-2 text-[13px] text-text-2">{step.prompt}</p>
-          {step.multiline ? (
-            <textarea
-              className="input"
-              rows={3}
-              value={answers[step.key] ?? ''}
-              onChange={(e) => setAnswer(step.key, e.target.value)}
-              placeholder="Type their answer…"
-            />
-          ) : (
-            <input
-              className="input"
-              value={answers[step.key] ?? ''}
-              onChange={(e) => setAnswer(step.key, e.target.value)}
-              placeholder="Type their answer…"
-            />
-          )}
+          <div className="space-y-3">
+            {step.questions.map((q) => (
+              <div key={q.key}>
+                <p className="mb-1.5 text-[13px] text-text-2">{q.prompt}</p>
+                <input
+                  className="input"
+                  value={answers[q.key] ?? ''}
+                  onChange={(e) => setAnswer(q.key, e.target.value)}
+                  placeholder="Type their answer…"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>

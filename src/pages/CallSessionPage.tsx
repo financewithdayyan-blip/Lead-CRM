@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
-import { useActivities, useAddActivity, useTodayCalledLeadIds } from '@/hooks/useActivities';
+import { useAddActivity, useTodayCalledLeadIds } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { useMyTodaySummary, useSubmitDailySummary } from '@/hooks/useDailySummaries';
@@ -255,7 +255,6 @@ export function CallSessionPage() {
   const currentLeadId = queueIds?.[currentIndex];
   const currentLead = leads.find((l) => l.id === currentLeadId) ?? null;
   const script = useScriptAnswers(currentLead);
-  const { data: leadActivities = [] } = useActivities(currentLeadId);
 
   // If a queued lead disappeared (e.g. deleted mid-session), skip past it.
   useEffect(() => {
@@ -712,31 +711,6 @@ export function CallSessionPage() {
               </div>
             )}
 
-            {/* Activity chat history for this lead */}
-            {leadActivities.length > 0 && (
-              <div className="mt-3">
-                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">History</div>
-                <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
-                  {leadActivities.map((a) => {
-                    const isRight = a.authorRole === 'admin';
-                    const initials = a.authorName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-                    return (
-                      <div key={a.id} className={`flex items-end gap-1.5 ${isRight ? 'flex-row-reverse' : ''}`}>
-                        <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-bold ${isRight ? 'bg-emerald-900/60 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                          {initials}
-                        </div>
-                        <div className={`max-w-[80%] rounded-xl px-2.5 py-1.5 text-[11px] leading-snug ${isRight ? 'rounded-br-sm border border-emerald-900/50 bg-emerald-950/40 text-emerald-100' : 'rounded-bl-sm border border-slate-800 bg-slate-900 text-slate-300'}`}>
-                          <span className={`mr-1 text-[9px] font-semibold opacity-60`}>[{a.type}]</span>
-                          {a.body}
-                          <div className={`mt-0.5 text-[9px] opacity-40 ${isRight ? 'text-right' : ''}`}>{a.authorName}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes for this call</div>
             <textarea
               value={notes}
@@ -876,24 +850,20 @@ export function CallSessionPage() {
                 </div>
               </ScriptStep>
               {SCRIPT_STEPS.map((step, i) => (
-                <ScriptStep key={step.key} index={i + 3} title={step.title}>
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">{step.prompt}</div>
-                  {step.multiline ? (
-                    <textarea
-                      value={script.answers[step.key] ?? ''}
-                      onChange={(e) => script.setAnswer(step.key, e.target.value)}
-                      placeholder="Type their answer…"
-                      rows={2}
-                      className="w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
-                    />
-                  ) : (
-                    <input
-                      value={script.answers[step.key] ?? ''}
-                      onChange={(e) => script.setAnswer(step.key, e.target.value)}
-                      placeholder="Type their answer…"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
-                    />
-                  )}
+                <ScriptStep key={step.title} index={i + 3} title={step.title}>
+                  {step.questions.map((q) => (
+                    <div key={q.key} className="space-y-1.5">
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">
+                        {q.prompt}
+                      </div>
+                      <input
+                        value={script.answers[q.key] ?? ''}
+                        onChange={(e) => script.setAnswer(q.key, e.target.value)}
+                        placeholder="Type their answer…"
+                        className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
+                      />
+                    </div>
+                  ))}
                 </ScriptStep>
               ))}
             </>
