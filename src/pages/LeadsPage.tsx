@@ -198,7 +198,14 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
 
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} targetUserId={targetUserId} />}
       {showImport && <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />}
-      {showDelete && <DeleteLeadsModal leads={leads} tags={tags} onClose={() => setShowDelete(false)} />}
+      {showDelete && (
+        <DeleteLeadsModal
+          leads={leads}
+          tags={tags}
+          selectedIds={selected}
+          onClose={() => { setShowDelete(false); setSelected(new Set()); }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!takeTarget}

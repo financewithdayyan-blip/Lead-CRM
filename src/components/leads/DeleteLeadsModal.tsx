@@ -3,17 +3,30 @@ import { Modal } from '@/components/ui/Modal';
 import { useDeleteLeads } from '@/hooks/useLeads';
 import { STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
-export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags: Tag[]; onClose: () => void }) {
+export function DeleteLeadsModal({
+  leads,
+  tags,
+  selectedIds,
+  onClose,
+}: {
+  leads: Lead[];
+  tags: Tag[];
+  selectedIds: Set<string>;
+  onClose: () => void;
+}) {
   const deleteLeads = useDeleteLeads();
-  const [mode, setMode] = useState<'all' | 'filter'>('all');
+  const hasSelection = selectedIds.size > 0;
+  const [mode, setMode] = useState<'selected' | 'filter'>(hasSelection ? 'selected' : 'filter');
   const [stages, setStages] = useState<Set<LeadStage>>(new Set());
   const [tagIds, setTagIds] = useState<Set<string>>(new Set());
   const [confirmText, setConfirmText] = useState('');
 
   const targets = useMemo(() => {
-    if (mode === 'all') return leads;
-    return leads.filter((l) => (stages.size > 0 && stages.has(l.stage)) || (tagIds.size > 0 && l.tagIds.some((t) => tagIds.has(t))));
-  }, [leads, mode, stages, tagIds]);
+    if (mode === 'selected') return leads.filter((l) => selectedIds.has(l.id));
+    return leads.filter(
+      (l) => (stages.size > 0 && stages.has(l.stage)) || (tagIds.size > 0 && l.tagIds.some((t) => tagIds.has(t))),
+    );
+  }, [leads, mode, selectedIds, stages, tagIds]);
 
   function toggleStage(s: LeadStage) {
     setStages((prev) => {
@@ -41,10 +54,13 @@ export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags
   return (
     <Modal open onClose={onClose} title="Delete Leads">
       <div className="space-y-4">
+        {/* Mode tabs — only show "Selected" tab when there is a selection */}
         <div className="flex gap-2">
-          <button onClick={() => setMode('all')} className={`btn ${mode === 'all' ? '!border-danger !text-danger' : ''}`}>
-            All leads
-          </button>
+          {hasSelection && (
+            <button onClick={() => setMode('selected')} className={`btn ${mode === 'selected' ? '!border-danger !text-danger' : ''}`}>
+              Selected ({selectedIds.size})
+            </button>
+          )}
           <button onClick={() => setMode('filter')} className={`btn ${mode === 'filter' ? '!border-danger !text-danger' : ''}`}>
             By filter
           </button>
@@ -89,6 +105,16 @@ export function DeleteLeadsModal({ leads, tags, onClose }: { leads: Lead[]; tags
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {mode === 'selected' && (
+          <div className="max-h-40 overflow-y-auto rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[13px] text-text-2">
+            {targets.map((l) => (
+              <div key={l.id} className="py-0.5">
+                {l.firstName} {l.lastName} <span className="text-text-3">#{l.leadNum}</span>
+              </div>
+            ))}
           </div>
         )}
 
