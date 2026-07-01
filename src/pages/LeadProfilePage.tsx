@@ -220,7 +220,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab lead={lead} />}
+      {tab === 'overview' && <OverviewTab lead={lead} leadId={lead.id} />}
       {tab === 'property' && <PropertyTab lead={lead} />}
       {tab === 'script' && <ScriptTab lead={lead} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
@@ -297,7 +297,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function OverviewTab({ lead }: { lead: Lead }) {
+function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
   const updateLead = useUpdateLead();
   const [form, setForm] = useState({
     firstName: lead.firstName,
@@ -310,7 +310,6 @@ function OverviewTab({ lead }: { lead: Lead }) {
     state: lead.state ?? '',
     zip: lead.zip ?? '',
     source: lead.source ?? '',
-    notes: lead.notes ?? '',
     nextFollowUp: lead.nextFollowUp ?? '',
   });
   const [saved, setSaved] = useState(false);
@@ -327,7 +326,6 @@ function OverviewTab({ lead }: { lead: Lead }) {
       state: lead.state ?? '',
       zip: lead.zip ?? '',
       source: lead.source ?? '',
-      notes: lead.notes ?? '',
       nextFollowUp: lead.nextFollowUp ?? '',
     });
   }, [lead.id]);
@@ -350,7 +348,6 @@ function OverviewTab({ lead }: { lead: Lead }) {
         state: form.state || null,
         zip: form.zip || null,
         source: form.source || null,
-        notes: form.notes || null,
         nextFollowUp: form.nextFollowUp || null,
       },
       { onSuccess: () => flash() },
@@ -363,6 +360,7 @@ function OverviewTab({ lead }: { lead: Lead }) {
   }
 
   return (
+    <>
     <div className="card">
       <div className="grid grid-cols-2 gap-3">
         <Field label="First Name">
@@ -400,11 +398,6 @@ function OverviewTab({ lead }: { lead: Lead }) {
         <Field label="Next Follow-Up">
           <input className="input" type="date" value={form.nextFollowUp} onChange={(e) => set('nextFollowUp', e.target.value)} />
         </Field>
-        <div className="col-span-2">
-          <Field label="Notes">
-            <textarea className="input" rows={4} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
-          </Field>
-        </div>
       </div>
       <div className="mt-4 flex items-center gap-3">
         <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
@@ -412,6 +405,78 @@ function OverviewTab({ lead }: { lead: Lead }) {
         </button>
         {saved && <span className="text-[12px] text-success">✓ Saved</span>}
       </div>
+    </div>
+    <NotesChatSection leadId={leadId} legacyNote={lead.notes ?? null} />
+    </>
+  );
+}
+
+function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: string | null }) {
+  const { profile } = useAuth();
+  const { data: allActivities = [], isLoading } = useActivities(leadId);
+  const addActivity = useAddActivity();
+  const deleteActivity = useDeleteActivity();
+  const [body, setBody] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const notes = allActivities.filter((a) => a.type === 'note');
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [notes.length]);
+
+  function handleSend() {
+    if (!body.trim()) return;
+    addActivity.mutate({ leadId, type: 'note', body: body.trim() }, { onSuccess: () => setBody('') });
+  }
+
+  return (
+    <div className="card mt-4">
+      <h3 className="mb-3 text-sm font-semibold text-text">Notes</h3>
+
+      {/* Legacy note (old single-field notes migrated from lead.notes) */}
+      {legacyNote && (
+        <div className="mb-3 rounded-xl border border-amber-200/40 bg-amber-50/30 px-3 py-2 text-[12px] text-text-3 dark:border-amber-900/30 dark:bg-amber-950/20">
+          <span className="mr-1.5 font-semibold text-amber-600 dark:text-amber-400">Legacy note:</span>
+          {legacyNote}
+        </div>
+      )}
+
+      {/* Chat bubbles */}
+      {isLoading && <div className="text-[13px] text-text-3">Loading…</div>}
+      {!isLoading && notes.length === 0 && !legacyNote && (
+        <div className="text-[13px] text-text-3">No notes yet.</div>
+      )}
+      <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+        {notes.map((a) => (
+          <ActivityBubble
+            key={a.id}
+            a={a}
+            isAdmin={profile?.role === 'admin'}
+            leadId={leadId}
+            onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
+          />
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Compose */}
+      <div className="mt-3 flex items-end gap-2">
+        <textarea
+          className="input flex-1 resize-none"
+          rows={2}
+          placeholder="Add a note…"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+          }}
+        />
+        <button className="btn btn-primary self-end" onClick={handleSend} disabled={addActivity.isPending || !body.trim()}>
+          <Send size={14} />
+        </button>
+      </div>
+      <div className="mt-1 text-[11px] text-text-3">Enter to send · Shift+Enter for new line</div>
     </div>
   );
 }
