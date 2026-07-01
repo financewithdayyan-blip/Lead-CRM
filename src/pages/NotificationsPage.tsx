@@ -1,22 +1,23 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Phone, Share2, X } from 'lucide-react';
+import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, MessageSquare, Phone, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
 import { formatDate, formatTime, localIsoDate } from '@/lib/utils';
 
 // ── Filter chip config ─────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'auction';
+type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'auction' | 'adminnote';
 
 const FILTER_CONFIG: { key: FilterKey; label: string }[] = [
-  { key: 'all',     label: 'All' },
-  { key: 'session', label: 'Calling Sessions' },
-  { key: 'summary', label: 'Daily Summaries' },
-  { key: 'followup',label: 'Follow-Ups' },
-  { key: 'task',    label: 'Tasks' },
-  { key: 'share',   label: 'Shared Leads' },
-  { key: 'auction', label: 'Auctions' },
+  { key: 'all',       label: 'All' },
+  { key: 'adminnote', label: 'Admin Notes' },
+  { key: 'session',   label: 'Calling Sessions' },
+  { key: 'summary',   label: 'Daily Summaries' },
+  { key: 'followup',  label: 'Follow-Ups' },
+  { key: 'task',      label: 'Tasks' },
+  { key: 'share',     label: 'Shared Leads' },
+  { key: 'auction',   label: 'Auctions' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ export function NotificationsPage() {
     pendingShares,
     auctionAlerts,
     sessionEvents,
+    adminNotes,
     toggleTask,
     acceptShare,
     declineShare,
@@ -83,14 +85,17 @@ export function NotificationsPage() {
   } = useNotificationsContext();
 
   const counts: Record<FilterKey, number> = {
-    all:      dueTasks.length + dueFollowUps.length + auctionAlerts.length +
-              (isAdmin ? teamSummaries.length + pendingShares.length + sessionEvents.length : 0),
-    session:  sessionEvents.length,
-    summary:  teamSummaries.length,
-    followup: dueFollowUps.length,
-    task:     dueTasks.length,
-    share:    pendingShares.length,
-    auction:  auctionAlerts.length,
+    all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length +
+               (isAdmin
+                 ? teamSummaries.length + pendingShares.length + sessionEvents.length
+                 : adminNotes.length),
+    adminnote: adminNotes.length,
+    session:   sessionEvents.length,
+    summary:   teamSummaries.length,
+    followup:  dueFollowUps.length,
+    task:      dueTasks.length,
+    share:     pendingShares.length,
+    auction:   auctionAlerts.length,
   };
 
   const show = (key: FilterKey) => filter === 'all' || filter === key;
@@ -118,6 +123,7 @@ export function NotificationsPage() {
           const active = filter === key;
           const count = counts[key];
           if (key !== 'all' && !isAdmin && (key === 'session' || key === 'summary' || key === 'share')) return null;
+          if (key === 'adminnote' && isAdmin) return null;
           return (
             <button
               key={key}
@@ -143,6 +149,46 @@ export function NotificationsPage() {
         <div className="card text-center text-text-3">You're all caught up — nothing this week.</div>
       ) : (
         <div className="space-y-5">
+
+          {/* Admin Notes (shown to callers when an admin leaves a note on their lead) */}
+          {!isAdmin && show('adminnote') && adminNotes.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                <MessageSquare size={12} /> Admin Notes ({adminNotes.length})
+              </div>
+              <ScrollList>
+                {adminNotes.map((n) => {
+                  const id = `adminnote:${n.id}`;
+                  const unread = !readIds.has(id);
+                  return (
+                    <Link
+                      key={n.id}
+                      to={`/leads/${n.leadId}`}
+                      onClick={() => markRead([id])}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3 hover:border-primary"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        {unread && <UnreadDot />}
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium text-text">
+                            {n.authorName} left a note on{' '}
+                            <span className="font-semibold">{n.leadName}</span>
+                          </div>
+                          {n.body && (
+                            <div className="mt-0.5 truncate text-[12px] italic text-text-3">
+                              "{n.body}"
+                            </div>
+                          )}
+                          <div className="text-[11px] text-text-3">{formatEventTime(n.createdAt, todayIso)}</div>
+                        </div>
+                      </div>
+                      <NotifTag label="Admin Note" color="#4f46e5" />
+                    </Link>
+                  );
+                })}
+              </ScrollList>
+            </div>
+          )}
 
           {/* Shared Leads */}
           {isAdmin && show('share') && pendingShares.length > 0 && (

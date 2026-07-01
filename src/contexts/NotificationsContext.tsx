@@ -6,6 +6,7 @@ import { useTeamWeeklySummaries } from '@/hooks/useDailySummaries';
 import { useAcceptLeadShare, useDeclineLeadShare, usePendingLeadShares } from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useTeamWeeklySessions } from '@/hooks/useAttendance';
+import { useAdminNotesOnMyLeads, type AdminNoteNotif } from '@/hooks/useActivities';
 import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
 import { daysUntil, localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
@@ -34,6 +35,7 @@ interface NotificationsContextValue {
   pendingShares: (LeadShare & { leadName: string; fromName: string })[];
   auctionAlerts: AuctionAlert[];
   sessionEvents: SessionEvent[];
+  adminNotes: AdminNoteNotif[];
   toggleTask: ReturnType<typeof useToggleTask>;
   acceptShare: ReturnType<typeof useAcceptLeadShare>;
   declineShare: ReturnType<typeof useDeclineLeadShare>;
@@ -63,6 +65,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: pendingShares = [] } = usePendingLeadShares();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: teamSessions = [] } = useTeamWeeklySessions();
+  const { data: adminNotes = [] } = useAdminNotesOnMyLeads();
   const toggleTask = useToggleTask();
   const acceptShare = useAcceptLeadShare();
   const declineShare = useDeclineLeadShare();
@@ -115,8 +118,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       ...auctionAlerts.map((a) => `auction:${a.lead.id}:${a.milestone}`),
       ...sessionEvents.map((e) => e.id),
       ...(isAdmin ? teamSummaries.map((s) => `summary:${s.id}`) : []),
+      ...adminNotes.map((n) => `adminnote:${n.id}`),
     ],
-    [dueTasks, dueFollowUps, auctionAlerts, sessionEvents, teamSummaries, isAdmin],
+    [dueTasks, dueFollowUps, auctionAlerts, sessionEvents, teamSummaries, isAdmin, adminNotes],
   );
   const unreadCount = allIds.filter((id) => !readIds.has(id)).length + (isAdmin ? pendingShares.length : 0);
 
@@ -154,6 +158,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         pendingShares,
         auctionAlerts,
         sessionEvents,
+        adminNotes,
         toggleTask,
         acceptShare,
         declineShare,

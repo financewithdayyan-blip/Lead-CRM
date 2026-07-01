@@ -5,6 +5,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { localIsoDate } from '@/lib/utils';
 import type { ActivityType } from '@/types/domain';
 
+export interface AdminNoteNotif {
+  id: string;
+  leadId: string;
+  leadName: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 export function useActivities(leadId: string | undefined) {
   return useQuery({
     queryKey: ['activities', leadId],
@@ -45,6 +54,7 @@ export function useAddActivity() {
       qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
       qc.invalidateQueries({ queryKey: ['today_calls'] });
       qc.invalidateQueries({ queryKey: ['activity_feed'] });
+      qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
     },
   });
 }
@@ -125,5 +135,42 @@ export function useRecentActivities(targetUserId?: string, limit = 12) {
       }));
     },
     enabled: !!userId,
+  });
+}
+
+/**
+ * Note-type activities on the current caller's leads authored by someone else (admin).
+ * Only enabled for non-admin users — admins write notes, callers receive them.
+ * Limited to the last 7 days.
+ */
+export function useAdminNotesOnMyLeads() {
+  const { session, profile } = useAuth();
+  const userId = session?.user.id;
+  return useQuery({
+    queryKey: ['admin_notes_on_my_leads', userId],
+    queryFn: async () => {
+      const since7 = new Date();
+      since7.setDate(since7.getDate() - 7);
+      const { data, error } = await supabase
+        .from('lead_activities')
+        .select('*, lead:leads!lead_id(first_name, last_name), author:profiles!user_id(full_name, email)')
+        .eq('type', 'note')
+        .neq('user_id', userId)
+        .gte('created_at', since7.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []).map((row: any): AdminNoteNotif => ({
+        id: row.id as string,
+        leadId: row.lead_id as string,
+        leadName: row.lead
+          ? `${row.lead.first_name ?? ''} ${row.lead.last_name ?? ''}`.trim()
+          : 'A lead',
+        authorName: row.author?.full_name || row.author?.email || 'Admin',
+        body: (row.body ?? '') as string,
+        createdAt: row.created_at as string,
+      }));
+    },
+    enabled: !!userId && profile?.role !== 'admin',
   });
 }
