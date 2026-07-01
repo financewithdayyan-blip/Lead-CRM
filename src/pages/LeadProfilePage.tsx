@@ -869,21 +869,45 @@ function FilesTab({ lead }: { lead: Lead }) {
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadFile.mutate(
+      { leadId: lead.id, file },
+      {
+        onSettled: () => {
+          // Reset so the same file can be re-selected if needed
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        },
+      },
+    );
+  }
+
   return (
     <div className="card">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-text">Files & Photos</h3>
-        <label className="btn cursor-pointer">
-          <Upload size={14} /> Upload
+        <label className={`btn cursor-pointer ${uploadFile.isPending ? 'pointer-events-none opacity-60' : ''}`}>
+          <Upload size={14} /> {uploadFile.isPending ? 'Uploading…' : 'Upload'}
           <input
             ref={fileInputRef}
             type="file"
             className="hidden"
-            onChange={(e) => e.target.files?.[0] && uploadFile.mutate({ leadId: lead.id, file: e.target.files[0] })}
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            onChange={handleFileChange}
           />
         </label>
       </div>
-      {files.length === 0 && <div className="text-[13px] text-text-3">No files uploaded yet.</div>}
+
+      {uploadFile.isError && (
+        <div className="mb-3 rounded-md bg-danger-dim px-3 py-2 text-[12px] text-danger">
+          Upload failed: {(uploadFile.error as Error)?.message ?? 'Unknown error'}
+        </div>
+      )}
+
+      {files.length === 0 && !uploadFile.isPending && (
+        <div className="text-[13px] text-text-3">No files uploaded yet.</div>
+      )}
       <div className="space-y-2">
         {files.map((f) => (
           <div key={f.id} className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-2.5">

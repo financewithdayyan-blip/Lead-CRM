@@ -323,7 +323,7 @@ export function CallSessionPage() {
   }
 
   function copySmsMessage() {
-    const message = `Hi. I tried reaching you today regarding your property at ${addressLine}. I'd love to have a quick conversation when you have a moment feel free to call or text me back at  Thank you!`;
+    const message = `Hi. I tried reaching you today regarding your property at ${addressLine}. I'd love to have a quick conversation when you have a moment feel free to call or text me back. Thank you!`;
     navigator.clipboard.writeText(message);
     setSmsCopied(true);
     setTimeout(() => setSmsCopied(false), 1500);
