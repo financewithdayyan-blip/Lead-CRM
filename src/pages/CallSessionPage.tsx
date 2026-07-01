@@ -17,6 +17,7 @@ import {
   PauseCircle,
   Phone,
   PhoneIncoming,
+  PhoneCall,
   Send,
   Square,
   Target,
@@ -165,6 +166,7 @@ export function CallSessionPage() {
 
   const [queueIds, setQueueIds] = useState<string[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [inFollowUpMode, setInFollowUpMode] = useState(false);
   const [sessionCallsLogged, setSessionCallsLogged] = useState(0);
   // Map<leadId, dateIso> — tracks which date each in-session call was logged on,
   // so calls made before midnight don't bleed into the next day's count.
@@ -281,9 +283,25 @@ export function CallSessionPage() {
   const dailyGoal = profile?.dailyGoal ?? 20;
   const goalReached = callsToday >= dailyGoal;
   const queueExhausted = queueIds !== null && currentIndex >= queueIds.length;
-  const finished = goalReached || queueExhausted;
+  // In follow-up mode the goal being met no longer ends the session — only queue exhaustion does.
+  const finished = (goalReached && !inFollowUpMode) || queueExhausted;
   const summaryWordCount = summaryText.trim() ? summaryText.trim().split(/\s+/).length : 0;
-  const needsSummary = goalReached && !todaySummary && !summaryJustSubmitted;
+  const needsSummary = finished && !todaySummary && !summaryJustSubmitted;
+
+  // Leads in 'initial_contact' or 'followup' stage that haven't been called this session —
+  // offered as a follow-up queue once the daily goal is met.
+  const followUpLeads = useMemo(() => {
+    if (!goalReached || inFollowUpMode) return [];
+    return leads
+      .filter((l) => (l.stage === 'initial_contact' || l.stage === 'followup') && !sessionLeadIdsCalled.has(l.id))
+      .sort((a, b) => (a.leadNum ?? 0) - (b.leadNum ?? 0));
+  }, [goalReached, inFollowUpMode, leads, sessionLeadIdsCalled]);
+
+  function startFollowUpSession() {
+    setQueueIds(followUpLeads.map((l) => l.id));
+    setCurrentIndex(0);
+    setInFollowUpMode(true);
+  }
 
   function endSession() {
     navigate('/');
@@ -368,12 +386,15 @@ export function CallSessionPage() {
   }
 
   if (finished) {
+    const isFollowUpComplete = inFollowUpMode && queueExhausted;
+    const title = isFollowUpComplete ? 'Follow-up session complete!' : goalReached ? 'Daily goal reached!' : 'Session complete';
+
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-900 via-slate-950 to-black text-center text-slate-200">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/30">
-          <Trophy size={28} className="text-slate-950" />
+        <div className={`flex h-16 w-16 items-center justify-center rounded-full shadow-lg ${isFollowUpComplete ? 'bg-gradient-to-br from-blue-500 to-indigo-400 shadow-blue-500/30' : 'bg-gradient-to-br from-emerald-500 to-teal-400 shadow-emerald-500/30'}`}>
+          {isFollowUpComplete ? <PhoneCall size={28} className="text-slate-950" /> : <Trophy size={28} className="text-slate-950" />}
         </div>
-        <div className="text-2xl font-bold">{goalReached ? 'Daily goal reached!' : 'Session complete'}</div>
+        <div className="text-2xl font-bold">{title}</div>
         <div className="text-slate-400">
           {sessionCallsLogged} call{sessionCallsLogged !== 1 ? 's' : ''} logged this session · {callsToday}/{dailyGoal} today
         </div>
@@ -404,12 +425,33 @@ export function CallSessionPage() {
         ) : (
           <>
             {summaryJustSubmitted && <div className="text-[13px] text-emerald-400">✓ Summary submitted</div>}
-            <button
-              onClick={endSession}
-              className="mt-2 flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.02]"
-            >
-              Back to Dashboard
-            </button>
+
+            {/* Follow-up session offer — only shown when daily goal just reached (not in follow-up mode) */}
+            {!inFollowUpMode && followUpLeads.length > 0 && (
+              <div className="mt-1 flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-blue-900/50 bg-blue-950/30 p-5">
+                <div className="text-[13px] text-slate-300">
+                  You have <span className="font-semibold text-blue-300">{followUpLeads.length} follow-up lead{followUpLeads.length !== 1 ? 's' : ''}</span> waiting in Initial Contact &amp; Follow-Up stages.
+                </div>
+                <button
+                  onClick={startFollowUpSession}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-400 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/20 transition-transform hover:scale-[1.02]"
+                >
+                  <PhoneCall size={16} /> Start Follow-up Session
+                </button>
+                <button onClick={endSession} className="text-[12px] text-slate-500 hover:text-slate-400">
+                  Skip — back to dashboard
+                </button>
+              </div>
+            )}
+
+            {(inFollowUpMode || followUpLeads.length === 0) && (
+              <button
+                onClick={endSession}
+                className="mt-2 flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-emerald-500/20 transition-transform hover:scale-[1.02]"
+              >
+                Back to Dashboard
+              </button>
+            )}
           </>
         )}
       </div>
