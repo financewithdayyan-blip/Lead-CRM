@@ -136,6 +136,8 @@ export interface LeadActivity {
   id: string;
   leadId: string;
   userId: string;
+  authorName: string;
+  authorRole: string;
   type: ActivityType;
   body: string | null;
   meta: Record<string, unknown>;

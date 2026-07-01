@@ -11,9 +11,9 @@ export function useActivities(leadId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('lead_activities')
-        .select('*')
+        .select('*, author:profiles!user_id(full_name, email, role)')
         .eq('lead_id', leadId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (error) throw error;
       return data.map(dbToActivity);
     },

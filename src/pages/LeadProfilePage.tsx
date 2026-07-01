@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Upload, ExternalLink, Share2, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Trash2, Upload, ExternalLink, Share2, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -14,7 +14,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadStage, type Tag } from '@/types/domain';
+import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
 import { callerDisplayName, formatPhone, formatDate, formatDateTime } from '@/lib/utils';
 import { SCRIPT_STEPS } from '@/lib/callScript';
 
@@ -742,26 +742,119 @@ function ScriptTab({ lead }: { lead: Lead }) {
   );
 }
 
+function ActivityBubble({
+  a,
+  isAdmin,
+  onDelete,
+  leadId,
+}: {
+  a: LeadActivity;
+  isAdmin: boolean;
+  onDelete: () => void;
+  leadId: string;
+}) {
+  const isRight = a.authorRole === 'admin';
+  const initials = a.authorName
+    .split(' ')
+    .map((w: string) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className={`group flex items-end gap-2 ${isRight ? 'flex-row-reverse' : ''}`}>
+      {/* Avatar */}
+      <div
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+          isRight ? 'bg-primary/20 text-primary' : 'bg-surface-3 text-text-3'
+        }`}
+      >
+        {initials}
+      </div>
+
+      {/* Bubble */}
+      <div className={`relative max-w-[75%] ${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
+        <div className={`mb-0.5 flex items-center gap-1.5 text-[10px] text-text-3 ${isRight ? 'flex-row-reverse' : ''}`}>
+          <span className="font-medium">{a.authorName}</span>
+          <span>·</span>
+          <span>{formatDateTime(a.createdAt)}</span>
+        </div>
+        <div
+          className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
+            isRight
+              ? 'rounded-br-sm border border-primary/25 bg-primary/8 text-text'
+              : 'rounded-bl-sm border border-border-2 bg-surface-3 text-text'
+          }`}
+        >
+          <span className={`mr-1.5 inline-block rounded px-1 py-0.5 text-[10px] font-semibold ${isRight ? 'bg-primary/15 text-primary' : 'bg-border-2 text-text-3'}`}>
+            {ACTIVITY_LABEL[a.type]}
+          </span>
+          {a.body}
+        </div>
+      </div>
+
+      {/* Delete */}
+      <button
+        className="mb-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 text-text-3 hover:text-danger"
+        onClick={onDelete}
+        title="Delete"
+      >
+        <Trash2 size={12} />
+      </button>
+    </div>
+  );
+}
+
 function ActivityTab({ leadId }: { leadId: string }) {
+  const { profile } = useAuth();
   const { data: activities = [], isLoading } = useActivities(leadId);
   const addActivity = useAddActivity();
   const deleteActivity = useDeleteActivity();
-  const [type, setType] = useState<ActivityType>('call');
+  const [type, setType] = useState<ActivityType>('note');
   const [body, setBody] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activities.length]);
 
   function handleAdd() {
     if (!body.trim()) return;
     addActivity.mutate({ leadId, type, body: body.trim() }, { onSuccess: () => setBody('') });
   }
 
+  const isAdmin = profile?.role === 'admin';
+
   return (
     <div className="space-y-4">
+      {/* Chat history */}
+      <div className="card">
+        <h3 className="mb-3 text-sm font-semibold text-text">Activity</h3>
+        {isLoading && <div className="text-[13px] text-text-3">Loading…</div>}
+        {!isLoading && activities.length === 0 && (
+          <div className="text-[13px] text-text-3">No activity yet — notes and call logs will appear here.</div>
+        )}
+        <div className="max-h-[480px] overflow-y-auto space-y-3 pr-1">
+          {activities.map((a) => (
+            <ActivityBubble
+              key={a.id}
+              a={a}
+              isAdmin={isAdmin}
+              leadId={leadId}
+              onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
+            />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/* Compose */}
       <div className="card">
         <h3 className="mb-3 text-sm font-semibold text-text">Log activity</h3>
         <div className="flex flex-wrap items-end gap-2">
           <select className="input !w-auto" value={type} onChange={(e) => setType(e.target.value as ActivityType)}>
-            <option value="call">Call</option>
             <option value="note">Note</option>
+            <option value="call">Call</option>
             <option value="email">Email</option>
             <option value="meeting">Meeting</option>
             <option value="sms">Text</option>
@@ -773,29 +866,9 @@ function ActivityTab({ leadId }: { leadId: string }) {
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           />
-          <button className="btn btn-primary" onClick={handleAdd} disabled={addActivity.isPending}>
-            <Plus size={14} /> Add
+          <button className="btn btn-primary" onClick={handleAdd} disabled={addActivity.isPending || !body.trim()}>
+            <Send size={14} /> Send
           </button>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold text-text">Timeline</h3>
-        {isLoading && <div className="text-[13px] text-text-3">Loading…</div>}
-        {!isLoading && activities.length === 0 && <div className="text-[13px] text-text-3">No activity logged yet.</div>}
-        <div className="space-y-3">
-          {activities.map((a) => (
-            <div key={a.id} className="flex items-start justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
-              <div>
-                <div className="text-[13px] font-medium text-text">{ACTIVITY_LABEL[a.type]}</div>
-                {a.body && <div className="mt-0.5 text-[13px] text-text-2">{a.body}</div>}
-                <div className="mt-0.5 text-[11px] text-text-3">{formatDateTime(a.createdAt)}</div>
-              </div>
-              <button className="shrink-0 text-text-3 hover:text-danger" onClick={() => deleteActivity.mutate({ id: a.id, leadId })}>
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
         </div>
       </div>
     </div>

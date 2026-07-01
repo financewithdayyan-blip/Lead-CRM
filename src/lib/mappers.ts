@@ -167,6 +167,8 @@ export function dbToActivity(row: any): LeadActivity {
     id: row.id,
     leadId: row.lead_id,
     userId: row.user_id,
+    authorName: row.author?.full_name || row.author?.email || 'Team member',
+    authorRole: row.author?.role ?? 'caller',
     type: row.type,
     body: row.body,
     meta: row.meta ?? {},
