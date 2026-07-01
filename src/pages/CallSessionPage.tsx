@@ -10,7 +10,9 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  DollarSign,
   FileText,
+  Home,
   Loader2,
   MapPin,
   MessageSquare,
@@ -80,6 +82,11 @@ function ratingColor(n: number) {
   if (n <= 4) return '#ef4444';
   if (n <= 7) return '#f59e0b';
   return '#10b981';
+}
+
+function formatCurrency(n: number | null | undefined): string {
+  if (n == null) return '—';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 
 function RepairsDropdown({ repairs, onChange }: { repairs: RepairFlags; onChange: (r: RepairFlags) => void }) {
@@ -473,6 +480,8 @@ export function CallSessionPage() {
     [currentLead.address, currentLead.city, currentLead.state].filter(Boolean).join(', ') + (currentLead.zip ? ` ${currentLead.zip}` : '');
   const fullName = `${currentLead.firstName} ${currentLead.lastName}`.trim();
   const callerName = callerDisplayName(profile?.fullName, session?.user.email);
+  const isFollowUpLead = currentLead.stage === 'initial_contact' || currentLead.stage === 'followup';
+  const hasOffer = currentLead.minOffer != null || currentLead.maxOffer != null;
 
   return (
     <div className="flex h-screen flex-col bg-gradient-to-br from-slate-900 via-slate-950 to-black text-slate-200">
@@ -562,6 +571,30 @@ export function CallSessionPage() {
             <div className="mt-3 flex items-start gap-2 text-[16px] font-semibold leading-snug text-amber-300">
               <MapPin size={17} className="mt-0.5 shrink-0 text-amber-400" />
               <span className="uppercase tracking-wide">{addressLine}</span>
+            </div>
+          )}
+
+          {isFollowUpLead && (
+            <div className="mt-4 rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                <DollarSign size={11} /> Offer Range
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg border border-emerald-900/30 bg-slate-950/50 p-2.5">
+                  <div className="text-[9.5px] font-semibold uppercase tracking-wide text-slate-500">Min Offer</div>
+                  <div className="mt-1 text-[16px] font-bold text-emerald-400">{formatCurrency(currentLead.minOffer)}</div>
+                </div>
+                <div className="rounded-lg border border-emerald-900/30 bg-slate-950/50 p-2.5">
+                  <div className="text-[9.5px] font-semibold uppercase tracking-wide text-slate-500">Max Offer</div>
+                  <div className="mt-1 text-[16px] font-bold text-emerald-400">{formatCurrency(currentLead.maxOffer)}</div>
+                </div>
+              </div>
+              {currentLead.arv != null && (
+                <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+                  <span className="text-[11px] text-slate-500">ARV</span>
+                  <span className="text-[13px] font-semibold text-slate-300">{formatCurrency(currentLead.arv)}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -735,54 +768,136 @@ export function CallSessionPage() {
         </div>
 
         <div className="max-h-full overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-xl shadow-black/20">
-          <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <FileText size={13} /> Call Script
-            </span>
-            {script.status === 'saving' && <span className="text-slate-500">Saving…</span>}
-            {script.status === 'saved' && <span className="text-emerald-400">Saved</span>}
-          </div>
-          <ScriptStep index={1} title="Introduction & Permission">
-            <ScriptSay>
-              "Hi, is this <b className="text-white">{fullName}</b>? My name is <b className="text-amber-300">{callerName}</b>. I'm calling
-              about the property at <b className="text-amber-300">{addressLine}</b>. Do you have a few minutes to talk about it?"
-            </ScriptSay>
-            <ScriptSay>
-              "So we are basically an acquisition company — we help homeowners solve problems regarding their properties. We have access to
-              public records and we came across your property there, that's how we got your address and number. We are interested in your
-              house."
-            </ScriptSay>
-          </ScriptStep>
-          <ScriptStep index={2} title="Confirm They Want to Sell">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">
-              › Are you interested in selling your house for the right price?
-              <div className="mt-2 flex gap-2">
-                <span className="rounded-md border border-emerald-800 bg-emerald-950/60 px-2.5 py-1 text-[12px] text-emerald-400">✓ Yes</span>
-                <span className="rounded-md border border-red-800 bg-red-950/60 px-2.5 py-1 text-[12px] text-red-400">✗ No</span>
+          {isFollowUpLead ? (
+            <>
+              <div className="mb-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-400">
+                <PhoneCall size={13} /> Follow-Up Script
               </div>
-            </div>
-          </ScriptStep>
-          {SCRIPT_STEPS.map((step, i) => (
-            <ScriptStep key={step.key} index={i + 3} title={step.title}>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">{step.prompt}</div>
-              {step.multiline ? (
-                <textarea
-                  value={script.answers[step.key] ?? ''}
-                  onChange={(e) => script.setAnswer(step.key, e.target.value)}
-                  placeholder="Type their answer…"
-                  rows={2}
-                  className="w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
-                />
-              ) : (
-                <input
-                  value={script.answers[step.key] ?? ''}
-                  onChange={(e) => script.setAnswer(step.key, e.target.value)}
-                  placeholder="Type their answer…"
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
-                />
+
+              <ScriptStep index={1} title="Re-introduce">
+                <ScriptSay>
+                  "Hi, is this <b className="text-white">{fullName}</b>? This is <b className="text-amber-300">{callerName}</b> — I'm following up about your property at <b className="text-amber-300">{addressLine}</b>. How are you doing?"
+                </ScriptSay>
+              </ScriptStep>
+
+              <ScriptStep index={2} title="Reference Prior Conversation">
+                <ScriptSay>
+                  "Last time we spoke you were thinking about selling. I wanted to circle back because we're still very interested. Has anything changed with your situation since we last talked?"
+                </ScriptSay>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">
+                  › Listen: new urgency, changed timeline, price movement?
+                </div>
+              </ScriptStep>
+
+              <ScriptStep index={3} title="Present Offer Range">
+                {hasOffer ? (
+                  <ScriptSay>
+                    "Based on our research and the condition of the property, we're prepared to make you a cash offer in the range of{' '}
+                    <b className="text-emerald-400">{formatCurrency(currentLead.minOffer)}</b> to{' '}
+                    <b className="text-emerald-400">{formatCurrency(currentLead.maxOffer)}</b>. That's all cash, no repairs needed, and we can close on your schedule. Does that sound like something that could work for you?"
+                  </ScriptSay>
+                ) : (
+                  <div className="rounded-xl border border-amber-900/40 bg-amber-950/20 p-3 text-[13px] text-amber-300">
+                    No offer range set yet — discuss internally before committing to a number.
+                  </div>
+                )}
+              </ScriptStep>
+
+              <ScriptStep index={4} title="Handle Objections">
+                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">
+                  <div><span className="font-semibold text-slate-400">Price too low:</span>{' '}"Our offer reflects the as-is value plus what we spend on repairs and closing costs. The convenience of a quick, guaranteed close is real value."</div>
+                  <div><span className="font-semibold text-slate-400">Not ready yet:</span>{' '}"I completely understand — when do you think you'll have a better idea of your timeline? I can follow up then."</div>
+                  <div><span className="font-semibold text-slate-400">Need to think:</span>{' '}"Of course — what questions can I answer right now to help you decide?"</div>
+                </div>
+              </ScriptStep>
+
+              <ScriptStep index={5} title="Close & Next Steps">
+                <ScriptSay>
+                  "I'd love to get you a written offer. Can we schedule a quick walkthrough, or would you be comfortable moving forward based on what we've discussed today?"
+                </ScriptSay>
+              </ScriptStep>
+
+              {currentLead.comps && currentLead.comps.length > 0 && (
+                <div className="mt-5 border-t border-slate-800 pt-4">
+                  <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <Home size={12} /> Comparable Sales ({currentLead.comps.length})
+                  </div>
+                  <div className="space-y-2">
+                    {currentLead.comps.map((c) => (
+                      <div key={c.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-[12px] font-semibold text-slate-200">{c.address ?? 'Address N/A'}</div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                              {c.beds != null && <span>{c.beds} bd</span>}
+                              {c.baths != null && <span>{c.baths} ba</span>}
+                              {c.sqft != null && <span>{c.sqft.toLocaleString()} sqft</span>}
+                              {c.distance && <span className="text-slate-500">{c.distance} away</span>}
+                            </div>
+                          </div>
+                          {c.price != null && (
+                            <div className="shrink-0 text-[14px] font-bold text-emerald-400">{formatCurrency(c.price)}</div>
+                          )}
+                        </div>
+                        {c.notes && <div className="mt-1.5 text-[11px] italic text-slate-500">{c.notes}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-            </ScriptStep>
-          ))}
+            </>
+          ) : (
+            <>
+              <div className="mb-4 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <FileText size={13} /> Call Script
+                </span>
+                {script.status === 'saving' && <span className="text-slate-500">Saving…</span>}
+                {script.status === 'saved' && <span className="text-emerald-400">Saved</span>}
+              </div>
+              <ScriptStep index={1} title="Introduction & Permission">
+                <ScriptSay>
+                  "Hi, is this <b className="text-white">{fullName}</b>? My name is <b className="text-amber-300">{callerName}</b>. I'm calling
+                  about the property at <b className="text-amber-300">{addressLine}</b>. Do you have a few minutes to talk about it?"
+                </ScriptSay>
+                <ScriptSay>
+                  "So we are basically an acquisition company — we help homeowners solve problems regarding their properties. We have access to
+                  public records and we came across your property there, that's how we got your address and number. We are interested in your
+                  house."
+                </ScriptSay>
+              </ScriptStep>
+              <ScriptStep index={2} title="Confirm They Want to Sell">
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">
+                  › Are you interested in selling your house for the right price?
+                  <div className="mt-2 flex gap-2">
+                    <span className="rounded-md border border-emerald-800 bg-emerald-950/60 px-2.5 py-1 text-[12px] text-emerald-400">✓ Yes</span>
+                    <span className="rounded-md border border-red-800 bg-red-950/60 px-2.5 py-1 text-[12px] text-red-400">✗ No</span>
+                  </div>
+                </div>
+              </ScriptStep>
+              {SCRIPT_STEPS.map((step, i) => (
+                <ScriptStep key={step.key} index={i + 3} title={step.title}>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">{step.prompt}</div>
+                  {step.multiline ? (
+                    <textarea
+                      value={script.answers[step.key] ?? ''}
+                      onChange={(e) => script.setAnswer(step.key, e.target.value)}
+                      placeholder="Type their answer…"
+                      rows={2}
+                      className="w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
+                    />
+                  ) : (
+                    <input
+                      value={script.answers[step.key] ?? ''}
+                      onChange={(e) => script.setAnswer(step.key, e.target.value)}
+                      placeholder="Type their answer…"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950/60 p-2.5 text-[13px] text-slate-200 outline-none transition-colors placeholder:text-slate-600 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/40"
+                    />
+                  )}
+                </ScriptStep>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
