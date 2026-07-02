@@ -325,7 +325,7 @@ export function CallSessionPage() {
   // In follow-up mode the goal being met no longer ends the session — only queue exhaustion does.
   const finished = (goalReached && !inFollowUpMode) || queueExhausted;
   const summaryWordCount = summaryText.trim() ? summaryText.trim().split(/\s+/).length : 0;
-  const needsSummary = finished && !todaySummary && !summaryJustSubmitted;
+  const needsSummary = finished && goalReached && !todaySummary && !summaryJustSubmitted;
 
   // Leads in 'initial_contact' or 'followup' stage that haven't been called this session —
   // offered as a follow-up queue once the daily goal is met.
