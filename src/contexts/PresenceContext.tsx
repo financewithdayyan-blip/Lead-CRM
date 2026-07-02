@@ -36,6 +36,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     });
     channelRef.current = channel;
 
+    function trackIfVisible() {
+      if (document.visibilityState === 'visible') {
+        channel.track({ online_at: new Date().toISOString(), status: myStatusRef.current });
+      } else {
+        channel.untrack();
+      }
+    }
+
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState<{ online_at: string; status?: UserStatus }>();
@@ -49,11 +57,14 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       })
       .subscribe((sub) => {
         if (sub === 'SUBSCRIBED') {
-          channel.track({ online_at: new Date().toISOString(), status: myStatusRef.current });
+          trackIfVisible();
         }
       });
 
+    document.addEventListener('visibilitychange', trackIfVisible);
+
     return () => {
+      document.removeEventListener('visibilitychange', trackIfVisible);
       channelRef.current = null;
       supabase.removeChannel(channel);
     };
@@ -61,7 +72,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   const setMyStatus = useCallback((status: UserStatus) => {
     myStatusRef.current = status;
-    channelRef.current?.track({ online_at: new Date().toISOString(), status });
+    if (document.visibilityState === 'visible') {
+      channelRef.current?.track({ online_at: new Date().toISOString(), status });
+    }
   }, []);
 
   return (
