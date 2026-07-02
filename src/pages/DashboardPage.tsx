@@ -1,12 +1,13 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, PhoneCall } from 'lucide-react';
+import { CalendarClock, MapPin, PhoneCall } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
+import { DailyBriefingModal } from '@/components/daily/DailyBriefingModal';
 
 const DailyActivityChart = lazy(() =>
   import('@/components/dashboard/DailyActivityChart').then((m) => ({ default: m.DailyActivityChart })),
@@ -69,12 +70,14 @@ export function DashboardView({
   heading = 'Dashboard',
   subtitle = 'Your pipeline and activity at a glance',
   allowStartSession = false,
+  onOpenBriefing,
 }: {
   userId: string;
   profile: Profile | null;
   heading?: string;
   subtitle?: string;
   allowStartSession?: boolean;
+  onOpenBriefing?: () => void;
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
@@ -342,19 +345,26 @@ export function DashboardView({
           <h1 className="text-2xl font-semibold text-text">{heading}</h1>
           <p className="text-sm text-text-3">{subtitle}</p>
         </div>
-        {allowStartSession ? (
-          <Link to="/session" className="btn btn-primary shrink-0">
-            <PhoneCall size={15} /> Start Session
-          </Link>
-        ) : (
-          <button
-            disabled
-            title="You can only start a calling session for your own account."
-            className="btn shrink-0 cursor-not-allowed opacity-50"
-          >
-            <PhoneCall size={15} /> Start Session
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {onOpenBriefing && (
+            <button onClick={onOpenBriefing} className="btn shrink-0">
+              <CalendarClock size={15} /> Today's Briefing
+            </button>
+          )}
+          {allowStartSession ? (
+            <Link to="/session" className="btn btn-primary shrink-0">
+              <PhoneCall size={15} /> Start Session
+            </Link>
+          ) : (
+            <button
+              disabled
+              title="You can only start a calling session for your own account."
+              className="btn shrink-0 cursor-not-allowed opacity-50"
+            >
+              <PhoneCall size={15} /> Start Session
+            </button>
+          )}
+        </div>
       </div>
 
       {leads.length === 0 ? (
@@ -545,6 +555,30 @@ export function DashboardView({
 
 export function DashboardPage() {
   const { session, profile } = useAuth();
+  const todayIso = localIsoDate(new Date());
+  const userId = session?.user.id ?? '';
+  const isAdmin = profile?.role === 'admin';
+
+  const [showBriefing, setShowBriefing] = useState(() => {
+    if (!userId || isAdmin) return false;
+    return !localStorage.getItem(`daily_briefing_${userId}_${todayIso}`);
+  });
+
+  function closeBriefing() {
+    localStorage.setItem(`daily_briefing_${userId}_${todayIso}`, '1');
+    setShowBriefing(false);
+  }
+
   if (!session) return null;
-  return <DashboardView userId={session.user.id} profile={profile} allowStartSession />;
+  return (
+    <>
+      <DashboardView
+        userId={userId}
+        profile={profile}
+        allowStartSession
+        onOpenBriefing={!isAdmin ? () => setShowBriefing(true) : undefined}
+      />
+      {showBriefing && <DailyBriefingModal onClose={closeBriefing} />}
+    </>
+  );
 }
