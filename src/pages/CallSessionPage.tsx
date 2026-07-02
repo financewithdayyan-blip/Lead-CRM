@@ -162,6 +162,7 @@ export function CallSessionPage() {
 
   const { setMyStatus } = usePresence();
   const callingSessionIdRef = useRef<string | null>(null);
+  const accessTokenRef = useRef<string | undefined>(session?.access_token);
 
   const { data: leads = [], isLoading } = useLeads();
   const { data: todayCalledIds = new Set<string>() } = useTodayCalledLeadIds(userId);
@@ -251,6 +252,37 @@ export function CallSessionPage() {
       }
     };
   }, []); // runs once on mount / cleanup on unmount
+
+  // Keep accessTokenRef current so the beforeunload handler always has a valid JWT.
+  useEffect(() => {
+    accessTokenRef.current = session?.access_token;
+  }, [session?.access_token]);
+
+  // Close the calling session if the user closes/refreshes the tab without clicking "End Session".
+  // fetch with keepalive:true is the only reliable way to fire a network request during beforeunload.
+  useEffect(() => {
+    function handleUnload() {
+      const id = callingSessionIdRef.current;
+      const token = accessTokenRef.current;
+      if (!id || !token) return;
+      fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calling_sessions?id=eq.${id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${token}`,
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify({ ended_at: new Date().toISOString() }),
+          keepalive: true,
+        },
+      );
+    }
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, []);
 
   const currentLeadId = queueIds?.[currentIndex];
   const currentLead = leads.find((l) => l.id === currentLeadId) ?? null;
