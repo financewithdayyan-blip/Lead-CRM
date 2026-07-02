@@ -403,9 +403,10 @@ export function CallSessionPage() {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
-      if (key === 'v') setOutcome('voicemail');
+      const inFollowUpStage = currentLead.stage === 'followup';
+      if (key === 'v') setOutcome(inFollowUpStage ? 'followup' : 'voicemail');
       else if (key === 'f') setOutcome('followup');
-      else if (key === 'd') setOutcome('dead');
+      else if (key === 'd') { if (!inFollowUpStage) setOutcome('dead'); }
       else if (key === 'h') setOutcome('onhold');
       else if (key === 'n') saveAndNext();
       else if (key === 'c') copyPhone('phone');
@@ -666,7 +667,9 @@ export function CallSessionPage() {
           <div className="mx-auto max-w-sm">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Call Outcome</div>
             <div className="mt-2 grid grid-cols-3 gap-1.5">
-              {OUTCOMES.map((o) => {
+              {OUTCOMES.filter((o) =>
+                currentLead.stage !== 'followup' || (o.key !== 'voicemail' && o.key !== 'dead'),
+              ).map((o) => {
                 const active = outcome === o.key;
                 const Icon = o.icon;
                 return (
