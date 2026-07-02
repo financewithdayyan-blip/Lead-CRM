@@ -61,6 +61,7 @@ function formatDayLabel(iso: string) {
 
 function MemberAttendance({ memberId }: { memberId: string }) {
   const { data: sessions = [], isLoading } = useAttendanceSessions(memberId);
+  const todayIso = localIsoDate(new Date());
 
   if (isLoading) return <div className="mt-3 text-[12px] text-text-3">Loading attendance…</div>;
   if (sessions.length === 0) return <div className="mt-3 text-[12px] text-text-3">No attendance recorded yet.</div>;
@@ -71,6 +72,16 @@ function MemberAttendance({ memberId }: { memberId: string }) {
     days.set(day, [...(days.get(day) ?? []), s]);
   }
 
+  // Sessions with no ended_at are either genuinely active (started today) or orphaned
+  // (browser closed before the cleanup hook ran). Cap orphaned sessions at midnight of
+  // the day they started so stale rows don't inflate past-day totals.
+  function effectiveEndMs(endedAt: string | null, sessionDay: string): number {
+    if (endedAt) return new Date(endedAt).getTime();
+    if (sessionDay === todayIso) return Date.now();
+    const [y, m, d] = sessionDay.split('-').map(Number);
+    return new Date(y, m - 1, d + 1, 0, 0, 0, 0).getTime(); // midnight = end of that calendar day
+  }
+
   return (
     <div className="mt-3">
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
@@ -78,9 +89,8 @@ function MemberAttendance({ memberId }: { memberId: string }) {
       </div>
       <div className="space-y-1.5">
         {Array.from(days.entries()).map(([day, daySessions]) => {
-          const now = new Date().toISOString();
           const totalSeconds = daySessions.reduce(
-            (sum, s) => sum + (new Date(s.endedAt ?? now).getTime() - new Date(s.startedAt).getTime()) / 1000,
+            (sum, s) => sum + Math.max(0, (effectiveEndMs(s.endedAt, day) - new Date(s.startedAt).getTime()) / 1000),
             0,
           );
           const ordered = [...daySessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
@@ -88,12 +98,15 @@ function MemberAttendance({ memberId }: { memberId: string }) {
             <div key={day} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-3 p-2 text-[12px]">
               <div className="font-medium text-text">{formatDayLabel(day)}</div>
               <div className="text-text-2">
-                {ordered.map((s, i) => (
-                  <span key={s.id}>
-                    {i > 0 && ', '}
-                    {formatTime(s.startedAt)}–{s.endedAt ? formatTime(s.endedAt) : 'ongoing'}
-                  </span>
-                ))}
+                {ordered.map((s, i) => {
+                  const isLiveSession = !s.endedAt && day === todayIso;
+                  return (
+                    <span key={s.id}>
+                      {i > 0 && ', '}
+                      {formatTime(s.startedAt)}–{s.endedAt ? formatTime(s.endedAt) : isLiveSession ? 'ongoing' : '?'}
+                    </span>
+                  );
+                })}
               </div>
               <div className="font-mono font-semibold text-primary">{formatDuration(totalSeconds)}</div>
             </div>
