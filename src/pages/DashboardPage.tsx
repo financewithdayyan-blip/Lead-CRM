@@ -101,9 +101,11 @@ export function DashboardView({
     const callsToday = calls.filter((a) => localIsoDate(new Date(a.createdAt)) === todayIso).length;
 
     const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
     const monthCalls = calls.filter((a) => {
       const d = new Date(a.createdAt);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      return d >= monthStart && d < nextMonthStart;
     }).length;
 
     const dayOfWeek = now.getDay();
@@ -422,7 +424,13 @@ export function DashboardView({
               label="Monthly Call Goal"
               done={stats.monthCalls}
               goal={profile?.monthlyGoal ?? 400}
-              periodLabel={new Date().toLocaleDateString([], { month: 'long', year: 'numeric' })}
+              periodLabel={(() => {
+                const n = new Date();
+                const s = new Date(n.getFullYear(), n.getMonth(), 1);
+                const e = new Date(n.getFullYear(), n.getMonth() + 1, 1);
+                const fmt = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                return `${fmt(s)} – ${fmt(e)}`;
+              })()}
             />
           </div>
 
