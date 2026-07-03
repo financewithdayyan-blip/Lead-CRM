@@ -148,8 +148,8 @@ export function DashboardView({
     const followupCount = outcomeCount('followup');
     const callConversations = outcomeCount('initial_contact') + followupCount;
     const declinedCount = outcomeCount('declined');
-    const callsPerFollowup = followupCount > 0 ? (callsMade / followupCount).toFixed(1) : null;
-    const callsPerConversation = callConversations > 0 ? (callsMade / callConversations).toFixed(1) : null;
+    const callsPerFollowup = pipelineFollowupCount > 0 ? (callsMade / pipelineFollowupCount).toFixed(1) : null;
+    const callsPerConversation = conversations > 0 ? (callsMade / conversations).toFixed(1) : null;
     const pickupDenominator = outcomeCount('initial_contact') + followupCount + declinedCount;
     const pickupRatio = pickupDenominator > 0 ? (callsMade / pickupDenominator).toFixed(1) : null;
 
