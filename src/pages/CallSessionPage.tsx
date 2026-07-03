@@ -205,12 +205,13 @@ export function CallSessionPage() {
 
   // Snapshot the queue once when leads finish loading so the order/membership
   // stays stable for the rest of the session, even as mutations refetch `leads`.
+  // Only cold (new-stage) leads go here — follow-up leads are offered as a
+  // separate session AFTER the daily goal is met and the summary is submitted.
   useEffect(() => {
     if (queueIds === null && !isLoading) {
       const byNum = (a: Lead, b: Lead) => (a.leadNum ?? 0) - (b.leadNum ?? 0);
       const cold = leads.filter((l) => l.stage === 'new').sort(byNum).map((l) => l.id);
-      const followups = leads.filter((l) => l.stage === 'followup').sort(byNum).map((l) => l.id);
-      setQueueIds([...cold, ...followups]);
+      setQueueIds(cold);
     }
   }, [isLoading, leads, queueIds]);
 
