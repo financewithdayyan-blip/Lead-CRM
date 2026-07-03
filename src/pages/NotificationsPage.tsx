@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, MessageSquare, Phone, Share2, X } from 'lucide-react';
+import { ArrowRightLeft, Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, MessageSquare, Phone, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
 import { formatDate, formatTime, localIsoDate } from '@/lib/utils';
 
 // ── Filter chip config ─────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'auction' | 'adminnote';
+type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'transfer' | 'auction' | 'adminnote';
 
 const FILTER_CONFIG: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All' },
   { key: 'adminnote', label: 'Admin Notes' },
+  { key: 'transfer',  label: 'Transfer Requests' },
   { key: 'session',   label: 'Calling Sessions' },
   { key: 'summary',   label: 'Daily Summaries' },
   { key: 'followup',  label: 'Follow-Ups' },
@@ -71,12 +72,15 @@ export function NotificationsPage() {
     dueFollowUps,
     teamSummaries,
     pendingShares,
+    pendingIncomingShares,
     auctionAlerts,
     sessionEvents,
     adminNotes,
     toggleTask,
     acceptShare,
     declineShare,
+    acceptAdminShare,
+    declineAdminShare,
     acknowledgeAuctionAlert,
     readIds,
     unreadCount,
@@ -88,8 +92,9 @@ export function NotificationsPage() {
     all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length +
                (isAdmin
                  ? teamSummaries.length + pendingShares.length + sessionEvents.length
-                 : adminNotes.length),
+                 : adminNotes.length + pendingIncomingShares.length),
     adminnote: adminNotes.length,
+    transfer:  pendingIncomingShares.length,
     session:   sessionEvents.length,
     summary:   teamSummaries.length,
     followup:  dueFollowUps.length,
@@ -124,6 +129,7 @@ export function NotificationsPage() {
           const count = counts[key];
           if (key !== 'all' && !isAdmin && (key === 'session' || key === 'summary' || key === 'share')) return null;
           if (key === 'adminnote' && isAdmin) return null;
+          if (key === 'transfer' && isAdmin) return null;
           return (
             <button
               key={key}
@@ -186,6 +192,56 @@ export function NotificationsPage() {
                     </Link>
                   );
                 })}
+              </ScrollList>
+            </div>
+          )}
+
+          {/* Transfer Requests (shown to callers when admin reassigns a followup lead to them) */}
+          {!isAdmin && show('transfer') && pendingIncomingShares.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                <ArrowRightLeft size={12} /> Transfer Requests ({pendingIncomingShares.length})
+              </div>
+              <ScrollList>
+                {pendingIncomingShares.map((s) => (
+                  <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                      <div className="min-w-0 text-[13px] text-text">
+                        <span className="font-semibold">{s.leadName}</span>
+                        <div className="mt-0.5 text-[12px] text-text-3">
+                          Moved from <span className="font-medium text-text">{s.fromName}</span>{' '}
+                          to <span className="font-medium text-text">{s.toName}</span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-text-3">
+                          Stage: {STAGE_CONFIG[s.stageAtShare].label}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                        style={{ backgroundColor: '#c084fc22', color: '#c084fc' }}
+                      >
+                        Transfer
+                      </span>
+                      <button
+                        className="btn btn-primary !px-2.5 !py-1 text-[12px]"
+                        disabled={acceptAdminShare.isPending}
+                        onClick={() => acceptAdminShare.mutate(s.id)}
+                      >
+                        <Check size={13} /> Accept
+                      </button>
+                      <button
+                        className="btn !px-2.5 !py-1 text-[12px] text-danger hover:border-danger"
+                        disabled={declineAdminShare.isPending}
+                        onClick={() => declineAdminShare.mutate(s.id)}
+                      >
+                        <X size={13} /> Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </ScrollList>
             </div>
           )}

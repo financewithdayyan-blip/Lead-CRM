@@ -3,7 +3,14 @@ import { useAuth } from './AuthContext';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTeamWeeklySummaries } from '@/hooks/useDailySummaries';
-import { useAcceptLeadShare, useDeclineLeadShare, usePendingLeadShares } from '@/hooks/useLeadShares';
+import {
+  useAcceptLeadShare,
+  useDeclineLeadShare,
+  usePendingLeadShares,
+  usePendingIncomingShares,
+  useAcceptAdminLeadShare,
+  useDeclineAdminLeadShare,
+} from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useTeamWeeklySessions } from '@/hooks/useAttendance';
 import { useAdminNotesOnMyLeads, type AdminNoteNotif } from '@/hooks/useActivities';
@@ -33,12 +40,15 @@ interface NotificationsContextValue {
   dueFollowUps: Lead[];
   teamSummaries: (DailySummary & { memberName: string })[];
   pendingShares: (LeadShare & { leadName: string; fromName: string })[];
+  pendingIncomingShares: (LeadShare & { leadName: string; fromName: string; toName: string })[];
   auctionAlerts: AuctionAlert[];
   sessionEvents: SessionEvent[];
   adminNotes: AdminNoteNotif[];
   toggleTask: ReturnType<typeof useToggleTask>;
   acceptShare: ReturnType<typeof useAcceptLeadShare>;
   declineShare: ReturnType<typeof useDeclineLeadShare>;
+  acceptAdminShare: ReturnType<typeof useAcceptAdminLeadShare>;
+  declineAdminShare: ReturnType<typeof useDeclineAdminLeadShare>;
   acknowledgeAuctionAlert: (leadId: string, milestone: number) => void;
   readIds: Set<string>;
   unreadCount: number;
@@ -63,12 +73,15 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: leads = [] } = useLeads();
   const { data: teamSummaries = [] } = useTeamWeeklySummaries();
   const { data: pendingShares = [] } = usePendingLeadShares();
+  const { data: pendingIncomingShares = [] } = usePendingIncomingShares();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: teamSessions = [] } = useTeamWeeklySessions();
   const { data: adminNotes = [] } = useAdminNotesOnMyLeads();
   const toggleTask = useToggleTask();
   const acceptShare = useAcceptLeadShare();
   const declineShare = useDeclineLeadShare();
+  const acceptAdminShare = useAcceptAdminLeadShare();
+  const declineAdminShare = useDeclineAdminLeadShare();
   const updateLead = useUpdateLead();
 
   // Tasks due within 7 days (overdue + today + this week)
@@ -122,7 +135,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     ],
     [dueTasks, dueFollowUps, auctionAlerts, sessionEvents, teamSummaries, isAdmin, adminNotes],
   );
-  const unreadCount = allIds.filter((id) => !readIds.has(id)).length + (isAdmin ? pendingShares.length : 0);
+  const unreadCount =
+    allIds.filter((id) => !readIds.has(id)).length +
+    (isAdmin ? pendingShares.length : pendingIncomingShares.length);
 
   function markRead(ids: string[]) {
     setReadIds((prev) => {
@@ -156,12 +171,15 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         dueFollowUps,
         teamSummaries,
         pendingShares,
+        pendingIncomingShares,
         auctionAlerts,
         sessionEvents,
         adminNotes,
         toggleTask,
         acceptShare,
         declineShare,
+        acceptAdminShare,
+        declineAdminShare,
         acknowledgeAuctionAlert,
         readIds,
         unreadCount,

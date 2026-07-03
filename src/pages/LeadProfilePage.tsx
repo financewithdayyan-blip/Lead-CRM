@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Send, Trash2, Upload, ExternalLink, Share2, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -8,7 +8,8 @@ import { useActivities, useAddActivity, useDeleteActivity } from '@/hooks/useAct
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl } from '@/hooks/useLeadFiles';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
-import { useMyPendingShareForLead, useShareLead } from '@/hooks/useLeadShares';
+import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller } from '@/hooks/useLeadShares';
+import { useTeamMembers } from '@/hooks/useTeam';
 import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
@@ -113,6 +114,96 @@ function ShareLeadButton({ leadId, stage }: { leadId: string; stage: LeadStage }
   );
 }
 
+function AdminShareToCallerButton({
+  leadId,
+  stage,
+  currentOwnerId,
+}: {
+  leadId: string;
+  stage: LeadStage;
+  currentOwnerId: string;
+}) {
+  const { data: teamMembers = [] } = useTeamMembers();
+  const adminShare = useAdminShareLeadToCaller();
+  const [open, setOpen] = useState(false);
+  const [selectedCallerId, setSelectedCallerId] = useState('');
+
+  const callers = teamMembers
+    .map((m) => m.member)
+    .filter((m) => m.role === 'caller' && m.id !== currentOwnerId);
+
+  const isFollowUp = stage === 'followup';
+
+  function handleShare() {
+    if (!selectedCallerId) return;
+    adminShare.mutate(
+      { leadId, toUserId: selectedCallerId },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setSelectedCallerId('');
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      <button className="btn !py-1.5 text-[12px]" onClick={() => setOpen(true)}>
+        <ArrowRightLeft size={13} /> Share to Caller
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
+          <div className="card w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="text-sm font-semibold text-text">Share lead to caller</div>
+            <select
+              className="input text-[13px]"
+              value={selectedCallerId}
+              onChange={(e) => setSelectedCallerId(e.target.value)}
+            >
+              <option value="">Select a caller…</option>
+              {callers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.fullName || c.email}
+                </option>
+              ))}
+            </select>
+            {callers.length === 0 && (
+              <p className="text-[12px] text-text-3">No other callers in your team.</p>
+            )}
+            <p className="text-[12px] text-text-3">
+              {isFollowUp
+                ? 'This lead is in Follow-Up — the caller will receive a notification and must approve the transfer.'
+                : 'This lead will be transferred to the selected caller immediately.'}
+            </p>
+            {adminShare.isError && (
+              <p className="text-[12px] text-danger">Transfer failed. Please try again.</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                className="btn text-[12px]"
+                onClick={() => {
+                  setOpen(false);
+                  setSelectedCallerId('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary text-[12px]"
+                disabled={!selectedCallerId || adminShare.isPending}
+                onClick={handleShare}
+              >
+                {adminShare.isPending ? 'Sharing…' : 'Share'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 const ACTIVITY_LABEL: Record<ActivityType, string> = {
   note: 'Note',
   call: 'Call',
@@ -135,6 +226,8 @@ const TAB_LABELS: Record<TabKey, string> = {
 
 export function LeadProfileView({ id, backTo, allowShare = false }: { id: string | undefined; backTo: string; allowShare?: boolean }) {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const { data: lead, isLoading } = useLead(id);
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
@@ -187,6 +280,13 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
               ))}
             </select>
             {allowShare && <ShareLeadButton leadId={lead.id} stage={lead.stage} />}
+            {isAdmin && (
+              <AdminShareToCallerButton
+                leadId={lead.id}
+                stage={lead.stage}
+                currentOwnerId={lead.userId}
+              />
+            )}
           </div>
         </div>
 

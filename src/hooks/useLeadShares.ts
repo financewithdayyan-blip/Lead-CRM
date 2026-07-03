@@ -52,6 +52,7 @@ export function usePendingLeadShares() {
         .from('lead_shares')
         .select('*, lead:leads(first_name, last_name), from_profile:profiles!lead_shares_from_user_id_fkey(full_name, email)')
         .eq('status', 'pending')
+        .is('initiated_by', null) // only caller-initiated shares; admin-initiated go to receiving caller
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data.map((row: any) => ({
@@ -61,6 +62,74 @@ export function usePendingLeadShares() {
       }));
     },
     enabled: profile?.role === 'admin',
+  });
+}
+
+/** Admin shares a lead from its current owner to another caller. */
+export function useAdminShareLeadToCaller() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, toUserId }: { leadId: string; toUserId: string }) => {
+      const { error } = await supabase.rpc('admin_share_lead_to_caller', {
+        p_lead_id: leadId,
+        p_to_user_id: toUserId,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateAfterTransfer(qc),
+  });
+}
+
+/** Fetches pending admin-initiated shares targeting the current caller. */
+export function usePendingIncomingShares() {
+  const { session, profile } = useAuth();
+  const userId = session?.user.id;
+  return useQuery({
+    queryKey: ['lead_shares', 'incoming', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_shares')
+        .select(
+          '*, lead:leads(first_name, last_name), from_profile:profiles!lead_shares_from_user_id_fkey(full_name, email), to_profile:profiles!lead_shares_to_user_id_fkey(full_name, email)',
+        )
+        .eq('to_user_id', userId)
+        .eq('status', 'pending')
+        .not('initiated_by', 'is', null)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map((row: any) => ({
+        ...dbToLeadShare(row),
+        leadId: row.lead_id,
+        leadName: `${row.lead?.first_name ?? ''} ${row.lead?.last_name ?? ''}`.trim() || 'Untitled lead',
+        fromName: row.from_profile?.full_name || row.from_profile?.email || 'A team member',
+        toName: row.to_profile?.full_name || row.to_profile?.email || 'You',
+      }));
+    },
+    enabled: !!userId && profile?.role === 'caller',
+  });
+}
+
+/** Receiving caller accepts an admin-initiated share. */
+export function useAcceptAdminLeadShare() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (shareId: string) => {
+      const { error } = await supabase.rpc('accept_admin_lead_share', { p_share_id: shareId });
+      if (error) throw error;
+    },
+    onSuccess: () => invalidateAfterTransfer(qc),
+  });
+}
+
+/** Receiving caller declines an admin-initiated share. */
+export function useDeclineAdminLeadShare() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (shareId: string) => {
+      const { error } = await supabase.rpc('decline_admin_lead_share', { p_share_id: shareId });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead_shares'] }),
   });
 }
 

@@ -216,6 +216,7 @@ export function dbToLeadShare(row: any): LeadShare {
     toUserId: row.to_user_id,
     stageAtShare: row.stage_at_share,
     status: row.status,
+    initiatedBy: row.initiated_by ?? null,
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,
   };

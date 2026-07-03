@@ -192,6 +192,7 @@ export interface LeadShare {
   toUserId: string | null;
   stageAtShare: LeadStage;
   status: 'pending' | 'accepted' | 'declined';
+  initiatedBy: string | null;
   createdAt: string;
   resolvedAt: string | null;
 }
