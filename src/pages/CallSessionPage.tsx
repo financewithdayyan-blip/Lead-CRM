@@ -363,7 +363,36 @@ export function CallSessionPage() {
   }
 
   function copySmsMessage() {
-    const message = `Hi. I tried reaching you today regarding your property at ${addressLine}. I'd love to have a quick conversation when you have a moment feel free to call or text me back. Thank you!`;
+    if (!currentLead) return;
+
+    const leadTagNames = currentLead.tagIds
+      .map((tid) => tags.find((t) => t.id === tid)?.name ?? '')
+      .filter(Boolean)
+      .map((n) => n.toLowerCase());
+
+    const hasTag = (...needles: string[]) =>
+      leadTagNames.some((n) => needles.some((needle) => n.includes(needle)));
+
+    const auctionDateStr = currentLead.auctionDate
+      ? new Date(currentLead.auctionDate + 'T00:00:00').toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : null;
+
+    let message: string;
+
+    if (hasTag('preforeclosure', 'pre-foreclosure', 'foreclosure') && auctionDateStr) {
+      message = `Hey ${currentLead.firstName}, this is ${callerName} with Bluebird Acquisition. I heard ${addressLine} may have an auction date coming up on ${auctionDateStr}. Is everything okay?`;
+    } else if (hasTag('code violation', 'code', 'violation', 'city issue', 'city')) {
+      message = `Hey ${currentLead.firstName}, this is ${callerName} with Bluebird Acquisition. I heard the city may be giving you a hard time about ${addressLine}. Did you already get that handled?`;
+    } else if (hasTag('tax delinquent', 'tax auction', 'tax')) {
+      message = `Hey ${currentLead.firstName}, this is ${callerName} with Bluebird Acquisition. I heard the county may be giving you a hard time about taxes on ${addressLine}. Did you already get that handled?`;
+    } else {
+      message = `Hi ${currentLead.firstName}. I tried reaching you today regarding your property at ${addressLine}. I'd love to have a quick conversation when you have a moment — feel free to call or text me back. Thank you!`;
+    }
+
     navigator.clipboard.writeText(message);
     setSmsCopied(true);
     setTimeout(() => setSmsCopied(false), 1500);
