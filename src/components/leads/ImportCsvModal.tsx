@@ -135,10 +135,25 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
             ))}
           </div>
           <div className="rounded-md border border-border bg-surface-3 p-2 text-[12px] text-text-3">
-            Preview: {cellAt(parsed.rows[0], mapping.name)} · {cellAt(parsed.rows[0], mapping.phone)} · {cellAt(parsed.rows[0], mapping.address)}
-            {cellAt(parsed.rows[0], mapping.city) && `, ${cellAt(parsed.rows[0], mapping.city)}`}
-            {cellAt(parsed.rows[0], mapping.state) && `, ${cellAt(parsed.rows[0], mapping.state)}`}
-            {cellAt(parsed.rows[0], mapping.zip) && ` ${cellAt(parsed.rows[0], mapping.zip)}`}
+            <div>
+              Preview: {cellAt(parsed.rows[0], mapping.name)} · {cellAt(parsed.rows[0], mapping.phone)} · {cellAt(parsed.rows[0], mapping.address)}
+              {cellAt(parsed.rows[0], mapping.city) && `, ${cellAt(parsed.rows[0], mapping.city)}`}
+              {cellAt(parsed.rows[0], mapping.state) && `, ${cellAt(parsed.rows[0], mapping.state)}`}
+              {cellAt(parsed.rows[0], mapping.zip) && ` ${cellAt(parsed.rows[0], mapping.zip)}`}
+            </div>
+            {previewMapped[0]?.auctionDateRaw && (
+              <div className={`mt-1 flex items-center gap-1 ${previewMapped[0].auctionDateWarning ? 'text-warning' : 'text-text-3'}`}>
+                <span>Auction date:</span>
+                <span className="font-mono">{previewMapped[0].auctionDateRaw}</span>
+                <span className="text-text-3">→</span>
+                <span className={previewMapped[0].auctionDateWarning ? 'text-warning font-semibold' : 'text-text'}>
+                  {previewMapped[0].auctionDateDisplay || '(unparseable)'}
+                </span>
+                {previewMapped[0].auctionDateWarning && (
+                  <span className="text-warning">⚠ {previewMapped[0].auctionDateWarning}</span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <button className="btn" onClick={() => setStep('upload')}>
@@ -187,12 +202,32 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
             </div>
           </div>
 
-          <div className="rounded-md border border-border bg-surface-3 p-3 text-[13px]">
-            <div className="text-text">
-              {unique.length} new lead{unique.length !== 1 ? 's' : ''} will be imported.
-            </div>
-            {duplicateCount > 0 && <div className="mt-1 text-warning">{duplicateCount} duplicate(s) skipped (matched by phone number).</div>}
-          </div>
+          {(() => {
+            const auctionWarnings = unique.filter(m => m.auctionDateWarning);
+            return (
+              <div className="rounded-md border border-border bg-surface-3 p-3 text-[13px]">
+                <div className="text-text">
+                  {unique.length} new lead{unique.length !== 1 ? 's' : ''} will be imported.
+                </div>
+                {duplicateCount > 0 && <div className="mt-1 text-warning">{duplicateCount} duplicate(s) skipped (matched by phone number).</div>}
+                {auctionWarnings.length > 0 && (
+                  <div className="mt-2 rounded border border-warning/40 bg-warning/10 p-2 text-[12px] text-warning">
+                    <div className="font-semibold">⚠ {auctionWarnings.length} lead{auctionWarnings.length !== 1 ? 's have' : ' has'} a suspicious auction date — verify before importing:</div>
+                    <ul className="mt-1 space-y-0.5 text-[11px]">
+                      {auctionWarnings.slice(0, 5).map((m, i) => (
+                        <li key={i}>
+                          {m.firstName} {m.lastName}: <span className="font-mono">{m.auctionDateRaw}</span>
+                          {m.auctionDateDisplay && <> → <span className="font-semibold">{m.auctionDateDisplay}</span></>}
+                          {' '}— {m.auctionDateWarning}
+                        </li>
+                      ))}
+                      {auctionWarnings.length > 5 && <li className="text-text-3">…and {auctionWarnings.length - 5} more</li>}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="flex justify-end gap-2">
             <button className="btn" onClick={() => setStep('mapping')}>

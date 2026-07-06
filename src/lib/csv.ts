@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { expandStreetSuffix, extractPhones, formatPhone, normalizePhoneDigits, parseFlexibleDate } from './utils';
+import { expandStreetSuffix, extractPhones, formatPhone, normalizePhoneDigits, parseAuctionDate } from './utils';
 
 export interface CsvParseResult {
   headers: string[];
@@ -70,7 +70,10 @@ export interface MappedCsvLead {
   sqft: string;
   lotSize: string;
   propType: string;
-  auctionDate: string;
+  auctionDate: string;         // ISO date string for the DB
+  auctionDateRaw: string;      // original CSV cell value
+  auctionDateDisplay: string;  // human-readable parsed date, e.g. "Jul 9, 2026"
+  auctionDateWarning: string | null; // non-null when the date looks suspect
   source: string;
 }
 
@@ -96,7 +99,16 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
         sqft: cellAt(r, mapping.sqft),
         lotSize: cellAt(r, mapping.lotsize),
         propType: cellAt(r, mapping.proptype),
-        auctionDate: parseFlexibleDate(cellAt(r, mapping.auctiondate)) ?? '',
+        ...(() => {
+          const raw = cellAt(r, mapping.auctiondate);
+          const parsed = parseAuctionDate(raw);
+          return {
+            auctionDate: parsed.iso ?? '',
+            auctionDateRaw: raw,
+            auctionDateDisplay: parsed.display,
+            auctionDateWarning: parsed.warning,
+          };
+        })(),
         source: cellAt(r, mapping.source),
       };
     });

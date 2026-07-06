@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, MessageSquare, Phone, Share2, X } from 'lucide-react';
+import { ArrowRightLeft, Bell, Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, MessageSquare, Phone, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
 import { formatDate, formatTime, localIsoDate } from '@/lib/utils';
 
 // ── Filter chip config ─────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'transfer' | 'auction' | 'adminnote';
+type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'transfer' | 'auction' | 'adminnote' | 'dbalerts';
 
 const FILTER_CONFIG: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All' },
+  { key: 'dbalerts',  label: 'Auction Alerts' },
   { key: 'adminnote', label: 'Admin Notes' },
   { key: 'transfer',  label: 'Transfer Requests' },
   { key: 'session',   label: 'Calling Sessions' },
@@ -18,7 +19,7 @@ const FILTER_CONFIG: { key: FilterKey; label: string }[] = [
   { key: 'followup',  label: 'Follow-Ups' },
   { key: 'task',      label: 'Tasks' },
   { key: 'share',     label: 'Shared Leads' },
-  { key: 'auction',   label: 'Auctions' },
+  { key: 'auction',   label: 'Milestones' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -76,23 +77,27 @@ export function NotificationsPage() {
     auctionAlerts,
     sessionEvents,
     adminNotes,
+    dbAlerts,
     toggleTask,
     acceptShare,
     declineShare,
     acceptAdminShare,
     declineAdminShare,
     acknowledgeAuctionAlert,
+    markDbAlertRead,
     readIds,
     unreadCount,
     markRead,
     markAllRead,
   } = useNotificationsContext();
 
+  const dbUnread = dbAlerts.filter((n) => !n.isRead).length;
   const counts: Record<FilterKey, number> = {
-    all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length +
+    all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length + dbAlerts.length +
                (isAdmin
                  ? teamSummaries.length + pendingShares.length + sessionEvents.length
                  : adminNotes.length + pendingIncomingShares.length),
+    dbalerts:  dbAlerts.length,
     adminnote: adminNotes.length,
     transfer:  pendingIncomingShares.length,
     session:   sessionEvents.length,
@@ -286,7 +291,67 @@ export function NotificationsPage() {
             </div>
           )}
 
-          {/* Auctions */}
+          {/* Scheduled Auction Alerts (generated server-side by pg_cron) */}
+          {show('dbalerts') && dbAlerts.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                  <Bell size={12} /> Auction Alerts ({dbAlerts.length})
+                </div>
+                {dbUnread > 0 && (
+                  <button
+                    className="text-[11px] text-primary hover:underline"
+                    onClick={() => markDbAlertRead(dbAlerts.filter((n) => !n.isRead).map((n) => n.id))}
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <ScrollList>
+                {dbAlerts.map((n) => {
+                  const tierMatch = n.title.match(/—\s*(\w+)$/);
+                  const tierColor =
+                    n.type === 'auction_passed' ? '#6b7280'
+                    : tierMatch?.[1] === 'CRITICAL' ? '#ef4444'
+                    : tierMatch?.[1] === 'URGENT'   ? '#f97316'
+                    : tierMatch?.[1] === 'HIGH'     ? '#eab308'
+                    : tierMatch?.[1] === 'MEDIUM'   ? '#60a5fa'
+                    : '#9ca3af';
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => !n.isRead && markDbAlertRead([n.id])}
+                      className={`flex w-full items-start justify-between gap-3 rounded-md border p-3 text-left transition-colors ${
+                        n.isRead ? 'border-border-2 bg-surface-3' : 'border-primary/30 bg-primary/5 hover:border-primary/50'
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-start gap-2">
+                        {!n.isRead && <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-text">{n.title}</div>
+                          {n.body && <div className="mt-0.5 text-[12px] text-text-3">{n.body}</div>}
+                          <div className="mt-0.5 text-[11px] text-text-3">
+                            {new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                      <span
+                        className="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                        style={{ backgroundColor: `${tierColor}22`, color: tierColor }}
+                      >
+                        {n.type === 'auction_passed' ? 'Passed'
+                          : n.type === 'auction_tier_change' ? 'Tier Change'
+                          : 'Reminder'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </ScrollList>
+            </div>
+          )}
+
+          {/* Auction milestone reminders (client-side) */}
           {show('auction') && auctionAlerts.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">

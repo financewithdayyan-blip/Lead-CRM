@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Share2, Trash2, Upload, UserPlus } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
@@ -25,6 +25,8 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<LeadStage | ''>('');
   const [tagFilter, setTagFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 200;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -44,6 +46,11 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
     });
   }, [leads, search, stageFilter, tagFilter]);
 
+  useEffect(() => { setPage(1); }, [search, stageFilter, tagFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   function toggleSelected(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -53,6 +60,16 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
   }
   function toggleSelectAll() {
     setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map((l) => l.id)));
+  }
+
+  function paginationPages(): (number | '…')[] {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const items: (number | '…')[] = [1];
+    if (page > 3) items.push('…');
+    for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) items.push(p);
+    if (page < totalPages - 2) items.push('…');
+    items.push(totalPages);
+    return items;
   }
 
   return (
@@ -137,7 +154,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                 </td>
               </tr>
             )}
-            {filtered.map((lead) => {
+            {paginated.map((lead) => {
               const sharedFrom = receivedShares[lead.id];
               return (
                 <tr
@@ -195,6 +212,43 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-[13px] text-text-2">
+          <span>
+            Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              className="btn !px-2.5 !py-1"
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              ‹ Prev
+            </button>
+            {paginationPages().map((item, i) =>
+              item === '…' ? (
+                <span key={`e${i}`} className="px-1 text-text-3">…</span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setPage(item as number)}
+                  className={`btn !px-2.5 !py-1 ${page === item ? 'btn-primary' : ''}`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+            <button
+              className="btn !px-2.5 !py-1"
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next ›
+            </button>
+          </div>
+        </div>
+      )}
 
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} targetUserId={targetUserId} />}
       {showImport && <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />}

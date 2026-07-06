@@ -67,12 +67,120 @@ export function localIsoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export function parseFlexibleDate(raw: string | null | undefined): string | null {
-  const trimmed = (raw ?? '').trim();
-  if (!trimmed) return null;
-  const d = new Date(trimmed);
-  if (isNaN(d.getTime())) return null;
-  return localIsoDate(d);
+export interface ParsedAuctionDate {
+  iso: string | null;      // YYYY-MM-DD for the DB, null if unparseable
+  display: string;         // "Jul 9, 2026" for the import preview
+  warning: string | null;  // non-null = flag this row before importing
+}
+
+const AUCTION_MONTHS: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+  apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+  aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
+};
+const AUCTION_WEEKDAYS = new Set([
+  'monday','tuesday','wednesday','thursday','friday','saturday','sunday',
+  'mon','tue','wed','thu','fri','sat','sun',
+]);
+
+/**
+ * Parses auction date strings from CSV with year inference and sanity checks.
+ * Handles: "Thursday 9 July", "9 July", "July 9th", "9/7/2026", "2026-07-09", etc.
+ * When the year is missing, assumes the current year; if that date is past, rolls to next year.
+ */
+export function parseAuctionDate(raw: string | null | undefined): ParsedAuctionDate {
+  const input = (raw ?? '').trim();
+  if (!input) return { iso: null, display: '', warning: null };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Strip ordinal suffixes: "9th" → "9", "1st" → "1"
+  let s = input.replace(/\b(\d+)(st|nd|rd|th)\b/gi, '$1');
+  // Strip weekday names so "Thursday 9 July" becomes "9 July"
+  s = s.split(/[\s,]+/).filter(t => t && !AUCTION_WEEKDAYS.has(t.toLowerCase())).join(' ').trim();
+
+  // ── structured formats with explicit year ──────────────────────────────────
+  let m: RegExpMatchArray | null;
+
+  // YYYY-MM-DD
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return _finalize(+m[1], +m[2], +m[3], true, today, input);
+
+  // MM/DD/YYYY
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return _finalize(+m[3], +m[1], +m[2], true, today, input);
+
+  // YYYY/MM/DD
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (m) return _finalize(+m[1], +m[2], +m[3], true, today, input);
+
+  // MM-DD-YYYY
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (m) return _finalize(+m[3], +m[1], +m[2], true, today, input);
+
+  // ── natural-language tokenizer ─────────────────────────────────────────────
+  const tokens = s.split(/[\s,]+/).filter(Boolean);
+  let day: number | null = null;
+  let month: number | null = null;
+  let year: number | null = null;
+
+  for (const tok of tokens) {
+    const mo = AUCTION_MONTHS[tok.toLowerCase()];
+    if (mo !== undefined) { month = mo; continue; }
+    const n = parseInt(tok, 10);
+    if (isNaN(n)) continue;
+    // Numbers >= 2020 are recognisable explicit years; below that (including
+    // the V8-artifact "2001") are treated as unknown and trigger year inference.
+    if (n >= 2020) { year = n; continue; }
+    if (n >= 1 && n <= 31 && day === null) { day = n; }
+  }
+
+  if (day !== null && month !== null) {
+    return _finalize(year, month, day, year !== null, today, input);
+  }
+
+  return { iso: null, display: input, warning: 'could not parse date' };
+}
+
+function _finalize(
+  year: number | null,
+  month: number,
+  day: number,
+  yearProvided: boolean,
+  today: Date,
+  originalInput: string,
+): ParsedAuctionDate {
+  const cy = today.getFullYear();
+  let resolvedYear: number;
+
+  if (!yearProvided || year === null) {
+    // Infer year: current year if still future, otherwise next year
+    const candidate = new Date(cy, month - 1, day);
+    resolvedYear = candidate >= today ? cy : cy + 1;
+  } else {
+    resolvedYear = year;
+  }
+
+  const date = new Date(resolvedYear, month - 1, day);
+  // Guard against invalid calendar dates (e.g. Feb 31)
+  if (date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return { iso: null, display: originalInput, warning: 'invalid date' };
+  }
+
+  const iso = localIsoDate(date);
+  const display = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const diffMs = date.getTime() - today.getTime();
+  let warning: string | null = null;
+  if (diffMs < 0) {
+    warning = 'check auction date — appears to be in the past';
+  } else if (diffMs > 366 * 86400000) {
+    warning = 'check auction date — over 12 months out';
+  }
+
+  return { iso, display, warning };
 }
 
 export function daysUntil(dateIso: string): number {

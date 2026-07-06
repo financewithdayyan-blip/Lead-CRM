@@ -1,4 +1,4 @@
-import type { CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import type { AuctionTier, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, Profile, Tag, TeamInvite, Task } from '@/types/domain';
 
 export function dbToTag(row: any): Tag {
   return { id: row.id, userId: row.user_id, name: row.name, colorBg: row.color_bg, colorText: row.color_text };
@@ -61,6 +61,12 @@ export function dbToLead(row: any): Lead {
     aiScore: row.ai_score ?? null,
     aiScoreReasoning: row.ai_score_reasoning ?? null,
     aiScoredAt: row.ai_scored_at ?? null,
+    followupStartDate: row.followup_start_date ?? null,
+    touchCount: row.touch_count ?? 0,
+    touchDates: row.touch_dates ?? [],
+    earlyExitOverride: row.early_exit_override ?? false,
+    auctionTier: (row.auction_tier as AuctionTier | null) ?? null,
+    lastAlertDate: row.last_alert_date ?? null,
   };
 }
 
@@ -140,6 +146,12 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['scriptAnswers', 'script_answers'],
   ['notes', 'notes'],
   ['nextFollowUp', 'next_follow_up'],
+  ['touchCount', 'touch_count'],
+  ['touchDates', 'touch_dates'],
+  ['followupStartDate', 'followup_start_date'],
+  ['earlyExitOverride', 'early_exit_override'],
+  ['auctionTier', 'auction_tier'],
+  ['lastAlertDate', 'last_alert_date'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {

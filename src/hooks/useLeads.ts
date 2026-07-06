@@ -12,13 +12,22 @@ export function useLeads(targetUserId?: string) {
   return useQuery({
     queryKey: ['leads', userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select(LEAD_SELECT)
-        .eq('user_id', userId)
-        .order('lead_num', { ascending: true });
-      if (error) throw error;
-      return data.map(dbToLead);
+      const PAGE = 1000;
+      const rows: any[] = [];
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select(LEAD_SELECT)
+          .eq('user_id', userId)
+          .order('lead_num', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        rows.push(...data);
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+      return rows.map(dbToLead);
     },
     enabled: !!userId,
   });
@@ -121,6 +130,20 @@ export function useDeleteLeads() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
+  });
+}
+
+export function useOverrideFollowupEarlyExit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (leadId: string) => {
+      const { error } = await supabase.rpc('override_followup_early_exit', { p_lead_id: leadId });
+      if (error) throw error;
+    },
+    onSuccess: (_data, leadId) => {
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['lead', leadId] });
+    },
   });
 }
 

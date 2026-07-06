@@ -12,6 +12,7 @@ import {
   Copy,
   DollarSign,
   FileText,
+  Gavel,
   Home,
   Loader2,
   MapPin,
@@ -38,7 +39,15 @@ import { useMyTodaySummary, useSubmitDailySummary } from '@/hooks/useDailySummar
 import { TagPill } from '@/components/ui/TagPill';
 import { SCRIPT_STEPS } from '@/lib/callScript';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
-import { callerDisplayName, formatPhone, initials, localIsoDate } from '@/lib/utils';
+import { callerDisplayName, daysUntil, formatPhone, initials, localIsoDate } from '@/lib/utils';
+import {
+  isTouchedToday,
+  isTouchDueTodayAuctionAware,
+  nextScheduledTouchDate,
+  formatTouchDate,
+  isFollowupOverdue,
+} from '@/lib/followupSchedule';
+import { computeDaysToAuction, getAuctionTier, touchScheduleMode, TIER_CONFIG } from '@/lib/auctionTiers';
 
 const REPAIR_OPTIONS: Array<{ key: keyof RepairFlags; label: string }> = [
   { key: 'plumbing', label: 'Plumbing' },
@@ -209,8 +218,20 @@ export function CallSessionPage() {
   // separate session AFTER the daily goal is met and the summary is submitted.
   useEffect(() => {
     if (queueIds === null && !isLoading) {
-      const byNum = (a: Lead, b: Lead) => (a.leadNum ?? 0) - (b.leadNum ?? 0);
-      const cold = leads.filter((l) => l.stage === 'new').sort(byNum).map((l) => l.id);
+      const cold = leads
+        .filter((l) => l.stage === 'new')
+        .sort((a, b) => {
+          const aDays = computeDaysToAuction(a.auctionDate);
+          const bDays = computeDaysToAuction(b.auctionDate);
+          const aCrit = aDays !== null && aDays >= 0 && aDays <= 3;
+          const bCrit = bDays !== null && bDays >= 0 && bDays <= 3;
+          if (aCrit !== bCrit) return aCrit ? -1 : 1;
+          if (aDays !== null && bDays !== null) return aDays - bDays;
+          if (aDays !== null) return -1;
+          if (bDays !== null) return 1;
+          return (a.leadNum ?? 0) - (b.leadNum ?? 0);
+        })
+        .map((l) => l.id);
       setQueueIds(cold);
     }
   }, [isLoading, leads, queueIds]);
@@ -328,13 +349,38 @@ export function CallSessionPage() {
   const summaryWordCount = summaryText.trim() ? summaryText.trim().split(/\s+/).length : 0;
   const needsSummary = finished && goalReached && !todaySummary && !summaryJustSubmitted;
 
-  // Leads in 'initial_contact' or 'followup' stage that haven't been called this session —
-  // offered as a follow-up queue once the daily goal is met.
+  // Follow-up queue: initial_contact and followup leads, auction-aware sorting.
+  // CRITICAL leads (1–3 days to auction) are pinned to the top.
+  // Followup-stage leads use the auction-aware touch schedule:
+  //   standard  → fixed [1,2,3,6,7,8,11,12,16,17] schedule
+  //   daily     → every day (10–16 days to auction)
+  //   deadline  → every day, 10-touch minimum waived (<10 days to auction)
   const followUpLeads = useMemo(() => {
     if (!goalReached || inFollowUpMode) return [];
+    const todayStr = localIsoDate(new Date());
     return leads
-      .filter((l) => (l.stage === 'initial_contact' || l.stage === 'followup') && !sessionLeadIdsCalled.has(l.id))
-      .sort((a, b) => (a.leadNum ?? 0) - (b.leadNum ?? 0));
+      .filter((l) => {
+        if (sessionLeadIdsCalled.has(l.id)) return false;
+        if (l.stage === 'initial_contact') {
+          return !isTouchedToday(l.touchDates, todayStr);
+        }
+        if (l.stage === 'followup') {
+          const days = computeDaysToAuction(l.auctionDate);
+          return isTouchDueTodayAuctionAware(l.touchDates, l.followupStartDate, l.touchCount, days, todayStr);
+        }
+        return false;
+      })
+      .sort((a, b) => {
+        const aDays = computeDaysToAuction(a.auctionDate);
+        const bDays = computeDaysToAuction(b.auctionDate);
+        const aCrit = aDays !== null && aDays >= 0 && aDays <= 3;
+        const bCrit = bDays !== null && bDays >= 0 && bDays <= 3;
+        if (aCrit !== bCrit) return aCrit ? -1 : 1;
+        if (aDays !== null && bDays !== null) return aDays - bDays;
+        if (aDays !== null) return -1;
+        if (bDays !== null) return 1;
+        return (a.leadNum ?? 0) - (b.leadNum ?? 0);
+      });
   }, [goalReached, inFollowUpMode, leads, sessionLeadIdsCalled]);
 
   function startFollowUpSession() {
@@ -401,13 +447,30 @@ export function CallSessionPage() {
   function saveAndNext() {
     if (!currentLead || !outcome) return;
     const chosen = OUTCOMES.find((o) => o.key === outcome);
+
+    // For followup-stage leads, log one touch per calendar day.
+    const todayStr = localIsoDate(new Date());
+    const isFollowupStage = currentLead.stage === 'followup';
+    const alreadyTouchedToday = isTouchedToday(currentLead.touchDates, todayStr);
+    const daysToAuction = computeDaysToAuction(currentLead.auctionDate);
+    const schedMode = touchScheduleMode(daysToAuction);
+    // In deadline mode (<10 days to auction) the 10-touch cap is waived
+    const touchCapReached = schedMode !== 'deadline' && currentLead.touchCount >= 10;
+    const shouldLogTouch = isFollowupStage && !alreadyTouchedToday && !touchCapReached;
+    const newTouchCount = shouldLogTouch ? currentLead.touchCount + 1 : currentLead.touchCount;
+    const newTouchDates = shouldLogTouch ? [...currentLead.touchDates, todayStr] : currentLead.touchDates;
+    // Auto-move to dead_declined at touch 10 only in standard/daily mode
+    const touchesComplete = schedMode !== 'deadline' && shouldLogTouch && newTouchCount >= 10;
+    const finalStage = touchesComplete ? 'dead_declined' : (chosen?.stage ?? currentLead.stage);
+
     updateLead.mutate({
       id: currentLead.id,
-      ...(chosen ? { stage: chosen.stage } : {}),
-      ...(outcome === 'followup' ? { nextFollowUp: followUpDate } : {}),
+      stage: finalStage,
+      ...(outcome === 'followup' && !touchesComplete ? { nextFollowUp: followUpDate } : {}),
       repairs,
       propertyRating,
       notes: notes.trim() || null,
+      ...(shouldLogTouch ? { touchCount: newTouchCount, touchDates: newTouchDates } : {}),
     });
     addActivity.mutate({
       leadId: currentLead.id,
@@ -543,6 +606,23 @@ export function CallSessionPage() {
   const fullName = `${currentLead.firstName} ${currentLead.lastName}`.trim();
   const callerName = callerDisplayName(profile?.fullName, session?.user.email);
   const isFollowUpLead = currentLead.stage === 'initial_contact' || currentLead.stage === 'followup';
+
+  // Touch schedule info for the current followup lead
+  const todayStrForRender = localIsoDate(new Date());
+  const leadDaysToAuction = computeDaysToAuction(currentLead.auctionDate);
+  const leadSchedMode = touchScheduleMode(leadDaysToAuction);
+  const touchDueToday =
+    currentLead.stage === 'followup' &&
+    isTouchDueTodayAuctionAware(
+      currentLead.touchDates,
+      currentLead.followupStartDate,
+      currentLead.touchCount,
+      leadDaysToAuction,
+      todayStrForRender,
+    );
+  const nextTouchDate = nextScheduledTouchDate(currentLead.followupStartDate, currentLead.touchCount, todayStrForRender);
+  const followupOverdue = isFollowupOverdue(currentLead.followupStartDate, currentLead.touchCount, todayStrForRender);
+  const leadAuctionTier = leadDaysToAuction !== null ? getAuctionTier(leadDaysToAuction) : null;
   const hasOffer = currentLead.minOffer != null || currentLead.maxOffer != null;
 
   return (
@@ -598,6 +678,60 @@ export function CallSessionPage() {
               </div>
             </div>
           </div>
+
+          {/* CRITICAL auction badge */}
+          {leadAuctionTier && leadDaysToAuction !== null && leadDaysToAuction >= 0 && (
+            <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 ${TIER_CONFIG[leadAuctionTier].borderClass} ${TIER_CONFIG[leadAuctionTier].bgClass}`}>
+              <Gavel size={13} className={TIER_CONFIG[leadAuctionTier].textClass} />
+              <span className={`text-[12px] font-bold uppercase tracking-wide ${TIER_CONFIG[leadAuctionTier].textClass}`}>
+                {leadAuctionTier === 'CRITICAL'
+                  ? `AUCTION IN ${leadDaysToAuction}d — CALL NOW`
+                  : leadDaysToAuction === 0
+                  ? 'AUCTION TODAY'
+                  : `Auction in ${leadDaysToAuction}d · ${leadAuctionTier}`}
+              </span>
+              {leadSchedMode === 'deadline' && (
+                <span className="ml-auto rounded-full bg-red-900/50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-red-300">
+                  Call daily
+                </span>
+              )}
+              {leadSchedMode === 'daily' && (
+                <span className="ml-auto rounded-full bg-orange-900/50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-orange-300">
+                  No gaps
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Touch progress for followup-stage leads */}
+          {currentLead.stage === 'followup' && (
+            <div className={`mt-4 rounded-xl border p-3 ${followupOverdue ? 'border-red-800/60 bg-red-950/20' : touchDueToday ? 'border-purple-800/60 bg-purple-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
+              <div className={`mb-2 text-[10px] font-semibold uppercase tracking-wide ${followupOverdue ? 'text-red-400' : touchDueToday ? 'text-purple-300' : 'text-slate-500'}`}>
+                {followupOverdue ? 'Follow-Up Overdue' : touchDueToday ? `Touch ${currentLead.touchCount + 1} Due Today` : 'Follow-Up Touch'}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className="rounded-full bg-purple-500 transition-all"
+                      style={{ width: `${(currentLead.touchCount / 10) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <span className="shrink-0 text-[12px] font-semibold text-slate-200">
+                  {currentLead.touchCount}/10
+                </span>
+              </div>
+              {nextTouchDate && nextTouchDate !== todayStrForRender && (
+                <div className="mt-1.5 text-[11px] text-slate-500">
+                  Next touch: <span className="text-slate-300">{formatTouchDate(nextTouchDate)}</span>
+                </div>
+              )}
+              {followupOverdue && (
+                <div className="mt-1 text-[11px] text-red-400">Past schedule window — flag for review</div>
+              )}
+            </div>
+          )}
 
           <div className="mt-5 space-y-2">
             <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3.5">

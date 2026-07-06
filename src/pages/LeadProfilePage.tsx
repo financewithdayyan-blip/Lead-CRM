@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps } from '@/hooks/useLeads';
+import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
 import { useActivities, useAddActivity, useDeleteActivity } from '@/hooks/useActivities';
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
@@ -16,7 +16,9 @@ import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
-import { callerDisplayName, formatPhone, formatDate, formatDateTime } from '@/lib/utils';
+import { callerDisplayName, daysUntil, formatPhone, formatDate, formatDateTime, localIsoDate } from '@/lib/utils';
+import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
+import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
 import { SCRIPT_STEPS } from '@/lib/callScript';
 
 function scoreColor(score: number) {
@@ -232,7 +234,9 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
   const setLeadTags = useSetLeadTags();
+  const overrideEarlyExit = useOverrideFollowupEarlyExit();
   const [tab, setTab] = useState<TabKey>('overview');
+  const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
 
   if (isLoading) return <div className="text-text-3">Loading…</div>;
   if (!lead) return <div className="text-text-3">Lead not found.</div>;
@@ -271,7 +275,22 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
             <select
               className="input !w-auto !py-1.5 text-[12px]"
               value={lead.stage}
-              onChange={(e) => updateLead.mutate({ id: lead.id, stage: e.target.value as LeadStage })}
+              onChange={(e) => {
+                const newStage = e.target.value as LeadStage;
+                const daysToAuction = computeDaysToAuction(lead.auctionDate);
+                const schedMode = touchScheduleMode(daysToAuction);
+                if (
+                  lead.stage === 'followup' &&
+                  newStage === 'dead_declined' &&
+                  lead.touchCount < 10 &&
+                  !lead.earlyExitOverride &&
+                  schedMode !== 'deadline'
+                ) {
+                  setPendingStage(newStage);
+                  return;
+                }
+                updateLead.mutate({ id: lead.id, stage: newStage });
+              }}
             >
               {STAGE_ORDER.map((s) => (
                 <option key={s} value={s}>
@@ -279,6 +298,41 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 </option>
               ))}
             </select>
+            {/* Touch-lock warning + admin override */}
+            {pendingStage === 'dead_declined' && lead.stage === 'followup' && (
+              <div className="w-64 rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-[12px]">
+                <div className="font-semibold text-amber-300">
+                  {lead.touchCount} of 10 touches completed — lead can't be closed yet.
+                </div>
+                <div className="mt-1 text-amber-500/80">
+                  Complete the 10-touch schedule before moving to Dead / Declined.
+                </div>
+                <div className="mt-2 flex gap-2">
+                  {isAdmin && (
+                    <button
+                      onClick={() =>
+                        overrideEarlyExit.mutate(lead.id, {
+                          onSuccess: () => {
+                            updateLead.mutate({ id: lead.id, stage: 'dead_declined' });
+                            setPendingStage(null);
+                          },
+                        })
+                      }
+                      disabled={overrideEarlyExit.isPending}
+                      className="flex-1 rounded-md bg-amber-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+                    >
+                      {overrideEarlyExit.isPending ? 'Applying…' : 'Admin Override'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setPendingStage(null)}
+                    className="rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-400 hover:text-slate-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {allowShare && <ShareLeadButton leadId={lead.id} stage={lead.stage} />}
             {isAdmin && (
               <AdminShareToCallerButton
@@ -303,6 +357,43 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           })}
           <TagPicker lead={lead} tags={tags} />
         </div>
+
+        {/* Touch progress panel for followup leads */}
+        {lead.stage === 'followup' && lead.followupStartDate && (() => {
+          const todayStr = localIsoDate(new Date());
+          const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
+          const overdue = isFollowupOverdue(lead.followupStartDate, lead.touchCount, todayStr);
+          const dueToday = isTouchScheduledToday(lead.followupStartDate, todayStr) && !isTouchedToday(lead.touchDates, todayStr) && lead.touchCount < 10;
+          return (
+            <div className={`mt-3 rounded-lg border p-3 ${overdue ? 'border-red-700/50 bg-red-950/20' : dueToday ? 'border-purple-700/40 bg-purple-950/15' : 'border-border bg-surface-2'}`}>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className={`text-[11px] font-semibold uppercase tracking-wide ${overdue ? 'text-red-400' : dueToday ? 'text-purple-300' : 'text-text-3'}`}>
+                    {overdue ? '⚠ Overdue — past schedule window' : dueToday ? `Touch ${lead.touchCount + 1} due today` : `Follow-Up Progress`}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="flex h-1.5 w-32 overflow-hidden rounded-full bg-border">
+                      <div className="rounded-full bg-purple-500" style={{ width: `${(lead.touchCount / 10) * 100}%` }} />
+                    </div>
+                    <span className="text-[13px] font-semibold text-text">{lead.touchCount} / 10</span>
+                  </div>
+                  {nextDate && nextDate !== todayStr && (
+                    <div className="mt-1 text-[11px] text-text-3">Next touch: <span className="text-text-2">{formatTouchDate(nextDate)}</span></div>
+                  )}
+                  {lead.touchCount >= 10 && (
+                    <div className="mt-1 text-[11px] text-success">All 10 touches complete</div>
+                  )}
+                </div>
+                {lead.earlyExitOverride && (
+                  <span className="rounded-full border border-amber-700/50 bg-amber-950/30 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                    Admin override active
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         <AiScoreCard lead={lead} />
       </div>
 

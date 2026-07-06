@@ -1,5 +1,7 @@
 export type Role = 'admin' | 'caller';
 
+export type AuctionTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | 'CRITICAL' | 'PAST';
+
 export type LeadStage =
   | 'new'
   | 'voicemail'
@@ -143,6 +145,12 @@ export interface Lead {
   aiScore: number | null;
   aiScoreReasoning: string | null;
   aiScoredAt: string | null;
+  followupStartDate: string | null;
+  touchCount: number;
+  touchDates: string[];
+  earlyExitOverride: boolean;
+  auctionTier: AuctionTier | null;
+  lastAlertDate: string | null;
 }
 
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';

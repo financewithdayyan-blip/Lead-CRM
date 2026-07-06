@@ -14,11 +14,13 @@ import {
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useTeamWeeklySessions } from '@/hooks/useAttendance';
 import { useAdminNotesOnMyLeads, type AdminNoteNotif } from '@/hooks/useActivities';
+import { useDbNotifications, useMarkAllDbNotificationsRead, useMarkDbNotificationsRead, type DbNotification } from '@/hooks/useDbNotifications';
 import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
 import { daysUntil, localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
 
-const AUCTION_MILESTONES = [20, 10, 7];
+// Tier boundary days — the points at which client-side auction alerts fire.
+const AUCTION_MILESTONES = [30, 14, 7, 3];
 
 interface AuctionAlert {
   lead: Lead;
@@ -44,12 +46,14 @@ interface NotificationsContextValue {
   auctionAlerts: AuctionAlert[];
   sessionEvents: SessionEvent[];
   adminNotes: AdminNoteNotif[];
+  dbAlerts: DbNotification[];
   toggleTask: ReturnType<typeof useToggleTask>;
   acceptShare: ReturnType<typeof useAcceptLeadShare>;
   declineShare: ReturnType<typeof useDeclineLeadShare>;
   acceptAdminShare: ReturnType<typeof useAcceptAdminLeadShare>;
   declineAdminShare: ReturnType<typeof useDeclineAdminLeadShare>;
   acknowledgeAuctionAlert: (leadId: string, milestone: number) => void;
+  markDbAlertRead: (ids: string[]) => void;
   readIds: Set<string>;
   unreadCount: number;
   markRead: (ids: string[]) => void;
@@ -77,6 +81,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: teamSessions = [] } = useTeamWeeklySessions();
   const { data: adminNotes = [] } = useAdminNotesOnMyLeads();
+  const { data: dbAlerts = [] } = useDbNotifications();
+  const markDbRead = useMarkDbNotificationsRead();
+  const markAllDbRead = useMarkAllDbNotificationsRead();
   const toggleTask = useToggleTask();
   const acceptShare = useAcceptLeadShare();
   const declineShare = useDeclineLeadShare();
@@ -135,9 +142,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     ],
     [dueTasks, dueFollowUps, auctionAlerts, sessionEvents, teamSummaries, isAdmin, adminNotes],
   );
+  const dbUnreadCount = dbAlerts.filter((n) => !n.isRead).length;
   const unreadCount =
     allIds.filter((id) => !readIds.has(id)).length +
-    (isAdmin ? pendingShares.length : pendingIncomingShares.length);
+    (isAdmin ? pendingShares.length : pendingIncomingShares.length) +
+    dbUnreadCount;
 
   function markRead(ids: string[]) {
     setReadIds((prev) => {
@@ -151,6 +160,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   function markAllRead() {
     markRead(allIds);
     auctionAlerts.forEach((a) => acknowledgeAuctionAlert(a.lead.id, a.milestone));
+    markAllDbRead.mutate();
+  }
+
+  function markDbAlertRead(ids: string[]) {
+    markDbRead.mutate(ids);
   }
 
   function acknowledgeAuctionAlert(leadId: string, milestone: number) {
@@ -175,12 +189,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         auctionAlerts,
         sessionEvents,
         adminNotes,
+        dbAlerts,
         toggleTask,
         acceptShare,
         declineShare,
         acceptAdminShare,
         declineAdminShare,
         acknowledgeAuctionAlert,
+        markDbAlertRead,
         readIds,
         unreadCount,
         markRead,
