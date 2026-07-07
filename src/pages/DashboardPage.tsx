@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock, MapPin, PhoneCall } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
@@ -563,17 +563,22 @@ export function DashboardView({
 
 export function DashboardPage() {
   const { session, profile } = useAuth();
-  const todayIso = localIsoDate(new Date());
   const userId = session?.user.id ?? '';
   const isAdmin = profile?.role === 'admin';
 
-  const [showBriefing, setShowBriefing] = useState(() => {
-    if (!userId || isAdmin) return false;
-    return !localStorage.getItem(`daily_briefing_${userId}_${todayIso}`);
-  });
+  const [showBriefing, setShowBriefing] = useState(false);
+
+  useEffect(() => {
+    if (!userId || isAdmin) return;
+    const today = localIsoDate(new Date());
+    if (!localStorage.getItem(`daily_briefing_${userId}_${today}`)) {
+      setShowBriefing(true);
+    }
+  }, [userId, isAdmin]);
 
   function closeBriefing() {
-    localStorage.setItem(`daily_briefing_${userId}_${todayIso}`, '1');
+    const today = localIsoDate(new Date());
+    localStorage.setItem(`daily_briefing_${userId}_${today}`, '1');
     setShowBriefing(false);
   }
 
