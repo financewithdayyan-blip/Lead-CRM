@@ -26,6 +26,7 @@ const MemberLeadProfilePage = lazy(() => import('@/pages/MemberLeadProfilePage')
 const MemberKanbanPage = lazy(() => import('@/pages/MemberKanbanPage').then((m) => ({ default: m.MemberKanbanPage })));
 const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then((m) => ({ default: m.MemberSettingsPage })));
 const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) => ({ default: m.CallSessionPage })));
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -46,6 +47,7 @@ export default function App() {
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
                   <Route path="/login" element={<LoginPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/accept-invite" element={<AcceptInvitePage />} />
                   <Route element={<ProtectedRoute />}>
                     <Route path="/session" element={<CallSessionPage />} />

@@ -35,9 +35,11 @@ export function LoginPage() {
         if (error) throw error;
         setMessage('Account created. Check your email to confirm, then sign in.');
       } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/crm/reset-password`,
+        });
         if (error) throw error;
-        setMessage('Password reset email sent.');
+        setMessage('Password reset email sent. Check your inbox.');
       }
     } catch (err) {
       setError(getErrorMessage(err));
