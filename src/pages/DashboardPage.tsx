@@ -215,17 +215,15 @@ export function DashboardView({
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
     activities.forEach((a) => {
-      if (a.type !== 'stage_change') return;
+      if (a.type !== 'call') return;
       const iso = localIsoDate(new Date(a.createdAt));
       const day = byIso.get(iso);
       if (!day) return;
-      const to = (a.meta as { to?: string })?.to;
-      if (to === 'voicemail') day.voicemail++;
-      else if (to === 'dead_declined') day.dead_declined++;
-      else if (to === 'followup' || to === 'initial_contact') day.followupCombined++;
-    });
-    days.forEach((d) => {
-      d.calls = d.voicemail + d.dead_declined + d.followupCombined;
+      day.calls++;
+      const outcome = (a.meta as { outcome?: string })?.outcome;
+      if (outcome === 'voicemail') day.voicemail++;
+      else if (outcome === 'dead' || outcome === 'declined') day.dead_declined++;
+      else if (outcome === 'followup' || outcome === 'initial_contact') day.followupCombined++;
     });
     return days;
   }, [activities, trendRange]);
