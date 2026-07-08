@@ -1063,7 +1063,7 @@ function ActivityBubble({
           </div>
         ) : (
           <div
-            className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
+            className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
               isRight
                 ? 'rounded-br-sm border border-primary/25 bg-primary/8 text-text'
                 : 'rounded-bl-sm border border-border-2 bg-surface-3 text-text'
