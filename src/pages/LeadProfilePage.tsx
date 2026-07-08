@@ -134,8 +134,6 @@ function AdminShareToCallerButton({
     .map((m) => m.member)
     .filter((m) => m.role === 'caller' && m.id !== currentOwnerId);
 
-  const isFollowUp = stage === 'followup';
-
   function handleShare() {
     if (!selectedCallerId) return;
     adminShare.mutate(
@@ -174,9 +172,7 @@ function AdminShareToCallerButton({
               <p className="text-[12px] text-text-3">No other callers in your team.</p>
             )}
             <p className="text-[12px] text-text-3">
-              {isFollowUp
-                ? 'This lead is in Follow-Up — the caller will receive a notification and must approve the transfer.'
-                : 'This lead will be transferred to the selected caller immediately.'}
+              This lead will be transferred to the selected caller immediately.
             </p>
             {adminShare.isError && (
               <p className="text-[12px] text-danger">Transfer failed. Please try again.</p>
