@@ -349,26 +349,16 @@ export function CallSessionPage() {
   const summaryWordCount = summaryText.trim() ? summaryText.trim().split(/\s+/).length : 0;
   const needsSummary = finished && goalReached && !todaySummary && !summaryJustSubmitted;
 
-  // Follow-up queue: initial_contact and followup leads, auction-aware sorting.
+  // Follow-up queue: any non-cold, non-dead lead whose nextFollowUp date has arrived.
   // CRITICAL leads (1–3 days to auction) are pinned to the top.
-  // Followup-stage leads use the auction-aware touch schedule:
-  //   standard  → fixed [1,2,3,6,7,8,11,12,16,17] schedule
-  //   daily     → every day (10–16 days to auction)
-  //   deadline  → every day, 10-touch minimum waived (<10 days to auction)
   const followUpLeads = useMemo(() => {
     if (!goalReached || inFollowUpMode) return [];
     const todayStr = localIsoDate(new Date());
     return leads
       .filter((l) => {
         if (sessionLeadIdsCalled.has(l.id)) return false;
-        if (l.stage === 'initial_contact') {
-          return !isTouchedToday(l.touchDates, todayStr);
-        }
-        if (l.stage === 'followup') {
-          const days = computeDaysToAuction(l.auctionDate);
-          return isTouchDueTodayAuctionAware(l.touchDates, l.followupStartDate, l.touchCount, days, todayStr);
-        }
-        return false;
+        if (l.stage === 'new' || l.stage === 'dead_declined') return false;
+        return !!l.nextFollowUp && l.nextFollowUp <= todayStr;
       })
       .sort((a, b) => {
         const aDays = computeDaysToAuction(a.auctionDate);
