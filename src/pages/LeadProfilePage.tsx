@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
-import { useActivities, useAddActivity, useDeleteActivity } from '@/hooks/useActivities';
+import { useActivities, useAddActivity, useDeleteActivity, useUpdateActivity } from '@/hooks/useActivities';
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl } from '@/hooks/useLeadFiles';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
@@ -607,6 +607,7 @@ function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: 
   const { data: allActivities = [], isLoading } = useActivities(leadId);
   const addActivity = useAddActivity();
   const deleteActivity = useDeleteActivity();
+  const updateActivity = useUpdateActivity();
   const [body, setBody] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -646,6 +647,7 @@ function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: 
             isAdmin={profile?.role === 'admin'}
             leadId={leadId}
             onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
+            onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
           />
         ))}
         <div ref={bottomRef} />
@@ -998,13 +1000,16 @@ function ActivityBubble({
   a,
   isAdmin,
   onDelete,
+  onEdit,
   leadId,
 }: {
   a: LeadActivity;
   isAdmin: boolean;
   onDelete: () => void;
+  onEdit: (body: string) => void;
   leadId: string;
 }) {
+  const [editText, setEditText] = useState<string | null>(null);
   const isRight = a.authorRole === 'admin';
   const initials = a.authorName
     .split(' ')
@@ -1012,6 +1017,7 @@ function ActivityBubble({
     .join('')
     .slice(0, 2)
     .toUpperCase();
+  const canEdit = a.type !== 'stage_change';
 
   return (
     <div className={`group flex items-end gap-2 ${isRight ? 'flex-row-reverse' : ''}`}>
@@ -1031,28 +1037,67 @@ function ActivityBubble({
           <span>·</span>
           <span>{formatDateTime(a.createdAt)}</span>
         </div>
-        <div
-          className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
-            isRight
-              ? 'rounded-br-sm border border-primary/25 bg-primary/8 text-text'
-              : 'rounded-bl-sm border border-border-2 bg-surface-3 text-text'
-          }`}
-        >
-          <span className={`mr-1.5 inline-block rounded px-1 py-0.5 text-[10px] font-semibold ${isRight ? 'bg-primary/15 text-primary' : 'bg-border-2 text-text-3'}`}>
-            {ACTIVITY_LABEL[a.type]}
-          </span>
-          {a.body}
-        </div>
+
+        {editText !== null ? (
+          <div className="flex w-full flex-col gap-1.5">
+            <textarea
+              autoFocus
+              className="input resize-none text-[13px]"
+              rows={3}
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setEditText(null); }}
+            />
+            <div className="flex gap-1.5">
+              <button
+                className="btn btn-primary !px-2.5 !py-1 text-[12px]"
+                disabled={!editText.trim()}
+                onClick={() => { onEdit(editText.trim()); setEditText(null); }}
+              >
+                Save
+              </button>
+              <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => setEditText(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${
+              isRight
+                ? 'rounded-br-sm border border-primary/25 bg-primary/8 text-text'
+                : 'rounded-bl-sm border border-border-2 bg-surface-3 text-text'
+            }`}
+          >
+            <span className={`mr-1.5 inline-block rounded px-1 py-0.5 text-[10px] font-semibold ${isRight ? 'bg-primary/15 text-primary' : 'bg-border-2 text-text-3'}`}>
+              {ACTIVITY_LABEL[a.type]}
+            </span>
+            {a.body}
+          </div>
+        )}
       </div>
 
-      {/* Delete */}
-      <button
-        className="mb-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 text-text-3 hover:text-danger"
-        onClick={onDelete}
-        title="Delete"
-      >
-        <Trash2 size={12} />
-      </button>
+      {/* Actions — visible on hover, hidden while editing */}
+      {editText === null && (
+        <div className="mb-0.5 flex shrink-0 flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {canEdit && (
+            <button
+              className="text-text-3 hover:text-primary"
+              onClick={() => setEditText(a.body)}
+              title="Edit"
+            >
+              <Pencil size={12} />
+            </button>
+          )}
+          <button
+            className="text-text-3 hover:text-danger"
+            onClick={onDelete}
+            title="Delete"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1062,6 +1107,7 @@ function ActivityTab({ leadId }: { leadId: string }) {
   const { data: activities = [], isLoading } = useActivities(leadId);
   const addActivity = useAddActivity();
   const deleteActivity = useDeleteActivity();
+  const updateActivity = useUpdateActivity();
   const [type, setType] = useState<ActivityType>('note');
   const [body, setBody] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1094,6 +1140,7 @@ function ActivityTab({ leadId }: { leadId: string }) {
               isAdmin={isAdmin}
               leadId={leadId}
               onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
+              onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
             />
           ))}
           <div ref={bottomRef} />

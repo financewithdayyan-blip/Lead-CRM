@@ -70,6 +70,22 @@ export function useDeleteActivity() {
   });
 }
 
+export function useUpdateActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, body }: { id: string; leadId: string; body: string }) => {
+      const { error } = await supabase.from('lead_activities').update({ body }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
+      qc.invalidateQueries({ queryKey: ['activity_feed'] });
+      qc.invalidateQueries({ queryKey: ['recent_activities'] });
+      qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
+    },
+  });
+}
+
 /** All activity since `sinceIso` (default: start of this year) for dashboard charts. */
 export function useActivityFeed(targetUserId?: string, sinceIso?: string) {
   const { session } = useAuth();
