@@ -438,7 +438,10 @@ export function CallSessionPage() {
     if (!currentLead || !outcome) return;
     const chosen = OUTCOMES.find((o) => o.key === outcome);
 
-    // For followup-stage leads, log one touch per calendar day.
+    // Log one touch per calendar day.
+    // Touches count for followup-stage leads in any session, AND for any lead
+    // in the follow-up session (inFollowUpMode) — callers make deliberate follow-up
+    // attempts in that session regardless of the lead's current stage.
     const todayStr = localIsoDate(new Date());
     const isFollowupStage = currentLead.stage === 'followup';
     const alreadyTouchedToday = isTouchedToday(currentLead.touchDates, todayStr);
@@ -446,11 +449,11 @@ export function CallSessionPage() {
     const schedMode = touchScheduleMode(daysToAuction);
     // In deadline mode (<10 days to auction) the 10-touch cap is waived
     const touchCapReached = schedMode !== 'deadline' && currentLead.touchCount >= 10;
-    const shouldLogTouch = isFollowupStage && !alreadyTouchedToday && !touchCapReached;
+    const shouldLogTouch = (isFollowupStage || inFollowUpMode) && !alreadyTouchedToday && !touchCapReached;
     const newTouchCount = shouldLogTouch ? currentLead.touchCount + 1 : currentLead.touchCount;
     const newTouchDates = shouldLogTouch ? [...currentLead.touchDates, todayStr] : currentLead.touchDates;
-    // Auto-move to dead_declined at touch 10 only in standard/daily mode
-    const touchesComplete = schedMode !== 'deadline' && shouldLogTouch && newTouchCount >= 10;
+    // Auto-move to dead_declined at touch 10 only for followup-stage leads in standard/daily mode
+    const touchesComplete = isFollowupStage && schedMode !== 'deadline' && shouldLogTouch && newTouchCount >= 10;
     const finalStage = touchesComplete ? 'dead_declined' : (chosen?.stage ?? currentLead.stage);
 
     updateLead.mutate({
