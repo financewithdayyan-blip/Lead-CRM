@@ -2712,69 +2712,97 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
 <script>
 (function () {
   var KB = [
-    { k: ['hello','hi ','hey ','howdy','good morning','good afternoon','good evening'],
-      r: "Hi there! I'm the Bluebird Acquisition assistant.\n\nI can help with cash offers, our buying process, or any questions about your property. What brings you here today?",
+    { k: ['hello','hi ','hey ','howdy','good morning','good afternoon','good evening','sup ','greetings'],
+      r: "Hi! I'm the Bluebird Acquisition assistant — happy to help.\n\nWe buy houses in any condition, pay all closing costs and commissions, and close in as little as 30 days. What would you like to know?",
       q: ['Get a Cash Offer','How It Works','What We Buy','Talk to Someone'] },
 
-    { k: ['cash offer','get offer','free offer','how much','price','quote','value my','make offer','what will you pay'],
-      r: "Getting your cash offer is free, fast, and carries no obligation.\n\nHere's how it works:\n① Fill out the short form on this page\n② Our team reviews your property details\n③ You receive a written offer within 24 hours\n\nReady to start?",
-      q: ['Yes — take me to the form','How do you determine price?','No fees at all?'] },
+    { k: ['cash offer','get offer','free offer','how much','what will you pay','make offer','quote','value my','what is my home worth','home value','property value'],
+      r: "Every offer is based on the specific details of your property — condition, location, and situation. We never use automated estimates.\n\nThe fastest way to get your number:\n① Fill out the short form on this page\n② Our team reviews your property\n③ You receive a <strong>written, no-obligation offer within 24 hours</strong>\n\nReady?",
+      q: ['Yes — take me to the form','How fast can you close?','No fees at all?'] },
 
-    { k: ['how does it work','how it work','process','steps','what happens','walk me through','explain','tell me more'],
-      r: "Our process has four steps:\n\n<strong>① Submit</strong> — share your address & situation\n<strong>② Assess</strong> — we review it as-is, no pressure\n<strong>③ Offer</strong> — written cash offer within 24 hrs\n<strong>④ Close</strong> — you pick the date, we handle everything\n\nNo agents. No repairs. No bank delays.",
-      q: ['How fast can you close?','Do I need any repairs?','Get My Cash Offer'] },
+    { k: ['how does it work','how it work','process','steps','what happens','walk me through','explain','tell me more','what do i do','what next'],
+      r: "Here's exactly how it works:\n\n<strong>① Submit</strong> — share your address & situation (2 minutes)\n<strong>② We Assess</strong> — we review the property as-is, no pressure\n<strong>③ Written Offer</strong> — you get a cash offer within 24 hours\n<strong>④ You Choose</strong> — accept, decline, or ask questions — zero obligation\n<strong>⑤ Close</strong> — we handle all paperwork, closing costs, and logistics\n\nNo agents. No repairs. No bank delays. No fees of any kind.",
+      q: ['How fast can you close?','Do I need any repairs?','What does it cost me?'] },
 
-    { k: ['how fast','how long','timeline','30 day','quick close','fast close','when can','how soon','closing date'],
-      r: "We can close in as little as <strong>7–30 days</strong> — sometimes faster in urgent situations like foreclosure auctions. You choose the closing date that works for your schedule.",
+    { k: ['how fast','how long','timeline','30 day','quick close','fast close','when can','how soon','closing date','days to close','quickly','need to sell fast','sell fast','sell quickly','fast sale'],
+      r: "Our standard closing timeline is <strong>30 days or less</strong> — and in urgent situations we can move even faster.\n\nBecause we pay cash, there's no waiting on:\n✗ Bank loan approvals\n✗ Appraisals\n✗ Inspections\n✗ Contingencies\n\nYou pick the date. We'll meet it.",
       q: ['Get My Cash Offer','What if I need more time?','Contact the team'] },
 
-    { k: ['repair','fix','renovate','condition','as is','as-is','damage','broken','needs work','fixer','any condition','tear down'],
-      r: "<strong>Zero repairs needed.</strong> We buy homes in any condition — structurally challenged, cosmetically dated, or in full disrepair. You walk away and we handle everything after closing.",
-      q: ['Get My Cash Offer','What about code violations?','No fees either?'] },
+    { k: ['repair','fix','renovate','condition','as is','as-is','damage','broken','needs work','fixer','any condition','tear down','fire damage','water damage','mold','foundation','roof','old house','junk','stuff inside','clean out'],
+      r: "<strong>Zero repairs. Zero cleanup. Zero prep.</strong>\n\nWe buy in any condition:\n✓ Fire or water damage\n✓ Foundation or structural issues\n✓ Old or completely dated homes\n✓ Full of belongings or furniture\n✓ Fully gutted or stripped\n\nWalk out the door — leave everything or take what you want. We handle the rest.",
+      q: ['Get My Cash Offer','What about code violations?','Do you pay closing costs?'] },
 
-    { k: ['foreclosure','foreclose','behind on','missed payment','notice of default','bank taking','stop foreclosure','auction','pre-foreclosure'],
-      r: "Foreclosure is time-sensitive — and it's exactly what we specialize in. A cash sale can <strong>stop the foreclosure process</strong> and protect your credit.\n\nWe move fast, often closing before auction dates. The sooner you reach us, the more options we can offer.",
-      q: ['Contact the team urgently','How fast can you close?','Get My Cash Offer'] },
-
-    { k: ['tax lien','back tax','delinquent tax','irs','county tax','property tax','tax debt','treasurer'],
-      r: "Tax liens are our specialty. We purchase properties with outstanding liens and typically <strong>handle the lien payoff as part of the transaction</strong> — so you walk away with no remaining obligations to the county or IRS.",
-      q: ['Get My Cash Offer','Talk to Someone','How It Works'] },
-
-    { k: ['code violation','code enforcement','violation notice','city notice','zoning','permit issue','unsafe','condemned','citation'],
-      r: "Code violations don't affect our offer. We buy properties <strong>regardless of compliance status</strong> and take on the remediation ourselves after closing. You deal with the city: zero.",
-      q: ['Get My Cash Offer','Will violations reduce my offer?','How It Works'] },
-
-    { k: ['inherited','estate','probate','deceased','passed away','heir','inherited property'],
-      r: "Inherited properties and probate situations are common for us. We work with executors and estate attorneys regularly — and can often make an offer before probate is fully settled.",
-      q: ['Get My Cash Offer','Talk to Someone','How It Works'] },
-
-    { k: ['agent','realtor','commission','fees','closing cost','what do i pay','no fee','hidden cost','charges'],
-      r: "<strong>You pay absolutely nothing.</strong> No commissions, no closing costs, no transaction fees — zero. The offer amount is what you receive at closing. No surprises.",
+    { k: ['agent','realtor','commission','fees','closing cost','what do i pay','no fee','hidden cost','charges','how much will i pay','cost to sell','do i pay','any cost','is it free','do you pay','who pays'],
+      r: "<strong>You pay absolutely nothing.</strong>\n\nWe cover 100% of:\n✓ All closing costs\n✓ Agent commissions (even if you have a listing agent)\n✓ Title fees & transfer taxes\n✓ All other transaction costs\n\nThe number in your written offer is exactly what hits your bank account. No deductions. No surprises. Ever.",
       q: ['Get My Cash Offer','How fast can you close?','No repairs either?'] },
 
-    { k: ['contact','call','phone','text','email','speak to','talk to','reach','real person','someone','team','representative','get in touch'],
+    { k: ['foreclosure','foreclose','behind on','missed payment','notice of default','bank taking','stop foreclosure','pre-foreclosure','behind on mortgage','default','lis pendens','notice of sale'],
+      r: "Foreclosure is time-sensitive — and it's one of our specialties.\n\nA cash sale can <strong>stop the foreclosure process</strong>, protect your credit, and put money in your pocket instead of letting the bank take the home.\n\nWe move fast. The sooner you reach out, the more options we can create for you.",
+      q: ['Contact the team urgently','How fast can you close?','Get My Cash Offer'] },
+
+    { k: ['auction','going to auction','scheduled for auction','auction date','tax sale','sheriff sale','trustee sale','courthouse','foreclosure auction','auction tomorrow','auction this week'],
+      r: "If your property is headed to auction, <strong>contact us immediately</strong> — this is exactly what we handle.\n\nHere's our process:\n<strong>① We assess your property right away</strong>\n<strong>② We hire a real estate attorney — entirely at our expense</strong> — to petition and push the auction date back\n<strong>③ That creates the window we need to close before you lose the property</strong>\n\nDon't wait. Every day matters in auction situations.",
+      q: ['Contact the team urgently','Call Now: (217) 408-2781','How fast can you close?'] },
+
+    { k: ['tax lien','back tax','delinquent tax','irs','county tax','property tax','tax debt','treasurer','owing taxes','overdue tax'],
+      r: "Tax liens are something we handle regularly. We purchase properties with outstanding liens and typically <strong>cover the payoff as part of closing</strong> — so you walk away with no remaining obligations to the county or IRS.",
+      q: ['Get My Cash Offer','Talk to Someone','How It Works'] },
+
+    { k: ['code violation','code enforcement','violation notice','city notice','zoning','permit issue','unsafe','condemned','citation','building code','unpermitted'],
+      r: "Code violations don't stop us. We buy in any compliance status and take on the remediation ourselves after closing.\n\n<strong>Your obligation to the city or municipality ends at the closing table.</strong>",
+      q: ['Get My Cash Offer','Will violations reduce my offer?','How It Works'] },
+
+    { k: ['inherited','estate','probate','deceased','passed away','heir','inherited property','death','family home','grandparents','parents home','trust','trustee'],
+      r: "Inherited properties and probate situations are very common for us. We work with executors, trustees, and estate attorneys regularly.\n\nWe can often make an offer <strong>before probate is fully settled</strong>, and we'll move at whatever pace the estate process requires.",
+      q: ['Get My Cash Offer','Talk to Someone','How It Works'] },
+
+    { k: ['divorce','separation','separating','splitting up','ex-spouse','ex spouse','marital home','joint ownership'],
+      r: "We work with sellers going through divorce regularly. A fast, clean cash sale removes the shared asset quickly — no repairs, no showings, no prolonged listing.\n\nWe can coordinate with both parties and their attorneys to keep things moving smoothly.",
+      q: ['Get My Cash Offer','How fast can you close?','Talk to Someone'] },
+
+    { k: ['relocat','moving','job transfer','moving out of state','moving away','new job','moving for work','leaving the area','military','pcs','transfer'],
+      r: "Relocating on a deadline is one of the most common situations we help with. We close in <strong>30 days or less</strong> — or on whatever date fits your move.\n\nNo listing, no showings, no waiting around.",
+      q: ['Get My Cash Offer','How fast can you close?','Talk to Someone'] },
+
+    { k: ['landlord','tenant','rental property','renters','problem tenant','evict','bad tenant','investment property','rental','tired landlord'],
+      r: "Tired of managing a rental? We buy with tenants in place — no eviction process required on your end.\n\nWe take the property in its current condition, occupied or vacant, and handle the tenant situation ourselves after closing.",
+      q: ['Get My Cash Offer','How fast can you close?','No repairs either?'] },
+
+    { k: ['vacant','empty','abandoned','nobody living','sitting empty','sitting vacant','uninhabited','unoccupied'],
+      r: "Vacant properties are a great fit for us. Whether it's been sitting for months or years, in any condition, we'll make a straightforward cash offer — no need to clean it up or maintain it.",
+      q: ['Get My Cash Offer','How fast can you close?','How It Works'] },
+
+    { k: ['what do i need','paperwork','documents','deed','title','what do i bring','what should i have','mortgage statement','do i need anything'],
+      r: "Don't worry about gathering documents upfront. To get started, all we need is:\n\n① Your property address\n② A brief description of the situation\n③ Your contact information\n\nWe handle the title search and all paperwork from there.",
+      q: ['Get My Cash Offer','Talk to Someone','How It Works'] },
+
+    { k: ['need more time','what if i need','can we extend','delay closing','longer closing','more time to move','flexible closing','leaseback','stay in home','stay in the home'],
+      r: "Completely flexible. <strong>You set the closing date.</strong>\n\nIf you need 60, 90, or more days to get organized, we work around your schedule. In some cases we can also arrange a <strong>sale-leaseback</strong> — close quickly and remain in the home for a short transition period.",
+      q: ['Get My Cash Offer','Talk to Someone','How fast can you close?'] },
+
+    { k: ['contact','call','phone','text','email','speak to','talk to','reach','real person','someone','team','representative','get in touch','human','person'],
       r: "Our acquisitions team is available <strong>7 days a week</strong>:\n\n📞 <strong>(217) 408-2781</strong> — call or text\n✉️ <strong>contactus@bluebirdacquisition.com</strong>\n\nOr fill out the form on this page — we respond within 1 business day.",
       q: ['Go to the form','Call Now: (217) 408-2781','Get My Cash Offer'] },
 
-    { k: ['hours','when are you','business hours','7 days','available','open'],
-      r: "We're available <strong>7 days a week</strong>, including weekends. For urgent foreclosure situations we also respond to after-hours texts at <strong>(217) 408-2781</strong>.",
+    { k: ['hours','when are you','business hours','7 days','available','open','after hours','weekend'],
+      r: "We're available <strong>7 days a week</strong>, including weekends. For urgent situations — foreclosure deadlines or upcoming auctions — we respond to after-hours texts at <strong>(217) 408-2781</strong>.",
       q: ['Call Now: (217) 408-2781','Get My Cash Offer','How It Works'] },
 
     { k: ['where','location','state','city','area','market','serve','available in','do you buy','florida','north carolina','south carolina','illinois','ohio','georgia','virginia','texas','tennessee','indiana',' fl ',' nc ',' sc ',' il ',' oh ',' ga ',' va ',' tx ',' tn ',' in '],
-      r: "We buy properties in <strong>10 states</strong>:\n\n🏠 FL · NC · SC · IL · OH · GA · VA · TX · TN · IN\n\nNot sure if your area qualifies? Drop your address in the form and we'll confirm right away.",
+      r: "We buy in <strong>10 states</strong>:\n\n🏠 FL · NC · SC · IL · OH · GA · VA · TX · TN · IN\n\nNot sure if your specific area qualifies? Drop your address in the form and we'll confirm right away.",
       q: ['Get My Cash Offer','Contact the team','How It Works'] },
 
-    { k: ['novation','subject to','subject-to','creative financing','types of offer','purchase method','offer type'],
-      r: "We offer three purchase structures depending on your situation:\n\n<strong>① Cash purchase</strong> — fastest, closes in 7–30 days\n<strong>② Subject-To</strong> — we take over your existing mortgage payments\n<strong>③ Novation agreement</strong> — we renovate & sell, you receive a higher net price",
+    { k: ['novation','subject to','subject-to','creative financing','types of offer','purchase method','offer type','how do you buy','different options'],
+      r: "Depending on your situation, we can structure the purchase three ways:\n\n<strong>① Cash Purchase</strong> — closes in 30 days or less, clean and straightforward\n<strong>② Subject-To</strong> — we take over your existing mortgage payments\n<strong>③ Novation Agreement</strong> — we renovate and sell on your behalf; you receive a higher net at closing\n\nWe'll recommend the right fit after reviewing your situation.",
       q: ['Get My Cash Offer','Talk to Someone','How fast can you close?'] },
 
-    { k: ['thank','thanks','appreciate','great','helpful','perfect','awesome','fantastic'],
+    { k: ['thank','thanks','appreciate','great','helpful','perfect','awesome','fantastic','that helps','got it'],
       r: "Happy to help! Is there anything else I can answer for you?",
       q: ['Get My Cash Offer','Contact the team','See how it works'] }
   ];
 
   var FALLBACK = {
-    r: "That's a great question. For details specific to your situation, one of our property specialists can give you a personalized answer.\n\n📞 <strong>(217) 408-2781</strong>\n✉️ <strong>contactus@bluebirdacquisition.com</strong>",
+    r: "Great question — and one best answered by our team directly, since every property situation is unique.\n\n📞 <strong>(217) 408-2781</strong> — call or text, 7 days a week\n✉️ <strong>contactus@bluebirdacquisition.com</strong>\n\nOr fill out the form and we'll reach out within 1 business day.",
     q: ['Contact a Specialist','Get My Cash Offer','How It Works']
   };
 
@@ -2804,7 +2832,10 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
     'No fees at all?': function () { botReply(findKB('agent')); },
     'No fees either?': function () { botReply(findKB('agent')); },
     'Will violations reduce my offer?': function () { botReply(findKB('code violation')); },
-    'How do you determine price?': function () { botReply(findKB('cash offer')); }
+    'How do you determine price?': function () { botReply(findKB('cash offer')); },
+    'What does it cost me?': function () { botReply(findKB('closing cost')); },
+    'Do you pay closing costs?': function () { botReply(findKB('closing cost')); },
+    'What if I need more time?': function () { botReply(findKB('need more time')); }
   };
 
   function findKB(key) {
