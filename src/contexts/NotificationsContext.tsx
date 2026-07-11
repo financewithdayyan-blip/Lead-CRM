@@ -15,6 +15,7 @@ import { useTeamMembers } from '@/hooks/useTeam';
 import { useTeamWeeklySessions } from '@/hooks/useAttendance';
 import { useAdminNotesOnMyLeads, type AdminNoteNotif } from '@/hooks/useActivities';
 import { useDbNotifications, useMarkAllDbNotificationsRead, useMarkDbNotificationsRead, type DbNotification } from '@/hooks/useDbNotifications';
+import { useWebLeads, useMarkWebLeadRead, useMarkAllWebLeadsRead, type WebLead } from '@/hooks/useWebLeads';
 import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
 import { daysUntil, localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
@@ -47,6 +48,9 @@ interface NotificationsContextValue {
   sessionEvents: SessionEvent[];
   adminNotes: AdminNoteNotif[];
   dbAlerts: DbNotification[];
+  webLeads: WebLead[];
+  markWebLeadRead: (id: string) => void;
+  markAllWebLeadsRead: () => void;
   toggleTask: ReturnType<typeof useToggleTask>;
   acceptShare: ReturnType<typeof useAcceptLeadShare>;
   declineShare: ReturnType<typeof useDeclineLeadShare>;
@@ -82,8 +86,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: teamSessions = [] } = useTeamWeeklySessions();
   const { data: adminNotes = [] } = useAdminNotesOnMyLeads();
   const { data: dbAlerts = [] } = useDbNotifications();
+  const { data: webLeads = [] } = useWebLeads(isAdmin);
   const markDbRead = useMarkDbNotificationsRead();
   const markAllDbRead = useMarkAllDbNotificationsRead();
+  const markWebLeadReadMutation = useMarkWebLeadRead();
+  const markAllWebLeadsReadMutation = useMarkAllWebLeadsRead();
   const toggleTask = useToggleTask();
   const acceptShare = useAcceptLeadShare();
   const declineShare = useDeclineLeadShare();
@@ -143,10 +150,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [dueTasks, dueFollowUps, auctionAlerts, sessionEvents, teamSummaries, isAdmin, adminNotes],
   );
   const dbUnreadCount = dbAlerts.filter((n) => !n.isRead).length;
+  const webLeadsUnread = isAdmin ? webLeads.filter((l) => !l.isRead).length : 0;
   const unreadCount =
     allIds.filter((id) => !readIds.has(id)).length +
     (isAdmin ? pendingShares.length : pendingIncomingShares.length) +
-    dbUnreadCount;
+    dbUnreadCount +
+    webLeadsUnread;
 
   function markRead(ids: string[]) {
     setReadIds((prev) => {
@@ -161,10 +170,19 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     markRead(allIds);
     auctionAlerts.forEach((a) => acknowledgeAuctionAlert(a.lead.id, a.milestone));
     markAllDbRead.mutate();
+    if (isAdmin) markAllWebLeadsReadMutation.mutate();
   }
 
   function markDbAlertRead(ids: string[]) {
     markDbRead.mutate(ids);
+  }
+
+  function markWebLeadRead(id: string) {
+    markWebLeadReadMutation.mutate(id);
+  }
+
+  function markAllWebLeadsRead() {
+    markAllWebLeadsReadMutation.mutate();
   }
 
   function acknowledgeAuctionAlert(leadId: string, milestone: number) {
@@ -190,6 +208,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         sessionEvents,
         adminNotes,
         dbAlerts,
+        webLeads,
+        markWebLeadRead,
+        markAllWebLeadsRead,
         toggleTask,
         acceptShare,
         declineShare,

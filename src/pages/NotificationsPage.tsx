@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightLeft, Bell, Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, MessageSquare, Phone, Share2, X } from 'lucide-react';
+import { ArrowRightLeft, Bell, Check, CalendarClock, CheckSquare, ChevronDown, FileText, Gavel, Globe, MessageSquare, Phone, Share2, X } from 'lucide-react';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { STAGE_CONFIG } from '@/types/domain';
 import { formatDate, formatTime, localIsoDate } from '@/lib/utils';
 
 // ── Filter chip config ─────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'transfer' | 'auction' | 'adminnote' | 'dbalerts';
+type FilterKey = 'all' | 'session' | 'summary' | 'followup' | 'task' | 'share' | 'transfer' | 'auction' | 'adminnote' | 'dbalerts' | 'weblead';
 
 const FILTER_CONFIG: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All' },
+  { key: 'weblead',   label: 'Website Leads' },
   { key: 'dbalerts',  label: 'Auction Alerts' },
   { key: 'adminnote', label: 'Admin Notes' },
   { key: 'transfer',  label: 'Transfer Requests' },
@@ -78,6 +79,9 @@ export function NotificationsPage() {
     sessionEvents,
     adminNotes,
     dbAlerts,
+    webLeads,
+    markWebLeadRead,
+    markAllWebLeadsRead,
     toggleTask,
     acceptShare,
     declineShare,
@@ -92,11 +96,13 @@ export function NotificationsPage() {
   } = useNotificationsContext();
 
   const dbUnread = dbAlerts.filter((n) => !n.isRead).length;
+  const webLeadsUnread = webLeads.filter((l) => !l.isRead).length;
   const counts: Record<FilterKey, number> = {
     all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length + dbAlerts.length +
                (isAdmin
-                 ? teamSummaries.length + pendingShares.length + sessionEvents.length
+                 ? teamSummaries.length + pendingShares.length + sessionEvents.length + webLeads.length
                  : adminNotes.length + pendingIncomingShares.length),
+    weblead:   webLeads.length,
     dbalerts:  dbAlerts.length,
     adminnote: adminNotes.length,
     transfer:  pendingIncomingShares.length,
@@ -132,7 +138,7 @@ export function NotificationsPage() {
         {FILTER_CONFIG.map(({ key, label }) => {
           const active = filter === key;
           const count = counts[key];
-          if (key !== 'all' && !isAdmin && (key === 'session' || key === 'summary' || key === 'share')) return null;
+          if (key !== 'all' && !isAdmin && (key === 'session' || key === 'summary' || key === 'share' || key === 'weblead')) return null;
           if (key === 'adminnote' && isAdmin) return null;
           if (key === 'transfer' && isAdmin) return null;
           return (
@@ -244,6 +250,73 @@ export function NotificationsPage() {
                       >
                         <X size={13} /> Decline
                       </button>
+                    </div>
+                  </div>
+                ))}
+              </ScrollList>
+            </div>
+          )}
+
+          {/* Website Inquiries */}
+          {isAdmin && show('weblead') && webLeads.length > 0 && (
+            <div className="card">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                  <Globe size={12} /> Website Inquiries ({webLeads.length})
+                </div>
+                {webLeadsUnread > 0 && (
+                  <button
+                    className="text-[11px] text-primary hover:underline"
+                    onClick={markAllWebLeadsRead}
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <ScrollList>
+                {webLeads.map((l) => (
+                  <div
+                    key={l.id}
+                    className={`rounded-md border p-3 transition-colors ${
+                      l.isRead ? 'border-border-2 bg-surface-3' : 'border-primary/30 bg-primary/5'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {!l.isRead && <UnreadDot />}
+                          <span className="text-[13px] font-semibold text-text">
+                            {l.firstName} {l.lastName}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-text-2">
+                          <a href={`tel:${l.phone}`} className="hover:text-primary">{l.phone}</a>
+                          {l.email && (
+                            <a href={`mailto:${l.email}`} className="truncate hover:text-primary">{l.email}</a>
+                          )}
+                        </div>
+                        <div className="mt-1 text-[12px] text-text-3">{l.propertyAddress}</div>
+                        {(l.situation || l.timeline) && (
+                          <div className="mt-0.5 text-[12px] text-text-3">
+                            {[l.situation, l.timeline].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                        {l.notes && (
+                          <div className="mt-1 text-[12px] italic text-text-3">"{l.notes}"</div>
+                        )}
+                        <div className="mt-1 text-[11px] text-text-3">{formatEventTime(l.createdAt, todayIso)}</div>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <NotifTag label="Website Lead" color="#10b981" />
+                        {!l.isRead && (
+                          <button
+                            className="text-[11px] text-primary hover:underline"
+                            onClick={() => markWebLeadRead(l.id)}
+                          >
+                            Mark read
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
