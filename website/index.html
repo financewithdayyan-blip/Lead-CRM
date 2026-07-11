@@ -2731,10 +2731,30 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
 #bbSend:hover{background:var(--sky-deep);transform:scale(1.06);}
 #bbSend:disabled{background:var(--paper-line);cursor:default;transform:none;}
 
-@media(max-width:480px){#bbWrap{bottom:16px;right:14px;}#bbPanel{width:calc(100vw - 28px);right:-2px;}}
+#bbPeek{position:absolute;bottom:70px;right:0;width:252px;opacity:0;transform:translateY(8px) scale(.96);transform-origin:bottom right;transition:opacity .32s var(--ease),transform .32s var(--ease);pointer-events:none;}
+#bbPeek.show{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+#bbWrap.open #bbPeek{opacity:0 !important;pointer-events:none !important;}
+.bb-peek-bbl{background:var(--ink);color:#fff;border-radius:14px 14px 4px 14px;padding:13px 36px 13px 15px;font-size:.82rem;line-height:1.52;box-shadow:var(--shadow-deep);position:relative;cursor:pointer;transition:background .18s;}
+.bb-peek-bbl:hover{background:var(--ink-soft);}
+.bb-peek-name{font-family:var(--serif);font-weight:600;font-size:.86rem;margin-bottom:4px;}
+.bb-peek-dismiss{position:absolute;top:8px;right:9px;width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.12);border:none;cursor:pointer;color:rgba(255,255,255,.65);display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0;}
+.bb-peek-dismiss:hover{background:rgba(255,255,255,.25);}
+
+@media(max-width:480px){#bbWrap{bottom:16px;right:14px;}#bbPanel{width:calc(100vw - 28px);right:-2px;}#bbPeek{width:calc(100vw - 44px);}}
 </style>
 
 <div id="bbWrap">
+
+  <div id="bbPeek" aria-hidden="true">
+    <div class="bb-peek-bbl" id="bbPeekBbl">
+      <div class="bb-peek-name">👋 Hi there!</div>
+      Have questions about selling your property? I can help — fast answers, no pressure.
+      <button class="bb-peek-dismiss" id="bbPeekX" aria-label="Dismiss greeting">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+
   <div id="bbPanel" role="dialog" aria-modal="true" aria-label="Bluebird Acquisition chat assistant">
     <div class="bbh">
       <div class="bbh-av" aria-hidden="true">
@@ -3014,7 +3034,81 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
   inp.addEventListener('input', function () { send.disabled = !inp.value.trim(); });
 
   // Show notification badge after 6 seconds to draw attention
-  setTimeout(function () { if (!isOpen) wrap.classList.remove('seen'); }, 6000);
+  // — peek greeting bubble ——————————————————————
+  var peek      = document.getElementById('bbPeek');
+  var peekBbl   = document.getElementById('bbPeekBbl');
+  var peekX     = document.getElementById('bbPeekX');
+  var peekShown = false;
+  var peekTimer = null;
+
+  function showPeek() {
+    if (peekShown || isOpen) return;
+    peekShown = true;
+    wrap.classList.add('seen');
+    peek.removeAttribute('aria-hidden');
+    peek.classList.add('show');
+    peekTimer = setTimeout(hidePeek, 10000);
+    playTick();
+  }
+
+  function hidePeek() {
+    clearTimeout(peekTimer);
+    peek.classList.remove('show');
+    peek.setAttribute('aria-hidden', 'true');
+  }
+
+  peekBbl.addEventListener('click', function (e) {
+    if (peekX.contains(e.target)) return;
+    hidePeek();
+    openChat();
+  });
+  peekX.addEventListener('click', function (e) {
+    e.stopPropagation();
+    hidePeek();
+  });
+
+  // — tick sound (synthesised, no file needed) ——
+  var tickPlayed = false;
+  function playTick() {
+    if (tickPlayed) return;
+    tickPlayed = true;
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      function doTick() {
+        var sr  = ctx.sampleRate;
+        var len = Math.floor(sr * 0.022);
+        var buf = ctx.createBuffer(1, len, sr);
+        var d   = buf.getChannelData(0);
+        for (var i = 0; i < len; i++) {
+          d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.12));
+        }
+        var src  = ctx.createBufferSource();
+        src.buffer = buf;
+        var gain = ctx.createGain();
+        gain.gain.value = 0.22;
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        src.start(0);
+        setTimeout(function () { try { ctx.close(); } catch(e) {} }, 800);
+      }
+      if (ctx.state === 'running') {
+        doTick();
+      } else {
+        var evts = ['click','mousemove','touchstart','keydown','scroll'];
+        function onFirst() {
+          evts.forEach(function (ev) { document.removeEventListener(ev, onFirst); });
+          ctx.resume().then(doTick).catch(function () {});
+        }
+        evts.forEach(function (ev) { document.addEventListener(ev, onFirst, { once: true, passive: true }); });
+      }
+    } catch (e) {}
+  }
+
+  // Auto-show peek after 2 s
+  setTimeout(showPeek, 2000);
+
+  // Fall-through: hide new-message badge after 6 s if user ignored everything
+  setTimeout(function () { if (!isOpen && !peekShown) wrap.classList.remove('seen'); }, 6000);
 })();
 </script>
 <!-- ═══════════════════════════════════════════════════════════
