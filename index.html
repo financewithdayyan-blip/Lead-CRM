@@ -3073,37 +3073,38 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
     hidePeek();
   });
 
-  // — tick sound (synthesised, no file needed) ——
-  var tickPlayed = false;
+  // — notification chime (synthesised, no file needed) ——
+  var chimePlayed = false;
   function playTick() {
-    if (tickPlayed) return;
-    tickPlayed = true;
+    if (chimePlayed) return;
+    chimePlayed = true;
     try {
       var ctx = new (window.AudioContext || window.webkitAudioContext)();
-      function doTick() {
-        var sr  = ctx.sampleRate;
-        var len = Math.floor(sr * 0.022);
-        var buf = ctx.createBuffer(1, len, sr);
-        var d   = buf.getChannelData(0);
-        for (var i = 0; i < len; i++) {
-          d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.12));
-        }
-        var src  = ctx.createBufferSource();
-        src.buffer = buf;
-        var gain = ctx.createGain();
-        gain.gain.value = 0.22;
-        src.connect(gain);
-        gain.connect(ctx.destination);
-        src.start(0);
-        setTimeout(function () { try { ctx.close(); } catch(e) {} }, 800);
+      function doChime() {
+        var now = ctx.currentTime;
+        // Two-tone descending chime: 880 Hz → 660 Hz (pleasant notification ding)
+        [{ f: 880, t: 0 }, { f: 660, t: 0.13 }].forEach(function (note) {
+          var osc  = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = note.f;
+          gain.gain.setValueAtTime(0, now + note.t);
+          gain.gain.linearRampToValueAtTime(0.32, now + note.t + 0.012);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + note.t + 0.55);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + note.t);
+          osc.stop(now + note.t + 0.6);
+        });
+        setTimeout(function () { try { ctx.close(); } catch(e) {} }, 1500);
       }
       if (ctx.state === 'running') {
-        doTick();
+        doChime();
       } else {
         var evts = ['click','mousemove','touchstart','keydown','scroll'];
         function onFirst() {
           evts.forEach(function (ev) { document.removeEventListener(ev, onFirst); });
-          ctx.resume().then(doTick).catch(function () {});
+          ctx.resume().then(doChime).catch(function () {});
         }
         evts.forEach(function (ev) { document.addEventListener(ev, onFirst, { once: true, passive: true }); });
       }
