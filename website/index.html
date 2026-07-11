@@ -3067,43 +3067,57 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
     hidePeek();
   });
 
-  // — notification chime (synthesised, no file needed) ——
+  // — notification chime ————————————————————————
+  // AudioContext MUST be created inside a user-gesture handler or browsers block it.
+  // We start listening for the first gesture immediately so we never miss it.
   var chimePlayed = false;
+  var chimeQueued = false;
+  var audioCtxObj = null;
+
+  function doChime(ctx) {
+    var now = ctx.currentTime;
+    [{ f: 880, t: 0 }, { f: 660, t: 0.15 }].forEach(function (note) {
+      var osc = ctx.createOscillator();
+      var env = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = note.f;
+      env.gain.setValueAtTime(0, now + note.t);
+      env.gain.linearRampToValueAtTime(0.55, now + note.t + 0.01);
+      env.gain.exponentialRampToValueAtTime(0.001, now + note.t + 0.7);
+      osc.connect(env);
+      env.connect(ctx.destination);
+      osc.start(now + note.t);
+      osc.stop(now + note.t + 0.75);
+    });
+    setTimeout(function () { try { ctx.close(); } catch(e) {} }, 2000);
+  }
+
   function playTick() {
     if (chimePlayed) return;
     chimePlayed = true;
-    try {
-      var ctx = new (window.AudioContext || window.webkitAudioContext)();
-      function doChime() {
-        var now = ctx.currentTime;
-        // Two-tone descending chime: 880 Hz → 660 Hz (pleasant notification ding)
-        [{ f: 880, t: 0 }, { f: 660, t: 0.13 }].forEach(function (note) {
-          var osc  = ctx.createOscillator();
-          var gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.value = note.f;
-          gain.gain.setValueAtTime(0, now + note.t);
-          gain.gain.linearRampToValueAtTime(0.32, now + note.t + 0.012);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + note.t + 0.55);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now + note.t);
-          osc.stop(now + note.t + 0.6);
-        });
-        setTimeout(function () { try { ctx.close(); } catch(e) {} }, 1500);
-      }
-      if (ctx.state === 'running') {
-        doChime();
-      } else {
-        var evts = ['click','mousemove','touchstart','keydown','scroll'];
-        function onFirst() {
-          evts.forEach(function (ev) { document.removeEventListener(ev, onFirst); });
-          ctx.resume().then(doChime).catch(function () {});
-        }
-        evts.forEach(function (ev) { document.addEventListener(ev, onFirst, { once: true, passive: true }); });
-      }
-    } catch (e) {}
+    if (audioCtxObj) {
+      doChime(audioCtxObj); // AudioContext already unlocked — play immediately
+    } else {
+      chimeQueued = true;   // play as soon as the first gesture unlocks audio
+    }
   }
+
+  // Listen for first gesture from the moment the page loads
+  (function () {
+    var done = false;
+    var evts = ['click', 'mousemove', 'touchstart', 'keydown', 'scroll'];
+    function onGesture() {
+      if (done) return;
+      done = true;
+      evts.forEach(function (ev) { document.removeEventListener(ev, onGesture); });
+      try {
+        // Creating AudioContext inside a gesture handler starts it in 'running' state
+        audioCtxObj = new (window.AudioContext || window.webkitAudioContext)();
+        if (chimeQueued) { chimeQueued = false; doChime(audioCtxObj); }
+      } catch(e) {}
+    }
+    evts.forEach(function (ev) { document.addEventListener(ev, onGesture, { once: true, passive: true }); });
+  }());
 
   // Auto-show peek after 2 s
   setTimeout(showPeek, 2000);
