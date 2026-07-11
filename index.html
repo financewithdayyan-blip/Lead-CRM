@@ -3111,13 +3111,14 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
   // Listen for first gesture from the moment the page loads
   (function () {
     var done = false;
-    var evts = ['click', 'mousemove', 'touchstart', 'keydown', 'scroll'];
+    // Only real user-activation events unlock AudioContext — mousemove/scroll do NOT
+    var evts = ['pointerdown', 'mousedown', 'touchstart', 'touchend', 'click', 'keydown'];
     function onGesture() {
       if (done) return;
       done = true;
       evts.forEach(function (ev) { document.removeEventListener(ev, onGesture); });
       try {
-        // Creating AudioContext inside a gesture handler starts it in 'running' state
+        // Creating AudioContext inside a qualifying gesture handler starts it 'running'
         audioCtxObj = new (window.AudioContext || window.webkitAudioContext)();
         if (chimeQueued) { chimeQueued = false; doChime(audioCtxObj); }
       } catch(e) {}
