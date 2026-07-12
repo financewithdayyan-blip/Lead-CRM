@@ -16,12 +16,15 @@ import { useTeamWeeklySessions } from '@/hooks/useAttendance';
 import { useAdminNotesOnMyLeads, type AdminNoteNotif } from '@/hooks/useActivities';
 import { useDbNotifications, useMarkAllDbNotificationsRead, useMarkDbNotificationsRead, type DbNotification } from '@/hooks/useDbNotifications';
 import { useWebLeads, useMarkWebLeadRead, useMarkAllWebLeadsRead, type WebLead } from '@/hooks/useWebLeads';
-import type { DailySummary, Lead, LeadShare, Task } from '@/types/domain';
+import type { DailySummary, Lead, LeadShare, LeadStage, Task } from '@/types/domain';
 import { daysUntil, localIsoDate } from '@/lib/utils';
 import { loadReadIds, saveReadIds } from '@/lib/notificationReads';
 
 // Tier boundary days — the points at which client-side auction alerts fire.
 const AUCTION_MILESTONES = [30, 14, 7, 3];
+
+// Only alert on leads where contact has been established (warm leads on the board).
+const WARM_STAGES: LeadStage[] = ['initial_contact', 'followup', 'negotiation', 'onhold'];
 
 interface AuctionAlert {
   lead: Lead;
@@ -29,10 +32,11 @@ interface AuctionAlert {
   milestone: number;
 }
 
-interface SessionEvent {
+export interface SessionEvent {
   id: string;
   memberName: string;
   at: string;
+  type: 'start' | 'done';
 }
 
 interface NotificationsContextValue {
@@ -85,7 +89,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: teamSessions = [] } = useTeamWeeklySessions();
   const { data: adminNotes = [] } = useAdminNotesOnMyLeads();
-  const { data: dbAlerts = [] } = useDbNotifications();
+  const { data: rawDbAlerts = [] } = useDbNotifications();
   const { data: webLeads = [] } = useWebLeads(isAdmin);
   const markDbRead = useMarkDbNotificationsRead();
   const markAllDbRead = useMarkAllDbNotificationsRead();
@@ -116,10 +120,18 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [leads, weekFromNowIso],
   );
 
+  // Index leads by id for O(1) stage lookup when filtering db alerts.
+  const leadStageById = useMemo(
+    () => new Map<string, LeadStage>(leads.map((l) => [l.id, l.stage])),
+    [leads],
+  );
+
+  // Auction alerts — only for warm leads (contact established).
   const auctionAlerts = useMemo(() => {
     const alerts: AuctionAlert[] = [];
     for (const lead of leads) {
       if (!lead.auctionDate) continue;
+      if (!WARM_STAGES.includes(lead.stage)) continue;
       const daysRemaining = daysUntil(lead.auctionDate);
       if (daysRemaining < 0) continue;
       const due = AUCTION_MILESTONES.filter((m) => daysRemaining <= m && !lead.auctionMilestonesNotified.includes(m));
@@ -129,13 +141,44 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
   }, [leads]);
 
-  // Only show session-start events (no online/offline spam)
+  // Server-side auction alerts — filter to warm-stage leads only.
+  // If we can't find the lead in our local data, we err on the side of showing it.
+  const dbAlerts = useMemo(
+    () =>
+      rawDbAlerts.filter((n) => {
+        if (!n.leadId) return true;
+        const stage = leadStageById.get(n.leadId);
+        if (stage === undefined) return true;
+        return WARM_STAGES.includes(stage);
+      }),
+    [rawDbAlerts, leadStageById],
+  );
+
+  // Calling session events — deduplicated to one start + one completion per person per day.
   const sessionEvents = useMemo(() => {
-    return teamSessions.map((s) => {
+    const seenStart = new Set<string>();
+    const seenDone = new Set<string>();
+    const events: SessionEvent[] = [];
+
+    const sorted = [...teamSessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+
+    for (const s of sorted) {
       const member = teamMembers.find((m) => m.memberId === s.userId);
       const memberName = member ? member.member.fullName || member.member.email : 'A team member';
-      return { id: `session:${s.id}`, memberName, at: s.startedAt };
-    });
+      const dayKey = `${s.userId}:${localIsoDate(new Date(s.startedAt))}`;
+
+      if (!seenStart.has(dayKey)) {
+        seenStart.add(dayKey);
+        events.push({ id: `session:${dayKey}:start`, memberName, at: s.startedAt, type: 'start' });
+      }
+
+      if (s.endedAt && !seenDone.has(dayKey)) {
+        seenDone.add(dayKey);
+        events.push({ id: `session:${dayKey}:done`, memberName, at: s.endedAt, type: 'done' });
+      }
+    }
+
+    return events.sort((a, b) => b.at.localeCompare(a.at));
   }, [teamSessions, teamMembers]);
 
   const allIds = useMemo(

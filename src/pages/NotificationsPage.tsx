@@ -95,19 +95,29 @@ export function NotificationsPage() {
     markAllRead,
   } = useNotificationsContext();
 
-  const dbUnread = dbAlerts.filter((n) => !n.isRead).length;
-  const webLeadsUnread = webLeads.filter((l) => !l.isRead).length;
+  // Read notifications older than 2 days are automatically hidden to reduce noise.
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+  const visibleDbAlerts    = dbAlerts.filter((n) => !n.isRead || n.createdAt >= twoDaysAgo);
+  const visibleSessions    = sessionEvents.filter((e) => !readIds.has(e.id) || e.at >= twoDaysAgo);
+  const visibleSummaries   = teamSummaries.filter((s) => !readIds.has(`summary:${s.id}`) || s.createdAt >= twoDaysAgo);
+  const visibleAdminNotes  = adminNotes.filter((n) => !readIds.has(`adminnote:${n.id}`) || n.createdAt >= twoDaysAgo);
+  const visibleWebLeads    = webLeads.filter((l) => !l.isRead || l.createdAt >= twoDaysAgo);
+
+  const dbUnread       = visibleDbAlerts.filter((n) => !n.isRead).length;
+  const webLeadsUnread = visibleWebLeads.filter((l) => !l.isRead).length;
+
   const counts: Record<FilterKey, number> = {
-    all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length + dbAlerts.length +
+    all:       dueTasks.length + dueFollowUps.length + auctionAlerts.length + visibleDbAlerts.length +
                (isAdmin
-                 ? teamSummaries.length + pendingShares.length + sessionEvents.length + webLeads.length
-                 : adminNotes.length + pendingIncomingShares.length),
-    weblead:   webLeads.length,
-    dbalerts:  dbAlerts.length,
-    adminnote: adminNotes.length,
+                 ? visibleSummaries.length + pendingShares.length + visibleSessions.length + visibleWebLeads.length
+                 : visibleAdminNotes.length + pendingIncomingShares.length),
+    weblead:   visibleWebLeads.length,
+    dbalerts:  visibleDbAlerts.length,
+    adminnote: visibleAdminNotes.length,
     transfer:  pendingIncomingShares.length,
-    session:   sessionEvents.length,
-    summary:   teamSummaries.length,
+    session:   visibleSessions.length,
+    summary:   visibleSummaries.length,
     followup:  dueFollowUps.length,
     task:      dueTasks.length,
     share:     pendingShares.length,
@@ -124,7 +134,7 @@ export function NotificationsPage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-text">Notifications</h1>
-          <p className="text-sm text-text-3">Shared leads, daily summaries, follow-ups, tasks, and session activity — last 7 days.</p>
+          <p className="text-sm text-text-3">Action items, warm lead alerts, and team activity. Read items clear after 2 days.</p>
         </div>
         {unreadCount > 0 && (
           <button className="btn shrink-0" onClick={markAllRead}>
@@ -163,18 +173,18 @@ export function NotificationsPage() {
       </div>
 
       {empty ? (
-        <div className="card text-center text-text-3">You're all caught up — nothing this week.</div>
+        <div className="card text-center text-text-3">You're all caught up — nothing to show.</div>
       ) : (
         <div className="space-y-5">
 
           {/* Admin Notes (shown to callers when an admin leaves a note on their lead) */}
-          {!isAdmin && show('adminnote') && adminNotes.length > 0 && (
+          {!isAdmin && show('adminnote') && visibleAdminNotes.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <MessageSquare size={12} /> Admin Notes ({adminNotes.length})
+                <MessageSquare size={12} /> Admin Notes ({visibleAdminNotes.length})
               </div>
               <ScrollList>
-                {adminNotes.map((n) => {
+                {visibleAdminNotes.map((n) => {
                   const id = `adminnote:${n.id}`;
                   const unread = !readIds.has(id);
                   return (
@@ -258,11 +268,11 @@ export function NotificationsPage() {
           )}
 
           {/* Website Inquiries */}
-          {isAdmin && show('weblead') && webLeads.length > 0 && (
+          {isAdmin && show('weblead') && visibleWebLeads.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                  <Globe size={12} /> Website Inquiries ({webLeads.length})
+                  <Globe size={12} /> Website Inquiries ({visibleWebLeads.length})
                 </div>
                 {webLeadsUnread > 0 && (
                   <button
@@ -274,7 +284,7 @@ export function NotificationsPage() {
                 )}
               </div>
               <ScrollList>
-                {webLeads.map((l) => (
+                {visibleWebLeads.map((l) => (
                   <div
                     key={l.id}
                     className={`rounded-md border p-3 transition-colors ${
@@ -364,24 +374,24 @@ export function NotificationsPage() {
             </div>
           )}
 
-          {/* Scheduled Auction Alerts (generated server-side by pg_cron) */}
-          {show('dbalerts') && dbAlerts.length > 0 && (
+          {/* Scheduled Auction Alerts (generated server-side by pg_cron — warm leads only) */}
+          {show('dbalerts') && visibleDbAlerts.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                  <Bell size={12} /> Auction Alerts ({dbAlerts.length})
+                  <Bell size={12} /> Auction Alerts ({visibleDbAlerts.length})
                 </div>
                 {dbUnread > 0 && (
                   <button
                     className="text-[11px] text-primary hover:underline"
-                    onClick={() => markDbAlertRead(dbAlerts.filter((n) => !n.isRead).map((n) => n.id))}
+                    onClick={() => markDbAlertRead(visibleDbAlerts.filter((n) => !n.isRead).map((n) => n.id))}
                   >
                     Mark all read
                   </button>
                 )}
               </div>
               <ScrollList>
-                {dbAlerts.map((n) => {
+                {visibleDbAlerts.map((n) => {
                   const tierMatch = n.title.match(/—\s*(\w+)$/);
                   const tierColor =
                     n.type === 'auction_passed' ? '#6b7280'
@@ -424,7 +434,7 @@ export function NotificationsPage() {
             </div>
           )}
 
-          {/* Auction milestone reminders (client-side) */}
+          {/* Auction milestone reminders (client-side, warm leads only) */}
           {show('auction') && auctionAlerts.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
@@ -441,6 +451,7 @@ export function NotificationsPage() {
                         <div className="min-w-0 text-[13px] text-text">
                           <span className="font-medium">{a.lead.firstName} {a.lead.lastName}</span>
                           {' '}— {a.daysRemaining} day{a.daysRemaining !== 1 ? 's' : ''} until auction.
+                          <div className="mt-0.5 text-[11px] text-text-3">{STAGE_CONFIG[a.lead.stage].label}</div>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -463,14 +474,14 @@ export function NotificationsPage() {
             </div>
           )}
 
-          {/* Calling Sessions */}
-          {isAdmin && show('session') && sessionEvents.length > 0 && (
+          {/* Calling Sessions — first start + completion per person per day */}
+          {isAdmin && show('session') && visibleSessions.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <Phone size={12} /> Calling Sessions ({sessionEvents.length})
+                <Phone size={12} /> Calling Sessions ({visibleSessions.length})
               </div>
               <ScrollList>
-                {sessionEvents.map((e) => {
+                {visibleSessions.map((e) => {
                   const unread = !readIds.has(e.id);
                   return (
                     <button
@@ -483,12 +494,17 @@ export function NotificationsPage() {
                         {unread && <UnreadDot />}
                         <div className="min-w-0">
                           <div className="truncate text-[13px] font-medium text-text">
-                            {e.memberName} started a calling session
+                            {e.type === 'start'
+                              ? `${e.memberName} started a calling session`
+                              : `${e.memberName} completed their daily calling session`}
                           </div>
                           <div className="text-[11px] text-text-3">{formatEventTime(e.at, todayIso)}</div>
                         </div>
                       </div>
-                      <NotifTag label="Session" color="#6366f1" />
+                      <NotifTag
+                        label={e.type === 'start' ? 'Session' : 'Completed'}
+                        color={e.type === 'start' ? '#6366f1' : '#10b981'}
+                      />
                     </button>
                   );
                 })}
@@ -497,13 +513,13 @@ export function NotificationsPage() {
           )}
 
           {/* Daily Summaries */}
-          {isAdmin && show('summary') && teamSummaries.length > 0 && (
+          {isAdmin && show('summary') && visibleSummaries.length > 0 && (
             <div className="card">
               <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <FileText size={12} /> Daily Summaries ({teamSummaries.length})
+                <FileText size={12} /> Daily Summaries ({visibleSummaries.length})
               </div>
               <ScrollList>
-                {teamSummaries.map((s) => {
+                {visibleSummaries.map((s) => {
                   const id = `summary:${s.id}`;
                   const expanded = expandedSummaryId === s.id;
                   const unread = !readIds.has(id);
