@@ -52,6 +52,8 @@ body{
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  /* Promote the scroll container to the compositor so it doesn't block the main thread */
+  will-change: scroll-position;
 }
 img{ max-width:100%; display:block; }
 a{ color:inherit; text-decoration:none; }
@@ -503,13 +505,20 @@ h1,h2,h3{ font-family: var(--serif); font-weight: 600; line-height: 1.05; letter
 .scene-card-relief .pulse{
   width:7px;height:7px;border-radius:50%;
   background: var(--sky);
-  box-shadow: 0 0 0 0 rgba(30,143,213,0.6);
-  animation: pulse 1.8s infinite;
+  position: relative;
 }
-@keyframes pulse{
-  0%{ box-shadow: 0 0 0 0 rgba(30,143,213,0.55); }
-  70%{ box-shadow: 0 0 0 10px rgba(30,143,213,0); }
-  100%{ box-shadow: 0 0 0 0 rgba(30,143,213,0); }
+.scene-card-relief .pulse::after{
+  content:'';
+  position:absolute;
+  inset:-4px;
+  border-radius:50%;
+  border:1.5px solid rgba(30,143,213,0.65);
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+@keyframes pulse-ring{
+  0%{ transform:scale(1); opacity:0.65; }
+  70%{ transform:scale(2.8); opacity:0; }
+  100%{ transform:scale(2.8); opacity:0; }
 }
 
 .hero-bottom-fade{
@@ -1043,14 +1052,14 @@ section{ padding: 120px 0; position:relative; }
   filter: drop-shadow(0 14px 18px rgba(0,0,0,0.55));
 }
 .map-state.active{
-  fill: var(--sky-deep);
+  fill: var(--sky);
   stroke: var(--sky);
   animation: glow-pulse 2.8s ease-in-out infinite;
 }
-.map-state.active:hover{ fill: var(--sky); cursor: pointer; }
+.map-state.active:hover{ opacity: 1; cursor: pointer; }
 @keyframes glow-pulse{
-  0%,100%{ fill: var(--sky-deep); }
-  50%{ fill: var(--sky); }
+  0%,100%{ opacity: 0.72; }
+  50%{ opacity: 1; }
 }
 .map-label{
   font-family: var(--mono);
@@ -2688,12 +2697,12 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
 #bbWrap{position:fixed;bottom:28px;right:28px;z-index:9999;font-family:var(--sans);}
 
 #bbToggle{
-  width:58px;height:58px;border-radius:50%;background:var(--ink);
+  width:58px;height:58px;border-radius:50%;background:var(--brass);
   border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  box-shadow:0 4px 20px rgba(11,30,51,.4),0 1px 4px rgba(11,30,51,.2);
+  box-shadow:0 4px 20px rgba(201,162,75,.45),0 1px 4px rgba(11,30,51,.2);
   transition:transform .22s var(--ease),box-shadow .22s var(--ease);position:relative;
 }
-#bbToggle:hover{transform:translateY(-2px) scale(1.05);box-shadow:0 8px 28px rgba(11,30,51,.5);}
+#bbToggle:hover{transform:translateY(-2px) scale(1.05);box-shadow:0 8px 28px rgba(201,162,75,.6);}
 #bbToggle:focus-visible{outline:2.5px solid var(--brass);outline-offset:3px;}
 
 #bbBadge{
@@ -3081,7 +3090,6 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
     peek.removeAttribute('aria-hidden');
     peek.classList.add('show');
     peekTimer = setTimeout(hidePeek, 10000);
-    playTick();
   }
 
   function hidePeek() {
@@ -3099,59 +3107,6 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
     e.stopPropagation();
     hidePeek();
   });
-
-  // — notification chime ————————————————————————
-  // AudioContext MUST be created inside a user-gesture handler or browsers block it.
-  // We start listening for the first gesture immediately so we never miss it.
-  var chimePlayed = false;
-  var chimeQueued = false;
-  var audioCtxObj = null;
-
-  function doChime(ctx) {
-    var now = ctx.currentTime;
-    [{ f: 880, t: 0 }, { f: 660, t: 0.15 }].forEach(function (note) {
-      var osc = ctx.createOscillator();
-      var env = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = note.f;
-      env.gain.setValueAtTime(0, now + note.t);
-      env.gain.linearRampToValueAtTime(0.55, now + note.t + 0.01);
-      env.gain.exponentialRampToValueAtTime(0.001, now + note.t + 0.7);
-      osc.connect(env);
-      env.connect(ctx.destination);
-      osc.start(now + note.t);
-      osc.stop(now + note.t + 0.75);
-    });
-    setTimeout(function () { try { ctx.close(); } catch(e) {} }, 2000);
-  }
-
-  function playTick() {
-    if (chimePlayed) return;
-    chimePlayed = true;
-    if (audioCtxObj) {
-      doChime(audioCtxObj); // AudioContext already unlocked — play immediately
-    } else {
-      chimeQueued = true;   // play as soon as the first gesture unlocks audio
-    }
-  }
-
-  // Listen for first gesture from the moment the page loads
-  (function () {
-    var done = false;
-    // Only real user-activation events unlock AudioContext — mousemove/scroll do NOT
-    var evts = ['pointerdown', 'mousedown', 'touchstart', 'touchend', 'click', 'keydown'];
-    function onGesture() {
-      if (done) return;
-      done = true;
-      evts.forEach(function (ev) { document.removeEventListener(ev, onGesture); });
-      try {
-        // Creating AudioContext inside a qualifying gesture handler starts it 'running'
-        audioCtxObj = new (window.AudioContext || window.webkitAudioContext)();
-        if (chimeQueued) { chimeQueued = false; doChime(audioCtxObj); }
-      } catch(e) {}
-    }
-    evts.forEach(function (ev) { document.addEventListener(ev, onGesture, { once: true, passive: true }); });
-  }());
 
   // Auto-show peek after 2 s
   setTimeout(showPeek, 2000);
