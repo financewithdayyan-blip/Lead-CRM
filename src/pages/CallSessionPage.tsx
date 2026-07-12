@@ -141,16 +141,38 @@ function RepairsDropdown({ repairs, onChange }: { repairs: RepairFlags; onChange
   );
 }
 
-function ScriptStep({ index, title, children }: { index: number; title: string; children: React.ReactNode }) {
+function ScriptStep({
+  index,
+  title,
+  children,
+  collapsible = false,
+}: {
+  index: number;
+  title: string;
+  children: React.ReactNode;
+  collapsible?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="mb-5">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-[11px] font-bold text-slate-950 shadow shadow-emerald-500/30">
+      <div
+        className={`mb-2 flex items-center gap-2${collapsible ? ' cursor-pointer select-none' : ''}`}
+        onClick={() => collapsible && setOpen((o) => !o)}
+      >
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-[11px] font-bold text-slate-950 shadow shadow-emerald-500/30">
           {index}
         </span>
-        <span className="text-[13px] font-semibold text-slate-100">{title}</span>
+        <span className="flex-1 text-[13px] font-semibold text-slate-100">{title}</span>
+        {collapsible && (
+          <ChevronDown
+            size={14}
+            className={`shrink-0 text-slate-500 transition-transform duration-200${open ? ' rotate-180' : ''}`}
+          />
+        )}
       </div>
-      <div className="space-y-2 border-l-2 border-emerald-900/60 pl-3.5">{children}</div>
+      {(!collapsible || open) && (
+        <div className="space-y-2 border-l-2 border-emerald-900/60 pl-3.5">{children}</div>
+      )}
     </div>
   );
 }
@@ -1042,7 +1064,7 @@ export function CallSessionPage() {
                 </div>
               </ScriptStep>
               {SCRIPT_STEPS.map((step, i) => (
-                <ScriptStep key={step.title} index={i + 3} title={step.title}>
+                <ScriptStep key={step.title} index={i + 3} title={step.title} collapsible>
                   {step.questions.map((q) => (
                     <div key={q.key} className="space-y-1.5">
                       <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[13px] text-slate-300">
