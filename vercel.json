@@ -1,5 +1,12 @@
 {
   "rewrites": [
     { "source": "/crm/:path*", "destination": "/crm/index.html" }
+  ],
+  "redirects": [
+    { "source": "/home", "destination": "/", "permanent": true },
+    { "source": "/about", "destination": "/", "permanent": true },
+    { "source": "/sell", "destination": "/", "permanent": true },
+    { "source": "/privacy-policy", "destination": "/", "permanent": true },
+    { "source": "/contact", "destination": "/", "permanent": true }
   ]
 }
