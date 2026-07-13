@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToLead, leadToDbInsert, leadToDbUpdate } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +30,32 @@ export function useLeads(targetUserId?: string) {
       return rows.map(dbToLead);
     },
     enabled: !!userId,
+  });
+}
+
+/** Call on hover to warm the cache before navigation. */
+export function prefetchLeads(qc: QueryClient, userId: string) {
+  const PAGE = 1000;
+  return qc.prefetchQuery({
+    queryKey: ['leads', userId],
+    queryFn: async () => {
+      const rows: any[] = [];
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select(LEAD_SELECT)
+          .eq('user_id', userId)
+          .order('lead_num', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        rows.push(...data);
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+      return rows.map(dbToLead);
+    },
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -29,7 +29,14 @@ const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) =>
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60_000,       // serve from cache for 5 min across page switches
+      gcTime: 15 * 60_000,          // keep unused cache for 15 min (was 5 min default)
+      refetchOnWindowFocus: false,  // don't refetch every time the tab regains focus
+      retry: 1,
+    },
+  },
 });
 
 function RouteFallback() {

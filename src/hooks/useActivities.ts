@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToActivity } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
@@ -83,6 +83,25 @@ export function useUpdateActivity() {
       qc.invalidateQueries({ queryKey: ['recent_activities'] });
       qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
     },
+  });
+}
+
+/** Call on hover to warm the cache before navigation. */
+export function prefetchActivityFeed(qc: QueryClient, userId: string) {
+  const since = `${new Date().getFullYear()}-01-01`;
+  return qc.prefetchQuery({
+    queryKey: ['activity_feed', userId, since],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_activities')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map(dbToActivity);
+    },
+    staleTime: 5 * 60_000,
   });
 }
 

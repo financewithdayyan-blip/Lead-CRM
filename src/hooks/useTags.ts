@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToTag } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +14,19 @@ const TAG_COLORS = [
 
 export function nextTagColor(existingCount: number) {
   return TAG_COLORS[existingCount % TAG_COLORS.length];
+}
+
+/** Call on hover to warm the cache before navigation. */
+export function prefetchTags(qc: QueryClient, userId: string) {
+  return qc.prefetchQuery({
+    queryKey: ['tags', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('tags').select('*').eq('user_id', userId).order('name');
+      if (error) throw error;
+      return data.map(dbToTag);
+    },
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function useTags(targetUserId?: string) {

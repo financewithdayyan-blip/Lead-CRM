@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, UserPlus, Trash2, ChevronDown, LayoutDashboard, Mail, Copy, Clock, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers, useRemoveTeamMember, useUpdateMemberRole, useTeamInvites, useSendInvite, useRevokeInvite } from '@/hooks/useTeam';
-import { useLeads } from '@/hooks/useLeads';
-import { useActivityFeed } from '@/hooks/useActivities';
+import { useLeads, prefetchLeads } from '@/hooks/useLeads';
+import { useActivityFeed, prefetchActivityFeed } from '@/hooks/useActivities';
 import { aggregateTodayAttendance, useAttendanceSessions, useTeamTodaySessions } from '@/hooks/useAttendance';
-import { nextTagColor } from '@/hooks/useTags';
+import { nextTagColor, prefetchTags } from '@/hooks/useTags';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { usePresence } from '@/contexts/PresenceContext';
 import type { Role } from '@/types/domain';
@@ -121,6 +122,16 @@ export function TeamPage() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const { data: members = [] } = useTeamMembers();
+  const qc = useQueryClient();
+
+  const prefetchMember = useCallback(
+    (memberId: string) => {
+      prefetchLeads(qc, memberId);
+      prefetchActivityFeed(qc, memberId);
+      prefetchTags(qc, memberId);
+    },
+    [qc],
+  );
   const { data: invites = [] } = useTeamInvites();
   const { onlineIds, statusMap } = usePresence();
   const { data: todaySessions = [] } = useTeamTodaySessions();
@@ -329,7 +340,12 @@ export function TeamPage() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Link to={`/team/${m.memberId}`} className="btn !px-2.5 !py-1 text-[12px]" title="Open full dashboard">
+                    <Link
+                      to={`/team/${m.memberId}`}
+                      className="btn !px-2.5 !py-1 text-[12px]"
+                      title="Open full dashboard"
+                      onMouseEnter={() => prefetchMember(m.memberId)}
+                    >
                       <LayoutDashboard size={13} /> Dashboard
                     </Link>
                     <button
