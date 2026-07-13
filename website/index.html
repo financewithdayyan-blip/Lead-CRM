@@ -1433,7 +1433,7 @@ footer{
 .faq{
   background: var(--paper-dim);
   border-top: 1px solid var(--paper-line);
-  padding: 96px 0;
+  padding: 96px 0 !important;
 }
 .faq-head{
   text-align: center;
@@ -1442,6 +1442,7 @@ footer{
 .faq-head .eyebrow{
   color: var(--brass);
   margin-bottom: 14px;
+  display: block;
 }
 .faq-head h2{
   font-size: clamp(1.8rem, 3.5vw, 2.55rem);
@@ -1460,69 +1461,35 @@ footer{
 .faq-list{
   max-width: 760px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
-.faq-item{
+.faq-card{
   background: var(--white);
   border: 1.5px solid var(--paper-line);
   border-radius: var(--radius-md);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  padding: 24px 28px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 4px rgba(11,30,51,0.06);
 }
-.faq-item:hover{
-  border-color: rgba(30,143,213,0.35);
-  box-shadow: 0 4px 18px -8px rgba(11,30,51,0.14);
-}
-.faq-item[open]{
-  border-color: rgba(30,143,213,0.5);
-  box-shadow: 0 4px 22px -8px rgba(11,30,51,0.18);
-}
-.faq-item summary{
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 22px 28px;
-  cursor: pointer;
+.faq-card:last-child{ margin-bottom: 0; }
+.faq-card h3{
   font-family: var(--sans);
   font-size: 16px;
   font-weight: 700;
   color: var(--ink);
-  user-select: none;
-  -webkit-user-select: none;
+  margin-bottom: 10px;
+  line-height: 1.35;
 }
-.faq-item summary::-webkit-details-marker{ display:none; }
-.faq-chevron{
-  flex: none;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--paper);
-  border: 1.5px solid var(--paper-line);
-  display: flex; align-items: center; justify-content: center;
-  transition: transform 0.28s var(--ease), background 0.2s, border-color 0.2s;
-}
-.faq-item[open] .faq-chevron{
-  transform: rotate(180deg);
-  background: var(--sky);
-  border-color: var(--sky);
-}
-.faq-chevron svg{ display:block; }
-.faq-item[open] .faq-chevron svg path{ stroke: var(--white); }
-.faq-body{
-  padding: 0 28px 24px;
+.faq-card p{
   font-size: 15px;
   line-height: 1.75;
   color: var(--slate);
-  border-top: 1px solid var(--paper-line);
-  margin-top: -2px;
-  padding-top: 20px;
+  margin: 0;
 }
 @media(max-width:640px){
-  .faq{ padding:72px 0; }
-  .faq-item summary{ padding:18px 20px; font-size:15px; }
-  .faq-body{ padding:16px 20px 20px; font-size:14px; }
+  .faq{ padding:72px 0 !important; }
+  .faq-card{ padding:20px; }
+  .faq-card h3{ font-size:15px; }
+  .faq-card p{ font-size:14px; }
 }
 </style>
 </head>
@@ -1958,67 +1925,46 @@ footer{
 <section class="faq">
   <div class="container">
     <div class="faq-head">
-      <p class="eyebrow">Common Questions</p>
+      <span class="eyebrow">Common Questions</span>
       <h2>Everything you need to know before you call</h2>
       <p>No pressure, no obligation — just straight answers about how our process works.</p>
     </div>
     <div class="faq-list">
 
-      <details class="faq-item" open>
-        <summary>
-          How quickly can you close?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">We can typically close in as little as 14 days, or on whatever timeline works best for you. If you need more time to sort things out on your end, we'll wait — there's no rush. If you need to move fast, we'll do everything we can to make that happen.</div>
-      </details>
+      <div class="faq-card">
+        <h3>How quickly can you close?</h3>
+        <p>We can typically close in as little as 14 days, or on whatever timeline works best for you. If you need more time to sort things out on your end, we'll wait — there's no rush. If you need to move fast, we'll do everything we can to make that happen.</p>
+      </div>
 
-      <details class="faq-item">
-        <summary>
-          Do I need to make any repairs before selling?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">Not at all. We buy properties exactly as-is — roof damage, foundation issues, code violations, fire damage, full of belongings, you name it. You leave what you don't want and walk away. We handle every repair and cleanup after closing.</div>
-      </details>
+      <div class="faq-card">
+        <h3>Do I need to make any repairs before selling?</h3>
+        <p>Not at all. We buy properties exactly as-is — roof damage, foundation issues, code violations, fire damage, full of belongings, you name it. You leave what you don't want and walk away. We handle every repair and cleanup after closing.</p>
+      </div>
 
-      <details class="faq-item">
-        <summary>
-          Is there any cost or obligation to get an offer?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">Zero cost, zero obligation. We'll evaluate your property and present an offer completely free of charge. There are no agent commissions, no closing costs, and no fees of any kind taken out of your proceeds. You can decline for any reason with no hard feelings.</div>
-      </details>
+      <div class="faq-card">
+        <h3>Is there any cost or obligation to get an offer?</h3>
+        <p>Zero cost, zero obligation. We'll evaluate your property and present an offer completely free of charge. There are no agent commissions, no closing costs, and no fees of any kind taken out of your proceeds. You can decline for any reason with no hard feelings.</p>
+      </div>
 
-      <details class="faq-item">
-        <summary>
-          How do you determine what to offer?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">We look at the property's location, current condition, comparable sales in your area, and the cost of any work needed after we take over. Our goal is to give you a fair number we can both feel good about — not the lowest offer we can get away with.</div>
-      </details>
+      <div class="faq-card">
+        <h3>How do you determine what to offer?</h3>
+        <p>We look at the property's location, current condition, comparable sales in your area, and the cost of any work needed after we take over. Our goal is to give you a fair number we can both feel good about — not the lowest offer we can get away with.</p>
+      </div>
 
-      <details class="faq-item">
-        <summary>
-          What if I'm behind on mortgage payments or facing foreclosure?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">This is one of the most common situations we work with. A quick sale can stop a foreclosure, clear late payments, and let you walk away without a judgment on your record. The sooner you reach out, the more options we can put on the table — time matters in these situations.</div>
-      </details>
+      <div class="faq-card">
+        <h3>What if I'm behind on mortgage payments or facing foreclosure?</h3>
+        <p>This is one of the most common situations we work with. A quick sale can stop a foreclosure, clear late payments, and let you walk away without a judgment on your record. The sooner you reach out, the more options we can put on the table — time matters in these situations.</p>
+      </div>
 
-      <details class="faq-item">
-        <summary>
-          Which states do you buy properties in?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">We currently buy in Florida, North Carolina, South Carolina, Illinois, Ohio, Georgia, Virginia, Texas, Tennessee, and Indiana. Don't see your state? Reach out anyway — our coverage is expanding and we may still be able to help or connect you with a trusted partner.</div>
-      </details>
+      <div class="faq-card">
+        <h3>Which states do you buy properties in?</h3>
+        <p>We currently buy in Florida, North Carolina, South Carolina, Illinois, Ohio, Georgia, Virginia, Texas, Tennessee, and Indiana. Don't see your state? Reach out anyway — our coverage is expanding and we may still be able to help or connect you with a trusted partner.</p>
+      </div>
 
-      <details class="faq-item">
-        <summary>
-          What types of situations do you help with?
-          <span class="faq-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
-        </summary>
-        <div class="faq-body">We work with homeowners in all kinds of difficult situations: code violations, tax liens, inherited properties, divorce, job loss, health issues, relocation, probate, hoarding cleanup, fire or water damage, and more. If the property has become a burden, we want to hear from you.</div>
-      </details>
+      <div class="faq-card">
+        <h3>What types of situations do you help with?</h3>
+        <p>We work with homeowners in all kinds of difficult situations: code violations, tax liens, inherited properties, divorce, job loss, health issues, relocation, probate, hoarding cleanup, fire or water damage, and more. If the property has become a burden, we want to hear from you.</p>
+      </div>
 
     </div>
   </div>
