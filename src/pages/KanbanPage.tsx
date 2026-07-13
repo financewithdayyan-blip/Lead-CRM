@@ -20,7 +20,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { formatPhone, localIsoDate } from '@/lib/utils';
-import { isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
+import { isTouchScheduledToday, isTouchedToday, nextScheduledTouchDate, formatTouchDate } from '@/lib/followupSchedule';
 import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
@@ -94,6 +94,7 @@ function KanbanCardVisual({
               isTouchScheduledToday(lead.followupStartDate, todayStr) &&
               !isTouchedToday(lead.touchDates, todayStr) &&
               lead.touchCount < 10;
+            const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
             return (
               <div
                 className={`mt-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
@@ -101,7 +102,11 @@ function KanbanCardVisual({
                 }`}
               >
                 <span>{lead.touchCount}/10 touches</span>
-                {dueToday && <span>· due today</span>}
+                {dueToday ? (
+                  <span>· due today</span>
+                ) : nextDate ? (
+                  <span>· next {formatTouchDate(nextDate)}</span>
+                ) : null}
               </div>
             );
           })()}
