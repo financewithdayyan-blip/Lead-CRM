@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTags, useCreateTag, useDeleteTag, nextTagColor } from '@/hooks/useTags';
 import { useUpdateProfile } from '@/hooks/useProfile';
+import { useBusinessCard } from '@/hooks/useBusinessCard';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -31,6 +32,12 @@ export function SettingsPage() {
   const deleteTag = useDeleteTag();
   const updateProfile = useUpdateProfile();
 
+  const { cardDataUrl, saveCard, removeCard } = useBusinessCard();
+  const cardInputRef = useRef<HTMLInputElement>(null);
+  const [cardSaving, setCardSaving] = useState(false);
+  const [cardSaved, setCardSaved] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+
   const [fullName, setFullName] = useState(profile?.fullName ?? '');
   const [fullNameSaved, setFullNameSaved] = useState(false);
   const [dailyGoal, setDailyGoal] = useState(String(profile?.dailyGoal ?? 20));
@@ -39,6 +46,26 @@ export function SettingsPage() {
   const [monthlyGoalSaved, setMonthlyGoalSaved] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [tagDeleteTarget, setTagDeleteTarget] = useState<string | null>(null);
+
+  async function handleCardUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setCardError('Image must be under 5 MB.');
+      return;
+    }
+    setCardError(null);
+    setCardSaving(true);
+    try {
+      await saveCard(file);
+      flash(setCardSaved);
+    } catch {
+      setCardError('Failed to save image. Try a different file.');
+    } finally {
+      setCardSaving(false);
+      if (cardInputRef.current) cardInputRef.current.value = '';
+    }
+  }
 
   function saveFullName() {
     const name = fullName.trim();
@@ -86,6 +113,57 @@ export function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+        <div className="card">
+          <div className="text-sm font-semibold text-text">Business Card</div>
+          <p className="mt-1 text-[13px] text-text-2">
+            Upload your business card image. During a call session, it will be shown alongside the copy-text-message button so you can paste it into any messaging app as an attachment.
+          </p>
+          <input
+            ref={cardInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleCardUpload}
+          />
+          {cardDataUrl ? (
+            <div className="mt-3 flex flex-wrap items-start gap-4">
+              <img
+                src={cardDataUrl}
+                alt="Your business card"
+                className="h-28 max-w-xs rounded-lg border border-border object-contain shadow-sm"
+              />
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  className="btn btn-primary"
+                  disabled={cardSaving}
+                  onClick={() => cardInputRef.current?.click()}
+                >
+                  {cardSaving ? 'Saving…' : 'Replace image'}
+                </button>
+                <button
+                  className="btn !text-danger"
+                  onClick={removeCard}
+                >
+                  Remove card
+                </button>
+                {cardSaved && <span className="text-[11px] text-success">✓ Saved</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                className="btn btn-primary"
+                disabled={cardSaving}
+                onClick={() => cardInputRef.current?.click()}
+              >
+                {cardSaving ? 'Saving…' : 'Upload business card'}
+              </button>
+              {cardSaved && <span className="text-[11px] text-success">✓ Saved</span>}
+            </div>
+          )}
+          {cardError && <p className="mt-2 text-[12px] text-danger">{cardError}</p>}
+        </div>
+
         <div className="card">
           <div className="text-sm font-semibold text-text">Your name</div>
           <p className="mt-1 text-[13px] text-text-2">Shown to your team and used across the app.</p>
