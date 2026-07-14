@@ -1,12 +1,11 @@
 {
   "cleanUrls": true,
-  "rewrites": [
-    { "source": "/crm/(.*)", "destination": "/crm/index.html" }
-  ],
-  "redirects": [
-    { "source": "/home", "destination": "/", "permanent": true },
-    { "source": "/about", "destination": "/about-us", "permanent": true },
-    { "source": "/sell", "destination": "/", "permanent": true },
-    { "source": "/contact", "destination": "/contact-us", "permanent": true }
+  "routes": [
+    { "src": "/home", "dest": "/", "status": 301 },
+    { "src": "/about", "dest": "/about-us", "status": 301 },
+    { "src": "/sell", "dest": "/", "status": 301 },
+    { "src": "/contact", "dest": "/contact-us", "status": 301 },
+    { "handle": "filesystem" },
+    { "src": "/crm/(.*)", "dest": "/crm/index.html" }
   ]
 }
