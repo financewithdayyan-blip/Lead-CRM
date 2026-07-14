@@ -1,11 +1,16 @@
 {
-  "cleanUrls": true,
   "routes": [
     { "src": "/home", "dest": "/", "status": 301 },
     { "src": "/about", "dest": "/about-us", "status": 301 },
     { "src": "/sell", "dest": "/", "status": 301 },
     { "src": "/contact", "dest": "/contact-us", "status": 301 },
+    { "src": "/about-us", "dest": "/about-us.html" },
+    { "src": "/contact-us", "dest": "/contact-us.html" },
+    { "src": "/privacy-policy", "dest": "/privacy-policy.html" },
+    { "src": "/terms-of-service", "dest": "/terms-of-service.html" },
+    { "src": "/communications-consent", "dest": "/communications-consent.html" },
+    { "src": "/do-not-sell", "dest": "/do-not-sell.html" },
     { "handle": "filesystem" },
-    { "src": "/crm/(.*)", "dest": "/crm/index.html" }
+    { "src": "/crm(/.*)?", "dest": "/crm/index.html" }
   ]
 }
