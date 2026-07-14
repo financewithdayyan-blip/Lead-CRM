@@ -1,12 +1,13 @@
 {
+  "cleanUrls": true,
   "rewrites": [
     { "source": "/crm/:path*", "destination": "/crm/index.html" }
   ],
   "redirects": [
     { "source": "/home", "destination": "/", "permanent": true },
-    { "source": "/about", "destination": "/about-us.html", "permanent": true },
+    { "source": "/about", "destination": "/about-us", "permanent": true },
     { "source": "/sell", "destination": "/", "permanent": true },
     { "source": "/privacy-policy", "destination": "/#privacy-policy", "permanent": false },
-    { "source": "/contact", "destination": "/contact-us.html", "permanent": true }
+    { "source": "/contact", "destination": "/contact-us", "permanent": true }
   ]
 }
