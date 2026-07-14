@@ -221,7 +221,8 @@ export function CallSessionPage() {
   const [summaryJustSubmitted, setSummaryJustSubmitted] = useState(false);
   const [copiedField, setCopiedField] = useState<'phone' | 'phone2' | null>(null);
   const [smsCopied, setSmsCopied] = useState(false);
-  const { cardDataUrl } = useBusinessCard();
+  const { cardDataUrl, copyCardToClipboard } = useBusinessCard();
+  const [cardCopied, setCardCopied] = useState(false);
 
   const followUpDays = useMemo(() => {
     const today = new Date();
@@ -453,22 +454,19 @@ export function CallSessionPage() {
       message = `Hi ${currentLead.firstName}. I tried reaching you today regarding your property at ${addressLine}. I'd love to have a quick conversation when you have a moment — feel free to call or text me back. Thank you!`;
     }
 
-    if (cardDataUrl) {
-      try {
-        const textBlob = new Blob([message], { type: 'text/plain' });
-        const imgBlob = await (await fetch(cardDataUrl)).blob();
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'text/plain': textBlob, 'image/png': imgBlob }),
-        ]);
-      } catch {
-        navigator.clipboard.writeText(message);
-      }
-    } else {
-      navigator.clipboard.writeText(message);
-    }
-
+    navigator.clipboard.writeText(message);
     setSmsCopied(true);
     setTimeout(() => setSmsCopied(false), 1500);
+  }
+
+  async function handleCopyCard() {
+    try {
+      await copyCardToClipboard();
+      setCardCopied(true);
+      setTimeout(() => setCardCopied(false), 1500);
+    } catch {
+      // silently ignore — clipboard permission denied
+    }
   }
 
   function saveAndNext() {
@@ -898,16 +896,14 @@ export function CallSessionPage() {
             </button>
 
             {cardDataUrl && (
-              <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2">
-                <img
-                  src={cardDataUrl}
-                  alt="Business card"
-                  className="h-10 max-w-[100px] rounded object-contain opacity-80"
-                />
-                <span className="text-[10.5px] text-slate-500">
-                  {smsCopied ? '✓ Text + card copied' : 'Card included with copy'}
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={handleCopyCard}
+                className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 py-2 text-[12px] font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-900"
+              >
+                <img src={cardDataUrl} alt="" className="h-5 w-auto rounded object-contain opacity-70" />
+                {cardCopied ? 'Card Copied!' : 'Copy Business Card'}
+              </button>
             )}
 
             {outcome === 'followup' && (
