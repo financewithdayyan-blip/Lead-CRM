@@ -4,9 +4,9 @@
   ],
   "redirects": [
     { "source": "/home", "destination": "/", "permanent": true },
-    { "source": "/about", "destination": "/", "permanent": true },
+    { "source": "/about", "destination": "/about-us.html", "permanent": true },
     { "source": "/sell", "destination": "/", "permanent": true },
-    { "source": "/privacy-policy", "destination": "/", "permanent": true },
-    { "source": "/contact", "destination": "/", "permanent": true }
+    { "source": "/privacy-policy", "destination": "/#privacy-policy", "permanent": false },
+    { "source": "/contact", "destination": "/contact-us.html", "permanent": true }
   ]
 }

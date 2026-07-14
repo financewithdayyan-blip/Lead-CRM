@@ -1419,6 +1419,21 @@ footer{
   .relief-float-tag .big{ font-size:21px; }
   .relief-card{ padding:36px 26px; }
 }
+
+/* ============================================
+   FAQ ACCORDION
+   ============================================ */
+.faq{ background: var(--paper-dim); }
+.faq-list{ max-width: 780px; margin: 0 auto; display:flex; flex-direction:column; gap:0; }
+.faq-item{ background:var(--white); border:1.5px solid var(--paper-line); border-radius:var(--radius-md); margin-bottom:10px; overflow:hidden; transition:border-color 0.2s; }
+.faq-item.open{ border-color:var(--sky); }
+.faq-btn{ width:100%; background:none; border:none; padding:22px 28px; text-align:left; display:flex; align-items:center; justify-content:space-between; gap:16px; cursor:pointer; }
+.faq-btn-text{ font-family:var(--sans); font-size:16px; font-weight:700; color:var(--ink); line-height:1.35; }
+.faq-chevron{ flex:none; width:20px; height:20px; color:var(--slate-dim); transition:transform 0.28s ease, color 0.2s; }
+.faq-item.open .faq-chevron{ transform:rotate(180deg); color:var(--sky); }
+.faq-body{ max-height:0; overflow:hidden; transition:max-height 0.35s ease, padding 0.35s ease; padding:0 28px; }
+.faq-item.open .faq-body{ max-height:400px; padding:0 28px 22px; }
+.faq-body p{ font-size:15px; line-height:1.75; color:var(--slate); margin:0; }
 </style>
 </head>
 <body>
@@ -1436,6 +1451,7 @@ footer{
       <a href="#offers">Offers</a>
       <a href="#promise">Our Promise</a>
       <a href="#markets">Markets</a>
+      <a href="/about-us.html">About</a>
       <a href="#contact">Contact</a>
     </nav>
     <a href="/crm" class="header-login">Login</a>
@@ -1849,6 +1865,96 @@ footer{
 </script>
 
 <!-- ============================================
+     FAQ
+     ============================================ -->
+<section class="faq">
+  <div class="container">
+    <div class="section-head center reveal" style="max-width:600px;">
+      <span class="eyebrow">FAQ</span>
+      <h2>Common Questions</h2>
+      <p>Answers to what sellers ask us most before getting started.</p>
+    </div>
+    <div class="faq-list reveal">
+
+      <div class="faq-item open">
+        <button class="faq-btn" type="button" aria-expanded="true">
+          <span class="faq-btn-text">How quickly can you close?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>We can typically close in as little as 30 days, or on whatever timeline works best for you. Because we pay cash, there are no bank approvals, appraisals, or inspection contingencies slowing things down. Urgent auction date coming up? We can move even faster.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-btn" type="button" aria-expanded="false">
+          <span class="faq-btn-text">Do I need to make repairs before selling?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>No. We buy homes exactly as they are — fire damage, foundation issues, code violations, full of belongings, you name it. You don't lift a finger. We handle repairs after closing.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-btn" type="button" aria-expanded="false">
+          <span class="faq-btn-text">Are there any fees or commissions?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>None. We cover all closing costs, title fees, and recording fees. There are no agent commissions and no hidden charges. The offer we make is what you receive at closing.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-btn" type="button" aria-expanded="false">
+          <span class="faq-btn-text">Can you help if I'm already in foreclosure?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>Yes. Foreclosure, tax liens, code violations, probate properties — these are exactly the situations we specialize in. We work with your lender and any lien holders directly. Time matters in foreclosure; contact us as soon as possible so we have room to act.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-btn" type="button" aria-expanded="false">
+          <span class="faq-btn-text">What states do you buy in?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>We currently operate in Florida, North Carolina, South Carolina, Illinois, Ohio, Georgia, Virginia, Texas, Tennessee, and Indiana. Not sure if your area qualifies? Submit your info and we'll let you know.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-btn" type="button" aria-expanded="false">
+          <span class="faq-btn-text">How is the offer price determined?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>We look at recent comparable sales in your area, the current condition of the property, and the estimated cost of repairs. We're transparent about how we arrive at our number, and there's never any pressure to accept.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-btn" type="button" aria-expanded="false">
+          <span class="faq-btn-text">What happens after I submit the form?</span>
+          <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-body"><p>A member of our acquisitions team will reach out within one business day — usually the same day. We'll ask a few follow-up questions about the property, then present a no-obligation cash offer. If you accept, we handle everything from there.</p></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+<script>
+(function(){
+  document.querySelectorAll('.faq-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var item = btn.closest('.faq-item');
+      var isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(function(el){
+        el.classList.remove('open');
+        el.querySelector('.faq-btn').setAttribute('aria-expanded','false');
+      });
+      if(!isOpen){
+        item.classList.add('open');
+        btn.setAttribute('aria-expanded','true');
+      }
+    });
+  });
+})();
+</script>
+
+<!-- ============================================
      FOOTER
      ============================================ -->
 <footer>
@@ -1864,6 +1970,7 @@ footer{
       <div class="footer-col">
         <h5>Company</h5>
         <ul>
+          <li><a href="/about-us.html">About Us</a></li>
           <li><a href="#what-we-do">What We Do</a></li>
           <li><a href="#offers">Our Offers</a></li>
           <li><a href="#promise">Our Promise</a></li>
@@ -1873,6 +1980,7 @@ footer{
       <div class="footer-col">
         <h5>Get In Touch</h5>
         <ul>
+          <li><a href="/contact-us.html">Contact Us</a></li>
           <li><a href="#contact">Request an Offer</a></li>
           <li><a href="tel:+12174082781">(217) 408-2781</a></li>
           <li><a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a></li>

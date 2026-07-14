@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About Us — Bluebird Acquisition</title>
+<meta name="description" content="Bluebird Acquisition helps distressed property owners sell fast, as-is, with no fees, repairs, or waiting. Learn who we are and how we work.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0B1E33; --ink-soft:#16314F;
+  --sky:#1E8FD5; --sky-deep:#1568A8;
+  --brass:#C9A24B; --brass-soft:#E4CD8C;
+  --paper:#F6F3EC; --paper-dim:#EDE8DB; --paper-line:#DCD5C2;
+  --slate:#57667A; --slate-dim:#8693A1; --white:#FFFFFF;
+  --serif:'Fraunces',Georgia,serif;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+  --container:1100px; --radius-md:14px;
+  --shadow-card:0 1px 2px rgba(11,30,51,0.04),0 8px 24px -8px rgba(11,30,51,0.12);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;}
+a{color:inherit;text-decoration:none;}
+img{max-width:100%;display:block;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;}
+
+.site-header{
+  background:var(--ink);padding:18px 32px;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-weight:700;font-size:18px;color:var(--white);}
+.brand:hover{opacity:0.88;}
+.brand-logo{height:26px;width:auto;}
+.b-acq{color:var(--sky);font-weight:500;}
+.back-home{font-size:13.5px;font-weight:600;color:rgba(246,243,236,0.7);display:inline-flex;align-items:center;gap:6px;transition:color 0.2s;}
+.back-home:hover{color:var(--white);}
+
+/* HERO */
+.about-hero{
+  background:var(--ink);color:var(--white);
+  padding:96px 32px 80px;text-align:center;
+  position:relative;overflow:hidden;
+}
+.about-hero::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 60% 70% at 50% -10%,rgba(30,143,213,0.38),transparent 60%);
+  pointer-events:none;
+}
+.about-hero-inner{position:relative;max-width:680px;margin:0 auto;}
+.about-eyebrow{
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--brass-soft);
+  display:block;margin-bottom:20px;
+}
+.about-hero h1{
+  font-family:var(--serif);font-size:clamp(2rem,5vw,3.2rem);
+  font-weight:700;line-height:1.08;margin-bottom:20px;
+}
+.about-hero h1 em{font-style:italic;font-weight:500;color:var(--sky);}
+.about-hero p{font-size:18px;line-height:1.65;color:rgba(246,243,236,0.75);max-width:52ch;margin:0 auto;}
+
+/* STATS */
+.stat-row{
+  background:var(--white);
+  display:flex;flex-wrap:wrap;justify-content:center;gap:0;
+  border-bottom:1px solid var(--paper-line);
+}
+.stat-cell{
+  flex:1;min-width:180px;padding:36px 32px;text-align:center;
+  border-right:1px solid var(--paper-line);
+}
+.stat-cell:last-child{border-right:none;}
+.stat-num{font-family:var(--serif);font-size:2.4rem;font-weight:700;color:var(--sky);line-height:1;}
+.stat-label{font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--slate-dim);margin-top:8px;}
+
+/* SECTIONS */
+.section{padding:80px 32px;}
+.section-inner{max-width:var(--container);margin:0 auto;}
+.section-eyebrow{
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--sky-deep);
+  display:block;margin-bottom:14px;
+}
+.section h2{font-family:var(--serif);font-size:clamp(1.6rem,3vw,2.2rem);font-weight:700;color:var(--ink);margin-bottom:18px;line-height:1.12;}
+.section p{font-size:16px;line-height:1.75;color:var(--slate);max-width:66ch;}
+
+/* MISSION + VALUES */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start;}
+.value-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:40px;}
+.value-card{
+  background:var(--white);border:1.5px solid var(--paper-line);
+  border-radius:var(--radius-md);padding:28px 24px;
+  box-shadow:var(--shadow-card);
+}
+.value-card .vc-icon{width:36px;height:36px;border-radius:8px;background:rgba(30,143,213,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:14px;}
+.value-card .vc-icon svg{width:18px;height:18px;color:var(--sky);}
+.value-card h4{font-family:var(--sans);font-size:15px;font-weight:700;color:var(--ink);margin-bottom:8px;}
+.value-card p{font-size:13.5px;line-height:1.65;color:var(--slate);}
+
+/* PROCESS */
+.process-section{background:var(--ink);color:var(--white);}
+.process-section .section-eyebrow{color:var(--brass-soft);}
+.process-section h2{color:var(--white);}
+.process-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:48px;}
+.process-step{position:relative;}
+.step-num{
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:0.1em;color:var(--brass-soft);display:block;margin-bottom:14px;
+}
+.process-step h3{font-family:var(--serif);font-size:1.2rem;font-weight:700;color:var(--white);margin-bottom:10px;}
+.process-step p{font-size:15px;line-height:1.7;color:rgba(246,243,236,0.68);}
+
+/* CTA */
+.cta-section{background:var(--sky);text-align:center;padding:72px 32px;}
+.cta-section h2{font-family:var(--serif);font-size:clamp(1.6rem,3vw,2.2rem);font-weight:700;color:var(--white);margin-bottom:16px;}
+.cta-section p{font-size:17px;color:rgba(255,255,255,0.82);margin-bottom:36px;max-width:50ch;margin-left:auto;margin-right:auto;line-height:1.6;}
+.btn-white{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--white);color:var(--sky-deep);
+  font-weight:700;font-size:15px;padding:15px 32px;
+  border-radius:100px;transition:transform 0.2s,box-shadow 0.2s;
+}
+.btn-white:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.18);}
+
+/* FOOTER */
+footer{
+  background:var(--ink);color:rgba(246,243,236,0.65);
+  padding:36px 32px;text-align:center;font-size:13.5px;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+}
+.footer-legal-links{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 12px;}
+.footer-legal-links a{color:rgba(246,243,236,0.6);font-size:13px;transition:color 0.2s;}
+.footer-legal-links a:hover{color:var(--sky);}
+.footer-legal-links .fl-dot{opacity:0.35;}
+
+@media(max-width:860px){
+  .two-col{grid-template-columns:1fr;}
+  .value-grid{grid-template-columns:1fr;}
+  .process-steps{grid-template-columns:1fr;}
+  .stat-cell{min-width:140px;}
+}
+@media(max-width:600px){
+  .site-header{padding:16px 20px;}
+  .about-hero{padding:72px 20px 60px;}
+  .section{padding:60px 20px;}
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a href="/" class="brand">
+    <img src="/logo-mark.svg" alt="" class="brand-logo">
+    Bluebird<span class="b-acq">&nbsp;Acquisition</span>
+  </a>
+  <a href="/" class="back-home">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Back to Home
+  </a>
+</header>
+
+<div class="about-hero">
+  <div class="about-hero-inner">
+    <span class="about-eyebrow">About Bluebird Acquisition</span>
+    <h1>We <em>solve</em> the problems<br>other buyers walk away from.</h1>
+    <p>We buy distressed properties in any condition, handle every detail, and let homeowners move forward — without the burden of repairs, agents, or bank delays.</p>
+  </div>
+</div>
+
+<div class="stat-row">
+  <div class="stat-cell">
+    <div class="stat-num">30</div>
+    <div class="stat-label">Days to close</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">10</div>
+    <div class="stat-label">States served</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">$0</div>
+    <div class="stat-label">Fees to you</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">As-Is</div>
+    <div class="stat-label">No repairs needed</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="section-inner two-col">
+    <div>
+      <span class="section-eyebrow">Our Mission</span>
+      <h2>A simpler path forward for homeowners in tough spots.</h2>
+      <p>Foreclosure notices, tax liens, code violation orders, inherited properties — these situations don't fit the traditional listing process. Bluebird Acquisition was built specifically for them.</p>
+      <p style="margin-top:16px;">We work directly with property owners, lien holders, and county offices to cut through complexity and get to closing fast. No middlemen, no surprises.</p>
+    </div>
+    <div>
+      <div class="value-grid">
+        <div class="value-card">
+          <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <h4>No Repairs</h4>
+          <p>We buy in any condition — fire damage, foundation issues, full of belongings.</p>
+        </div>
+        <div class="value-card">
+          <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <h4>Fast Close</h4>
+          <p>As little as 30 days. No bank approval waiting, no appraisal contingencies.</p>
+        </div>
+        <div class="value-card">
+          <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h4>Zero Fees</h4>
+          <p>We cover all closing costs, title fees, and commissions. The offer is what you get.</p>
+        </div>
+        <div class="value-card">
+          <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <h4>Dedicated Team</h4>
+          <p>Real people who specialize in complex, time-sensitive property situations.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section process-section">
+  <div class="section-inner">
+    <span class="section-eyebrow">How It Works</span>
+    <h2>Three steps from inquiry to closing.</h2>
+    <div class="process-steps">
+      <div class="process-step">
+        <span class="step-num">01 — Submit</span>
+        <h3>Tell us about the property.</h3>
+        <p>Fill out the form or call us. No photos required, no showing scheduled — just a few basic details about the address and your situation.</p>
+      </div>
+      <div class="process-step">
+        <span class="step-num">02 — Receive an Offer</span>
+        <h3>Get a no-obligation cash offer.</h3>
+        <p>We research comps and present a fair offer within one business day. No pressure — you decide if and when to move forward.</p>
+      </div>
+      <div class="process-step">
+        <span class="step-num">03 — Close on Your Timeline</span>
+        <h3>Pick the date. We handle the rest.</h3>
+        <p>We coordinate title, pay off any liens, and handle all paperwork. Close in as little as 30 days — or on whatever date works for you.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <span class="section-eyebrow">Where We Buy</span>
+    <h2>Active in 10 states across the Southeast and Midwest.</h2>
+    <p>We currently serve: Florida · North Carolina · South Carolina · Illinois · Ohio · Georgia · Virginia · Texas · Tennessee · Indiana.</p>
+    <p style="margin-top:14px;font-size:14px;color:var(--slate-dim);">Don't see your state? Contact us anyway — our coverage is expanding.</p>
+  </div>
+</section>
+
+<div class="cta-section">
+  <h2>Ready to get a cash offer?</h2>
+  <p>No obligation. No repairs. No waiting. Just a fast, fair offer on your property as-is.</p>
+  <a href="/#contact" class="btn-white">
+    Get My Cash Offer
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </a>
+</div>
+
+<footer>
+  <span>© 2026 Bluebird Acquisition. All rights reserved.</span>
+  <span class="footer-legal-links">
+    <a href="/about-us.html">About Us</a>
+    <span class="fl-dot">·</span>
+    <a href="/contact-us.html">Contact Us</a>
+    <span class="fl-dot">·</span>
+    <a href="/#privacy-policy" class="legal-link">Privacy Policy</a>
+    <span class="fl-dot">·</span>
+    <a href="/#terms-of-service" class="legal-link">Terms of Service</a>
+    <span class="fl-dot">·</span>
+    <a href="/#communications-consent" class="legal-link">Communications Consent</a>
+    <span class="fl-dot">·</span>
+    <a href="/#do-not-sell" class="legal-link">Do Not Sell My Info</a>
+  </span>
+</footer>
+
+</body>
+</html>
