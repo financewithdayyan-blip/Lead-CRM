@@ -221,9 +221,7 @@ export function CallSessionPage() {
   const [summaryJustSubmitted, setSummaryJustSubmitted] = useState(false);
   const [copiedField, setCopiedField] = useState<'phone' | 'phone2' | null>(null);
   const [smsCopied, setSmsCopied] = useState(false);
-  const [cardCopied, setCardCopied] = useState(false);
-  const [cardCopyError, setCardCopyError] = useState(false);
-  const { cardDataUrl, copyCardToClipboard } = useBusinessCard();
+  const { cardDataUrl } = useBusinessCard();
 
   const followUpDays = useMemo(() => {
     const today = new Date();
@@ -424,7 +422,7 @@ export function CallSessionPage() {
     setTimeout(() => setCopiedField((prev) => (prev === field ? null : prev)), 1200);
   }
 
-  function copySmsMessage() {
+  async function copySmsMessage() {
     if (!currentLead) return;
 
     const leadTagNames = currentLead.tagIds
@@ -455,21 +453,22 @@ export function CallSessionPage() {
       message = `Hi ${currentLead.firstName}. I tried reaching you today regarding your property at ${addressLine}. I'd love to have a quick conversation when you have a moment — feel free to call or text me back. Thank you!`;
     }
 
-    navigator.clipboard.writeText(message);
+    if (cardDataUrl) {
+      try {
+        const textBlob = new Blob([message], { type: 'text/plain' });
+        const imgBlob = await (await fetch(cardDataUrl)).blob();
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'text/plain': textBlob, 'image/png': imgBlob }),
+        ]);
+      } catch {
+        navigator.clipboard.writeText(message);
+      }
+    } else {
+      navigator.clipboard.writeText(message);
+    }
+
     setSmsCopied(true);
     setTimeout(() => setSmsCopied(false), 1500);
-  }
-
-  async function handleCopyCard() {
-    try {
-      await copyCardToClipboard();
-      setCardCopied(true);
-      setCardCopyError(false);
-      setTimeout(() => setCardCopied(false), 1500);
-    } catch {
-      setCardCopyError(true);
-      setTimeout(() => setCardCopyError(false), 2500);
-    }
   }
 
   function saveAndNext() {
@@ -899,38 +898,15 @@ export function CallSessionPage() {
             </button>
 
             {cardDataUrl && (
-              <div className={`mt-2 rounded-lg border p-2.5 transition-colors ${smsCopied ? 'border-emerald-700/60 bg-emerald-950/30' : 'border-slate-800 bg-slate-950/40'}`}>
-                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Your Business Card
-                </div>
-                <div className="flex items-center gap-3">
-                  <img
-                    src={cardDataUrl}
-                    alt="Business card"
-                    className="h-14 max-w-[140px] rounded-md object-contain"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyCard}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-1.5 text-[11.5px] font-semibold transition-all ${
-                      cardCopied
-                        ? 'border-emerald-600 bg-emerald-900/40 text-emerald-300'
-                        : cardCopyError
-                        ? 'border-red-800 bg-red-950/40 text-red-400'
-                        : smsCopied
-                        ? 'animate-pulse border-emerald-700/60 bg-emerald-900/20 text-emerald-400'
-                        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500 hover:text-slate-100'
-                    }`}
-                  >
-                    <Copy size={11} />
-                    {cardCopied ? 'Image copied!' : cardCopyError ? 'Copy failed' : 'Copy Image'}
-                  </button>
-                </div>
-                {smsCopied && !cardCopied && (
-                  <p className="mt-1.5 text-[10px] text-emerald-500">
-                    Text copied — now copy your card image and paste it in the message too.
-                  </p>
-                )}
+              <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2">
+                <img
+                  src={cardDataUrl}
+                  alt="Business card"
+                  className="h-10 max-w-[100px] rounded object-contain opacity-80"
+                />
+                <span className="text-[10.5px] text-slate-500">
+                  {smsCopied ? '✓ Text + card copied' : 'Card included with copy'}
+                </span>
               </div>
             )}
 
