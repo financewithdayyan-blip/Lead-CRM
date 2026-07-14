@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /crm
 
-Sitemap: https://bluebirdacquisition.com/sitemap.xml
+Sitemap: https://www.bluebirdacquisition.com/sitemap.xml
