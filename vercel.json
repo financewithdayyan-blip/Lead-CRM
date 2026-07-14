@@ -8,6 +8,9 @@
     { "source": "/about", "destination": "/about-us", "permanent": true },
     { "source": "/sell", "destination": "/", "permanent": true },
     { "source": "/privacy-policy", "destination": "/#privacy-policy", "permanent": false },
+    { "source": "/terms-of-service", "destination": "/#terms-of-service", "permanent": false },
+    { "source": "/communications-consent", "destination": "/#communications-consent", "permanent": false },
+    { "source": "/do-not-sell", "destination": "/#do-not-sell", "permanent": false },
     { "source": "/contact", "destination": "/contact-us", "permanent": true }
   ]
 }
