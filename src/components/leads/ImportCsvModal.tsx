@@ -61,6 +61,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
           propType: m.propType || null,
           auctionDate: m.auctionDate || null,
           source: m.source || batchSource || null,
+          notes: m.notes || null,
           stage: 'new' as const,
           rating: 0,
           tagIds: selectedTagIds,

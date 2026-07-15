@@ -40,6 +40,7 @@ export const CSV_FIELD_GUESSES: Array<{ key: string; label: string; patterns: Re
   { key: 'proptype', label: 'Property Type', patterns: [/property.?type|prop.?type|type|category/i], optional: true },
   { key: 'auctiondate', label: 'Auction Date', patterns: [/auction.?date|sale.?date|foreclosure.?date|\bauction\b/i], optional: true },
   { key: 'source', label: 'Source', patterns: [/source|lead.?source|campaign|list/i], optional: true },
+  { key: 'notes', label: 'Notes', patterns: [/\bnotes?\b|comments?|remarks?|description/i], optional: true },
 ];
 
 export function guessColumnMapping(headers: string[]): Record<string, number | null> {
@@ -75,6 +76,7 @@ export interface MappedCsvLead {
   auctionDateDisplay: string;  // human-readable parsed date, e.g. "Jul 9, 2026"
   auctionDateWarning: string | null; // non-null when the date looks suspect
   source: string;
+  notes: string;
 }
 
 export function mapRowsToLeads(rows: string[][], mapping: Record<string, number | null>): MappedCsvLead[] {
@@ -110,6 +112,7 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
           };
         })(),
         source: cellAt(r, mapping.source),
+        notes: cellAt(r, mapping.notes),
       };
     });
 }
