@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2 } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares } from '@/hooks/useLeadShares';
@@ -51,6 +51,16 @@ function KanbanCardVisual({
   lifted?: boolean;
 }) {
   const stars = lead.rating > 0 ? '★'.repeat(lead.rating) + '☆'.repeat(5 - lead.rating) : '';
+  const [copied, setCopied] = useState(false);
+
+  function copyPhone(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!lead.phone) return;
+    navigator.clipboard.writeText(lead.phone).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
 
   return (
     <div
@@ -67,7 +77,18 @@ function KanbanCardVisual({
           </div>
           <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
         </div>
-        <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
+        <div className="mt-1 flex items-center gap-1.5">
+          <span className="text-text-2">{formatPhone(lead.phone)}</span>
+          {lead.phone && (
+            <button
+              onClick={copyPhone}
+              className={`rounded p-0.5 transition-colors ${copied ? 'text-success' : 'text-text-3 hover:text-text-2'}`}
+              title={copied ? 'Copied!' : 'Copy phone number'}
+            >
+              {copied ? <Check size={10} /> : <Copy size={10} />}
+            </button>
+          )}
+        </div>
         {lead.address && (
           <div className="mt-0.5 truncate text-text-3" title={lead.address}>
             📍 {lead.address}
