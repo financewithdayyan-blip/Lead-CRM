@@ -82,10 +82,10 @@ function KanbanCardVisual({
           {lead.phone && (
             <button
               onClick={copyPhone}
-              className={`rounded p-0.5 transition-colors ${copied ? 'text-success' : 'text-text-3 hover:text-text-2'}`}
+              className={`rounded p-0.5 transition-colors ${copied ? 'text-success' : 'text-text-2 hover:bg-surface-3'}`}
               title={copied ? 'Copied!' : 'Copy phone number'}
             >
-              {copied ? <Check size={10} /> : <Copy size={10} />}
+              {copied ? <Check size={12} /> : <Copy size={12} />}
             </button>
           )}
         </div>
