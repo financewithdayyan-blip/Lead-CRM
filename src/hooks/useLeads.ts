@@ -4,7 +4,11 @@ import { dbToLead, leadToDbInsert, leadToDbUpdate } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Lead } from '@/types/domain';
 
-const LEAD_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
+// List views (Kanban, leads table, dashboard) don't render comps or files —
+// omitting them cuts payload by ~70% for large accounts.
+const LEAD_LIST_SELECT = '*, lead_tags(tag_id)';
+// Detail view (lead profile) needs comps and files.
+const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 export function useLeads(targetUserId?: string) {
   const { session } = useAuth();
@@ -18,7 +22,7 @@ export function useLeads(targetUserId?: string) {
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select(LEAD_SELECT)
+          .select(LEAD_LIST_SELECT)
           .eq('user_id', userId)
           .order('lead_num', { ascending: true })
           .range(offset, offset + PAGE - 1);
@@ -44,7 +48,7 @@ export function prefetchLeads(qc: QueryClient, userId: string) {
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select(LEAD_SELECT)
+          .select(LEAD_LIST_SELECT)
           .eq('user_id', userId)
           .order('lead_num', { ascending: true })
           .range(offset, offset + PAGE - 1);
@@ -65,7 +69,7 @@ export function useLead(id: string | undefined) {
   return useQuery({
     queryKey: ['lead', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('leads').select(LEAD_SELECT).eq('id', id).single();
+      const { data, error } = await supabase.from('leads').select(LEAD_DETAIL_SELECT).eq('id', id).single();
       if (error) throw error;
       return dbToLead(data);
     },
@@ -124,8 +128,12 @@ export function useUpdateLead() {
       if (error) throw error;
       return id;
     },
-    onSuccess: (id) => {
-      qc.invalidateQueries({ queryKey: ['leads'] });
+    onSuccess: (id, variables) => {
+      const { id: _id, ...updates } = variables;
+      // Patch the list cache in place — no full refetch of 4000 leads.
+      qc.setQueriesData<Lead[]>({ queryKey: ['leads'] }, (old) =>
+        old?.map((l) => (l.id === id ? { ...l, ...updates } : l)),
+      );
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['activities', id] });
     },

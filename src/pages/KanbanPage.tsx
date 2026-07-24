@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -156,49 +156,57 @@ function KanbanCardVisual({
 
 // ─── Draggable card (in-column) ───────────────────────────────────────────────
 
-function KanbanCard({
-  lead,
-  viewOnly,
-  tags,
-  sharedFrom,
-  onCall,
-  onOpen,
-  onDelete,
-}: {
-  lead: Lead;
-  viewOnly: boolean;
-  tags: Tag[];
-  sharedFrom?: string;
-  onCall: () => void;
-  onOpen: () => void;
-  onDelete: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
+const KanbanCard = memo(
+  function KanbanCard({
+    lead,
+    viewOnly,
+    tags,
+    sharedFrom,
+    onCall,
+    onOpen,
+    onDelete,
+  }: {
+    lead: Lead;
+    viewOnly: boolean;
+    tags: Tag[];
+    sharedFrom?: string;
+    onCall: () => void;
+    onOpen: () => void;
+    onDelete: () => void;
+  }) {
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
 
-  return (
-    <div ref={setNodeRef}>
-      {isDragging ? (
-        // Ghost placeholder — keeps the column slot visible while the overlay floats
-        <div className="min-h-[60px] rounded-md border border-dashed border-border-2 bg-surface-2 opacity-40" />
-      ) : (
-        <KanbanCardVisual
-          lead={lead}
-          viewOnly={viewOnly}
-          tags={tags}
-          sharedFrom={sharedFrom}
-          onCall={onCall}
-          onOpen={onOpen}
-          onDelete={onDelete}
-          dragProps={{ ...listeners, ...attributes }}
-        />
-      )}
-    </div>
-  );
-}
+    return (
+      <div ref={setNodeRef}>
+        {isDragging ? (
+          // Ghost placeholder — keeps the column slot visible while the overlay floats
+          <div className="min-h-[60px] rounded-md border border-dashed border-border-2 bg-surface-2 opacity-40" />
+        ) : (
+          <KanbanCardVisual
+            lead={lead}
+            viewOnly={viewOnly}
+            tags={tags}
+            sharedFrom={sharedFrom}
+            onCall={onCall}
+            onOpen={onOpen}
+            onDelete={onDelete}
+            dragProps={{ ...listeners, ...attributes }}
+          />
+        )}
+      </div>
+    );
+  },
+  // Skip re-renders when only callback refs change — data props are what matter.
+  (prev, next) =>
+    prev.lead === next.lead &&
+    prev.viewOnly === next.viewOnly &&
+    prev.tags === next.tags &&
+    prev.sharedFrom === next.sharedFrom,
+);
 
 // ─── Column ───────────────────────────────────────────────────────────────────
 
-function KanbanColumn({
+const KanbanColumn = memo(function KanbanColumn({
   stage,
   leads,
   viewOnly,
@@ -207,7 +215,7 @@ function KanbanColumn({
   onCall,
   onOpen,
   onDelete,
-  onClear,
+  setClearTarget,
 }: {
   stage: LeadStage;
   leads: Lead[];
@@ -217,7 +225,7 @@ function KanbanColumn({
   onCall: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
-  onClear: () => void;
+  setClearTarget: (stage: LeadStage | null) => void;
 }) {
   const cfg = STAGE_CONFIG[stage];
   const { setNodeRef, isOver } = useDroppable({ id: stage });
@@ -232,7 +240,7 @@ function KanbanColumn({
         <div className="flex-1 text-[13px] font-semibold text-text">{cfg.label}</div>
         <div className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-3">{leads.length}</div>
         {CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
-          <button onClick={onClear} className="text-text-3 hover:text-danger" title={`Delete all ${cfg.label}`}>
+          <button onClick={() => setClearTarget(stage)} className="text-text-3 hover:text-danger" title={`Delete all ${cfg.label}`}>
             <Trash2 size={13} />
           </button>
         )}
@@ -254,7 +262,7 @@ function KanbanColumn({
       </div>
     </div>
   );
-}
+});
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
@@ -273,7 +281,8 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const [clearTarget, setClearTarget] = useState<LeadStage | null>(null);
   const [calledId, setCalledId] = useState<string | null>(null);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
-  // Optimistic stage overrides — applied immediately on drop, cleared on server settle
+  // Optimistic stage overrides — applied immediately on drop, cleared once the
+  // cache patch lands so there is no visible snap-back.
   const [optimisticStages, setOptimisticStages] = useState<Record<string, LeadStage>>({});
 
   // Require 8px movement before drag starts so button clicks aren't accidentally intercepted
@@ -293,6 +302,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       });
   }, [leads, search, tagFilter, optimisticStages]);
 
+  // Pre-compute per-stage arrays so each KanbanColumn only re-renders when
+  // leads in its own stage change, not when any other stage changes.
+  const byStage = useMemo(() => {
+    const map = Object.fromEntries(STAGE_ORDER.map((s) => [s, [] as Lead[]])) as Record<LeadStage, Lead[]>;
+    for (const lead of filtered) map[lead.stage as LeadStage]?.push(lead);
+    return map;
+  }, [filtered]);
+
   function handleDragStart(e: DragStartEvent) {
     const lead = leads.find((l) => l.id === e.active.id);
     if (lead) setActiveLead(lead);
@@ -306,23 +323,16 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     const newStage = over.id as LeadStage;
     if (!lead || lead.stage === newStage || !STAGE_ORDER.includes(newStage)) return;
 
-    // Move the card to the new column instantly — don't wait for the server
     setOptimisticStages((prev) => ({ ...prev, [lead.id]: newStage }));
 
-    updateLead.mutate(
-      { id: lead.id, stage: newStage },
-      {
-        onSettled: () => {
-          // React Query invalidates the cache on settle; remove the override so
-          // the real server value (or rollback) takes over cleanly.
-          setOptimisticStages((prev) => {
-            const next = { ...prev };
-            delete next[lead.id];
-            return next;
-          });
-        },
-      },
-    );
+    const clearOptimistic = () =>
+      setOptimisticStages((prev) => {
+        const next = { ...prev };
+        delete next[lead.id];
+        return next;
+      });
+
+    updateLead.mutate({ id: lead.id, stage: newStage }, { onSuccess: clearOptimistic, onError: clearOptimistic });
   }
 
   function handleClear(stage: LeadStage) {
@@ -331,11 +341,15 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     setClearTarget(null);
   }
 
-  function handleCall(id: string) {
+  const handleCall = useCallback((id: string) => {
     addActivity.mutate({ leadId: id, type: 'call', body: 'Quick call logged from Kanban board' });
     setCalledId(id);
     setTimeout(() => setCalledId((prev) => (prev === id ? null : prev)), 1200);
-  }
+  }, [addActivity]);
+
+  const handleOpen = useCallback((id: string) => {
+    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`);
+  }, [navigate, targetUserId]);
 
   return (
     <div>
@@ -373,14 +387,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
             <KanbanColumn
               key={stage}
               stage={stage}
-              leads={filtered.filter((l) => l.stage === stage)}
+              leads={byStage[stage]}
               viewOnly={viewOnly}
               tags={tags}
               receivedShares={receivedShares}
               onCall={handleCall}
-              onOpen={(id) => navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`)}
+              onOpen={handleOpen}
               onDelete={setDeleteTarget}
-              onClear={() => setClearTarget(stage)}
+              setClearTarget={setClearTarget}
             />
           ))}
         </div>
