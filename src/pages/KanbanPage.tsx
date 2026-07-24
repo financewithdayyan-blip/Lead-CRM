@@ -77,18 +77,7 @@ function KanbanCardVisual({
           </div>
           <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
         </div>
-        <div className="mt-1 flex items-center gap-1.5">
-          <span className="text-text-2">{formatPhone(lead.phone)}</span>
-          {lead.phone && (
-            <button
-              onClick={copyPhone}
-              className={`rounded p-0.5 transition-colors ${copied ? 'text-success' : 'text-text-2 hover:bg-surface-3'}`}
-              title={copied ? 'Copied!' : 'Copy phone number'}
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-            </button>
-          )}
-        </div>
+        <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
         {lead.address && (
           <div className="mt-0.5 truncate text-text-3" title={lead.address}>
             📍 {lead.address}
@@ -135,6 +124,15 @@ function KanbanCardVisual({
       <div className="mt-1.5 flex items-center justify-between">
         <div>{stars && <div className="text-warning">{stars}</div>}</div>
         <div className="flex gap-1">
+          {lead.phone && (
+            <button
+              onClick={copyPhone}
+              className={`rounded-md border p-1 transition-colors ${copied ? 'border-success bg-surface-3 text-success' : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'}`}
+              title={copied ? 'Copied!' : 'Copy phone'}
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          )}
           {!viewOnly && (
             <button
               onClick={(e) => {
