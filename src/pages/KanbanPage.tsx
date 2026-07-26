@@ -11,11 +11,13 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
-import { useReceivedLeadShares } from '@/hooks/useLeadShares';
+import { useReceivedLeadShares, useAdminShareLeadToCaller } from '@/hooks/useLeadShares';
 import { useAddActivity } from '@/hooks/useActivities';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
@@ -26,6 +28,41 @@ import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 
+function exportCsv(selectedLeads: Lead[], tags: Tag[]) {
+  const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
+  const header = ['Lead#', 'First Name', 'Last Name', 'Phone', 'Phone 2', 'Email', 'Address', 'City', 'State', 'Zip', 'Stage', 'Tags', 'Rating', 'Notes', 'Source', 'Created'];
+  const rows = selectedLeads.map((l) => [
+    l.leadNum ?? '',
+    l.firstName,
+    l.lastName,
+    l.phone,
+    l.phone2 ?? '',
+    l.email ?? '',
+    l.address ?? '',
+    l.city ?? '',
+    l.state ?? '',
+    l.zip ?? '',
+    STAGE_CONFIG[l.stage].label,
+    l.tagIds.map((id) => tagMap[id] ?? '').filter(Boolean).join('; '),
+    l.rating,
+    l.notes ?? '',
+    l.source ?? '',
+    l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '',
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── Shared card visual ──────────────────────────────────────────────────────
 // Used both in-column (with drag handles) and in the DragOverlay (static copy).
 
@@ -34,6 +71,8 @@ function KanbanCardVisual({
   viewOnly,
   tags,
   sharedFrom,
+  selected,
+  onToggleSelect,
   onCall,
   onOpen,
   onDelete,
@@ -44,6 +83,8 @@ function KanbanCardVisual({
   viewOnly: boolean;
   tags: Tag[];
   sharedFrom?: string;
+  selected: boolean;
+  onToggleSelect: () => void;
   onCall: () => void;
   onOpen: () => void;
   onDelete: () => void;
@@ -65,61 +106,75 @@ function KanbanCardVisual({
   return (
     <div
       className={`rounded-md border p-2.5 text-[12px] ${
-        sharedFrom ? 'border-info/30 bg-info-dim' : 'border-border-2 bg-surface'
+        selected
+          ? 'border-primary bg-primary/5'
+          : sharedFrom
+            ? 'border-info/30 bg-info-dim'
+            : 'border-border-2 bg-surface'
       } ${lifted ? 'rotate-1 shadow-2xl' : 'shadow-card'}`}
       style={lifted ? { willChange: 'transform' } : undefined}
       onDoubleClick={onOpen}
     >
-      <div {...dragProps} className={dragProps ? 'cursor-grab active:cursor-grabbing' : undefined}>
-        <div className="flex items-start justify-between gap-1">
-          <div className="truncate font-medium text-text">
-            {lead.firstName} {lead.lastName}
+      {/* Checkbox row — outside dragProps so clicks don't start a drag */}
+      <div className="flex items-start gap-1.5">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-0.5 h-3 w-3 shrink-0 cursor-pointer accent-primary"
+        />
+        <div {...dragProps} className={`min-w-0 flex-1 ${dragProps ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+          <div className="flex items-start justify-between gap-1">
+            <div className="truncate font-medium text-text">
+              {lead.firstName} {lead.lastName}
+            </div>
+            <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
           </div>
-          <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
+          <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
+          {lead.address && (
+            <div className="mt-0.5 truncate text-text-3" title={lead.address}>
+              📍 {lead.address}
+            </div>
+          )}
+          {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
+          {sharedFrom && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
+              <Share2 size={9} /> Shared by {sharedFrom}
+            </div>
+          )}
+          {lead.tagIds.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {lead.tagIds.slice(0, 2).map((tid) => {
+                const tag = tags.find((t) => t.id === tid);
+                return tag ? <TagPill key={tid} tag={tag} /> : null;
+              })}
+            </div>
+          )}
+          {lead.stage === 'followup' &&
+            (() => {
+              const todayStr = localIsoDate(new Date());
+              const dueToday =
+                isTouchScheduledToday(lead.followupStartDate, todayStr) &&
+                !isTouchedToday(lead.touchDates, todayStr) &&
+                lead.touchCount < 10;
+              const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
+              return (
+                <div
+                  className={`mt-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    dueToday ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-text-3'
+                  }`}
+                >
+                  <span>{lead.touchCount}/10 touches</span>
+                  {dueToday ? (
+                    <span>· due today</span>
+                  ) : nextDate ? (
+                    <span>· next {formatTouchDate(nextDate)}</span>
+                  ) : null}
+                </div>
+              );
+            })()}
         </div>
-        <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
-        {lead.address && (
-          <div className="mt-0.5 truncate text-text-3" title={lead.address}>
-            📍 {lead.address}
-          </div>
-        )}
-        {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
-        {sharedFrom && (
-          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
-            <Share2 size={9} /> Shared by {sharedFrom}
-          </div>
-        )}
-        {lead.tagIds.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {lead.tagIds.slice(0, 2).map((tid) => {
-              const tag = tags.find((t) => t.id === tid);
-              return tag ? <TagPill key={tid} tag={tag} /> : null;
-            })}
-          </div>
-        )}
-        {lead.stage === 'followup' &&
-          (() => {
-            const todayStr = localIsoDate(new Date());
-            const dueToday =
-              isTouchScheduledToday(lead.followupStartDate, todayStr) &&
-              !isTouchedToday(lead.touchDates, todayStr) &&
-              lead.touchCount < 10;
-            const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
-            return (
-              <div
-                className={`mt-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                  dueToday ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-text-3'
-                }`}
-              >
-                <span>{lead.touchCount}/10 touches</span>
-                {dueToday ? (
-                  <span>· due today</span>
-                ) : nextDate ? (
-                  <span>· next {formatTouchDate(nextDate)}</span>
-                ) : null}
-              </div>
-            );
-          })()}
       </div>
       <div className="mt-1.5 flex items-center justify-between">
         <div>{stars && <div className="text-warning">{stars}</div>}</div>
@@ -181,6 +236,8 @@ const KanbanCard = memo(
     viewOnly,
     tags,
     sharedFrom,
+    selected,
+    onToggleSelect,
     onCall,
     onOpen,
     onDelete,
@@ -189,6 +246,8 @@ const KanbanCard = memo(
     viewOnly: boolean;
     tags: Tag[];
     sharedFrom?: string;
+    selected: boolean;
+    onToggleSelect: () => void;
     onCall: () => void;
     onOpen: () => void;
     onDelete: () => void;
@@ -206,6 +265,8 @@ const KanbanCard = memo(
             viewOnly={viewOnly}
             tags={tags}
             sharedFrom={sharedFrom}
+            selected={selected}
+            onToggleSelect={onToggleSelect}
             onCall={onCall}
             onOpen={onOpen}
             onDelete={onDelete}
@@ -220,7 +281,8 @@ const KanbanCard = memo(
     prev.lead === next.lead &&
     prev.viewOnly === next.viewOnly &&
     prev.tags === next.tags &&
-    prev.sharedFrom === next.sharedFrom,
+    prev.sharedFrom === next.sharedFrom &&
+    prev.selected === next.selected,
 );
 
 // ─── Column ───────────────────────────────────────────────────────────────────
@@ -231,6 +293,8 @@ const KanbanColumn = memo(function KanbanColumn({
   viewOnly,
   tags,
   receivedShares,
+  selectedIds,
+  onToggleSelect,
   onCall,
   onOpen,
   onDelete,
@@ -241,6 +305,8 @@ const KanbanColumn = memo(function KanbanColumn({
   viewOnly: boolean;
   tags: Tag[];
   receivedShares: Record<string, string>;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
   onCall: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -273,6 +339,8 @@ const KanbanColumn = memo(function KanbanColumn({
             viewOnly={viewOnly}
             tags={tags}
             sharedFrom={receivedShares[l.id]}
+            selected={selectedIds.has(l.id)}
+            onToggleSelect={() => onToggleSelect(l.id)}
             onCall={() => onCall(l.id)}
             onOpen={() => onOpen(l.id)}
             onDelete={() => onDelete(l.id)}
@@ -287,12 +355,15 @@ const KanbanColumn = memo(function KanbanColumn({
 
 export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { data: leads = [] } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const { data: receivedShares = {} } = useReceivedLeadShares();
+  const { data: teamMembers = [] } = useTeamMembers();
   const updateLead = useUpdateLead();
   const deleteLeads = useDeleteLeads();
   const addActivity = useAddActivity();
+  const adminShare = useAdminShareLeadToCaller();
 
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
@@ -300,6 +371,10 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const [clearTarget, setClearTarget] = useState<LeadStage | null>(null);
   const [calledId, setCalledId] = useState<string | null>(null);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareTargetId, setShareTargetId] = useState('');
+  const [isSharing, setIsSharing] = useState(false);
   // Optimistic stage overrides — applied immediately on drop, cleared once the
   // cache patch lands so there is no visible snap-back.
   const [optimisticStages, setOptimisticStages] = useState<Record<string, LeadStage>>({});
@@ -328,6 +403,49 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     for (const lead of filtered) map[lead.stage as LeadStage]?.push(lead);
     return map;
   }, [filtered]);
+
+  const callers = useMemo(
+    () => teamMembers.filter((m) => m.member.role === 'caller'),
+    [teamMembers],
+  );
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(new Set(filtered.map((l) => l.id)));
+  }, [filtered]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  function handleExportCsv() {
+    const selectedLeads = filtered.filter((l) => selectedIds.has(l.id));
+    exportCsv(selectedLeads, tags);
+  }
+
+  async function handleBulkShare() {
+    if (!shareTargetId) return;
+    setIsSharing(true);
+    try {
+      const selectedLeads = filtered.filter((l) => selectedIds.has(l.id));
+      await Promise.all(
+        selectedLeads.map((l) => adminShare.mutateAsync({ leadId: l.id, toUserId: shareTargetId })),
+      );
+      setShowShareModal(false);
+      setShareTargetId('');
+      setSelectedIds(new Set());
+    } finally {
+      setIsSharing(false);
+    }
+  }
 
   function handleDragStart(e: DragStartEvent) {
     const lead = leads.find((l) => l.id === e.active.id);
@@ -370,6 +488,9 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`);
   }, [navigate, targetUserId]);
 
+  const isAdmin = profile?.role === 'admin';
+  const selCount = selectedIds.size;
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -400,6 +521,44 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
         {calledId && <span className="text-[12px] text-success">✓ Call logged</span>}
       </div>
 
+      {/* ── Bulk-action toolbar ─────────────────────────────────────────────── */}
+      {selCount > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-[13px] font-semibold text-text">
+            {selCount} lead{selCount !== 1 ? 's' : ''} selected
+          </span>
+          <button
+            onClick={handleSelectAll}
+            className="text-[12px] text-primary hover:underline"
+          >
+            Select all {filtered.length}
+          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleExportCsv}
+              className="btn btn-sm flex items-center gap-1.5"
+            >
+              <Download size={13} /> Export CSV
+            </button>
+            {isAdmin && callers.length > 0 && (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="btn btn-sm btn-primary flex items-center gap-1.5"
+              >
+                <Users size={13} /> Share with caller
+              </button>
+            )}
+            <button
+              onClick={handleClearSelection}
+              className="rounded-md p-1 text-text-3 hover:text-text"
+              title="Clear selection"
+            >
+              <XIcon size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-2">
           {STAGE_ORDER.map((stage) => (
@@ -410,6 +569,8 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               viewOnly={viewOnly}
               tags={tags}
               receivedShares={receivedShares}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
               onCall={handleCall}
               onOpen={handleOpen}
               onDelete={setDeleteTarget}
@@ -427,6 +588,8 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               viewOnly={viewOnly}
               tags={tags}
               sharedFrom={receivedShares[activeLead.id]}
+              selected={false}
+              onToggleSelect={() => {}}
               onCall={() => {}}
               onOpen={() => {}}
               onDelete={() => {}}
@@ -435,6 +598,50 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* ── Share modal ─────────────────────────────────────────────────────── */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-text">
+                Share {selCount} lead{selCount !== 1 ? 's' : ''} with a caller
+              </h2>
+              <button onClick={() => setShowShareModal(false)} className="text-text-3 hover:text-text">
+                <XIcon size={16} />
+              </button>
+            </div>
+            <select
+              className="input w-full"
+              value={shareTargetId}
+              onChange={(e) => setShareTargetId(e.target.value)}
+            >
+              <option value="">Select a caller…</option>
+              {callers.map((m) => (
+                <option key={m.memberId} value={m.memberId}>
+                  {m.member.fullName || m.member.email}
+                </option>
+              ))}
+            </select>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="btn"
+                disabled={isSharing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkShare}
+                className="btn btn-primary"
+                disabled={!shareTargetId || isSharing}
+              >
+                {isSharing ? `Sharing…` : `Share ${selCount} lead${selCount !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}
