@@ -1,13 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarClock, MapPin, PhoneCall } from 'lucide-react';
+import { MapPin, PhoneCall } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
-import { DailyBriefingModal } from '@/components/daily/DailyBriefingModal';
 
 const DailyActivityChart = lazy(() =>
   import('@/components/dashboard/DailyActivityChart').then((m) => ({ default: m.DailyActivityChart })),
@@ -70,14 +69,12 @@ export function DashboardView({
   heading = 'Dashboard',
   subtitle = 'Your pipeline and activity at a glance',
   allowStartSession = false,
-  onOpenBriefing,
 }: {
   userId: string;
   profile: Profile | null;
   heading?: string;
   subtitle?: string;
   allowStartSession?: boolean;
-  onOpenBriefing?: () => void;
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
@@ -346,11 +343,6 @@ export function DashboardView({
           <p className="text-sm text-text-3">{subtitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {onOpenBriefing && (
-            <button onClick={onOpenBriefing} className="btn shrink-0">
-              <CalendarClock size={15} /> Today's Briefing
-            </button>
-          )}
           {allowStartSession ? (
             <Link to="/session" className="btn btn-primary shrink-0">
               <PhoneCall size={15} /> Start Session
@@ -562,34 +554,7 @@ export function DashboardView({
 export function DashboardPage() {
   const { session, profile } = useAuth();
   const userId = session?.user.id ?? '';
-  const isAdmin = profile?.role === 'admin';
-
-  const [showBriefing, setShowBriefing] = useState(false);
-
-  useEffect(() => {
-    if (!userId || isAdmin) return;
-    const today = localIsoDate(new Date());
-    if (!localStorage.getItem(`daily_briefing_${userId}_${today}`)) {
-      setShowBriefing(true);
-    }
-  }, [userId, isAdmin]);
-
-  function closeBriefing() {
-    const today = localIsoDate(new Date());
-    localStorage.setItem(`daily_briefing_${userId}_${today}`, '1');
-    setShowBriefing(false);
-  }
 
   if (!session) return null;
-  return (
-    <>
-      <DashboardView
-        userId={userId}
-        profile={profile}
-        allowStartSession
-        onOpenBriefing={!isAdmin ? () => setShowBriefing(true) : undefined}
-      />
-      {showBriefing && <DailyBriefingModal onClose={closeBriefing} />}
-    </>
-  );
+  return <DashboardView userId={userId} profile={profile} allowStartSession />;
 }
