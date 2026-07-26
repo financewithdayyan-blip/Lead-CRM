@@ -457,6 +457,8 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const [calledId, setCalledId] = useState<string | null>(null);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteSelected, setShowDeleteSelected] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareTargetId, setShareTargetId] = useState('');
   const [isSharing, setIsSharing] = useState(false);
@@ -522,6 +524,30 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     setSelectedIds(new Set());
   }, []);
 
+  /**
+   * Bulk delete over the current selection. Unlike the per-card bin and the
+   * column "clear" button — both deliberately limited to Cold Lead, Voicemail
+   * and Dead/Declined — this works in any stage, because picking leads out
+   * explicitly and confirming a count is a considered act rather than a
+   * one-click wipe of an active pipeline column.
+   */
+  async function handleDeleteSelected() {
+    const ids = filtered.filter((l) => selectedIds.has(l.id)).map((l) => l.id);
+    setShowDeleteSelected(false);
+    if (!ids.length) return;
+    setBulkError(null);
+    try {
+      await deleteLeads.mutateAsync(ids);
+      setSelectedIds(new Set());
+    } catch (e) {
+      setBulkError(
+        e instanceof Error
+          ? `${e.message} — some leads may not have been deleted.`
+          : 'Delete failed. Some leads may not have been deleted.',
+      );
+    }
+  }
+
   function handleExportCsv() {
     const selectedLeads = filtered.filter((l) => selectedIds.has(l.id));
     exportCsv(selectedLeads, tags);
@@ -568,10 +594,20 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     updateLead.mutate({ id: lead.id, stage: newStage }, { onSuccess: clearOptimistic, onError: clearOptimistic });
   }
 
-  function handleClear(stage: LeadStage) {
+  async function handleClear(stage: LeadStage) {
     const ids = leads.filter((l) => l.stage === stage).map((l) => l.id);
-    if (ids.length) deleteLeads.mutate(ids);
     setClearTarget(null);
+    if (!ids.length) return;
+    setBulkError(null);
+    try {
+      await deleteLeads.mutateAsync(ids);
+    } catch (e) {
+      setBulkError(
+        e instanceof Error
+          ? `${e.message} — some leads may not have been deleted.`
+          : 'Delete failed. Some leads may not have been deleted.',
+      );
+    }
   }
 
   const handleCall = useCallback((id: string) => {
@@ -645,6 +681,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               </button>
             )}
             <button
+              onClick={() => setShowDeleteSelected(true)}
+              disabled={deleteLeads.isPending}
+              className="btn btn-sm btn-danger flex items-center gap-1.5"
+            >
+              <Trash2 size={13} />
+              {deleteLeads.isPending ? `Deleting ${selCount}…` : `Delete ${selCount}`}
+            </button>
+            <button
               onClick={handleClearSelection}
               className="rounded-md p-1 text-text-3 hover:text-text"
               title="Clear selection"
@@ -652,6 +696,15 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               <XIcon size={15} />
             </button>
           </div>
+        </div>
+      )}
+
+      {bulkError && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">
+          <span className="flex-1">{bulkError}</span>
+          <button onClick={() => setBulkError(null)} className="shrink-0 hover:opacity-70" title="Dismiss">
+            <XIcon size={14} />
+          </button>
         </div>
       )}
 
@@ -741,6 +794,16 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       )}
 
       <ConfirmDialog
+        open={showDeleteSelected}
+        title={`Delete ${selCount} lead${selCount !== 1 ? 's' : ''}`}
+        message={`Permanently delete the ${selCount} selected lead${selCount !== 1 ? 's' : ''}, along with their activity, comps and files? This cannot be undone.`}
+        confirmLabel={`Delete ${selCount}`}
+        danger
+        onCancel={() => setShowDeleteSelected(false)}
+        onConfirm={handleDeleteSelected}
+      />
+
+      <ConfirmDialog
         open={!!deleteTarget}
         title="Delete lead"
         message="Permanently delete this lead? This removes it from everywhere and cannot be undone."
@@ -748,8 +811,13 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
         danger
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {
-          if (deleteTarget) deleteLeads.mutate([deleteTarget]);
+          const id = deleteTarget;
           setDeleteTarget(null);
+          if (!id) return;
+          setBulkError(null);
+          deleteLeads
+            .mutateAsync([id])
+            .catch((e) => setBulkError(e instanceof Error ? e.message : 'Delete failed.'));
         }}
       />
       <ConfirmDialog

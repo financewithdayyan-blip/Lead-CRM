@@ -44,11 +44,19 @@ export function DeleteLeadsModal({
   }
 
   const confirmed = confirmText.trim().toUpperCase() === 'DELETE';
+  const [error, setError] = useState<string | null>(null);
 
   async function handleDelete() {
-    if (!confirmed || targets.length === 0) return;
-    await deleteLeads.mutateAsync(targets.map((l) => l.id));
-    onClose();
+    if (!confirmed || targets.length === 0 || deleteLeads.isPending) return;
+    setError(null);
+    try {
+      await deleteLeads.mutateAsync(targets.map((l) => l.id));
+      onClose();
+    } catch (e) {
+      // Large deletes run in chunks, so a failure partway can still have removed
+      // some leads. Stay open and say so rather than closing on a silent error.
+      setError(e instanceof Error ? e.message : 'Delete failed. Some leads may not have been removed.');
+    }
   }
 
   return (
@@ -127,12 +135,24 @@ export function DeleteLeadsModal({
           <input className="input" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="DELETE" />
         </div>
 
+        {error && (
+          <div className="rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">
+            {error}
+          </div>
+        )}
+
         <div className="flex justify-end gap-2">
-          <button className="btn" onClick={onClose}>
+          <button className="btn" onClick={onClose} disabled={deleteLeads.isPending}>
             Cancel
           </button>
-          <button disabled={!confirmed || targets.length === 0} className="btn btn-danger" onClick={handleDelete}>
-            Delete {targets.length} lead{targets.length !== 1 ? 's' : ''}
+          <button
+            disabled={!confirmed || targets.length === 0 || deleteLeads.isPending}
+            className="btn btn-danger"
+            onClick={handleDelete}
+          >
+            {deleteLeads.isPending
+              ? `Deleting ${targets.length}…`
+              : `Delete ${targets.length} lead${targets.length !== 1 ? 's' : ''}`}
           </button>
         </div>
       </div>

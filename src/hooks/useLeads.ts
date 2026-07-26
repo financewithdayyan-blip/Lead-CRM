@@ -157,14 +157,55 @@ export function useSetLeadTags() {
   });
 }
 
+/**
+ * PostgREST encodes `.in()` into the URL query string, so a few hundred UUIDs
+ * pushes the request URI past the API gateway's length cap and the whole delete
+ * fails — at ~37 chars per id, 850 leads is a >30KB URL. 100 per request keeps
+ * every URL comfortably small.
+ */
+const DELETE_CHUNK = 100;
+
+/** Thrown when a chunked delete fails partway, carrying the ids that did land. */
+class PartialDeleteError extends Error {
+  deletedIds: string[];
+  constructor(message: string, deletedIds: string[]) {
+    super(message);
+    this.name = 'PartialDeleteError';
+    this.deletedIds = deletedIds;
+  }
+}
+
 export function useDeleteLeads() {
   const qc = useQueryClient();
+
+  // Drop the deleted rows straight out of the list cache. A blanket invalidate
+  // would refetch every lead on the account just to learn about the removals.
+  const dropFromCache = (ids: string[]) => {
+    if (!ids.length) return;
+    const gone = new Set(ids);
+    qc.setQueriesData<Lead[]>({ queryKey: ['leads'] }, (old) => old?.filter((l) => !gone.has(l.id)));
+  };
+
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from('leads').delete().in('id', ids);
-      if (error) throw error;
+      const deleted: string[] = [];
+      for (let i = 0; i < ids.length; i += DELETE_CHUNK) {
+        const chunk = ids.slice(i, i + DELETE_CHUNK);
+        const { error } = await supabase.from('leads').delete().in('id', chunk);
+        // Report what already landed so the UI can reflect reality rather than
+        // silently rolling back to a state that is no longer true.
+        if (error) throw new PartialDeleteError(error.message, deleted);
+        deleted.push(...chunk);
+      }
+      return deleted;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
+    onSuccess: (deleted) => {
+      dropFromCache(deleted);
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err) => {
+      if (err instanceof PartialDeleteError) dropFromCache(err.deletedIds);
+    },
   });
 }
 
