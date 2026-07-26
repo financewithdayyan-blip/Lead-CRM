@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext,
@@ -19,6 +19,7 @@ import { useAddActivity } from '@/hooks/useActivities';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { VirtualCardList } from '@/components/kanban/VirtualCardList';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { formatPhone, localIsoDate } from '@/lib/utils';
@@ -27,6 +28,55 @@ import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
+
+/** Lowercases and reduces every run of punctuation to a single space, so commas,
+ *  periods, hashes and hyphens can't block a match on either side. */
+function normalizeText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Digits only, with a US country code dropped, so "+1 (813) 555-0134",
+ *  "18135550134" and "813-555-0134" all reduce to the same ten digits. */
+function phoneDigits(value: string) {
+  const digits = value.replace(/\D/g, '');
+  return digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+}
+
+/**
+ * Matches a lead against a search box that may hold a name, a phone in any
+ * format, or a full address pasted straight out of a text message.
+ *
+ * Tokenised rather than one substring test: a pasted "123 Main St, Tampa, FL
+ * 33601" can never substring-match a record that stores street, city, state and
+ * zip as separate columns. Requiring every token to appear somewhere in the
+ * lead makes word order and punctuation stop mattering.
+ */
+function leadMatchesSearch(lead: Lead, tokens: string[], queryDigits: string) {
+  // A 7+ digit query is a phone number, not a street number — compare it against
+  // the digits of both phone fields so formatting never blocks a hit.
+  if (queryDigits.length >= 7) {
+    if (phoneDigits(lead.phone).includes(queryDigits)) return true;
+    if (lead.phone2 && phoneDigits(lead.phone2).includes(queryDigits)) return true;
+  }
+
+  const haystack = normalizeText(
+    [
+      lead.firstName,
+      lead.lastName,
+      lead.phone,
+      lead.phone2,
+      lead.email,
+      lead.address,
+      lead.city,
+      lead.state,
+      lead.zip,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
+
+  return tokens.every((token) => haystack.includes(token));
+}
 
 function exportCsv(selectedLeads: Lead[], tags: Tag[]) {
   const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
@@ -295,6 +345,7 @@ const KanbanColumn = memo(function KanbanColumn({
   receivedShares,
   selectedIds,
   onToggleSelect,
+  onToggleSelectMany,
   onCall,
   onOpen,
   onDelete,
@@ -307,6 +358,7 @@ const KanbanColumn = memo(function KanbanColumn({
   receivedShares: Record<string, string>;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  onToggleSelectMany: (ids: string[], select: boolean) => void;
   onCall: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -314,6 +366,18 @@ const KanbanColumn = memo(function KanbanColumn({
 }) {
   const cfg = STAGE_CONFIG[stage];
   const { setNodeRef, isOver } = useDroppable({ id: stage });
+
+  const ids = useMemo(() => leads.map((l) => l.id), [leads]);
+  const selectedHere = ids.reduce((n, id) => (selectedIds.has(id) ? n + 1 : n), 0);
+  const allSelected = leads.length > 0 && selectedHere === leads.length;
+  const someSelected = selectedHere > 0 && !allSelected;
+
+  // `indeterminate` is a DOM property with no HTML attribute, so it has to be
+  // set on the node rather than passed as a prop.
+  const headerCheckbox = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (headerCheckbox.current) headerCheckbox.current.indeterminate = someSelected;
+  }, [someSelected]);
   return (
     <div
       ref={setNodeRef}
@@ -321,6 +385,15 @@ const KanbanColumn = memo(function KanbanColumn({
       style={{ borderTopWidth: 3, borderTopColor: cfg.color }}
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+        <input
+          ref={headerCheckbox}
+          type="checkbox"
+          checked={allSelected}
+          disabled={leads.length === 0}
+          onChange={() => onToggleSelectMany(ids, !allSelected)}
+          className="h-3 w-3 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
+          title={allSelected ? `Deselect all ${cfg.label}` : `Select all ${cfg.label}`}
+        />
         <span className="h-2 w-2 rounded-full" style={{ background: cfg.color }} />
         <div className="flex-1 text-[13px] font-semibold text-text">{cfg.label}</div>
         <div className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-3">{leads.length}</div>
@@ -330,23 +403,32 @@ const KanbanColumn = memo(function KanbanColumn({
           </button>
         )}
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-2" style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}>
-        {leads.length === 0 && <div className="py-6 text-center text-[12px] text-text-3">No leads</div>}
-        {leads.map((l) => (
-          <KanbanCard
-            key={l.id}
-            lead={l}
-            viewOnly={viewOnly}
-            tags={tags}
-            sharedFrom={receivedShares[l.id]}
-            selected={selectedIds.has(l.id)}
-            onToggleSelect={() => onToggleSelect(l.id)}
-            onCall={() => onCall(l.id)}
-            onOpen={() => onOpen(l.id)}
-            onDelete={() => onDelete(l.id)}
-          />
-        ))}
-      </div>
+      {leads.length === 0 ? (
+        <div className="flex-1 overflow-y-auto p-2" style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}>
+          <div className="py-6 text-center text-[12px] text-text-3">No leads</div>
+        </div>
+      ) : (
+        <VirtualCardList
+          items={leads}
+          getKey={(l) => l.id}
+          estimateSize={150}
+          className="flex-1 overflow-y-auto p-2"
+          style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}
+          renderItem={(l) => (
+            <KanbanCard
+              lead={l}
+              viewOnly={viewOnly}
+              tags={tags}
+              sharedFrom={receivedShares[l.id]}
+              selected={selectedIds.has(l.id)}
+              onToggleSelect={() => onToggleSelect(l.id)}
+              onCall={() => onCall(l.id)}
+              onOpen={() => onOpen(l.id)}
+              onDelete={() => onDelete(l.id)}
+            />
+          )}
+        />
+      )}
     </div>
   );
 });
@@ -366,6 +448,9 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const adminShare = useAdminShareLeadToCaller();
 
   const [search, setSearch] = useState('');
+  // The input stays bound to `search` so typing paints immediately; the 4000-lead
+  // refilter runs against the deferred copy at lower priority.
+  const deferredSearch = useDeferredValue(search);
   const [tagFilter, setTagFilter] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [clearTarget, setClearTarget] = useState<LeadStage | null>(null);
@@ -383,18 +468,17 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
+    const normalized = normalizeText(deferredSearch);
+    const tokens = normalized ? normalized.split(' ') : [];
+    const queryDigits = tokens.length ? phoneDigits(deferredSearch) : '';
     return leads
       .map((l) => (optimisticStages[l.id] ? { ...l, stage: optimisticStages[l.id] } : l))
       .filter((l) => {
         if (tagFilter && !l.tagIds.includes(tagFilter)) return false;
-        if (q) {
-          const haystack = `${l.firstName} ${l.lastName} ${l.phone} ${l.address ?? ''}`.toLowerCase();
-          if (!haystack.includes(q)) return false;
-        }
+        if (tokens.length && !leadMatchesSearch(l, tokens, queryDigits)) return false;
         return true;
       });
-  }, [leads, search, tagFilter, optimisticStages]);
+  }, [leads, deferredSearch, tagFilter, optimisticStages]);
 
   // Pre-compute per-stage arrays so each KanbanColumn only re-renders when
   // leads in its own stage change, not when any other stage changes.
@@ -414,6 +498,18 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /** Select-all / deselect-all for one column's worth of leads. */
+  const handleToggleSelectMany = useCallback((ids: string[], select: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
       return next;
     });
   }, []);
@@ -506,7 +602,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
           className="input max-w-xs"
-          placeholder="Search name, phone, address…"
+          placeholder="Search name, phone, or paste a full address…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -571,6 +667,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               receivedShares={receivedShares}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
+              onToggleSelectMany={handleToggleSelectMany}
               onCall={handleCall}
               onOpen={handleOpen}
               onDelete={setDeleteTarget}

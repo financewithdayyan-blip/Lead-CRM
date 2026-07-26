@@ -32,7 +32,20 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         crm: path.resolve(__dirname, 'crm/index.html'),
       },
+      output: {
+        // Split the 476KB entry chunk so the browser downloads vendors in
+        // parallel, and so they stay cached across deploys instead of being
+        // re-fetched every time app code changes.
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-charts': ['recharts'],
+          'vendor-virtual': ['@tanstack/react-virtual'],
+        },
+      },
     },
+    chunkSizeWarningLimit: 500,
   },
   server: {
     port: 5173,

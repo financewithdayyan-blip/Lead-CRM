@@ -10,55 +10,56 @@ const LEAD_LIST_SELECT = '*, lead_tags(tag_id)';
 // Detail view (lead profile) needs comps and files.
 const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
+const PAGE = 1000;
+
+/**
+ * Fetches every lead for a user. A `head: true` count gives us the page count up
+ * front so all pages fire in parallel — the previous serial loop paid one full
+ * round-trip per 1000 leads before the next could even start.
+ *
+ * A lead inserted between the count and the page reads can be missed until the
+ * next refetch; the serial version had the same race and it self-corrects on
+ * the next invalidate.
+ */
+async function fetchLeadsPaged(userId: string): Promise<Lead[]> {
+  const { count, error: countError } = await supabase
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  if (countError) throw countError;
+  if (!count) return [];
+
+  const pages = await Promise.all(
+    Array.from({ length: Math.ceil(count / PAGE) }, async (_, i) => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select(LEAD_LIST_SELECT)
+        .eq('user_id', userId)
+        .order('lead_num', { ascending: true })
+        .range(i * PAGE, i * PAGE + PAGE - 1);
+      if (error) throw error;
+      return data;
+    }),
+  );
+
+  return pages.flat().map(dbToLead);
+}
+
 export function useLeads(targetUserId?: string) {
   const { session } = useAuth();
   const userId = targetUserId ?? session?.user.id;
   return useQuery({
     queryKey: ['leads', userId],
-    queryFn: async () => {
-      const PAGE = 1000;
-      const rows: any[] = [];
-      let offset = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('leads')
-          .select(LEAD_LIST_SELECT)
-          .eq('user_id', userId)
-          .order('lead_num', { ascending: true })
-          .range(offset, offset + PAGE - 1);
-        if (error) throw error;
-        rows.push(...data);
-        if (data.length < PAGE) break;
-        offset += PAGE;
-      }
-      return rows.map(dbToLead);
-    },
+    queryFn: () => fetchLeadsPaged(userId!),
     enabled: !!userId,
   });
 }
 
 /** Call on hover to warm the cache before navigation. */
 export function prefetchLeads(qc: QueryClient, userId: string) {
-  const PAGE = 1000;
   return qc.prefetchQuery({
     queryKey: ['leads', userId],
-    queryFn: async () => {
-      const rows: any[] = [];
-      let offset = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('leads')
-          .select(LEAD_LIST_SELECT)
-          .eq('user_id', userId)
-          .order('lead_num', { ascending: true })
-          .range(offset, offset + PAGE - 1);
-        if (error) throw error;
-        rows.push(...data);
-        if (data.length < PAGE) break;
-        offset += PAGE;
-      }
-      return rows.map(dbToLead);
-    },
+    queryFn: () => fetchLeadsPaged(userId),
     staleTime: 5 * 60_000,
   });
 }
