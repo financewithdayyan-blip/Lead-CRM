@@ -12,7 +12,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bluebird Acquisition — Sell Your Distressed Property As-Is</title>
-<meta name="description" content="Bluebird Acquisition buys distressed properties as-is across FL, NC, SC, IL, OH, GA, VA, TX, TN, and IN. Cash, novation, or subject-to offers. Close in 30 days. We cover closing costs.">
+<meta name="description" content="Bluebird Acquisition buys distressed properties as-is across FL, NC, SC, IL, OH, GA, VA, TX, TN, and IN. Cash, managed listing, or subject-to offers. Close in 30 days. We cover closing costs.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -169,6 +169,20 @@ h1,h2,h3{ font-family: var(--serif); font-weight: 600; line-height: 1.05; letter
 }
 .header-login:hover{ opacity: 1; }
 .site-header.scrolled .header-login{ color: var(--ink); }
+
+.header-phone{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--paper);
+  white-space: nowrap;
+  transition: opacity 0.2s, color 0.35s var(--ease);
+}
+.header-phone:hover{ opacity: 0.82; }
+.header-phone svg{ flex-shrink: 0; opacity: 0.75; }
+.site-header.scrolled .header-phone{ color: var(--ink); }
 
 .header-cta{
   display:inline-flex;
@@ -1419,6 +1433,8 @@ footer{
   .footer-grid{ grid-template-columns:1fr; gap:32px; }
   .hero-stats{ gap:24px; }
   .header-cta span{ display:none; }
+  /* Keep the tap-to-call target, drop the digits so the bar doesn't wrap. */
+  .header-phone span{ display:none; }
   .doc{ width:220px; }
   .bird-wrap{ width:260px; }
   .relief-row{ flex-wrap:wrap; gap:4px; padding:12px 0; }
@@ -1462,6 +1478,10 @@ footer{
       <a href="/about-us">About</a>
       <a href="#contact">Contact</a>
     </nav>
+    <a href="tel:+12174082781" class="header-phone" aria-label="Call Bluebird Acquisition at (217) 408-2781">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.68 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.32 1.85.55 2.81.68A2 2 0 0 1 22 16.92z"/></svg>
+      <span>(217) 408-2781</span>
+    </a>
     <a href="/crm" class="header-login">Login</a>
     <a href="#contact" class="header-cta">
       <span>Get Your Cash Offer</span>
@@ -1489,6 +1509,10 @@ footer{
         <a href="#what-we-do" class="btn-ghost">See how it works →</a>
       </div>
       <div class="hero-stats">
+        <div>
+          <div class="stat-num">15+ Families</div>
+          <div class="stat-label">Helped this year</div>
+        </div>
         <div>
           <div class="stat-num">30 Days</div>
           <div class="stat-label">Average close</div>
@@ -1623,7 +1647,7 @@ footer{
       <div class="offer-card featured reveal">
         <div class="offer-badge">Most Flexible</div>
         <span class="offer-num">Option 02</span>
-        <h3>Novation</h3>
+        <h3>Managed Listing</h3>
         <p>We list and manage the sale on your behalf to maximize value, while handling repairs, marketing, and negotiations — you get a higher net number without lifting a finger.</p>
         <span class="offer-tag">📈 Built for higher equity</span>
       </div>
@@ -2908,8 +2932,8 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
 
   <div id="bbPeek" aria-hidden="true">
     <div class="bb-peek-bbl" id="bbPeekBbl">
-      <div class="bb-peek-name">👋 Hi there!</div>
-      Have questions about selling your property? I can help — fast answers, no pressure.
+      <div class="bb-peek-name">👋 Facing auction or a lien?</div>
+      Tell me your situation and I'll walk you through your options — fast answers, no pressure.
       <button class="bb-peek-dismiss" id="bbPeekX" aria-label="Dismiss greeting">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
@@ -3034,8 +3058,8 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
       r: "We buy in <strong>10 states</strong>:\n\n🏠 FL · NC · SC · IL · OH · GA · VA · TX · TN · IN\n\nNot sure if your specific area qualifies? Drop your address in the form and we'll confirm right away.",
       q: ['Get My Cash Offer','Contact the team','How It Works'] },
 
-    { k: ['novation','subject to','subject-to','creative financing','types of offer','purchase method','offer type','how do you buy','different options'],
-      r: "Depending on your situation, we can structure the purchase three ways:\n\n<strong>① Cash Purchase</strong> — closes in 30 days or less, clean and straightforward\n<strong>② Subject-To</strong> — we take over your existing mortgage payments\n<strong>③ Novation Agreement</strong> — we renovate and sell on your behalf; you receive a higher net at closing\n\nWe'll recommend the right fit after reviewing your situation.",
+    { k: ['managed listing','list it for you','novation','subject to','subject-to','creative financing','types of offer','purchase method','offer type','how do you buy','different options'],
+      r: "Depending on your situation, we can structure the purchase three ways:\n\n<strong>① Cash Purchase</strong> — closes in 30 days or less, clean and straightforward\n<strong>② Subject-To</strong> — we take over your existing mortgage payments\n<strong>③ Managed Listing</strong> — we renovate and sell on your behalf; you receive a higher net at closing\n\nWe'll recommend the right fit after reviewing your situation.",
       q: ['Get My Cash Offer','Talk to Someone','How fast can you close?'] },
 
     { k: ['thank','thanks','appreciate','great','helpful','perfect','awesome','fantastic','that helps','got it'],
