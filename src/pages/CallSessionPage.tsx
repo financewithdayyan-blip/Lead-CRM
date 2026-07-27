@@ -219,6 +219,9 @@ export function CallSessionPage() {
   const [followUpDate, setFollowUpDate] = useState<string | null>(null);
   const [summaryText, setSummaryText] = useState('');
   const [summaryJustSubmitted, setSummaryJustSubmitted] = useState(false);
+  // Set by "End Session" so stopping early still routes through the wrap-up
+  // (summary, then the day's due follow-ups) instead of bailing to the dashboard.
+  const [endedEarly, setEndedEarly] = useState(false);
   const [copiedField, setCopiedField] = useState<'phone' | 'phone2' | null>(null);
   const [smsCopied, setSmsCopied] = useState(false);
   const { cardDataUrl, copyCardToClipboard } = useBusinessCard();
@@ -370,14 +373,16 @@ export function CallSessionPage() {
   const goalReached = callsToday >= dailyGoal;
   const queueExhausted = queueIds !== null && currentIndex >= queueIds.length;
   // In follow-up mode the goal being met no longer ends the session — only queue exhaustion does.
-  const finished = (goalReached && !inFollowUpMode) || queueExhausted;
+  const finished = (goalReached && !inFollowUpMode) || queueExhausted || endedEarly;
   const summaryWordCount = summaryText.trim() ? summaryText.trim().split(/\s+/).length : 0;
-  const needsSummary = finished && goalReached && !todaySummary && !summaryJustSubmitted;
+  // The summary is owed for the day's cold calling whether or not the goal was
+  // hit — but there is nothing to summarise if no calls were made at all.
+  const needsSummary = finished && callsToday > 0 && !todaySummary && !summaryJustSubmitted;
 
   // Follow-up queue: any non-cold, non-dead lead whose nextFollowUp date has arrived.
   // CRITICAL leads (1–3 days to auction) are pinned to the top.
   const followUpLeads = useMemo(() => {
-    if (!goalReached || inFollowUpMode) return [];
+    if (inFollowUpMode) return [];
     const todayStr = localIsoDate(new Date());
     return leads
       .filter((l) => {
@@ -396,7 +401,7 @@ export function CallSessionPage() {
         if (bDays !== null) return 1;
         return (a.leadNum ?? 0) - (b.leadNum ?? 0);
       });
-  }, [goalReached, inFollowUpMode, leads, sessionLeadIdsCalled]);
+  }, [inFollowUpMode, leads, sessionLeadIdsCalled]);
 
   function startFollowUpSession() {
     setQueueIds(followUpLeads.map((l) => l.id));
@@ -406,6 +411,11 @@ export function CallSessionPage() {
 
   function endSession() {
     navigate('/');
+  }
+
+  /** "End Session" mid-call: hand off to the wrap-up rather than leaving outright. */
+  function wrapUpSession() {
+    setEndedEarly(true);
   }
 
   function handleSubmitSummary() {
@@ -591,7 +601,7 @@ export function CallSessionPage() {
             {!inFollowUpMode && followUpLeads.length > 0 && (
               <div className="mt-1 flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-blue-900/50 bg-blue-950/30 p-5">
                 <div className="text-[13px] text-slate-300">
-                  You have <span className="font-semibold text-blue-300">{followUpLeads.length} follow-up lead{followUpLeads.length !== 1 ? 's' : ''}</span> waiting in Initial Contact &amp; Follow-Up stages.
+                  You have <span className="font-semibold text-blue-300">{followUpLeads.length} follow-up{followUpLeads.length !== 1 ? 's' : ''} due</span> — leads whose follow-up date has arrived, whatever stage they sit in.
                 </div>
                 <button
                   onClick={startFollowUpSession}
@@ -672,7 +682,7 @@ export function CallSessionPage() {
           </div>
 
           <button
-            onClick={endSession}
+            onClick={wrapUpSession}
             className="flex items-center gap-1.5 rounded-full border border-red-900/70 bg-red-950/40 px-3.5 py-1.5 text-[12.5px] font-semibold text-red-400 transition-colors hover:bg-red-900/50 hover:text-red-300"
           >
             <Square size={10} className="fill-current" /> End Session
