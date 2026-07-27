@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, X as XIcon } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller } from '@/hooks/useLeadShares';
@@ -22,7 +22,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { VirtualCardList } from '@/components/kanban/VirtualCardList';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
-import { formatPhone, localIsoDate } from '@/lib/utils';
+import { formatDate, formatPhone, localIsoDate } from '@/lib/utils';
 import { isTouchScheduledToday, isTouchedToday, nextScheduledTouchDate, formatTouchDate } from '@/lib/followupSchedule';
 import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
@@ -188,6 +188,33 @@ function KanbanCardVisual({
             </div>
           )}
           {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
+          {lead.nextFollowUp &&
+            (() => {
+              // The touch-counter badge below only renders for the followup stage,
+              // so without this the date set on the lead profile is invisible here.
+              const todayStr = localIsoDate(new Date());
+              const overdue = lead.nextFollowUp < todayStr;
+              const isToday = lead.nextFollowUp === todayStr;
+              return (
+                <div
+                  className={`mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    overdue
+                      ? 'bg-danger-dim text-danger'
+                      : isToday
+                        ? 'bg-warning-dim text-warning'
+                        : 'bg-surface-3 text-text-3'
+                  }`}
+                  title={`Next follow-up: ${formatDate(lead.nextFollowUp)}`}
+                >
+                  <CalendarClock size={9} />
+                  {overdue
+                    ? `Overdue · ${formatDate(lead.nextFollowUp)}`
+                    : isToday
+                      ? 'Follow up today'
+                      : formatDate(lead.nextFollowUp)}
+                </div>
+              );
+            })()}
           {sharedFrom && (
             <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
               <Share2 size={9} /> Shared by {sharedFrom}
