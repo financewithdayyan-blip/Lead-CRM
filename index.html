@@ -1526,15 +1526,15 @@ footer{
       </div>
       <div class="hero-stats">
         <div>
-          <div class="stat-num">15+ Families</div>
+          <div class="stat-num" data-count="23" data-suffix=" Families">23 Families</div>
           <div class="stat-label">Helped this year</div>
         </div>
         <div>
-          <div class="stat-num">30 Days</div>
+          <div class="stat-num" data-count="29" data-suffix=" Days">29 Days</div>
           <div class="stat-label">Average close</div>
         </div>
         <div>
-          <div class="stat-num">10 States</div>
+          <div class="stat-num" data-count="10" data-suffix="+ States">10+ States</div>
           <div class="stat-label">Active markets</div>
         </div>
         <div>
@@ -2591,23 +2591,19 @@ function animateCounter(el, target, suffix, duration) {
   requestAnimationFrame(tick);
 }
 
+// Each stat carries its own target in data-count / data-suffix. This used to be
+// a positional array, which silently mismatched every number with the wrong
+// label the moment a stat was added. A stat with no data-count (the $0) simply
+// keeps whatever the markup already says.
 const statEls = document.querySelectorAll('.stat-num');
-const statData = [
-  { val: 30, suffix: ' Days' },
-  { val: 10, suffix: ' States' },
-  { val: 0,  suffix: '', prefix: '$' }
-];
 const counterIO = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      const el = entry.target;
-      const idx = Array.from(statEls).indexOf(el);
-      const d = statData[idx];
-      if (!d) return;
-      if (d.prefix) el.textContent = d.prefix + '0';
-      else animateCounter(el, d.val, d.suffix, 1800);
-      counterIO.unobserve(el);
-    }
+    if (!entry.isIntersecting) return;
+    const el = entry.target;
+    counterIO.unobserve(el);
+    const target = parseFloat(el.dataset.count);
+    if (isNaN(target)) return;
+    animateCounter(el, target, el.dataset.suffix || '', 1800);
   });
 }, { threshold: 0.5 });
 statEls.forEach(el => counterIO.observe(el));
