@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import {
+  analyzeDeal,
   computeArvFromComps,
   packetImageUrl,
   packetUrl,
@@ -10,6 +11,8 @@ import {
   useUploadPacketImage,
   usePacket,
 } from '@/hooks/useDealPackets';
+import { VERDICT_STYLE } from '@/lib/dealVerdict';
+import { geocodeAddresses } from '@/lib/geocode';
 import { DEAL_TYPE_CONFIG, type DealType, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus } from '@/types/domain';
 
 /** Parses a currency-ish input into a number, treating empty as "not set". */
@@ -49,6 +52,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
   const [arvManual, setArvManual] = useState('');
   const [arvIsManual, setArvIsManual] = useState(false);
   const [assignmentFee, setAssignmentFee] = useState('');
@@ -62,6 +66,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
 
   // Hydrate local state once the packet arrives. Keyed on id so reopening a
   // different packet refills rather than keeping the previous one's values.
@@ -79,6 +84,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
     setCity(packet.city ?? '');
     setState(packet.state ?? '');
     setZip(packet.zip ?? '');
+    setPurchasePrice(packet.purchasePrice?.toString() ?? '');
     setArvManual(packet.arv?.toString() ?? '');
     setArvIsManual(packet.arvIsManual);
     setAssignmentFee(packet.assignmentFee?.toString() ?? '');
@@ -97,6 +103,24 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
   );
   const effectiveArv = arvIsManual ? num(arvManual) : autoArv;
   const totalRepairs = repairTotal(repairs as PacketRepair[]);
+
+  // What the investor is actually quoted, and what the analysis must price off.
+  const quotedPrice = useMemo(() => {
+    const base = num(purchasePrice);
+    if (base == null) return null;
+    return base + (num(assignmentFee) ?? 0);
+  }, [purchasePrice, assignmentFee]);
+
+  // Recomputed as you type, so the verdict is visible before you publish.
+  const analysis = useMemo(
+    () => analyzeDeal({
+      purchasePrice: quotedPrice,
+      arv: effectiveArv,
+      repairs: totalRepairs,
+      assignmentFee: null,
+    }),
+    [quotedPrice, effectiveArv, totalRepairs],
+  );
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -118,6 +142,17 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
   async function handleSave(nextStatus?: PacketStatus) {
     setError(null);
     try {
+      // Located here rather than on the public page, so a packet with a dozen
+      // viewers doesn't put a dozen requests through a free community geocoder.
+      const needsGeo = comps.some((c) => c.address && (c.lat == null || c.lng == null));
+      let geocoded = comps;
+      if (needsGeo) {
+        setGeocoding(true);
+        geocoded = await geocodeAddresses(comps, [city, state].filter(Boolean).join(', '));
+        setComps(geocoded);
+        setGeocoding(false);
+      }
+
       await savePacket.mutateAsync({
         id: packetId,
         fields: {
@@ -130,6 +165,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
           yearBuilt: num(yearBuilt),
           market: market || null,
           leadStatus: leadStatus || null,
+          purchasePrice: num(purchasePrice),
           city: city || null,
           state: state || null,
           zip: zip || null,
@@ -142,13 +178,14 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
           narrative: narrative || null,
           requireLeadCapture,
         },
-        comps,
+        comps: geocoded,
         repairs,
         images,
       });
       if (nextStatus) setStatus(nextStatus);
       onClose();
     } catch (e) {
+      setGeocoding(false);
       setError(e instanceof Error ? e.message : 'Could not save the packet.');
     }
   }
@@ -268,29 +305,49 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
             </div>
           </Section>
 
-          {/* ── Comps + ARV ─────────────────────────────────────────────── */}
-          <Section title="Comparable sales" hint="ARV is averaged from comp price-per-sqft against this property's sq ft, unless you override it.">
+          {/* ── Comps + listings + ARV ──────────────────────────────────── */}
+          <Section
+            title="Comps & current listings"
+            hint="Sold comps set the ARV. Listings are asking prices, so they appear on the map and table but are excluded from the ARV average."
+          >
             <div className="space-y-2">
               {comps.map((c, i) => (
-                <div key={i} className="grid grid-cols-[1fr_110px_130px_90px_auto] items-center gap-2">
+                <div key={i} className="grid grid-cols-[92px_1fr_110px_130px_90px_auto] items-center gap-2">
+                  <select
+                    className="input !py-1 text-[12px]"
+                    value={c.kind}
+                    onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, kind: e.target.value as 'sold' | 'listing' } : x))}
+                  >
+                    <option value="sold">Sold</option>
+                    <option value="listing">Listed</option>
+                  </select>
                   <input className="input !py-1 text-[13px]" placeholder="Address" value={c.address ?? ''}
-                         onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, address: e.target.value } : x))} />
-                  <input className="input !py-1 text-[13px]" placeholder="Sale price" inputMode="numeric" value={c.salePrice ?? ''}
+                         onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, address: e.target.value, lat: null, lng: null } : x))} />
+                  <input className="input !py-1 text-[13px]" placeholder={c.kind === 'listing' ? 'List price' : 'Sale price'} inputMode="numeric" value={c.salePrice ?? ''}
                          onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, salePrice: num(e.target.value) } : x))} />
                   <input className="input !py-1 text-[13px]" type="date" value={c.saleDate ?? ''}
                          onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, saleDate: e.target.value || null } : x))} />
                   <input className="input !py-1 text-[13px]" placeholder="Sq ft" inputMode="numeric" value={c.sqft ?? ''}
                          onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, sqft: num(e.target.value) } : x))} />
                   <button type="button" onClick={() => setComps((p) => p.filter((_, idx) => idx !== i))}
-                          className="rounded p-1 text-text-3 hover:text-danger" title="Remove comp">
+                          className="rounded p-1 text-text-3 hover:text-danger" title="Remove row">
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => setComps((p) => [...p, { address: '', salePrice: null, saleDate: null, sqft: null }])}
-                      className="btn !px-2 !py-1 text-[12px]">
-                <Plus size={13} /> Add comp
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => setComps((p) => [...p, { kind: 'sold', address: '', salePrice: null, saleDate: null, sqft: null, lat: null, lng: null }])}
+                        className="btn !px-2 !py-1 text-[12px]">
+                  <Plus size={13} /> Add sold comp
+                </button>
+                <button type="button" onClick={() => setComps((p) => [...p, { kind: 'listing', address: '', salePrice: null, saleDate: null, sqft: null, lat: null, lng: null }])}
+                        className="btn !px-2 !py-1 text-[12px]">
+                  <Plus size={13} /> Add current listing
+                </button>
+                <span className="text-[11px] text-text-3">
+                  Addresses are located on save so they can be mapped. Editing an address re-locates it.
+                </span>
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
@@ -358,20 +415,58 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
             </div>
           </Section>
 
-          {/* ── Assignment fee ──────────────────────────────────────────── */}
-          <Section title="Assignment fee">
-            <div className="flex flex-wrap items-center gap-3">
-              <input className="input !py-1 w-40 text-[13px]" placeholder="Fee" inputMode="numeric"
-                     value={assignmentFee} onChange={(e) => setAssignmentFee(e.target.value)} />
-              <label className="flex items-center gap-1.5 text-[12px] text-text-2">
-                <input type="checkbox" className="accent-primary" checked={showAssignmentFee}
-                       onChange={(e) => setShowAssignmentFee(e.target.checked)} />
-                Show this fee on the public packet
-              </label>
+          {/* ── Numbers + live analysis ─────────────────────────────────── */}
+          <Section
+            title="Pricing"
+            hint="Enter your price and fee separately. Investors are quoted the two combined — your base price never reaches the public page."
+          >
+            <div className="flex flex-wrap items-end gap-3">
+              <label><span className="label">Your purchase price</span>
+                <input className="input !py-1 w-40 text-[13px]" placeholder="90,000" inputMode="numeric"
+                       value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} /></label>
+              <span className="pb-2 text-[15px] text-text-3">+</span>
+              <label><span className="label">Assignment fee</span>
+                <input className="input !py-1 w-40 text-[13px]" placeholder="10,000" inputMode="numeric"
+                       value={assignmentFee} onChange={(e) => setAssignmentFee(e.target.value)} /></label>
+              <span className="pb-2 text-[15px] text-text-3">=</span>
+              <div className="pb-1">
+                <div className="label">Investor is quoted</div>
+                <div className="text-[18px] font-bold tabular-nums text-primary">
+                  {money(quotedPrice) || '—'}
+                </div>
+              </div>
             </div>
-            {!showAssignmentFee && (
-              <p className="mt-1.5 text-[12px] text-text-3">Hidden — the figure is withheld from the public payload entirely, not just visually.</p>
-            )}
+
+            <label className="mt-3 flex items-center gap-1.5 text-[12px] text-text-2">
+              <input type="checkbox" className="accent-primary" checked={showAssignmentFee}
+                     onChange={(e) => setShowAssignmentFee(e.target.checked)} />
+              Disclose the fee as a line item on the public packet
+            </label>
+            <p className="mt-1 text-[12px] text-text-3">
+              {showAssignmentFee
+                ? 'The quoted price is shown with the fee broken out as part of it — an investor can therefore work back to your base price.'
+                : 'Only the combined price is published. The fee and your base price are both withheld from the public payload.'}
+            </p>
+
+            <div className={`mt-3 rounded-md border p-3 ${VERDICT_STYLE[analysis.verdict].box}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[12px] font-semibold uppercase tracking-wide text-text-3">Deal analysis preview</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase ${VERDICT_STYLE[analysis.verdict].pill}`}>
+                  {VERDICT_STYLE[analysis.verdict].label}
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div><div className="text-[11px] text-text-3">All-in</div><div className="text-[14px] font-semibold text-text">{money(analysis.allIn) || '—'}</div></div>
+                <div><div className="text-[11px] text-text-3">ARV</div><div className="text-[14px] font-semibold text-text">{money(effectiveArv) || '—'}</div></div>
+                <div><div className="text-[11px] text-text-3">Equity</div><div className="text-[14px] font-semibold text-text">{money(analysis.spread) || '—'}</div></div>
+                <div><div className="text-[11px] text-text-3">Margin</div><div className="text-[14px] font-semibold text-text">{analysis.margin != null ? `${Math.round(analysis.margin * 100)}%` : '—'}</div></div>
+              </div>
+              <ul className="mt-2 space-y-0.5">
+                {analysis.notes.map((n, i) => (
+                  <li key={i} className="text-[12px] leading-snug text-text-2">· {n}</li>
+                ))}
+              </ul>
+            </div>
           </Section>
 
           {/* ── Narrative ───────────────────────────────────────────────── */}
@@ -391,9 +486,9 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
             <button className="btn" onClick={onClose} disabled={saving}>Cancel</button>
-            <button className="btn" onClick={() => handleSave('draft')} disabled={saving}>Save as draft</button>
-            <button className="btn btn-primary" onClick={() => handleSave()} disabled={saving}>
-              {saving ? 'Saving…' : status === 'active' ? 'Save & keep live' : 'Save'}
+            <button className="btn" onClick={() => handleSave('draft')} disabled={saving || geocoding}>Save as draft</button>
+            <button className="btn btn-primary" onClick={() => handleSave()} disabled={saving || geocoding}>
+              {geocoding ? 'Locating addresses…' : saving ? 'Saving…' : status === 'active' ? 'Save & keep live' : 'Save'}
             </button>
           </div>
         </div>

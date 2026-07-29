@@ -11,10 +11,13 @@ import type { DealType } from '@/types/domain';
 
 export interface PublicPacketComp {
   id: string;
+  kind: 'sold' | 'listing';
   address: string | null;
   salePrice: number | null;
   saleDate: string | null;
   sqft: number | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface PublicPacket {
@@ -29,6 +32,7 @@ export interface PublicPacket {
   market: string | null;
   leadStatus: string | null;
   state: string | null;
+  purchasePrice: number | null;
   arv: number | null;
   assignmentFee: number | null;
   showAssignmentFee: boolean;

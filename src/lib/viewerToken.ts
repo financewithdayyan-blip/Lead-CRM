@@ -14,10 +14,14 @@ export function getViewerToken(): string {
   return token;
 }
 
-/** Name/email captured by the lead-capture gate, remembered per packet. */
+/**
+ * Captured by the lead-capture gate and remembered per packet. Name only — the
+ * gate asks nothing else, so email and phone stay optional for any caller that
+ * happens to have them.
+ */
 export interface ViewerIdentity {
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
 }
 

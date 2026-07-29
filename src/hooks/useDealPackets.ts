@@ -35,6 +35,7 @@ function dbToPacket(row: any): DealPacket {
     city: row.city,
     state: row.state,
     zip: row.zip,
+    purchasePrice: row.purchase_price,
     arv: row.arv,
     arvIsManual: row.arv_is_manual ?? false,
     assignmentFee: row.assignment_fee,
@@ -47,10 +48,13 @@ function dbToPacket(row: any): DealPacket {
     comps: (row.packet_comps ?? []).sort(bySort).map(
       (c: any): PacketComp => ({
         id: c.id,
+        kind: (c.kind ?? 'sold') as PacketComp['kind'],
         address: c.address,
         salePrice: c.sale_price,
         saleDate: c.sale_date,
         sqft: c.sqft,
+        lat: c.lat != null ? Number(c.lat) : null,
+        lng: c.lng != null ? Number(c.lng) : null,
       }),
     ),
     repairs: (row.packet_repairs ?? []).sort(bySort).map(
@@ -80,7 +84,8 @@ function dbToView(row: any): PacketView {
 /** Straight average of comp price-per-sqft applied to the subject's sqft. */
 export function computeArvFromComps(comps: PacketComp[], subjectSqft: number | null): number | null {
   if (!subjectSqft) return null;
-  const usable = comps.filter((c) => c.salePrice && c.sqft);
+  // Listings are asking prices, not achieved ones — only sold comps set ARV.
+  const usable = comps.filter((c) => c.kind !== 'listing' && c.salePrice && c.sqft);
   if (!usable.length) return null;
   const avgPerSqft = usable.reduce((sum, c) => sum + c.salePrice! / c.sqft!, 0) / usable.length;
   return Math.round(avgPerSqft * subjectSqft);
@@ -88,6 +93,94 @@ export function computeArvFromComps(comps: PacketComp[], subjectSqft: number | n
 
 export function repairTotal(repairs: PacketRepair[]): number {
   return repairs.reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
+}
+
+// ── Deal analysis ───────────────────────────────────────────────────────────
+
+export type DealVerdict = 'strong' | 'fair' | 'thin' | 'unknown';
+
+export interface DealAnalysis {
+  verdict: DealVerdict;
+  /** What the investor is all-in for: price + repairs + fee. */
+  allIn: number | null;
+  /** ARV minus all-in — the equity left on the table at resale value. */
+  spread: number | null;
+  /** Spread as a share of ARV. The number the verdict keys off. */
+  margin: number | null;
+  /** Classic 70% rule ceiling: (ARV x 0.70) - repairs. */
+  mao: number | null;
+  /** True when the purchase price sits above that ceiling. */
+  overMao: boolean;
+  /** Plain-language reasons behind the verdict, strongest first. */
+  notes: string[];
+}
+
+/**
+ * Deterministic wholesale math rather than a model call. An investor-facing
+ * verdict has to be reproducible and defensible line by line — the same packet
+ * must never score differently on two loads — and it also keeps a public,
+ * unauthenticated page from being an inference-cost vector.
+ *
+ * Thresholds follow standard wholesale practice: 25%+ equity against ARV is a
+ * strong spread, 15-25% is workable, below that leaves little room once
+ * holding and closing costs land.
+ */
+export function analyzeDeal(input: {
+  purchasePrice: number | null;
+  arv: number | null;
+  repairs: number;
+  assignmentFee: number | null;
+}): DealAnalysis {
+  const { purchasePrice, arv, repairs } = input;
+  const fee = input.assignmentFee ?? 0;
+  const notes: string[] = [];
+
+  const mao = arv != null ? Math.round(arv * 0.7 - repairs) : null;
+
+  if (purchasePrice == null || arv == null || arv <= 0) {
+    return {
+      verdict: 'unknown',
+      allIn: null,
+      spread: null,
+      margin: null,
+      mao,
+      overMao: false,
+      notes: ['Add a purchase price and ARV to see the full analysis.'],
+    };
+  }
+
+  const allIn = purchasePrice + repairs + fee;
+  const spread = arv - allIn;
+  const margin = spread / arv;
+  const overMao = mao != null && purchasePrice > mao;
+
+  let verdict: DealVerdict;
+  if (margin >= 0.25) {
+    verdict = 'strong';
+    notes.push(`Roughly ${Math.round(margin * 100)}% equity against ARV, comfortably above the 25% investors typically look for.`);
+  } else if (margin >= 0.15) {
+    verdict = 'fair';
+    notes.push(`About ${Math.round(margin * 100)}% equity against ARV — workable, though it leaves less room for surprises.`);
+  } else {
+    verdict = 'thin';
+    notes.push(
+      margin < 0
+        ? `All-in cost exceeds ARV by ${Math.abs(Math.round(margin * 100))}%, so there is no equity at these numbers.`
+        : `Only about ${Math.round(margin * 100)}% equity against ARV, which is thin once closing and holding costs land.`,
+    );
+  }
+
+  if (overMao && mao != null) {
+    notes.push(`Purchase price is above the 70% rule ceiling of ${mao.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}.`);
+  } else if (mao != null) {
+    notes.push('Purchase price sits within the 70% rule ceiling.');
+  }
+
+  if (repairs === 0) {
+    notes.push('No repair estimate entered — treat the spread as optimistic until one is.');
+  }
+
+  return { verdict, allIn, spread, margin, mao, overMao, notes };
 }
 
 /** The link handed to investors. Absolute so it can go straight onto a clipboard. */
@@ -158,6 +251,7 @@ export function useCreatePacket() {
           city: lead.city,
           state: lead.state,
           zip: lead.zip,
+          purchase_price: lead.askingPrice,
           arv: lead.arv,
         })
         .select('id')
@@ -173,7 +267,7 @@ type PacketFields = Partial<
   Pick<
     DealPacket,
     | 'status' | 'ownerName' | 'propType' | 'beds' | 'baths' | 'sqft' | 'yearBuilt'
-    | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'arv'
+    | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'purchasePrice' | 'arv'
     | 'arvIsManual' | 'assignmentFee' | 'showAssignmentFee' | 'dealTypes'
     | 'narrative' | 'requireLeadCapture'
   >
@@ -205,7 +299,7 @@ export function useSavePacket() {
         status: 'status', ownerName: 'owner_name', propType: 'prop_type', beds: 'beds',
         baths: 'baths', sqft: 'sqft', yearBuilt: 'year_built', market: 'market',
         leadStatus: 'lead_status', city: 'city', state: 'state',
-        zip: 'zip', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
+        zip: 'zip', purchasePrice: 'purchase_price', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
         showAssignmentFee: 'show_assignment_fee', dealTypes: 'deal_types',
         narrative: 'narrative', requireLeadCapture: 'require_lead_capture',
       };
@@ -222,8 +316,9 @@ export function useSavePacket() {
         if (comps.length) {
           const { error: e } = await supabase.from('packet_comps').insert(
             comps.map((c, i) => ({
-              packet_id: id, address: c.address, sale_price: c.salePrice,
-              sale_date: c.saleDate || null, sqft: c.sqft, sort_order: i,
+              packet_id: id, kind: c.kind ?? 'sold', address: c.address,
+              sale_price: c.salePrice, sale_date: c.saleDate || null, sqft: c.sqft,
+              lat: c.lat ?? null, lng: c.lng ?? null, sort_order: i,
             })),
           );
           if (e) throw e;

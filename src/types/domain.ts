@@ -254,12 +254,18 @@ export const DEAL_TYPE_CONFIG: Record<DealType, { label: string; description: st
   },
 };
 
+export type CompKind = 'sold' | 'listing';
+
 export interface PacketComp {
   id: string;
+  /** 'sold' is a closed comp; 'listing' is currently on the market. */
+  kind: CompKind;
   address: string | null;
   salePrice: number | null;
   saleDate: string | null;
   sqft: number | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface PacketRepair {
@@ -297,6 +303,7 @@ export interface DealPacket {
   state: string | null;
   zip: string | null;
 
+  purchasePrice: number | null;
   arv: number | null;
   arvIsManual: boolean;
   assignmentFee: number | null;

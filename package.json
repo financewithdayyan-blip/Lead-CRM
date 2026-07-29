@@ -19,6 +19,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.451.0",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
@@ -27,6 +28,7 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
