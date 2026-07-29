@@ -27,6 +27,7 @@ const MemberKanbanPage = lazy(() => import('@/pages/MemberKanbanPage').then((m) 
 const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then((m) => ({ default: m.MemberSettingsPage })));
 const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) => ({ default: m.CallSessionPage })));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
+const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,6 +57,8 @@ export default function App() {
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/accept-invite" element={<AcceptInvitePage />} />
+                  {/* Public — investors reach this with no account and no session. */}
+                  <Route path="/deal/:slug" element={<PublicPacketPage />} />
                   <Route element={<ProtectedRoute />}>
                     <Route path="/session" element={<CallSessionPage />} />
                     <Route element={<AppShell />}>

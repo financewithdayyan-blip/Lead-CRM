@@ -20,6 +20,7 @@ import { callerDisplayName, daysUntil, formatPhone, formatDate, formatDateTime, 
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
 import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
 import { SCRIPT_STEPS } from '@/lib/callScript';
+import { PacketTab } from '@/components/packets/PacketTab';
 
 function scoreColor(score: number) {
   if (score >= 85) return { ring: 'ring-emerald-500', bg: 'bg-emerald-500', text: 'text-emerald-400', label: 'High' };
@@ -211,11 +212,12 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   stage_change: 'Stage changed',
 };
 
-const TABS = ['overview', 'property', 'script', 'activity', 'tasks', 'files'] as const;
+const TABS = ['overview', 'property', 'packet', 'script', 'activity', 'tasks', 'files'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
   property: 'Property Details',
+  packet: 'Deal Packet',
   script: 'Call Script',
   activity: 'Activity',
   tasks: 'Tasks',
@@ -409,6 +411,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
 
       {tab === 'overview' && <OverviewTab lead={lead} leadId={lead.id} />}
       {tab === 'property' && <PropertyTab lead={lead} />}
+      {tab === 'packet' && <PacketTab lead={lead} />}
       {tab === 'script' && <ScriptTab lead={lead} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
       {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}

@@ -225,6 +225,106 @@ export interface TeamMember {
   member: Profile;
 }
 
+// ── Deal Packets ────────────────────────────────────────────────────────────
+
+export type PacketStatus = 'draft' | 'active' | 'archived';
+export type DealType = 'cash' | 'subject_to' | 'novation' | 'creative';
+
+/** Labels and the blurb each selected structure renders on the public packet. */
+export const DEAL_TYPE_CONFIG: Record<DealType, { label: string; description: string }> = {
+  cash: {
+    label: 'Cash Offer',
+    description:
+      'A straightforward all-cash purchase with no financing contingency and no appraisal delay — the fastest and most certain path to closing.',
+  },
+  subject_to: {
+    label: 'Subject-To',
+    description:
+      'The existing mortgage stays in place and payments are taken over, transferring the property without paying off the underlying loan at closing.',
+  },
+  novation: {
+    label: 'Novation',
+    description:
+      'The property is renovated and resold on the seller’s behalf under an agreement that replaces the original contract, targeting a higher net at closing.',
+  },
+  creative: {
+    label: 'Creative Finance',
+    description:
+      'A tailored structure — seller carry, wrap, or a hybrid — built around the seller’s timeline and payoff requirements rather than a single fixed offer.',
+  },
+};
+
+export interface PacketComp {
+  id: string;
+  address: string | null;
+  salePrice: number | null;
+  saleDate: string | null;
+  sqft: number | null;
+}
+
+export interface PacketRepair {
+  id: string;
+  item: string;
+  cost: number;
+}
+
+export interface PacketImage {
+  id: string;
+  storagePath: string;
+  caption: string | null;
+}
+
+export interface DealPacket {
+  id: string;
+  leadId: string;
+  userId: string;
+  /** Public URL token — the packet is shared as /crm/deal/{slug}. */
+  slug: string;
+  status: PacketStatus;
+
+  ownerName: string | null;
+  propType: string | null;
+  beds: number | null;
+  baths: number | null;
+  sqft: number | null;
+  yearBuilt: number | null;
+  market: string | null;
+  leadStatus: string | null;
+
+  // No street address by design — a packet shows the area only, never an exact
+  // location, so it does not carry one.
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+
+  arv: number | null;
+  arvIsManual: boolean;
+  assignmentFee: number | null;
+  showAssignmentFee: boolean;
+
+  dealTypes: DealType[];
+  narrative: string | null;
+  requireLeadCapture: boolean;
+
+  createdAt: string;
+  updatedAt: string;
+
+  comps: PacketComp[];
+  repairs: PacketRepair[];
+  images: PacketImage[];
+}
+
+export interface PacketView {
+  id: string;
+  packetId: string;
+  viewerToken: string;
+  viewerName: string | null;
+  viewerEmail: string | null;
+  viewerPhone: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
 export interface TeamInvite {
   id: string;
   ownerId: string;
