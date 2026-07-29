@@ -97,39 +97,38 @@ export function repairTotal(repairs: PacketRepair[]): number {
 }
 
 export interface MarketEstimate {
-  /** Dollar-cost-averaged value for the subject's square footage. */
+  /** Mean price across every comparable, sold and listed alike. */
   value: number;
-  /** Mean price per square foot across every property used. */
-  avgPerSqft: number;
   soldCount: number;
   listingCount: number;
+  total: number;
 }
 
 /**
- * Investor-facing sanity check on the ARV, averaged across sold comps *and*
- * current listings — what the surrounding market is transacting and asking at,
- * per square foot, applied to this property's size.
+ * Cost-averaged ARV: every comparable price added together and divided by how
+ * many there are, sold and currently-listed alike.
  *
- * Distinct from computeArvFromComps, which feeds the admin's own ARV suggestion
- * and uses sold prices only. This one deliberately blends in asking prices,
- * because it is shown as market context rather than used to price the deal. The
- * ARV that drives the analysis is always the figure the admin enters.
+ * A flat mean of prices rather than an average price per square foot — it does
+ * not need the subject's footprint, so it still produces a figure when sq ft is
+ * missing from the packet or from individual comps.
+ *
+ * Shown to investors as a cross-check only. The ARV that drives the analysis is
+ * always the figure entered on the packet, and computeArvFromComps (sold prices
+ * only) remains what feeds the admin's own suggestion.
  */
 export function estimateMarketArv(
-  comps: Pick<PacketComp, 'kind' | 'salePrice' | 'sqft'>[],
-  subjectSqft: number | null,
+  comps: Pick<PacketComp, 'kind' | 'salePrice'>[],
 ): MarketEstimate | null {
-  if (!subjectSqft) return null;
-  const usable = comps.filter((c) => c.salePrice && c.sqft);
+  const usable = comps.filter((c) => c.salePrice != null && c.salePrice > 0);
   if (!usable.length) return null;
 
-  const avgPerSqft = usable.reduce((sum, c) => sum + c.salePrice! / c.sqft!, 0) / usable.length;
+  const sum = usable.reduce((acc, c) => acc + c.salePrice!, 0);
 
   return {
-    value: Math.round(avgPerSqft * subjectSqft),
-    avgPerSqft: Math.round(avgPerSqft),
+    value: Math.round(sum / usable.length),
     soldCount: usable.filter((c) => c.kind !== 'listing').length,
     listingCount: usable.filter((c) => c.kind === 'listing').length,
+    total: usable.length,
   };
 }
 
@@ -151,7 +150,7 @@ export interface DealAnalysis {
   spread: number | null;
   /** Spread as a share of ARV. */
   margin: number | null;
-  /** Max allowable offer: (ARV x 90%) - 3x repairs. */
+  /** Max allowable offer: (ARV x 90%) - 2x repairs. */
   mao: number | null;
   /** MAO minus the quoted price. Negative means the price is over the max. */
   headroom: number | null;
@@ -165,11 +164,11 @@ const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', curren
 /**
  * Bluebird's buy-box, not the generic 70% rule.
  *
- *   max offer = ARV x 90% - 3 x repairs
+ *   max offer = ARV x 90% - 2 x repairs
  *
- * Tripling the repair figure is the margin of safety: it absorbs the work, the
- * overruns that follow it, and the holding time both consume. The verdict keys
- * off how far the quoted price sits inside that ceiling.
+ * Doubling the repair figure is the margin of safety: it absorbs both the work
+ * and the overruns that usually follow it. The verdict keys off how far the
+ * quoted price sits inside that ceiling.
  *
  * Closing cost is entered by hand and paid by the buyer, so it forms part of
  * their all-in cost and reduces the equity on offer. It is deliberately outside
@@ -193,7 +192,7 @@ export function analyzeDeal(input: {
   const fee = input.assignmentFee ?? 0;
   const notes: string[] = [];
 
-  const mao = arv != null ? Math.round(arv * 0.9 - 3 * repairs) : null;
+  const mao = arv != null ? Math.round(arv * 0.9 - 2 * repairs) : null;
 
   if (purchasePrice == null || arv == null || arv <= 0) {
     return {
@@ -236,7 +235,7 @@ export function analyzeDeal(input: {
     notes.push(`Priced ${usd(Math.abs(headroom!))} above the ${usd(mao!)} maximum offer for this ARV and repair level.`);
   }
 
-  notes.push(`Max offer is 90% of ARV less three times the repair estimate — ${usd(arv)} × 90% − 3 × ${usd(repairs)}.`);
+  notes.push(`Max offer is 90% of ARV less twice the repair estimate — ${usd(arv)} × 90% − 2 × ${usd(repairs)}.`);
 
   if (closingCost != null) {
     notes.push(`Closing costs of ${usd(closingCost)} are paid by the buyer and are included in the all-in figure above.`);

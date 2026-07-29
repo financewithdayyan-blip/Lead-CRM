@@ -248,6 +248,17 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
         <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Value</div>
         <dl className="mt-2">
           <Line label="ARV" value={arv} />
+          {market && (
+            <Line
+              label="Comparable average"
+              value={market.value}
+              hint={
+                market.soldCount && market.listingCount
+                  ? `${market.total} properties · ${market.soldCount} sold, ${market.listingCount} listed`
+                  : `${market.total} ${market.listingCount ? 'listed' : 'sold'} propert${market.total === 1 ? 'y' : 'ies'}`
+              }
+            />
+          )}
           <Line
             label="Projected equity"
             value={analysis.spread}
@@ -279,16 +290,13 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2">
           <TrendingUp size={15} className="mt-0.5 shrink-0 text-text-3" />
           <div className="text-[12.5px] leading-snug text-text-2">
-            <span className="font-semibold text-text">Market check — {money(market.value)}.</span>{' '}
-            {market.soldCount + market.listingCount} nearby propert
-            {market.soldCount + market.listingCount === 1 ? 'y' : 'ies'}
+            <span className="font-semibold text-text">Comparable average — {money(market.value)}.</span>{' '}
+            Every comparable price on this page added together and divided by {market.total}
             {market.soldCount > 0 && market.listingCount > 0
-              ? ` (${market.soldCount} sold, ${market.listingCount} listed)`
+              ? ` — ${market.soldCount} sold and ${market.listingCount} currently listed`
               : market.listingCount > 0
-                ? ' currently listed'
-                : ' recently sold'}{' '}
-            average ${market.avgPerSqft.toLocaleString()}/sq ft. Applied to this property's footprint, for comparison
-            against the ARV above.
+                ? ' currently listed properties'
+                : ' recently sold properties'}. Shown alongside the ARV above as a cross-check.
           </div>
         </div>
       )}
@@ -303,7 +311,7 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
       </ul>
 
       <p className="mt-3 text-[11px] leading-snug text-text-3">
-        Max offer is 90% of ARV less three times the repair estimate. Figures are estimates for evaluation only —
+        Max offer is 90% of ARV less twice the repair estimate. Figures are estimates for evaluation only —
         run your own numbers before committing.
       </p>
     </section>
@@ -385,10 +393,7 @@ export function PublicPacketPage() {
   );
 
   // Averaged across every comp and listing carrying both a price and a size.
-  const market = useMemo(
-    () => estimateMarketArv(packet?.comps ?? [], packet?.sqft ?? null),
-    [packet?.comps, packet?.sqft],
-  );
+  const market = useMemo(() => estimateMarketArv(packet?.comps ?? []), [packet?.comps]);
 
   const analysis = useMemo(
     () =>
