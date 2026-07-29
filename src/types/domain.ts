@@ -304,6 +304,8 @@ export interface DealPacket {
   zip: string | null;
 
   purchasePrice: number | null;
+  /** Entered, not derived. Covered by Bluebird and shown to investors. */
+  closingCost: number | null;
   arv: number | null;
   arvIsManual: boolean;
   assignmentFee: number | null;

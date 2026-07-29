@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, Lock, MapPin, ShieldCheck, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Lock, MapPin, TrendingUp, X } from 'lucide-react';
 import { useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
 const PacketMap = lazy(() => import('@/components/packets/PacketMap').then((m) => ({ default: m.PacketMap })));
-import { analyzeDeal, type DealAnalysis } from '@/hooks/useDealPackets';
+import { analyzeDeal, estimateMarketArv, type DealAnalysis, type MarketEstimate } from '@/hooks/useDealPackets';
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
@@ -174,11 +174,40 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
   );
 }
 
-/** Verdict, the four headline numbers, and the reasoning behind them. */
-function DealAnalysisCard({ analysis, arv }: { analysis: DealAnalysis; arv: number | null }) {
+/** One line of the analysis breakdown: label, optional qualifier, right-aligned figure. */
+function Line({
+  label, value, sign, hint, strong, tone,
+}: {
+  label: string;
+  value: number | null;
+  sign?: '+';
+  hint?: string;
+  strong?: boolean;
+  tone?: 'good' | 'bad';
+}) {
+  const toneClass = tone === 'bad' ? 'text-danger' : tone === 'good' ? 'text-success' : 'text-text';
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-0.5">
+      <dt className={`text-[13px] ${strong ? 'font-semibold text-text' : 'text-text-2'}`}>
+        {label}
+        {hint && <span className="ml-1.5 text-[11px] font-normal text-text-3">{hint}</span>}
+      </dt>
+      <dd className={`shrink-0 tabular-nums ${strong ? `text-[15px] font-bold ${toneClass}` : 'text-[13px] text-text'}`}>
+        {sign && value != null ? sign : ''}{money(value)}
+      </dd>
+    </div>
+  );
+}
+
+/** Verdict, an itemised breakdown, and the rule the verdict comes from. */
+function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; arv: number | null; market: MarketEstimate | null }) {
   const style = VERDICT_STYLE[analysis.verdict];
-  // Bar fills toward the 40%-equity mark, so a strong deal visibly fills more.
-  const fill = analysis.margin != null ? Math.max(0, Math.min(100, (analysis.margin / 0.4) * 100)) : 0;
+  // Tracks headroom against the ceiling, the same measure the verdict uses, so
+  // the bar and the badge can never disagree. Full at 25% under max.
+  const fill =
+    analysis.mao != null && analysis.mao > 0 && analysis.headroom != null
+      ? Math.max(0, Math.min(100, (analysis.headroom / analysis.mao / 0.25) * 100))
+      : 0;
 
   return (
     <section className={`rounded-xl border p-5 shadow-card ${style.box}`}>
@@ -189,49 +218,83 @@ function DealAnalysisCard({ analysis, arv }: { analysis: DealAnalysis; arv: numb
         </span>
       </div>
 
-      {analysis.margin != null && (
-        <div className="mt-3">
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-text">{Math.round(analysis.margin * 100)}%</span>
-            <span className="text-[13px] text-text-3">equity against ARV</span>
-          </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-black/10">
-            <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${fill}%` }} />
-          </div>
+      {/* Headline is the verdict's own reasoning, so the badge and the number
+          under it can never tell different stories. */}
+      <p className="mt-2 text-[15px] font-medium leading-snug text-text">{analysis.notes[0]}</p>
+
+      {analysis.headroom != null && (
+        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-black/10">
+          <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${fill}%` }} />
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/10 pt-3 sm:grid-cols-4">
-        <div>
-          <div className="text-[11px] uppercase tracking-wide text-text-3">All-in cost</div>
-          <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-text">{money(analysis.allIn)}</div>
-        </div>
-        <div>
-          <div className="text-[11px] uppercase tracking-wide text-text-3">ARV</div>
-          <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-text">{money(arv)}</div>
-        </div>
-        <div>
-          <div className="text-[11px] uppercase tracking-wide text-text-3">Projected equity</div>
-          <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-text">{money(analysis.spread)}</div>
-        </div>
-        <div>
-          <div className="text-[11px] uppercase tracking-wide text-text-3">Max offer</div>
-          <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-text">{money(analysis.mao)}</div>
-        </div>
+      {/* ── What the buyer is in for ─────────────────────────────────────── */}
+      <div className="mt-4 border-t border-black/10 pt-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Buyer's cost</div>
+        <dl className="mt-2">
+          <Line label="Asking price" value={analysis.askingPrice} />
+          <Line label="Repairs" value={analysis.repairs} sign="+" />
+          {analysis.closingCost != null && (
+            <Line label="Closing costs" value={analysis.closingCost} sign="+" hint="paid by buyer" />
+          )}
+          <div className="mt-1 border-t border-black/15 pt-1">
+            <Line label="All-in cost" value={analysis.allIn} strong />
+          </div>
+        </dl>
       </div>
 
-      {analysis.closingCost != null && (
+      {/* ── What it's worth ──────────────────────────────────────────────── */}
+      <div className="mt-3 border-t border-black/10 pt-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Value</div>
+        <dl className="mt-2">
+          <Line label="ARV" value={arv} />
+          <Line
+            label="Projected equity"
+            value={analysis.spread}
+            strong
+            hint={analysis.margin != null ? `${Math.round(analysis.margin * 100)}% of ARV` : undefined}
+            tone={analysis.spread != null && analysis.spread < 0 ? 'bad' : 'good'}
+          />
+        </dl>
+      </div>
+
+      {/* ── The rule the verdict comes from ──────────────────────────────── */}
+      <div className="mt-3 border-t border-black/10 pt-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Against our buy box</div>
+        <dl className="mt-2">
+          <Line label="Max offer" value={analysis.mao} hint="ARV × 90% − 3 × repairs" />
+          <Line label="Asking price" value={analysis.askingPrice} />
+          <div className="mt-1 border-t border-black/15 pt-1">
+            <Line
+              label={analysis.headroom != null && analysis.headroom < 0 ? 'Over max offer by' : 'Room under max offer'}
+              value={analysis.headroom != null ? Math.abs(analysis.headroom) : null}
+              strong
+              tone={analysis.headroom != null && analysis.headroom < 0 ? 'bad' : 'good'}
+            />
+          </div>
+        </dl>
+      </div>
+
+      {market && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2">
-          <ShieldCheck size={15} className="mt-0.5 shrink-0 text-success" />
+          <TrendingUp size={15} className="mt-0.5 shrink-0 text-text-3" />
           <div className="text-[12.5px] leading-snug text-text-2">
-            <span className="font-semibold text-text">Closing costs covered — {money(analysis.closingCost)}.</span>{' '}
-            Bluebird pays closing on both sides of the transaction, so this sits outside your all-in figure above.
+            <span className="font-semibold text-text">Market check — {money(market.value)}.</span>{' '}
+            {market.soldCount + market.listingCount} nearby propert
+            {market.soldCount + market.listingCount === 1 ? 'y' : 'ies'}
+            {market.soldCount > 0 && market.listingCount > 0
+              ? ` (${market.soldCount} sold, ${market.listingCount} listed)`
+              : market.listingCount > 0
+                ? ' currently listed'
+                : ' recently sold'}{' '}
+            average ${market.avgPerSqft.toLocaleString()}/sq ft. Applied to this property's footprint, for comparison
+            against the ARV above.
           </div>
         </div>
       )}
 
       <ul className="mt-3 space-y-1 border-t border-black/10 pt-3">
-        {analysis.notes.map((n, i) => (
+        {analysis.notes.slice(1).map((n, i) => (
           <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-text-2">
             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-40" />
             {n}
@@ -240,8 +303,8 @@ function DealAnalysisCard({ analysis, arv }: { analysis: DealAnalysis; arv: numb
       </ul>
 
       <p className="mt-3 text-[11px] leading-snug text-text-3">
-        Max offer is ARV less 10% closing costs, less twice the repair estimate. Figures are estimates for
-        evaluation only — run your own numbers before committing.
+        Max offer is 90% of ARV less three times the repair estimate. Figures are estimates for evaluation only —
+        run your own numbers before committing.
       </p>
     </section>
   );
@@ -321,6 +384,12 @@ export function PublicPacketPage() {
     [packet?.comps],
   );
 
+  // Averaged across every comp and listing carrying both a price and a size.
+  const market = useMemo(
+    () => estimateMarketArv(packet?.comps ?? [], packet?.sqft ?? null),
+    [packet?.comps, packet?.sqft],
+  );
+
   const analysis = useMemo(
     () =>
       analyzeDeal({
@@ -331,8 +400,9 @@ export function PublicPacketPage() {
         arv: packet?.arv ?? null,
         repairs: repairTotalValue,
         assignmentFee: null,
+        closingCost: packet?.closingCost ?? null,
       }),
-    [packet?.purchasePrice, packet?.arv, repairTotalValue],
+    [packet?.purchasePrice, packet?.arv, packet?.closingCost, repairTotalValue],
   );
 
   if (isLoading) {
@@ -430,7 +500,7 @@ export function PublicPacketPage() {
       <main className="mx-auto max-w-5xl space-y-4 px-5 py-6">
         <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} />
 
-        <DealAnalysisCard analysis={analysis} arv={packet.arv} />
+        <DealAnalysisCard analysis={analysis} arv={packet.arv} market={market} />
 
         {packet.narrative && (
           <Card title="The opportunity">

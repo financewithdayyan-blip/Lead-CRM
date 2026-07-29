@@ -36,6 +36,7 @@ function dbToPacket(row: any): DealPacket {
     state: row.state,
     zip: row.zip,
     purchasePrice: row.purchase_price,
+    closingCost: row.closing_cost,
     arv: row.arv,
     arvIsManual: row.arv_is_manual ?? false,
     assignmentFee: row.assignment_fee,
@@ -95,21 +96,62 @@ export function repairTotal(repairs: PacketRepair[]): number {
   return repairs.reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
 }
 
+export interface MarketEstimate {
+  /** Dollar-cost-averaged value for the subject's square footage. */
+  value: number;
+  /** Mean price per square foot across every property used. */
+  avgPerSqft: number;
+  soldCount: number;
+  listingCount: number;
+}
+
+/**
+ * Investor-facing sanity check on the ARV, averaged across sold comps *and*
+ * current listings — what the surrounding market is transacting and asking at,
+ * per square foot, applied to this property's size.
+ *
+ * Distinct from computeArvFromComps, which feeds the admin's own ARV suggestion
+ * and uses sold prices only. This one deliberately blends in asking prices,
+ * because it is shown as market context rather than used to price the deal. The
+ * ARV that drives the analysis is always the figure the admin enters.
+ */
+export function estimateMarketArv(
+  comps: Pick<PacketComp, 'kind' | 'salePrice' | 'sqft'>[],
+  subjectSqft: number | null,
+): MarketEstimate | null {
+  if (!subjectSqft) return null;
+  const usable = comps.filter((c) => c.salePrice && c.sqft);
+  if (!usable.length) return null;
+
+  const avgPerSqft = usable.reduce((sum, c) => sum + c.salePrice! / c.sqft!, 0) / usable.length;
+
+  return {
+    value: Math.round(avgPerSqft * subjectSqft),
+    avgPerSqft: Math.round(avgPerSqft),
+    soldCount: usable.filter((c) => c.kind !== 'listing').length,
+    listingCount: usable.filter((c) => c.kind === 'listing').length,
+  };
+}
+
 // ── Deal analysis ───────────────────────────────────────────────────────────
 
 export type DealVerdict = 'strong' | 'fair' | 'thin' | 'unknown';
 
 export interface DealAnalysis {
   verdict: DealVerdict;
-  /** 10% of ARV — Bluebird covers this on both sides of the transaction. */
+  /** The quoted asking price — the first line of the buyer's breakdown. */
+  askingPrice: number | null;
+  /** Total repair estimate, carried through so the card can itemise it. */
+  repairs: number;
+  /** Entered by the admin. Paid by the buyer at closing, so it counts toward all-in. */
   closingCost: number | null;
-  /** What the investor is all-in for: quoted price + repairs. */
+  /** What the buyer is all-in for: quoted price + repairs + closing costs. */
   allIn: number | null;
   /** ARV minus all-in — the equity left at resale value. */
   spread: number | null;
   /** Spread as a share of ARV. */
   margin: number | null;
-  /** Max allowable offer: (ARV x 90%) - 2x repairs. */
+  /** Max allowable offer: (ARV x 90%) - 3x repairs. */
   mao: number | null;
   /** MAO minus the quoted price. Negative means the price is over the max. */
   headroom: number | null;
@@ -123,12 +165,16 @@ const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', curren
 /**
  * Bluebird's buy-box, not the generic 70% rule.
  *
- *   closing cost = ARV x 10%          (covered by Bluebird, both sides)
- *   max offer    = ARV x 90% - 2 x repairs
+ *   max offer = ARV x 90% - 3 x repairs
  *
- * The doubled repair figure is the margin of safety: it absorbs both the work
- * itself and the overruns that usually follow it. The verdict keys off how far
- * the quoted price sits inside that ceiling.
+ * Tripling the repair figure is the margin of safety: it absorbs the work, the
+ * overruns that follow it, and the holding time both consume. The verdict keys
+ * off how far the quoted price sits inside that ceiling.
+ *
+ * Closing cost is entered by hand and paid by the buyer, so it forms part of
+ * their all-in cost and reduces the equity on offer. It is deliberately outside
+ * the max-offer rule above, so it shifts the economics without moving the
+ * verdict, which stays a question of price against the ceiling.
  *
  * Deterministic rather than a model call. An investor-facing verdict has to be
  * reproducible and defensible line by line — the same packet must never score
@@ -140,18 +186,20 @@ export function analyzeDeal(input: {
   arv: number | null;
   repairs: number;
   assignmentFee: number | null;
+  closingCost: number | null;
 }): DealAnalysis {
-  const { purchasePrice, arv, repairs } = input;
+  const { purchasePrice, arv, repairs, closingCost } = input;
   // The quoted price already carries the fee, so it is not added again here.
   const fee = input.assignmentFee ?? 0;
   const notes: string[] = [];
 
-  const closingCost = arv != null ? Math.round(arv * 0.1) : null;
-  const mao = arv != null ? Math.round(arv * 0.9 - 2 * repairs) : null;
+  const mao = arv != null ? Math.round(arv * 0.9 - 3 * repairs) : null;
 
   if (purchasePrice == null || arv == null || arv <= 0) {
     return {
       verdict: 'unknown',
+      askingPrice: purchasePrice,
+      repairs,
       closingCost,
       allIn: null,
       spread: null,
@@ -163,7 +211,7 @@ export function analyzeDeal(input: {
     };
   }
 
-  const allIn = purchasePrice + repairs + fee;
+  const allIn = purchasePrice + repairs + fee + (closingCost ?? 0);
   const spread = arv - allIn;
   const margin = spread / arv;
   const headroom = mao != null ? mao - purchasePrice : null;
@@ -188,17 +236,17 @@ export function analyzeDeal(input: {
     notes.push(`Priced ${usd(Math.abs(headroom!))} above the ${usd(mao!)} maximum offer for this ARV and repair level.`);
   }
 
-  notes.push(`Max offer is ARV less 10% closing costs, less twice the repair estimate — ${usd(arv)} × 90% − 2 × ${usd(repairs)}.`);
+  notes.push(`Max offer is 90% of ARV less three times the repair estimate — ${usd(arv)} × 90% − 3 × ${usd(repairs)}.`);
 
   if (closingCost != null) {
-    notes.push(`Bluebird covers closing costs on both sides, roughly ${usd(closingCost)} at 10% of ARV.`);
+    notes.push(`Closing costs of ${usd(closingCost)} are paid by the buyer and are included in the all-in figure above.`);
   }
 
   if (repairs === 0) {
     notes.push('No repair estimate entered, so the maximum offer here is the optimistic case.');
   }
 
-  return { verdict, closingCost, allIn, spread, margin, mao, headroom, overMao, notes };
+  return { verdict, askingPrice: purchasePrice, repairs, closingCost, allIn, spread, margin, mao, headroom, overMao, notes };
 }
 
 /** The link handed to investors. Absolute so it can go straight onto a clipboard. */
@@ -285,7 +333,7 @@ type PacketFields = Partial<
   Pick<
     DealPacket,
     | 'status' | 'ownerName' | 'propType' | 'beds' | 'baths' | 'sqft' | 'yearBuilt'
-    | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'purchasePrice' | 'arv'
+    | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'purchasePrice' | 'closingCost' | 'arv'
     | 'arvIsManual' | 'assignmentFee' | 'showAssignmentFee' | 'dealTypes'
     | 'narrative' | 'requireLeadCapture'
   >
@@ -317,7 +365,7 @@ export function useSavePacket() {
         status: 'status', ownerName: 'owner_name', propType: 'prop_type', beds: 'beds',
         baths: 'baths', sqft: 'sqft', yearBuilt: 'year_built', market: 'market',
         leadStatus: 'lead_status', city: 'city', state: 'state',
-        zip: 'zip', purchasePrice: 'purchase_price', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
+        zip: 'zip', purchasePrice: 'purchase_price', closingCost: 'closing_cost', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
         showAssignmentFee: 'show_assignment_fee', dealTypes: 'deal_types',
         narrative: 'narrative', requireLeadCapture: 'require_lead_capture',
       };

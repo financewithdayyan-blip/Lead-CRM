@@ -33,6 +33,7 @@ export interface PublicPacket {
   leadStatus: string | null;
   state: string | null;
   purchasePrice: number | null;
+  closingCost: number | null;
   arv: number | null;
   assignmentFee: number | null;
   showAssignmentFee: boolean;

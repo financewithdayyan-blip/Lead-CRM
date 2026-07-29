@@ -53,6 +53,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
+  const [closingCost, setClosingCost] = useState('');
   const [arvManual, setArvManual] = useState('');
   const [arvIsManual, setArvIsManual] = useState(false);
   const [assignmentFee, setAssignmentFee] = useState('');
@@ -85,6 +86,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
     setState(packet.state ?? '');
     setZip(packet.zip ?? '');
     setPurchasePrice(packet.purchasePrice?.toString() ?? '');
+    setClosingCost(packet.closingCost?.toString() ?? '');
     setArvManual(packet.arv?.toString() ?? '');
     setArvIsManual(packet.arvIsManual);
     setAssignmentFee(packet.assignmentFee?.toString() ?? '');
@@ -118,8 +120,9 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
       arv: effectiveArv,
       repairs: totalRepairs,
       assignmentFee: null,
+      closingCost: num(closingCost),
     }),
-    [quotedPrice, effectiveArv, totalRepairs],
+    [quotedPrice, effectiveArv, totalRepairs, closingCost],
   );
 
   async function handleFiles(files: FileList | null) {
@@ -166,6 +169,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
           market: market || null,
           leadStatus: leadStatus || null,
           purchasePrice: num(purchasePrice),
+          closingCost: num(closingCost),
           city: city || null,
           state: state || null,
           zip: zip || null,
@@ -437,6 +441,16 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
               </div>
             </div>
 
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <label><span className="label">Closing cost</span>
+                <input className="input !py-1 w-40 text-[13px]" placeholder="e.g. 12,000" inputMode="numeric"
+                       value={closingCost} onChange={(e) => setClosingCost(e.target.value)} /></label>
+              <p className="max-w-md pb-1 text-[12px] leading-snug text-text-3">
+                Paid by the buyer at closing, so it counts toward their all-in and reduces the equity shown.
+                It sits outside the max-offer rule, so it shifts the economics without moving the verdict.
+              </p>
+            </div>
+
             <label className="mt-3 flex items-center gap-1.5 text-[12px] text-text-2">
               <input type="checkbox" className="accent-primary" checked={showAssignmentFee}
                      onChange={(e) => setShowAssignmentFee(e.target.checked)} />
@@ -467,7 +481,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-text-3">Closing (covered)</div>
+                  <div className="text-[11px] text-text-3">Closing (buyer)</div>
                   <div className="text-[14px] font-semibold text-text">{money(analysis.closingCost) || '—'}</div>
                 </div>
                 <div>
