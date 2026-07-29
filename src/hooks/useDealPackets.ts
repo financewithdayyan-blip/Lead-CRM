@@ -101,29 +101,39 @@ export type DealVerdict = 'strong' | 'fair' | 'thin' | 'unknown';
 
 export interface DealAnalysis {
   verdict: DealVerdict;
-  /** What the investor is all-in for: price + repairs + fee. */
+  /** 10% of ARV — Bluebird covers this on both sides of the transaction. */
+  closingCost: number | null;
+  /** What the investor is all-in for: quoted price + repairs. */
   allIn: number | null;
-  /** ARV minus all-in — the equity left on the table at resale value. */
+  /** ARV minus all-in — the equity left at resale value. */
   spread: number | null;
-  /** Spread as a share of ARV. The number the verdict keys off. */
+  /** Spread as a share of ARV. */
   margin: number | null;
-  /** Classic 70% rule ceiling: (ARV x 0.70) - repairs. */
+  /** Max allowable offer: (ARV x 90%) - 2x repairs. */
   mao: number | null;
-  /** True when the purchase price sits above that ceiling. */
+  /** MAO minus the quoted price. Negative means the price is over the max. */
+  headroom: number | null;
   overMao: boolean;
   /** Plain-language reasons behind the verdict, strongest first. */
   notes: string[];
 }
 
+const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
 /**
- * Deterministic wholesale math rather than a model call. An investor-facing
- * verdict has to be reproducible and defensible line by line — the same packet
- * must never score differently on two loads — and it also keeps a public,
- * unauthenticated page from being an inference-cost vector.
+ * Bluebird's buy-box, not the generic 70% rule.
  *
- * Thresholds follow standard wholesale practice: 25%+ equity against ARV is a
- * strong spread, 15-25% is workable, below that leaves little room once
- * holding and closing costs land.
+ *   closing cost = ARV x 10%          (covered by Bluebird, both sides)
+ *   max offer    = ARV x 90% - 2 x repairs
+ *
+ * The doubled repair figure is the margin of safety: it absorbs both the work
+ * itself and the overruns that usually follow it. The verdict keys off how far
+ * the quoted price sits inside that ceiling.
+ *
+ * Deterministic rather than a model call. An investor-facing verdict has to be
+ * reproducible and defensible line by line — the same packet must never score
+ * differently on two loads — and it keeps a public, unauthenticated page from
+ * being an inference-cost vector.
  */
 export function analyzeDeal(input: {
   purchasePrice: number | null;
@@ -132,18 +142,22 @@ export function analyzeDeal(input: {
   assignmentFee: number | null;
 }): DealAnalysis {
   const { purchasePrice, arv, repairs } = input;
+  // The quoted price already carries the fee, so it is not added again here.
   const fee = input.assignmentFee ?? 0;
   const notes: string[] = [];
 
-  const mao = arv != null ? Math.round(arv * 0.7 - repairs) : null;
+  const closingCost = arv != null ? Math.round(arv * 0.1) : null;
+  const mao = arv != null ? Math.round(arv * 0.9 - 2 * repairs) : null;
 
   if (purchasePrice == null || arv == null || arv <= 0) {
     return {
       verdict: 'unknown',
+      closingCost,
       allIn: null,
       spread: null,
       margin: null,
       mao,
+      headroom: null,
       overMao: false,
       notes: ['Add a purchase price and ARV to see the full analysis.'],
     };
@@ -152,35 +166,39 @@ export function analyzeDeal(input: {
   const allIn = purchasePrice + repairs + fee;
   const spread = arv - allIn;
   const margin = spread / arv;
-  const overMao = mao != null && purchasePrice > mao;
+  const headroom = mao != null ? mao - purchasePrice : null;
+  const overMao = headroom != null && headroom < 0;
+
+  // Measured against the ceiling itself, so the same 5k of headroom reads
+  // differently on a 60k deal than on a 400k one.
+  const headroomPct = mao != null && mao > 0 && headroom != null ? headroom / mao : null;
 
   let verdict: DealVerdict;
-  if (margin >= 0.25) {
+  if (headroomPct == null) {
+    verdict = 'thin';
+    notes.push('Repairs are large enough to wipe out the maximum offer at this ARV.');
+  } else if (headroomPct >= 0.1) {
     verdict = 'strong';
-    notes.push(`Roughly ${Math.round(margin * 100)}% equity against ARV, comfortably above the 25% investors typically look for.`);
-  } else if (margin >= 0.15) {
+    notes.push(`Priced ${usd(headroom!)} below the ${usd(mao!)} maximum offer — comfortably inside the buy box.`);
+  } else if (headroomPct >= 0) {
     verdict = 'fair';
-    notes.push(`About ${Math.round(margin * 100)}% equity against ARV — workable, though it leaves less room for surprises.`);
+    notes.push(`Priced ${usd(headroom!)} under the ${usd(mao!)} maximum offer, so it works but with little room to spare.`);
   } else {
     verdict = 'thin';
-    notes.push(
-      margin < 0
-        ? `All-in cost exceeds ARV by ${Math.abs(Math.round(margin * 100))}%, so there is no equity at these numbers.`
-        : `Only about ${Math.round(margin * 100)}% equity against ARV, which is thin once closing and holding costs land.`,
-    );
+    notes.push(`Priced ${usd(Math.abs(headroom!))} above the ${usd(mao!)} maximum offer for this ARV and repair level.`);
   }
 
-  if (overMao && mao != null) {
-    notes.push(`Purchase price is above the 70% rule ceiling of ${mao.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}.`);
-  } else if (mao != null) {
-    notes.push('Purchase price sits within the 70% rule ceiling.');
+  notes.push(`Max offer is ARV less 10% closing costs, less twice the repair estimate — ${usd(arv)} × 90% − 2 × ${usd(repairs)}.`);
+
+  if (closingCost != null) {
+    notes.push(`Bluebird covers closing costs on both sides, roughly ${usd(closingCost)} at 10% of ARV.`);
   }
 
   if (repairs === 0) {
-    notes.push('No repair estimate entered — treat the spread as optimistic until one is.');
+    notes.push('No repair estimate entered, so the maximum offer here is the optimistic case.');
   }
 
-  return { verdict, allIn, spread, margin, mao, overMao, notes };
+  return { verdict, closingCost, allIn, spread, margin, mao, headroom, overMao, notes };
 }
 
 /** The link handed to investors. Absolute so it can go straight onto a clipboard. */

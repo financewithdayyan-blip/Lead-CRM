@@ -456,10 +456,24 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div><div className="text-[11px] text-text-3">All-in</div><div className="text-[14px] font-semibold text-text">{money(analysis.allIn) || '—'}</div></div>
-                <div><div className="text-[11px] text-text-3">ARV</div><div className="text-[14px] font-semibold text-text">{money(effectiveArv) || '—'}</div></div>
-                <div><div className="text-[11px] text-text-3">Equity</div><div className="text-[14px] font-semibold text-text">{money(analysis.spread) || '—'}</div></div>
-                <div><div className="text-[11px] text-text-3">Margin</div><div className="text-[14px] font-semibold text-text">{analysis.margin != null ? `${Math.round(analysis.margin * 100)}%` : '—'}</div></div>
+                <div>
+                  <div className="text-[11px] text-text-3">Max offer</div>
+                  <div className="text-[14px] font-semibold text-text">{money(analysis.mao) || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-text-3">Headroom</div>
+                  <div className={`text-[14px] font-semibold ${analysis.headroom != null && analysis.headroom < 0 ? 'text-danger' : 'text-text'}`}>
+                    {money(analysis.headroom) || '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-text-3">Closing (covered)</div>
+                  <div className="text-[14px] font-semibold text-text">{money(analysis.closingCost) || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-text-3">Equity</div>
+                  <div className="text-[14px] font-semibold text-text">{money(analysis.spread) || '—'}</div>
+                </div>
               </div>
               <ul className="mt-2 space-y-0.5">
                 {analysis.notes.map((n, i) => (

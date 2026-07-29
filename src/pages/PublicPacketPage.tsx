@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2, Lock, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Lock, MapPin, ShieldCheck, X } from 'lucide-react';
 import { useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
@@ -71,7 +71,76 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-/** Name + email wall, shown before any packet content when the admin enables it. */
+interface PacketPhoto {
+  id: string;
+  storagePath: string;
+  caption: string | null;
+}
+
+/**
+ * Photo grid that always fills completely, whatever the photo count.
+ *
+ * A fixed 2x2-plus-four mosaic leaves visible holes at two, three or four
+ * photos, so the column count adapts: three columns fits a 2x2 feature beside
+ * two stacked thumbnails, four columns fits it beside four. Anything past the
+ * last visible slot collapses into a "+N more" overlay rather than a ragged
+ * extra row. Row heights come from the grid, never from the images, so a
+ * portrait shot can't stretch a row and strand its neighbours.
+ */
+function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: number) => void }) {
+  if (!images.length) return null;
+
+  const Tile = ({ img, index, className, overlay }: { img: PacketPhoto; index: number; className: string; overlay?: number }) => (
+    <button onClick={() => onOpen(index)} className={`group relative overflow-hidden rounded-xl border border-border ${className}`}>
+      <img
+        src={packetImageUrl(img.storagePath)}
+        alt={img.caption ?? 'Property photo'}
+        loading={index === 0 ? undefined : 'lazy'}
+        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+      />
+      {overlay ? (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[17px] font-semibold text-white">
+          +{overlay} more
+        </span>
+      ) : null}
+    </button>
+  );
+
+  if (images.length === 1) {
+    return <Tile img={images[0]} index={0} className="block h-72 w-full sm:h-[420px]" />;
+  }
+
+  if (images.length === 2) {
+    return (
+      <div className="grid h-56 grid-cols-2 gap-2 sm:h-[420px]">
+        {images.map((img, i) => <Tile key={img.id} img={img} index={i} className="h-full" />)}
+      </div>
+    );
+  }
+
+  // Three columns holds two thumbnails; four holds four. Picking the layout by
+  // count is what keeps every cell occupied.
+  const wide = images.length >= 5;
+  const thumbs = images.slice(1, wide ? 5 : 3);
+  const extra = images.length - 1 - thumbs.length;
+
+  return (
+    <div className={`grid grid-cols-2 gap-2 sm:h-[420px] sm:grid-rows-2 ${wide ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      <Tile img={images[0]} index={0} className="col-span-2 h-56 sm:row-span-2 sm:h-full" />
+      {thumbs.map((img, i) => (
+        <Tile
+          key={img.id}
+          img={img}
+          index={i + 1}
+          className="h-28 sm:h-full"
+          overlay={extra > 0 && i === thumbs.length - 1 ? extra : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Name-only wall, shown before any packet content when the admin enables it. */
 function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) => void }) {
   const [name, setName] = useState('');
   const valid = name.trim().length > 1;
@@ -146,10 +215,20 @@ function DealAnalysisCard({ analysis, arv }: { analysis: DealAnalysis; arv: numb
           <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-text">{money(analysis.spread)}</div>
         </div>
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-text-3">70% rule ceiling</div>
+          <div className="text-[11px] uppercase tracking-wide text-text-3">Max offer</div>
           <div className="mt-0.5 text-[15px] font-semibold tabular-nums text-text">{money(analysis.mao)}</div>
         </div>
       </div>
+
+      {analysis.closingCost != null && (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2">
+          <ShieldCheck size={15} className="mt-0.5 shrink-0 text-success" />
+          <div className="text-[12.5px] leading-snug text-text-2">
+            <span className="font-semibold text-text">Closing costs covered — {money(analysis.closingCost)}.</span>{' '}
+            Bluebird pays closing on both sides of the transaction, so this sits outside your all-in figure above.
+          </div>
+        </div>
+      )}
 
       <ul className="mt-3 space-y-1 border-t border-black/10 pt-3">
         {analysis.notes.map((n, i) => (
@@ -161,8 +240,8 @@ function DealAnalysisCard({ analysis, arv }: { analysis: DealAnalysis; arv: numb
       </ul>
 
       <p className="mt-3 text-[11px] leading-snug text-text-3">
-        Calculated from the figures on this page: purchase price plus repairs and fee against ARV. Estimates only —
-        run your own numbers before committing.
+        Max offer is ARV less 10% closing costs, less twice the repair estimate. Figures are estimates for
+        evaluation only — run your own numbers before committing.
       </p>
     </section>
   );
@@ -175,7 +254,7 @@ export function PublicPacketPage() {
   const logView = useLogPacketView();
 
   const [identity, setIdentity] = useState<ViewerIdentity | null>(() => (slug ? getViewerIdentity(slug) : null));
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const loggedRef = useRef(false);
 
   const gated = !!packet?.requireLeadCapture && !identity;
@@ -184,6 +263,29 @@ export function PublicPacketPage() {
   // mounted. Suppressed behind the capture gate — someone staring at a form
   // isn't viewing the deal.
   useAnnouncePacketPresence(packet?.id, !!packet && !gated);
+
+  const imageCount = packet?.images.length ?? 0;
+
+  /** Wraps at both ends so arrowing past the last photo returns to the first. */
+  const step = (delta: number) =>
+    setLightboxIndex((i) => (i === null || !imageCount ? i : (i + delta + imageCount) % imageCount));
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxIndex(null);
+      else if (e.key === 'ArrowRight') step(1);
+      else if (e.key === 'ArrowLeft') step(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    // The page behind the lightbox shouldn't scroll while it's open.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightboxIndex, imageCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One view per page load, and never before the capture gate is satisfied.
   useEffect(() => {
@@ -326,48 +428,7 @@ export function PublicPacketPage() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-4 px-5 py-6">
-        {packet.images.length > 0 && (
-          <div className="grid gap-2 sm:grid-cols-4">
-            {/* First photo leads at double size — a flat grid of six thumbnails
-                reads as a contact sheet rather than a listing. */}
-            <button
-              onClick={() => setLightbox(packetImageUrl(packet.images[0].storagePath))}
-              className="group relative sm:col-span-2 sm:row-span-2"
-            >
-              <img
-                src={packetImageUrl(packet.images[0].storagePath)}
-                alt={packet.images[0].caption ?? 'Property photo'}
-                className="h-56 w-full rounded-xl border border-border object-cover transition-opacity group-hover:opacity-90 sm:h-full"
-              />
-            </button>
-            {packet.images.slice(1, 5).map((img) => (
-              <button key={img.id} onClick={() => setLightbox(packetImageUrl(img.storagePath))} className="group relative">
-                <img
-                  src={packetImageUrl(img.storagePath)}
-                  alt={img.caption ?? 'Property photo'}
-                  loading="lazy"
-                  className="h-28 w-full rounded-xl border border-border object-cover transition-opacity group-hover:opacity-90"
-                />
-              </button>
-            ))}
-            {packet.images.length > 5 && (
-              <button
-                onClick={() => setLightbox(packetImageUrl(packet.images[5].storagePath))}
-                className="relative"
-              >
-                <img
-                  src={packetImageUrl(packet.images[5].storagePath)}
-                  alt="More property photos"
-                  loading="lazy"
-                  className="h-28 w-full rounded-xl border border-border object-cover brightness-50"
-                />
-                <span className="absolute inset-0 flex items-center justify-center text-[15px] font-semibold text-white">
-                  +{packet.images.length - 5}
-                </span>
-              </button>
-            )}
-          </div>
-        )}
+        <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} />
 
         <DealAnalysisCard analysis={analysis} arv={packet.arv} />
 
@@ -457,9 +518,71 @@ export function PublicPacketPage() {
         </p>
       </main>
 
-      {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="Property photo enlarged" className="max-h-full max-w-full rounded-lg object-contain" />
+      {lightboxIndex !== null && packet.images[lightboxIndex] && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/92 backdrop-blur-sm"
+          onClick={() => setLightboxIndex(null)}
+        >
+          <div className="flex shrink-0 items-center justify-between px-4 py-3 text-white">
+            <span className="text-[13px] tabular-nums text-white/70">
+              {lightboxIndex + 1} / {packet.images.length}
+            </span>
+            <button
+              onClick={() => setLightboxIndex(null)}
+              className="rounded-full p-1.5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="relative flex min-h-0 flex-1 items-center justify-center px-4">
+            {packet.images.length > 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); step(-1); }}
+                className="absolute left-3 z-10 rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/25"
+                aria-label="Previous photo"
+              >
+                <ChevronLeft size={22} />
+              </button>
+            )}
+
+            <img
+              src={packetImageUrl(packet.images[lightboxIndex].storagePath)}
+              alt={packet.images[lightboxIndex].caption ?? 'Property photo'}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-full max-w-full rounded-lg object-contain"
+            />
+
+            {packet.images.length > 1 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); step(1); }}
+                className="absolute right-3 z-10 rounded-full bg-white/10 p-2.5 text-white transition-colors hover:bg-white/25"
+                aria-label="Next photo"
+              >
+                <ChevronRight size={22} />
+              </button>
+            )}
+          </div>
+
+          {packet.images.length > 1 && (
+            <div
+              className="flex shrink-0 justify-center gap-1.5 overflow-x-auto px-4 py-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {packet.images.map((img, i) => (
+                <button
+                  key={img.id}
+                  onClick={() => setLightboxIndex(i)}
+                  className={`h-12 w-16 shrink-0 overflow-hidden rounded transition-all ${
+                    i === lightboxIndex ? 'ring-2 ring-white' : 'opacity-50 hover:opacity-90'
+                  }`}
+                >
+                  <img src={packetImageUrl(img.storagePath)} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
