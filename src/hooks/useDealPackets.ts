@@ -54,6 +54,8 @@ function dbToPacket(row: any): DealPacket {
         salePrice: c.sale_price,
         saleDate: c.sale_date,
         sqft: c.sqft,
+        beds: c.beds != null ? Number(c.beds) : null,
+        baths: c.baths != null ? Number(c.baths) : null,
         lat: c.lat != null ? Number(c.lat) : null,
         lng: c.lng != null ? Number(c.lng) : null,
       }),
@@ -112,9 +114,9 @@ export interface MarketEstimate {
  * not need the subject's footprint, so it still produces a figure when sq ft is
  * missing from the packet or from individual comps.
  *
- * Shown to investors as a cross-check only. The ARV that drives the analysis is
- * always the figure entered on the packet, and computeArvFromComps (sold prices
- * only) remains what feeds the admin's own suggestion.
+ * This is the operative ARV on the packet whenever comps exist; the figure
+ * entered by the admin is the fallback for when they don't. computeArvFromComps
+ * (sold prices only) still feeds the admin's own in-builder suggestion.
  */
 export function estimateMarketArv(
   comps: Pick<PacketComp, 'kind' | 'salePrice'>[],
@@ -373,6 +375,7 @@ export function useSavePacket() {
             comps.map((c, i) => ({
               packet_id: id, kind: c.kind ?? 'sold', address: c.address,
               sale_price: c.salePrice, sale_date: c.saleDate || null, sqft: c.sqft,
+              beds: c.beds ?? null, baths: c.baths ?? null,
               lat: c.lat ?? null, lng: c.lng ?? null, sort_order: i,
             })),
           );

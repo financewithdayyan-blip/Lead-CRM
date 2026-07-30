@@ -324,7 +324,7 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
           >
             <div className="space-y-2">
               {comps.map((c, i) => (
-                <div key={i} className="grid grid-cols-[92px_1fr_110px_130px_90px_auto] items-center gap-2">
+                <div key={i} className="grid grid-cols-[86px_1fr_102px_120px_70px_58px_58px_auto] items-center gap-1.5">
                   <select
                     className="input !py-1 text-[12px]"
                     value={c.kind}
@@ -341,6 +341,10 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
                          onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, saleDate: e.target.value || null } : x))} />
                   <input className="input !py-1 text-[13px]" placeholder="Sq ft" inputMode="numeric" value={c.sqft ?? ''}
                          onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, sqft: num(e.target.value) } : x))} />
+                  <input className="input !py-1 text-[13px]" placeholder="Bd" inputMode="decimal" value={c.beds ?? ''}
+                         onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, beds: num(e.target.value) } : x))} />
+                  <input className="input !py-1 text-[13px]" placeholder="Ba" inputMode="decimal" value={c.baths ?? ''}
+                         onChange={(e) => setComps((p) => p.map((x, idx) => idx === i ? { ...x, baths: num(e.target.value) } : x))} />
                   <button type="button" onClick={() => setComps((p) => p.filter((_, idx) => idx !== i))}
                           className="rounded p-1 text-text-3 hover:text-danger" title="Remove row">
                     <Trash2 size={14} />
@@ -348,11 +352,11 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
                 </div>
               ))}
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => setComps((p) => [...p, { kind: 'sold', address: '', salePrice: null, saleDate: null, sqft: null, lat: null, lng: null }])}
+                <button type="button" onClick={() => setComps((p) => [...p, { kind: 'sold', address: '', salePrice: null, saleDate: null, sqft: null, beds: null, baths: null, lat: null, lng: null }])}
                         className="btn !px-2 !py-1 text-[12px]">
                   <Plus size={13} /> Add sold comp
                 </button>
-                <button type="button" onClick={() => setComps((p) => [...p, { kind: 'listing', address: '', salePrice: null, saleDate: null, sqft: null, lat: null, lng: null }])}
+                <button type="button" onClick={() => setComps((p) => [...p, { kind: 'listing', address: '', salePrice: null, saleDate: null, sqft: null, beds: null, baths: null, lat: null, lng: null }])}
                         className="btn !px-2 !py-1 text-[12px]">
                   <Plus size={13} /> Add current listing
                 </button>

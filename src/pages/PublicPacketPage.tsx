@@ -41,6 +41,8 @@ function CompTable({
           <tr>
             <th className="pb-2 pr-3">Address</th>
             <th className="pb-2 pr-3 text-right">{priceLabel}</th>
+            <th className="pb-2 pr-3 text-right">Bed</th>
+            <th className="pb-2 pr-3 text-right">Bath</th>
             <th className="pb-2 pr-3 text-right">Sq ft</th>
             <th className="pb-2 text-right">{dateLabel}</th>
           </tr>
@@ -50,6 +52,8 @@ function CompTable({
             <tr key={c.id} className="border-b border-border last:border-b-0">
               <td className="py-2 pr-3 text-text-2">{c.address || '—'}</td>
               <td className="py-2 pr-3 text-right tabular-nums text-text">{money(c.salePrice)}</td>
+              <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.beds ?? '—'}</td>
+              <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.baths ?? '—'}</td>
               <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.sqft?.toLocaleString() ?? '—'}</td>
               <td className="py-2 text-right tabular-nums text-text-3">
                 {c.saleDate ? new Date(c.saleDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
@@ -343,6 +347,8 @@ export function PublicPacketPage() {
           address: c.address,
           price: c.salePrice,
           sqft: c.sqft,
+          beds: c.beds,
+          baths: c.baths,
           date: c.saleDate,
           lat: Number(c.lat),
           lng: Number(c.lng),

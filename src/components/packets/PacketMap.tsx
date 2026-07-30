@@ -8,6 +8,8 @@ export interface MapPin {
   address: string | null;
   price: number | null;
   sqft: number | null;
+  beds: number | null;
+  baths: number | null;
   date: string | null;
   lat: number;
   lng: number;
@@ -62,13 +64,23 @@ export function PacketMap({ pins }: { pins: MapPin[] }) {
     const bounds = L.latLngBounds([]);
     for (const p of pins) {
       const marker = L.marker([p.lat, p.lng], { icon: pinIcon(p.kind) }).addTo(map);
+
+      // Whichever of bed / bath / size this comp actually has.
+      const spec = [
+        p.beds != null ? `${p.beds} bd` : null,
+        p.baths != null ? `${p.baths} ba` : null,
+        p.sqft != null ? `${p.sqft.toLocaleString()} sq ft` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
       marker.bindPopup(
         `<div style="font:500 13px system-ui;min-width:150px">
            <div style="font-weight:600;margin-bottom:2px">${p.address ?? 'Property'}</div>
            <div style="color:${COLOR[p.kind]};font-weight:600;font-size:12px">
              ${p.kind === 'listing' ? 'Currently listed' : 'Sold'} · ${money(p.price)}
            </div>
-           ${p.sqft ? `<div style="color:#64748b;font-size:12px">${p.sqft.toLocaleString()} sq ft</div>` : ''}
+           ${spec ? `<div style="color:#64748b;font-size:12px">${spec}</div>` : ''}
          </div>`,
       );
       bounds.extend([p.lat, p.lng]);

@@ -264,6 +264,8 @@ export interface PacketComp {
   salePrice: number | null;
   saleDate: string | null;
   sqft: number | null;
+  beds: number | null;
+  baths: number | null;
   lat: number | null;
   lng: number | null;
 }
