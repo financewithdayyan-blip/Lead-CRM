@@ -162,18 +162,13 @@ export interface DealAnalysis {
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
 /**
- * Bluebird's buy-box, not the generic 70% rule.
+ * Verdict from projected equity — ARV less everything the buyer spends, as a
+ * share of ARV. Keyed off equity rather than a hidden ceiling so every input
+ * behind the badge is a number the investor can see on the page.
  *
- *   max offer = ARV x 90% - 2 x repairs
- *
- * Doubling the repair figure is the margin of safety: it absorbs both the work
- * and the overruns that usually follow it. The verdict keys off how far the
- * quoted price sits inside that ceiling.
- *
- * Closing cost is entered by hand and paid by the buyer, so it forms part of
- * their all-in cost and reduces the equity on offer. It is deliberately outside
- * the max-offer rule above, so it shifts the economics without moving the
- * verdict, which stays a question of price against the ceiling.
+ * Max offer (ARV x 90% - 2 x repairs) is still computed for the builder, where
+ * it is a useful internal check, but it no longer drives the verdict and is not
+ * shown to investors.
  *
  * Deterministic rather than a model call. An investor-facing verdict has to be
  * reproducible and defensible line by line — the same packet must never score
@@ -215,34 +210,29 @@ export function analyzeDeal(input: {
   const margin = spread / arv;
   const headroom = mao != null ? mao - purchasePrice : null;
   const overMao = headroom != null && headroom < 0;
-
-  // Measured against the ceiling itself, so the same 5k of headroom reads
-  // differently on a 60k deal than on a 400k one.
-  const headroomPct = mao != null && mao > 0 && headroom != null ? headroom / mao : null;
+  const pct = Math.round(margin * 100);
 
   let verdict: DealVerdict;
-  if (headroomPct == null) {
-    verdict = 'thin';
-    notes.push('Repairs are large enough to wipe out the maximum offer at this ARV.');
-  } else if (headroomPct >= 0.1) {
+  if (margin >= 0.2) {
     verdict = 'strong';
-    notes.push(`Priced ${usd(headroom!)} below the ${usd(mao!)} maximum offer — comfortably inside the buy box.`);
-  } else if (headroomPct >= 0) {
+    notes.push(`${usd(spread)} of projected equity — ${pct}% of ARV, a healthy spread for a project of this size.`);
+  } else if (margin >= 0.1) {
     verdict = 'fair';
-    notes.push(`Priced ${usd(headroom!)} under the ${usd(mao!)} maximum offer, so it works but with little room to spare.`);
+    notes.push(`${usd(spread)} of projected equity — ${pct}% of ARV. Workable, with less room for overruns.`);
+  } else if (spread >= 0) {
+    verdict = 'thin';
+    notes.push(`${usd(spread)} of projected equity — only ${pct}% of ARV, thin once holding costs are counted.`);
   } else {
     verdict = 'thin';
-    notes.push(`Priced ${usd(Math.abs(headroom!))} above the ${usd(mao!)} maximum offer for this ARV and repair level.`);
+    notes.push(`All-in cost exceeds ARV by ${usd(Math.abs(spread))}, so there is no equity at these numbers.`);
   }
 
-  notes.push(`Max offer is 90% of ARV less twice the repair estimate — ${usd(arv)} × 90% − 2 × ${usd(repairs)}.`);
-
   if (closingCost != null) {
-    notes.push(`Closing costs of ${usd(closingCost)} are paid by the buyer and are included in the all-in figure above.`);
+    notes.push(`Closing costs of ${usd(closingCost)} are paid by the buyer and are included in the all-in figure.`);
   }
 
   if (repairs === 0) {
-    notes.push('No repair estimate entered, so the maximum offer here is the optimistic case.');
+    notes.push('No repair estimate entered, so the spread here is the optimistic case.');
   }
 
   return { verdict, askingPrice: purchasePrice, repairs, closingCost, allIn, spread, margin, mao, headroom, overMao, notes };

@@ -247,7 +247,7 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
       <div className="mt-3 border-t border-black/10 pt-3">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Value</div>
         <dl className="mt-2">
-          <Line label="ARV" value={arv} />
+          <Line label="ARV" value={arv} hint={market ? "comparable average" : undefined} />
           {market && (
             <Line
               label="Comparable average"
@@ -269,50 +269,8 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
         </dl>
       </div>
 
-      {/* ── The rule the verdict comes from ──────────────────────────────── */}
-      <div className="mt-3 border-t border-black/10 pt-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Against our buy box</div>
-        <dl className="mt-2">
-          <Line label="Max offer" value={analysis.mao} hint="ARV × 90% − 3 × repairs" />
-          <Line label="Asking price" value={analysis.askingPrice} />
-          <div className="mt-1 border-t border-black/15 pt-1">
-            <Line
-              label={analysis.headroom != null && analysis.headroom < 0 ? 'Over max offer by' : 'Room under max offer'}
-              value={analysis.headroom != null ? Math.abs(analysis.headroom) : null}
-              strong
-              tone={analysis.headroom != null && analysis.headroom < 0 ? 'bad' : 'good'}
-            />
-          </div>
-        </dl>
-      </div>
-
-      {market && (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2">
-          <TrendingUp size={15} className="mt-0.5 shrink-0 text-text-3" />
-          <div className="text-[12.5px] leading-snug text-text-2">
-            <span className="font-semibold text-text">Comparable average — {money(market.value)}.</span>{' '}
-            Every comparable price on this page added together and divided by {market.total}
-            {market.soldCount > 0 && market.listingCount > 0
-              ? ` — ${market.soldCount} sold and ${market.listingCount} currently listed`
-              : market.listingCount > 0
-                ? ' currently listed properties'
-                : ' recently sold properties'}. Shown alongside the ARV above as a cross-check.
-          </div>
-        </div>
-      )}
-
-      <ul className="mt-3 space-y-1 border-t border-black/10 pt-3">
-        {analysis.notes.slice(1).map((n, i) => (
-          <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-text-2">
-            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-40" />
-            {n}
-          </li>
-        ))}
-      </ul>
-
-      <p className="mt-3 text-[11px] leading-snug text-text-3">
-        Max offer is 90% of ARV less twice the repair estimate. Figures are estimates for evaluation only —
-        run your own numbers before committing.
+      <p className="mt-3 border-t border-black/10 pt-3 text-[11px] leading-snug text-text-3">
+        Figures are estimates provided for evaluation and are not a warranty or an offer.
       </p>
     </section>
   );
@@ -395,6 +353,10 @@ export function PublicPacketPage() {
   // Averaged across every comp and listing carrying both a price and a size.
   const market = useMemo(() => estimateMarketArv(packet?.comps ?? []), [packet?.comps]);
 
+  // The comparable average is the operative ARV whenever comps exist; the
+  // figure entered on the packet is the fallback for when they don't.
+  const adjustedArv = market?.value ?? packet?.arv ?? null;
+
   const analysis = useMemo(
     () =>
       analyzeDeal({
@@ -402,12 +364,12 @@ export function PublicPacketPage() {
         // them. Passing the fee again here would double-count it and understate
         // the deal.
         purchasePrice: packet?.purchasePrice ?? null,
-        arv: packet?.arv ?? null,
+        arv: adjustedArv,
         repairs: repairTotalValue,
         assignmentFee: null,
         closingCost: packet?.closingCost ?? null,
       }),
-    [packet?.purchasePrice, packet?.arv, packet?.closingCost, repairTotalValue],
+    [packet?.purchasePrice, adjustedArv, packet?.closingCost, repairTotalValue],
   );
 
   if (isLoading) {
@@ -468,10 +430,10 @@ export function PublicPacketPage() {
                 <div className="text-2xl font-bold tabular-nums">{money(packet.purchasePrice)}</div>
               </div>
             )}
-            {packet.arv != null && (
+            {adjustedArv != null && (
               <div>
                 <div className="text-[11px] uppercase tracking-wide text-slate-400">ARV</div>
-                <div className="text-2xl font-bold tabular-nums text-sky-300">{money(packet.arv)}</div>
+                <div className="text-2xl font-bold tabular-nums text-sky-300">{money(adjustedArv)}</div>
               </div>
             )}
             {repairTotalValue > 0 && (
@@ -505,7 +467,7 @@ export function PublicPacketPage() {
       <main className="mx-auto max-w-5xl space-y-4 px-5 py-6">
         <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} />
 
-        <DealAnalysisCard analysis={analysis} arv={packet.arv} market={market} />
+        <DealAnalysisCard analysis={analysis} arv={adjustedArv} market={market} />
 
         {packet.narrative && (
           <Card title="The opportunity">
@@ -566,6 +528,23 @@ export function PublicPacketPage() {
         {sold.length > 0 && (
           <Card title="Recently sold">
             <CompTable rows={sold} priceLabel="Sale price" dateLabel="Sold" />
+          </Card>
+        )}
+
+        {market && (
+          <Card title="Comparable average">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-3xl font-bold tabular-nums text-text">{money(market.value)}</span>
+              <span className="text-[13px] text-text-3">
+                across {market.total} propert{market.total === 1 ? 'y' : 'ies'}
+                {market.soldCount > 0 && market.listingCount > 0
+                  ? ` — ${market.soldCount} sold, ${market.listingCount} listed`
+                  : ''}
+              </span>
+            </div>
+            <p className="mt-2 text-[12.5px] leading-snug text-text-3">
+              Every price above added together and divided by how many there are.
+            </p>
           </Card>
         )}
 

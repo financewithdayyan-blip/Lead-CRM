@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import {
   analyzeDeal,
   computeArvFromComps,
+  estimateMarketArv,
   packetImageUrl,
   packetUrl,
   repairTotal,
@@ -113,16 +114,23 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
     return base + (num(assignmentFee) ?? 0);
   }, [purchasePrice, assignmentFee]);
 
+  // Investors are shown the comparable average as the ARV, so the preview has
+  // to price off the same number rather than the entered one.
+  const adjustedArv = useMemo(
+    () => estimateMarketArv(comps as PacketComp[])?.value ?? effectiveArv,
+    [comps, effectiveArv],
+  );
+
   // Recomputed as you type, so the verdict is visible before you publish.
   const analysis = useMemo(
     () => analyzeDeal({
       purchasePrice: quotedPrice,
-      arv: effectiveArv,
+      arv: adjustedArv,
       repairs: totalRepairs,
       assignmentFee: null,
       closingCost: num(closingCost),
     }),
-    [quotedPrice, effectiveArv, totalRepairs, closingCost],
+    [quotedPrice, adjustedArv, totalRepairs, closingCost],
   );
 
   async function handleFiles(files: FileList | null) {
