@@ -134,6 +134,152 @@ export function estimateMarketArv(
   };
 }
 
+// ── Comp confidence ─────────────────────────────────────────────────────────
+
+export interface SubjectSpec {
+  sqft: number | null;
+  beds: number | null;
+  baths: number | null;
+}
+
+export interface CompScore {
+  /** 0-10. How closely this property matches the subject. */
+  score: number;
+  /** What cost it points, in descending severity. */
+  reasons: string[];
+}
+
+/**
+ * How comparable one property is to the subject, out of ten.
+ *
+ * No two houses are identical, so the bands allow real-world tolerance: square
+ * footage within 12% and baths within one scores as a like-for-like match.
+ * Beyond that the score decays rather than dropping off a cliff, because a 20%
+ * size difference is weaker evidence, not worthless evidence.
+ *
+ * Weighted by how much each attribute actually moves value — footprint most,
+ * then bedroom count, then baths. A missing attribute scores zero for that
+ * dimension: an unrecorded square footage is genuinely unknown comparability,
+ * not neutral, and pretending otherwise would inflate confidence in the ARV.
+ */
+export function scoreComp(comp: Pick<PacketComp, 'sqft' | 'beds' | 'baths'>, subject: SubjectSpec): CompScore {
+  const reasons: string[] = [];
+  let score = 0;
+
+  // Square footage — 5 of 10.
+  if (comp.sqft && subject.sqft) {
+    const diff = Math.abs(comp.sqft - subject.sqft) / subject.sqft;
+    if (diff <= 0.12) {
+      score += 5;
+    } else if (diff <= 0.3) {
+      // Straight decay from full marks at 12% to nothing at 30%.
+      score += 5 * (1 - (diff - 0.12) / 0.18);
+      reasons.push(`${Math.round(diff * 100)}% size difference`);
+    } else {
+      reasons.push(`${Math.round(diff * 100)}% size difference`);
+    }
+  } else {
+    reasons.push('no square footage recorded');
+  }
+
+  // Bedrooms — 3 of 10.
+  if (comp.beds != null && subject.beds != null) {
+    const diff = Math.abs(comp.beds - subject.beds);
+    if (diff === 0) score += 3;
+    else if (diff <= 1) {
+      score += 1.5;
+      reasons.push(`${diff} bedroom difference`);
+    } else {
+      reasons.push(`${diff} bedroom difference`);
+    }
+  } else {
+    reasons.push('no bedroom count');
+  }
+
+  // Baths — 2 of 10. One either way is normal between otherwise-alike houses.
+  if (comp.baths != null && subject.baths != null) {
+    const diff = Math.abs(comp.baths - subject.baths);
+    if (diff === 0) score += 2;
+    else if (diff <= 1) score += 1.4;
+    else if (diff <= 2) {
+      score += 0.6;
+      reasons.push(`${diff} bathroom difference`);
+    } else {
+      reasons.push(`${diff} bathroom difference`);
+    }
+  } else {
+    reasons.push('no bathroom count');
+  }
+
+  return { score: Math.round(score * 10) / 10, reasons };
+}
+
+export interface SetConfidence {
+  /** 0-10 across the whole comp set. */
+  score: number;
+  label: 'High' | 'Moderate' | 'Low';
+  /** Per-comp scores, keyed by comp id. */
+  byId: Record<string, CompScore>;
+  notes: string[];
+}
+
+/**
+ * Confidence in the comparable average as a whole — the honest answer to "how
+ * much should I trust this ARV".
+ *
+ * Starts from the mean comp score, then discounts for the two things that
+ * undermine an average regardless of how alike the individual properties are:
+ * too few data points, and prices scattered too widely to average meaningfully.
+ */
+export function compSetConfidence(
+  comps: (Pick<PacketComp, 'sqft' | 'beds' | 'baths' | 'salePrice'> & { id: string })[],
+  subject: SubjectSpec,
+): SetConfidence | null {
+  if (!comps.length) return null;
+
+  const byId: Record<string, CompScore> = {};
+  for (const c of comps) byId[c.id] = scoreComp(c, subject);
+
+  const notes: string[] = [];
+  const mean = comps.reduce((sum, c) => sum + byId[c.id].score, 0) / comps.length;
+  let score = mean;
+
+  if (comps.length < 3) {
+    score *= 0.8;
+    notes.push(`Only ${comps.length} comparable${comps.length === 1 ? '' : 's'} — a small sample to average.`);
+  } else if (comps.length < 5) {
+    score *= 0.92;
+    notes.push(`${comps.length} comparables is a workable sample, though more would tighten the estimate.`);
+  } else {
+    notes.push(`${comps.length} comparables is a solid sample.`);
+  }
+
+  // Coefficient of variation on price: a wide spread means the average sits in
+  // the middle of numbers that don't agree with each other.
+  const priced = comps.filter((c) => c.salePrice && c.salePrice > 0);
+  if (priced.length >= 2) {
+    const avg = priced.reduce((s, c) => s + c.salePrice!, 0) / priced.length;
+    const sd = Math.sqrt(priced.reduce((s, c) => s + (c.salePrice! - avg) ** 2, 0) / priced.length);
+    const cv = sd / avg;
+    if (cv > 0.2) {
+      score *= 0.85;
+      notes.push(`Prices vary widely (±${Math.round(cv * 100)}%), so the average carries more uncertainty.`);
+    } else if (cv > 0.1) {
+      notes.push(`Prices are reasonably clustered (±${Math.round(cv * 100)}%).`);
+    } else {
+      notes.push(`Prices are tightly clustered (±${Math.round(cv * 100)}%), which supports the average.`);
+    }
+  }
+
+  const rounded = Math.round(Math.min(10, score) * 10) / 10;
+  return {
+    score: rounded,
+    label: rounded >= 7.5 ? 'High' : rounded >= 5 ? 'Moderate' : 'Low',
+    byId,
+    notes,
+  };
+}
+
 // ── Deal analysis ───────────────────────────────────────────────────────────
 
 export type DealVerdict = 'strong' | 'fair' | 'thin' | 'unknown';

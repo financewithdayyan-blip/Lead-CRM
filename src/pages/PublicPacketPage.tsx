@@ -5,7 +5,7 @@ import { useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
 const PacketMap = lazy(() => import('@/components/packets/PacketMap').then((m) => ({ default: m.PacketMap })));
-import { analyzeDeal, estimateMarketArv, type DealAnalysis, type MarketEstimate } from '@/hooks/useDealPackets';
+import { analyzeDeal, compSetConfidence, estimateMarketArv, type CompScore, type DealAnalysis, type MarketEstimate, type SetConfidence } from '@/hooks/useDealPackets';
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
@@ -25,14 +25,22 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 /** Shared by the listings and sold tables — same columns, different labels. */
+function matchTone(score: number) {
+  if (score >= 7.5) return 'bg-success/15 text-success';
+  if (score >= 5) return 'bg-warning-dim text-warning';
+  return 'bg-danger-dim text-danger';
+}
+
 function CompTable({
   rows,
   priceLabel,
   dateLabel,
+  scores,
 }: {
   rows: PublicPacketComp[];
   priceLabel: string;
   dateLabel: string;
+  scores?: Record<string, CompScore>;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -44,7 +52,8 @@ function CompTable({
             <th className="pb-2 pr-3 text-right">Bed</th>
             <th className="pb-2 pr-3 text-right">Bath</th>
             <th className="pb-2 pr-3 text-right">Sq ft</th>
-            <th className="pb-2 text-right">{dateLabel}</th>
+            <th className="pb-2 pr-3 text-right">{dateLabel}</th>
+            {scores && <th className="pb-2 text-right">Match</th>}
           </tr>
         </thead>
         <tbody>
@@ -55,13 +64,58 @@ function CompTable({
               <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.beds ?? '—'}</td>
               <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.baths ?? '—'}</td>
               <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.sqft?.toLocaleString() ?? '—'}</td>
-              <td className="py-2 text-right tabular-nums text-text-3">
+              <td className="py-2 pr-3 text-right tabular-nums text-text-3">
                 {c.saleDate ? new Date(c.saleDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
               </td>
+              {scores && (
+                <td className="py-2 text-right">
+                  {scores[c.id] ? (
+                    <span
+                      className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${matchTone(scores[c.id].score)}`}
+                      title={scores[c.id].reasons.join(' · ') || 'Close match on size, beds and baths'}
+                    >
+                      {scores[c.id].score}/10
+                    </span>
+                  ) : (
+                    <span className="text-text-3">—</span>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Qualifies the comparable average. A number without a sense of how alike the
+ * comps were is worth less than a slightly worse number you can trust.
+ */
+function ConfidenceBlock({ confidence }: { confidence: SetConfidence }) {
+  const tone =
+    confidence.label === 'High' ? 'bg-success' : confidence.label === 'Moderate' ? 'bg-warning' : 'bg-danger';
+
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Comp confidence</span>
+        <span className="text-[13px] font-semibold text-text">
+          {confidence.label} · <span className="tabular-nums">{confidence.score}/10</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border-2">
+        <div className={`h-full rounded-full transition-all ${tone}`} style={{ width: `${confidence.score * 10}%` }} />
+      </div>
+      <ul className="mt-2 space-y-0.5">
+        {confidence.notes.map((n, i) => (
+          <li key={i} className="flex gap-1.5 text-[12px] leading-snug text-text-3">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-40" />
+            {n}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -359,6 +413,18 @@ export function PublicPacketPage() {
   // Averaged across every comp and listing carrying both a price and a size.
   const market = useMemo(() => estimateMarketArv(packet?.comps ?? []), [packet?.comps]);
 
+  // How alike the comps actually are to this property — what qualifies the
+  // comparable average rather than presenting it as a bare number.
+  const confidence = useMemo(
+    () =>
+      compSetConfidence(packet?.comps ?? [], {
+        sqft: packet?.sqft ?? null,
+        beds: packet?.beds ?? null,
+        baths: packet?.baths ?? null,
+      }),
+    [packet?.comps, packet?.sqft, packet?.beds, packet?.baths],
+  );
+
   // The comparable average is the operative ARV whenever comps exist; the
   // figure entered on the packet is the fallback for when they don't.
   const adjustedArv = market?.value ?? packet?.arv ?? null;
@@ -527,13 +593,13 @@ export function PublicPacketPage() {
 
         {listings.length > 0 && (
           <Card title="Currently on the market">
-            <CompTable rows={listings} priceLabel="List price" dateLabel="Listed" />
+            <CompTable rows={listings} priceLabel="List price" dateLabel="Listed" scores={confidence?.byId} />
           </Card>
         )}
 
         {sold.length > 0 && (
           <Card title="Recently sold">
-            <CompTable rows={sold} priceLabel="Sale price" dateLabel="Sold" />
+            <CompTable rows={sold} priceLabel="Sale price" dateLabel="Sold" scores={confidence?.byId} />
           </Card>
         )}
 
@@ -551,6 +617,8 @@ export function PublicPacketPage() {
             <p className="mt-2 text-[12.5px] leading-snug text-text-3">
               Every price above added together and divided by how many there are.
             </p>
+
+            {confidence && <ConfidenceBlock confidence={confidence} />}
           </Card>
         )}
 

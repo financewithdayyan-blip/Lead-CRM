@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import {
   analyzeDeal,
   computeArvFromComps,
+  compSetConfidence,
   estimateMarketArv,
   packetImageUrl,
   packetUrl,
@@ -113,6 +114,16 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
     if (base == null) return null;
     return base + (num(assignmentFee) ?? 0);
   }, [purchasePrice, assignmentFee]);
+
+  // Comps carry no id until saved, so index stands in for one here.
+  const confidence = useMemo(
+    () =>
+      compSetConfidence(
+        comps.map((c, i) => ({ ...c, id: String(i) })),
+        { sqft: num(sqft), beds: num(beds), baths: num(baths) },
+      ),
+    [comps, sqft, beds, baths],
+  );
 
   // Investors are shown the comparable average as the ARV, so the preview has
   // to price off the same number rather than the entered one.
@@ -364,6 +375,36 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
                   Addresses are located on save so they can be mapped. Editing an address re-locates it.
                 </span>
               </div>
+
+              {confidence && (
+                <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                      Comp confidence
+                    </span>
+                    <span className="text-[13px] font-semibold text-text">
+                      {confidence.label} · <span className="tabular-nums">{confidence.score}/10</span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border-2">
+                    <div
+                      className={`h-full rounded-full ${
+                        confidence.label === 'High' ? 'bg-success' : confidence.label === 'Moderate' ? 'bg-warning' : 'bg-danger'
+                      }`}
+                      style={{ width: `${confidence.score * 10}%` }}
+                    />
+                  </div>
+                  <ul className="mt-1.5 space-y-0.5">
+                    {confidence.notes.map((n, i) => (
+                      <li key={i} className="text-[11.5px] leading-snug text-text-3">· {n}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5 text-[11px] text-text-3">
+                    Scored against this property's {num(sqft) ?? '—'} sq ft, {num(beds) ?? '—'} bed,{' '}
+                    {num(baths) ?? '—'} bath. Fill those in above for an accurate reading.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
