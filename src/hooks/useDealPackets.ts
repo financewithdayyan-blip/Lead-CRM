@@ -143,7 +143,7 @@ export interface SubjectSpec {
 }
 
 export interface CompScore {
-  /** 0-10. How closely this property matches the subject. */
+  /** Whole number 0-10. How closely this property matches the subject. */
   score: number;
   /** What cost it points, in descending severity. */
   reasons: string[];
@@ -211,11 +211,13 @@ export function scoreComp(comp: Pick<PacketComp, 'sqft' | 'beds' | 'baths'>, sub
     reasons.push('no bathroom count');
   }
 
-  return { score: Math.round(score * 10) / 10, reasons };
+  // Whole numbers only — a comp is a 9 or a 10, not a 9.4. The extra decimal
+  // implied a precision the underlying judgement doesn't have.
+  return { score: Math.round(score), reasons };
 }
 
 export interface SetConfidence {
-  /** 0-10 across the whole comp set. */
+  /** Whole number 0-10 across the whole comp set. */
   score: number;
   label: 'High' | 'Moderate' | 'Low';
   /** Per-comp scores, keyed by comp id. */
@@ -241,6 +243,8 @@ export function compSetConfidence(
   for (const c of comps) byId[c.id] = scoreComp(c, subject);
 
   const notes: string[] = [];
+  // Averaged over the rounded scores actually shown, so the overall figure
+  // always reconciles with the individual badges.
   const mean = comps.reduce((sum, c) => sum + byId[c.id].score, 0) / comps.length;
   let score = mean;
 
@@ -271,7 +275,7 @@ export function compSetConfidence(
     }
   }
 
-  const rounded = Math.round(Math.min(10, score) * 10) / 10;
+  const rounded = Math.round(Math.min(10, score));
   return {
     score: rounded,
     label: rounded >= 7.5 ? 'High' : rounded >= 5 ? 'Moderate' : 'Low',

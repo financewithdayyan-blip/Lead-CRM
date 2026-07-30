@@ -93,19 +93,17 @@ function CompTable({
  * Qualifies the comparable average. A number without a sense of how alike the
  * comps were is worth less than a slightly worse number you can trust.
  */
+function confidenceText(label: SetConfidence['label']) {
+  return label === 'High' ? 'text-success' : label === 'Moderate' ? 'text-warning' : 'text-danger';
+}
+
 function ConfidenceBlock({ confidence }: { confidence: SetConfidence }) {
   const tone =
     confidence.label === 'High' ? 'bg-success' : confidence.label === 'Moderate' ? 'bg-warning' : 'bg-danger';
 
   return (
-    <div className="mt-4 border-t border-border pt-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Comp confidence</span>
-        <span className="text-[13px] font-semibold text-text">
-          {confidence.label} · <span className="tabular-nums">{confidence.score}/10</span>
-        </span>
-      </div>
-      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border-2">
+    <div className="mt-3 border-t border-border pt-3">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border-2">
         <div className={`h-full rounded-full transition-all ${tone}`} style={{ width: `${confidence.score * 10}%` }} />
       </div>
       <ul className="mt-2 space-y-0.5">
@@ -605,15 +603,30 @@ export function PublicPacketPage() {
 
         {market && (
           <Card title="Comparable average">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-3xl font-bold tabular-nums text-text">{money(market.value)}</span>
-              <span className="text-[13px] text-text-3">
-                across {market.total} propert{market.total === 1 ? 'y' : 'ies'}
-                {market.soldCount > 0 && market.listingCount > 0
-                  ? ` — ${market.soldCount} sold, ${market.listingCount} listed`
-                  : ''}
-              </span>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="text-3xl font-bold tabular-nums text-text">{money(market.value)}</div>
+                <div className="mt-0.5 text-[12.5px] text-text-3">
+                  across {market.total} propert{market.total === 1 ? 'y' : 'ies'}
+                  {market.soldCount > 0 && market.listingCount > 0
+                    ? ` — ${market.soldCount} sold, ${market.listingCount} listed`
+                    : ''}
+                </div>
+              </div>
+
+              {confidence && (
+                <div className="text-right">
+                  <div className="text-[11px] uppercase tracking-wide text-text-3">Comp confidence</div>
+                  <div className="mt-0.5 flex items-baseline justify-end gap-1.5">
+                    <span className={`text-2xl font-bold tabular-nums ${confidenceText(confidence.label)}`}>
+                      {confidence.score}
+                    </span>
+                    <span className="text-[13px] text-text-3">/ 10 · {confidence.label}</span>
+                  </div>
+                </div>
+              )}
             </div>
+
             <p className="mt-2 text-[12.5px] leading-snug text-text-3">
               Every price above added together and divided by how many there are.
             </p>
