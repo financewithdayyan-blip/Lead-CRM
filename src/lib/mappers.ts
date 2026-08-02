@@ -49,8 +49,10 @@ export function dbToLead(row: any): Lead {
     comps: row.lead_comps?.map((c: any) => ({
       id: c.id,
       leadId: c.lead_id,
+      kind: c.kind ?? 'sold',
       address: c.address,
       price: c.price,
+      saleDate: c.sale_date,
       sqft: c.sqft,
       beds: c.beds,
       baths: c.baths,

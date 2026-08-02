@@ -226,7 +226,23 @@ export function useOverrideFollowupEarlyExit() {
 export function useUpsertComps() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ leadId, comps }: { leadId: string; comps: Array<{ address: string | null; price: number | null; sqft: number | null; beds: number | null; baths: number | null; distance: string | null; notes: string | null }> }) => {
+    mutationFn: async ({
+      leadId,
+      comps,
+    }: {
+      leadId: string;
+      comps: Array<{
+        kind: 'sold' | 'listing';
+        address: string | null;
+        price: number | null;
+        sale_date: string | null;
+        sqft: number | null;
+        beds: number | null;
+        baths: number | null;
+        distance: string | null;
+        notes: string | null;
+      }>;
+    }) => {
       await supabase.from('lead_comps').delete().eq('lead_id', leadId);
       if (comps.length) {
         await supabase.from('lead_comps').insert(comps.map((c) => ({ lead_id: leadId, ...c })));

@@ -58,8 +58,10 @@ export interface Tag {
 export interface Comp {
   id: string;
   leadId: string;
+  kind: CompKind;
   address: string | null;
   price: number | null;
+  saleDate: string | null;
   sqft: number | null;
   beds: number | null;
   baths: number | null;

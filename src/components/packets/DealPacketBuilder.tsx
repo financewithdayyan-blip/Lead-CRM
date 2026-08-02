@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Check, Copy, FolderInput, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import {
   analyzeDeal,
@@ -9,13 +9,21 @@ import {
   packetImageUrl,
   packetUrl,
   repairTotal,
+  useCopyLeadFileToPacket,
   useSavePacket,
   useUploadPacketImage,
   usePacket,
 } from '@/hooks/useDealPackets';
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { geocodeAddresses } from '@/lib/geocode';
-import { DEAL_TYPE_CONFIG, type DealType, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus } from '@/types/domain';
+import { DEAL_TYPE_CONFIG, type DealType, type Lead, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus } from '@/types/domain';
+
+/** Anything with an image mime type or a common photo extension — lead files
+ * can be photos, PDFs, or spreadsheets, but only photos make sense here. */
+function isImageFile(fileType: string | null, fileName: string): boolean {
+  if (fileType?.startsWith('image/')) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(fileName);
+}
 
 /** Parses a currency-ish input into a number, treating empty as "not set". */
 function num(v: string): number | null {
@@ -36,11 +44,15 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onClose: () => void }) {
+export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: string; lead: Lead; onClose: () => void }) {
   const { data: packet, isLoading } = usePacket(packetId);
   const savePacket = useSavePacket();
   const uploadImage = useUploadPacketImage();
+  const copyLeadFile = useCopyLeadFileToPacket();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [showLeadFiles, setShowLeadFiles] = useState(false);
+  const [importedLeadFileIds, setImportedLeadFileIds] = useState<Set<string>>(new Set());
+  const [copyingFileId, setCopyingFileId] = useState<string | null>(null);
 
   const [status, setStatus] = useState<PacketStatus>('draft');
   const [ownerName, setOwnerName] = useState('');
@@ -159,6 +171,43 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
     }
+  }
+
+  const leadImageFiles = useMemo(
+    () => (lead.files ?? []).filter((f) => isImageFile(f.fileType, f.fileName)),
+    [lead.files],
+  );
+
+  async function handleImportLeadFile(fileId: string, storagePath: string, fileName: string) {
+    setError(null);
+    setCopyingFileId(fileId);
+    try {
+      const path = await copyLeadFile.mutateAsync({ packetId, storagePath, fileName });
+      setImages((prev) => [...prev, { storagePath: path, caption: null }]);
+      setImportedLeadFileIds((prev) => new Set(prev).add(fileId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not copy that file into the packet.');
+    } finally {
+      setCopyingFileId(null);
+    }
+  }
+
+  function handleImportLeadComps() {
+    if (!lead.comps?.length) return;
+    setComps((prev) => [
+      ...prev,
+      ...lead.comps!.map((c) => ({
+        kind: c.kind,
+        address: c.address,
+        salePrice: c.price,
+        saleDate: c.saleDate,
+        sqft: c.sqft,
+        beds: c.beds,
+        baths: c.baths,
+        lat: null,
+        lng: null,
+      })),
+    ]);
   }
 
   async function handleSave(nextStatus?: PacketStatus) {
@@ -326,6 +375,44 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
               </button>
               <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
             </div>
+
+            {leadImageFiles.length > 0 && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLeadFiles((p) => !p)}
+                  className="btn !px-2 !py-1 text-[12px]"
+                >
+                  <FolderInput size={13} /> {showLeadFiles ? 'Hide' : 'Add from'} lead's uploaded photos ({leadImageFiles.length})
+                </button>
+                {showLeadFiles && (
+                  <div className="mt-2 flex flex-wrap gap-2 rounded-md border border-border-2 bg-surface-3 p-2">
+                    {leadImageFiles.map((f) => {
+                      const alreadyImported = importedLeadFileIds.has(f.id);
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          disabled={alreadyImported || copyingFileId === f.id}
+                          onClick={() => handleImportLeadFile(f.id, f.storagePath, f.fileName)}
+                          className="flex items-center gap-1.5 rounded-md border border-border-2 bg-surface px-2 py-1 text-[12px] text-text-2 hover:border-primary hover:text-primary disabled:cursor-default disabled:opacity-50"
+                          title={f.fileName}
+                        >
+                          {copyingFileId === f.id ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : alreadyImported ? (
+                            <Check size={12} className="text-success" />
+                          ) : (
+                            <Plus size={12} />
+                          )}
+                          <span className="max-w-[140px] truncate">{f.fileName}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </Section>
 
           {/* ── Comps + listings + ARV ──────────────────────────────────── */}
@@ -371,6 +458,11 @@ export function DealPacketBuilder({ packetId, onClose }: { packetId: string; onC
                         className="btn !px-2 !py-1 text-[12px]">
                   <Plus size={13} /> Add current listing
                 </button>
+                {lead.comps && lead.comps.length > 0 && (
+                  <button type="button" onClick={handleImportLeadComps} className="btn !px-2 !py-1 text-[12px]">
+                    <FolderInput size={13} /> Import {lead.comps.length} comp{lead.comps.length !== 1 ? 's' : ''} from lead
+                  </button>
+                )}
                 <span className="text-[11px] text-text-3">
                   Addresses are located on save so they can be mapped. Editing an address re-locates it.
                 </span>

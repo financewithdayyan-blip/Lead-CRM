@@ -591,6 +591,32 @@ export function useUploadPacketImage() {
   });
 }
 
+/**
+ * Copies an already-uploaded lead file into the packet's own public bucket
+ * and returns the new storage path — a real byte copy, not a reference.
+ * lead-files is a private bucket (owner/overseer only) while packet-images
+ * is public, since a Deal Packet is viewed by an unauthenticated investor;
+ * there's no way for the public page to read a private object directly, so
+ * this is the only way to reuse a photo already on the lead without asking
+ * the admin to download it and re-select it from disk.
+ */
+export function useCopyLeadFileToPacket() {
+  return useMutation({
+    mutationFn: async ({ packetId, storagePath, fileName }: { packetId: string; storagePath: string; fileName: string }) => {
+      const { data, error: downloadError } = await supabase.storage.from('lead-files').download(storagePath);
+      if (downloadError) throw downloadError;
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `${packetId}/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('packet-images').upload(path, data, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      return path;
+    },
+  });
+}
+
 // ── Analytics ───────────────────────────────────────────────────────────────
 
 export function usePacketViews(packetId: string | undefined) {

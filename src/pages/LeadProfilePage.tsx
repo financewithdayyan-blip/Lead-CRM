@@ -773,7 +773,10 @@ function PropertyTab({ lead }: { lead: Lead }) {
     setComps((prev) => prev.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)));
   }
   function addComp() {
-    setComps((prev) => [...prev, { address: '', price: null, sqft: null, beds: null, baths: null, distance: null, notes: null }]);
+    setComps((prev) => [
+      ...prev,
+      { kind: 'sold', address: '', price: null, saleDate: null, sqft: null, beds: null, baths: null, distance: null, notes: null },
+    ]);
   }
   function removeComp(i: number) {
     setComps((prev) => prev.filter((_, idx) => idx !== i));
@@ -782,8 +785,10 @@ function PropertyTab({ lead }: { lead: Lead }) {
     upsertComps.mutate({
       leadId: lead.id,
       comps: comps.map((c) => ({
+        kind: (c.kind as 'sold' | 'listing') || 'sold',
         address: c.address || null,
         price: c.price ? Number(c.price) : null,
+        sale_date: c.saleDate || null,
         sqft: c.sqft ? Number(c.sqft) : null,
         beds: c.beds ? Number(c.beds) : null,
         baths: c.baths ? Number(c.baths) : null,
@@ -900,48 +905,65 @@ function PropertyTab({ lead }: { lead: Lead }) {
         {comps.length === 0 && <div className="text-[13px] text-text-3">No comps added yet.</div>}
         <div className="space-y-2">
           {comps.map((c, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 rounded-md border border-border-2 bg-surface-3 p-2">
+            <div
+              key={i}
+              className="grid grid-cols-[76px_1fr_86px_112px_64px_50px_50px_86px_auto] items-center gap-1.5 rounded-md border border-border-2 bg-surface-3 p-2"
+            >
+              <select
+                className="input !py-1 text-[12px]"
+                value={c.kind ?? 'sold'}
+                onChange={(e) => updateComp(i, 'kind', e.target.value)}
+              >
+                <option value="sold">Sold</option>
+                <option value="listing">Listed</option>
+              </select>
               <input
-                className="input col-span-4 !py-1 text-[12px]"
+                className="input !py-1 text-[12px]"
                 placeholder="Address"
                 value={c.address ?? ''}
                 onChange={(e) => updateComp(i, 'address', e.target.value)}
               />
               <input
-                className="input col-span-2 !py-1 text-[12px]"
-                placeholder="Price"
+                className="input !py-1 text-[12px]"
+                placeholder={c.kind === 'listing' ? 'List price' : 'Sale price'}
                 type="number"
                 value={c.price ?? ''}
                 onChange={(e) => updateComp(i, 'price', e.target.value)}
               />
               <input
-                className="input col-span-1 !py-1 text-[12px]"
+                className="input !py-1 text-[12px]"
+                type="date"
+                value={c.saleDate ?? ''}
+                onChange={(e) => updateComp(i, 'saleDate', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
                 placeholder="Sqft"
                 type="number"
                 value={c.sqft ?? ''}
                 onChange={(e) => updateComp(i, 'sqft', e.target.value)}
               />
               <input
-                className="input col-span-1 !py-1 text-[12px]"
-                placeholder="Beds"
+                className="input !py-1 text-[12px]"
+                placeholder="Bd"
                 type="number"
                 value={c.beds ?? ''}
                 onChange={(e) => updateComp(i, 'beds', e.target.value)}
               />
               <input
-                className="input col-span-1 !py-1 text-[12px]"
-                placeholder="Baths"
+                className="input !py-1 text-[12px]"
+                placeholder="Ba"
                 type="number"
                 value={c.baths ?? ''}
                 onChange={(e) => updateComp(i, 'baths', e.target.value)}
               />
               <input
-                className="input col-span-2 !py-1 text-[12px]"
+                className="input !py-1 text-[12px]"
                 placeholder="Distance"
                 value={c.distance ?? ''}
                 onChange={(e) => updateComp(i, 'distance', e.target.value)}
               />
-              <button className="col-span-1 flex items-center justify-center text-text-3 hover:text-danger" onClick={() => removeComp(i)}>
+              <button className="flex items-center justify-center text-text-3 hover:text-danger" onClick={() => removeComp(i)}>
                 <Trash2 size={13} />
               </button>
             </div>
@@ -1258,25 +1280,45 @@ function FilesTab({ lead }: { lead: Lead }) {
   const signedUrl = useSignedFileUrl();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const files = lead.files ?? [];
+  const [pasteHint, setPasteHint] = useState(false);
 
   async function handleView(storagePath: string) {
     const url = await signedUrl.mutateAsync(storagePath);
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    uploadFile.mutate(
-      { leadId: lead.id, file },
-      {
-        onSettled: () => {
-          // Reset so the same file can be re-selected if needed
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        },
-      },
-    );
+  function uploadMany(fileList: FileList | File[]) {
+    for (const file of Array.from(fileList)) {
+      uploadFile.mutate({ leadId: lead.id, file });
+    }
   }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) uploadMany(e.target.files);
+    // Reset so the same file(s) can be re-selected if needed
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  // Ctrl+V anywhere on this tab uploads whatever image is on the clipboard —
+  // a screenshot, or a photo copied out of another app — without having to
+  // save it to disk first just to run it back through the file picker.
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const imageFiles = Array.from(items)
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => !!f);
+      if (imageFiles.length === 0) return;
+      e.preventDefault();
+      uploadMany(imageFiles);
+      setPasteHint(true);
+      setTimeout(() => setPasteHint(false), 1500);
+    }
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="card">
@@ -1287,12 +1329,17 @@ function FilesTab({ lead }: { lead: Lead }) {
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             className="hidden"
             accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             onChange={handleFileChange}
           />
         </label>
       </div>
+
+      <p className="mb-3 text-[12px] text-text-3">
+        {pasteHint ? 'Pasted — uploading…' : 'Tip: copy an image and press Ctrl+V anywhere on this tab to upload it directly.'}
+      </p>
 
       {uploadFile.isError && (
         <div className="mb-3 rounded-md bg-danger-dim px-3 py-2 text-[12px] text-danger">

@@ -120,7 +120,7 @@ export function PacketTab({ lead }: { lead: Lead }) {
         </div>
       )}
 
-      {openId && <DealPacketBuilder packetId={openId} onClose={() => setOpenId(null)} />}
+      {openId && <DealPacketBuilder packetId={openId} lead={lead} onClose={() => setOpenId(null)} />}
 
       <ConfirmDialog
         open={!!deleteTarget}
