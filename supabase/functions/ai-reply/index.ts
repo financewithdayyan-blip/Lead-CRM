@@ -51,6 +51,14 @@ function json(body: unknown, status = 200) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// The STYLE rules below already forbid these, but a model doesn't always
+// comply, and a stray em dash or semicolon reads as robotic rather than a
+// real person texting — this is a deterministic safety net on top of the
+// prompt instruction, not a replacement for it.
+function humanizePunctuation(text: string): string {
+  return text.replace(/\s*[—–]\s*/g, ', ').replace(/\s*;\s*/g, ', ');
+}
+
 // ── Zoom send (mirrors send-sms's own copy — see the note there on why each
 // function keeps its own rather than sharing a module) ─────────────────────
 
@@ -119,10 +127,11 @@ const LIEN_TAG_NAMES = ['lis pendens', 'pre-foreclosure', 'foreclosure', 'auctio
 const SYSTEM_RULES = `You are texting on behalf of Bluebird Acquisition, a real-estate acquisitions company that buys distressed properties as-is for cash, subject-to, or novation. You are texting as {{AGENT_NAME}}.
 
 STYLE — every reply, always:
-- 1-3 short sentences. Sound like a real person texting, not a business.
+- Text like a real person, not a business. Short. One thought per message.
+- Break the reply into separate messages in reply_parts whenever there's more than one distinct thought, or a side reaction (a laugh, "no worries", "totally get it", "fair point") that a real person would send separately from the substantive point rather than cramming both into one text with a comma or dash. Usually 1-2 messages, 3 only if genuinely needed. This is what real texting looks like, not one long paragraph.
 - No "Dear", no signature, no sign-off.
-- Never use an em dash. Use a comma or a new sentence instead.
-- A casual emoji is fine occasionally, not in every message.
+- Never use an em dash, en dash, or semicolon. Use a comma, a period, or a new message in reply_parts instead.
+- A casual emoji is fine occasionally, for a human touch, not in every message.
 - Never invent facts, numbers, or offers that were not actually said in this conversation. Never state a specific dollar figure that has not actually been negotiated in this conversation.
 - Follow the framework's numbered steps in order — never jump ahead to a later step, and never revisit one already answered. The order across steps is fixed; within a step, phrase it naturally and respond to what they actually say.
 
@@ -151,7 +160,7 @@ FRAMEWORK for this lead:
 
 SUMMARY: whenever you set fully_qualified true, also fill in summary — a short, factual, labeled recap of what was actually established (condition, asking price and their reasoning if given, timeline, motivation if mentioned, mortgage details if this is a lien-adjacent lead, and ownership status). This is what a human reads instead of rereading the whole thread, so be complete but not padded, and never invent or infer anything not actually said. Leave summary as an empty string whenever fully_qualified is false.
 
-Call draft_reply with your response. fully_qualified is true only once every item the framework marks as required for that has actually been established in this conversation.`;
+Call draft_reply with your response, reply_parts broken into separate messages per the STYLE rules above. fully_qualified is true only once every item the framework marks as required for that has actually been established in this conversation.`;
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
@@ -313,7 +322,14 @@ Deno.serve(async (req) => {
           input_schema: {
             type: 'object',
             properties: {
-              reply: { type: 'string', description: 'The exact text message to send to the lead.' },
+              reply_parts: {
+                type: 'array',
+                items: { type: 'string' },
+                minItems: 1,
+                maxItems: 3,
+                description:
+                  'The reply broken into separate short SMS messages, the way a real person actually texts — one thought per message rather than one long paragraph. A side reaction (a laugh, "no worries", "totally get it") goes in its own message, separate from the substantive point. Usually 1-2 messages, 3 only if genuinely needed.',
+              },
               fully_qualified: {
                 type: 'boolean',
                 description: 'True only once every item the framework marks as required has been established.',
@@ -329,7 +345,7 @@ Deno.serve(async (req) => {
                   "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (condition, price, timeline, motivation if mentioned, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
               },
             },
-            required: ['reply', 'fully_qualified', 'negative_reply'],
+            required: ['reply_parts', 'fully_qualified', 'negative_reply'],
           },
         },
       ],
@@ -354,15 +370,26 @@ Deno.serve(async (req) => {
     return json({ error: 'no draft produced' }, 502);
   }
 
-  const { reply, fully_qualified: fullyQualified, negative_reply: negativeReply, summary } = toolUse.input as {
-    reply: string;
+  const { reply_parts: rawParts, fully_qualified: fullyQualified, negative_reply: negativeReply, summary } = toolUse.input as {
+    reply_parts: string[];
     fully_qualified: boolean;
     negative_reply: boolean;
     summary?: string;
   };
 
+  const replyParts = (Array.isArray(rawParts) ? rawParts : [])
+    .map((p) => humanizePunctuation(String(p).trim()))
+    .filter(Boolean);
+
+  if (replyParts.length === 0) {
+    if (triggerMessageId) {
+      await admin.from('inbound_messages').update({ send_error: 'Empty reply_parts in Anthropic response' }).eq('id', triggerMessageId);
+    }
+    return json({ error: 'no draft produced' }, 502);
+  }
+
   if (triggerMessageId) {
-    await admin.from('inbound_messages').update({ drafted_reply: reply }).eq('id', triggerMessageId);
+    await admin.from('inbound_messages').update({ drafted_reply: replyParts.join(' / ') }).eq('id', triggerMessageId);
   }
 
   // Step 7: reply from whichever of our numbers this conversation is
@@ -384,24 +411,36 @@ Deno.serve(async (req) => {
 
   try {
     const token = await zoomToken();
-    await sendZoomSms(from.phone, toE164Phone, reply, token);
+    const phoneNorm = toE164Phone.replace(/[^0-9]/g, '').slice(-10);
 
-    await admin.from('send_log').insert({
-      user_id: lead.user_id,
-      lead_id: leadId,
-      phone: toE164Phone,
-      phone_norm: toE164Phone.replace(/[^0-9]/g, '').slice(-10),
-      sent_from: from.phone,
-      body: reply,
-    });
+    // Sent and logged as separate messages, not one combined text — each
+    // part becomes its own bubble in the thread, matching how a real person
+    // actually sends a run of short texts instead of one long paragraph.
+    for (let i = 0; i < replyParts.length; i++) {
+      const part = replyParts[i];
+      await sendZoomSms(from.phone, toE164Phone, part, token);
 
-    await admin.from('lead_activities').insert({
-      lead_id: leadId,
-      user_id: lead.user_id,
-      type: 'sms',
-      body: reply,
-      meta: { direction: 'outbound', from: from.phone, to: toE164Phone, aiGenerated: true },
-    });
+      await admin.from('send_log').insert({
+        user_id: lead.user_id,
+        lead_id: leadId,
+        phone: toE164Phone,
+        phone_norm: phoneNorm,
+        sent_from: from.phone,
+        body: part,
+      });
+
+      await admin.from('lead_activities').insert({
+        lead_id: leadId,
+        user_id: lead.user_id,
+        type: 'sms',
+        body: part,
+        meta: { direction: 'outbound', from: from.phone, to: toE164Phone, aiGenerated: true },
+      });
+
+      // A short human-feeling gap between parts of the same reply, and
+      // enough separation that the carrier won't reorder them on delivery.
+      if (i < replyParts.length - 1) await sleep(1500);
+    }
   } catch (e) {
     if (triggerMessageId) {
       await admin

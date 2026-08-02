@@ -128,6 +128,7 @@ function AdminShareToCallerButton({
   currentOwnerId: string;
 }) {
   const { data: teamMembers = [] } = useTeamMembers();
+  const { profile } = useAuth();
   const adminShare = useAdminShareLeadToCaller();
   const [open, setOpen] = useState(false);
   const [selectedCallerId, setSelectedCallerId] = useState('');
@@ -135,6 +136,13 @@ function AdminShareToCallerButton({
   const callers = teamMembers
     .map((m) => m.member)
     .filter((m) => m.role === 'caller' && m.id !== currentOwnerId);
+  // Other admins on the team — admin_share_lead_to_caller has no server-side
+  // role restriction on its target despite the name, so the same RPC covers
+  // transferring to another admin. Excludes the current owner and whoever's
+  // viewing this button, since transferring to either is a no-op.
+  const otherAdmins = teamMembers
+    .map((m) => m.member)
+    .filter((m) => m.role === 'admin' && m.id !== currentOwnerId && m.id !== profile?.id);
 
   function handleShare() {
     if (!selectedCallerId) return;
@@ -152,29 +160,42 @@ function AdminShareToCallerButton({
   return (
     <>
       <button className="btn !py-1.5 text-[12px]" onClick={() => setOpen(true)}>
-        <ArrowRightLeft size={13} /> Share to Caller
+        <ArrowRightLeft size={13} /> Transfer Lead
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
           <div className="card w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="text-sm font-semibold text-text">Share lead to caller</div>
+            <div className="text-sm font-semibold text-text">Transfer this lead</div>
             <select
               className="input text-[13px]"
               value={selectedCallerId}
               onChange={(e) => setSelectedCallerId(e.target.value)}
             >
-              <option value="">Select a caller…</option>
-              {callers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.fullName || c.email}
-                </option>
-              ))}
+              <option value="">Select a team member…</option>
+              {otherAdmins.length > 0 && (
+                <optgroup label="Admins">
+                  {otherAdmins.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.fullName || c.email}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {callers.length > 0 && (
+                <optgroup label="Callers">
+                  {callers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.fullName || c.email}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
-            {callers.length === 0 && (
-              <p className="text-[12px] text-text-3">No other callers in your team.</p>
+            {callers.length === 0 && otherAdmins.length === 0 && (
+              <p className="text-[12px] text-text-3">No other team members to transfer to.</p>
             )}
             <p className="text-[12px] text-text-3">
-              This lead will be transferred to the selected caller immediately.
+              This lead will be transferred to the selected team member immediately.
             </p>
             {adminShare.isError && (
               <p className="text-[12px] text-danger">Transfer failed. Please try again.</p>
@@ -194,7 +215,7 @@ function AdminShareToCallerButton({
                 disabled={!selectedCallerId || adminShare.isPending}
                 onClick={handleShare}
               >
-                {adminShare.isPending ? 'Sharing…' : 'Share'}
+                {adminShare.isPending ? 'Transferring…' : 'Transfer'}
               </button>
             </div>
           </div>

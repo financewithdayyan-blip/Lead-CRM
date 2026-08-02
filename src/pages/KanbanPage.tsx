@@ -546,6 +546,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     () => teamMembers.filter((m) => m.member.role === 'caller'),
     [teamMembers],
   );
+  // Other admins on the team — excludes the current admin, since
+  // transferring a lead to yourself is a no-op. admin_share_lead_to_caller
+  // has no server-side role restriction on its target despite the name; the
+  // "callers only" behavior has always been purely this UI-layer filter.
+  const otherAdmins = useMemo(
+    () => teamMembers.filter((m) => m.member.role === 'admin' && m.memberId !== profile?.id),
+    [teamMembers, profile?.id],
+  );
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -723,12 +731,12 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
             >
               <Download size={13} /> Export CSV
             </button>
-            {isAdmin && callers.length > 0 && (
+            {isAdmin && (callers.length > 0 || otherAdmins.length > 0) && (
               <button
                 onClick={() => setShowShareModal(true)}
                 className="btn btn-sm btn-primary flex items-center gap-1.5"
               >
-                <Users size={13} /> Share with caller
+                <Users size={13} /> Transfer leads
               </button>
             )}
             {isAdmin && (
@@ -823,7 +831,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold text-text">
-                Share {selCount} lead{selCount !== 1 ? 's' : ''} with a caller
+                Transfer {selCount} lead{selCount !== 1 ? 's' : ''}
               </h2>
               <button onClick={() => setShowShareModal(false)} className="text-text-3 hover:text-text">
                 <XIcon size={16} />
@@ -834,12 +842,25 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               value={shareTargetId}
               onChange={(e) => setShareTargetId(e.target.value)}
             >
-              <option value="">Select a caller…</option>
-              {callers.map((m) => (
-                <option key={m.memberId} value={m.memberId}>
-                  {m.member.fullName || m.member.email}
-                </option>
-              ))}
+              <option value="">Select a team member…</option>
+              {otherAdmins.length > 0 && (
+                <optgroup label="Admins">
+                  {otherAdmins.map((m) => (
+                    <option key={m.memberId} value={m.memberId}>
+                      {m.member.fullName || m.member.email}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {callers.length > 0 && (
+                <optgroup label="Callers">
+                  {callers.map((m) => (
+                    <option key={m.memberId} value={m.memberId}>
+                      {m.member.fullName || m.member.email}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -854,7 +875,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
                 className="btn btn-primary"
                 disabled={!shareTargetId || isSharing}
               >
-                {isSharing ? `Sharing…` : `Share ${selCount} lead${selCount !== 1 ? 's' : ''}`}
+                {isSharing ? `Transferring…` : `Transfer ${selCount} lead${selCount !== 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
