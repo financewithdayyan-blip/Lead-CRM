@@ -1,0 +1,330 @@
+// Edge Function: sms-webhook
+//
+// Receives Zoom's phone.sms_received event. Public and unauthenticated by
+// necessity (Zoom calls this, not a logged-in user) — everything here has to
+// defend itself rather than trust the caller, via signature verification.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET_TOKEN')!;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-zm-signature, x-zm-request-timestamp',
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  });
+}
+
+// ── HMAC-SHA256, hex-encoded ────────────────────────────────────────────────
+
+async function hmacHex(message: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Reaction detection ──────────────────────────────────────────────────────
+
+/**
+ * Carrier-bridged tapback reactions ("👍 to \"our text\"", "Removed 👍 from
+ * \"our text\"") arrive through this same webhook as an ordinary inbound SMS.
+ * They are not replies — without this filter, a reaction and its removal each
+ * independently trigger a fresh AI draft answering a message the lead never
+ * actually sent.
+ */
+function isReactionMessage(body: string): boolean {
+  const trimmed = body.trim();
+  return /^(Liked|Loved|Disliked|Laughed at|Emphasized|Questioned|Removed\s+\S+\s+from|.{1,4}\s+to)\s+["“]/i.test(trimmed)
+    || /^(Removed\s+)?\p{Emoji_Presentation}\s*(to|from)\s+["“]/u.test(trimmed);
+}
+
+// ── Deterministic no-AI-cost paths ──────────────────────────────────────────
+// Each of these three ends the conversation without an AI call: skip drafting
+// entirely, send no reply, mark the lead Dead + opted_out + paused. Getting
+// the detection right matters more than usual here — a false positive
+// silently kills a real lead with no reply and no visibility, worse than the
+// cost of one wasted AI call, so every pattern below is deliberately narrow.
+
+/** Whole trimmed message only — "I want to stop looking at properties" must never match. */
+const HARD_STOP_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
+
+function isHardStopKeyword(body: string): boolean {
+  const normalized = body.trim().toLowerCase().replace(/[.!?]+$/, '');
+  return HARD_STOP_KEYWORDS.has(normalized);
+}
+
+/**
+ * Plain-English opt-out phrases, anchored to the END of the message so a
+ * phrase embedded in an unrelated sentence can't match. A handful of trailing
+ * softener words (again/anymore/please) are stripped before the suffix check,
+ * so "don't text me again" still matches the core phrase "don't text me".
+ *
+ * Verified against both required negative cases: "don't call me before 9am"
+ * (different verb, and trailing content after "me" blocks the anchor) and
+ * "remove my number, use this new one instead" (trailing content after the
+ * phrase blocks the anchor) — neither matches.
+ */
+const DECLINE_CORE_PHRASES = [
+  "don't text me",
+  'do not text me',
+  'stop texting me',
+  'do not contact me',
+  "don't contact me",
+  'remove my number',
+  'take me off your list',
+  'take me off the list',
+];
+const TRAILING_SOFTENERS = ['again', 'anymore', 'please'];
+
+function isDeclinePhrase(body: string): boolean {
+  let s = body.trim().toLowerCase().replace(/[.!?]+$/, '').trim();
+  // Strip up to two trailing softeners (e.g. "again please").
+  for (let i = 0; i < 2; i++) {
+    const match = TRAILING_SOFTENERS.find((w) => s.endsWith(` ${w}`));
+    if (!match) break;
+    s = s.slice(0, s.length - match.length - 1).replace(/[.!?]+$/, '').trim();
+  }
+  return DECLINE_CORE_PHRASES.some((phrase) => s.endsWith(phrase));
+}
+
+/**
+ * Curated profanity word list rather than a broad wildcard, so "fork",
+ * "funk", "stuck", "duck" and "truck" can never match. Word-boundary anchored.
+ * Unlike the decline phrases, hostility doesn't need end-anchoring — there is
+ * no benign reading of directing profanity at a cold-outreach text.
+ */
+const PROFANITY_PATTERN = /\b(fuck|f\*ck|f\*\*k|fck|fuk)\b/i;
+
+function isProfanity(body: string): boolean {
+  return PROFANITY_PATTERN.test(body);
+}
+
+// ── Phone normalisation ─────────────────────────────────────────────────────
+
+/** Zoom sends digits with no leading +. Match leads.phone_norm's shape: last 10 digits. */
+function normalizePhone(raw: string): string {
+  return raw.replace(/[^0-9]/g, '').slice(-10);
+}
+
+// ── Field extraction ─────────────────────────────────────────────────────────
+
+/**
+ * Zoom's inbound-SMS payload field names aren't pinned down with certainty
+ * without a live delivery to inspect, so every field is read with fallbacks
+ * and the full raw payload is always stored in webhook_log regardless of
+ * whether parsing below succeeds. If a field name is wrong, nothing is lost —
+ * it's visible in the log and this function gets corrected from there.
+ */
+function pick(obj: any, ...keys: string[]): string | undefined {
+  for (const k of keys) {
+    if (obj?.[k] != null && obj[k] !== '') return String(obj[k]);
+  }
+  return undefined;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+
+  const rawBody = await req.text();
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  let event: any;
+  try {
+    event = JSON.parse(rawBody || '{}');
+  } catch {
+    await admin.from('webhook_log').insert({ event_type: 'unparseable', payload: { rawBody }, error: 'invalid JSON' });
+    return json({ error: 'invalid JSON' }, 400);
+  }
+
+  // ── Zoom's endpoint validation handshake ──────────────────────────────────
+  // Runs once when the URL is registered in the Zoom app, unsigned, so it is
+  // handled before any signature check.
+  if (event.event === 'endpoint.url_validation') {
+    const plainToken = event.payload?.plainToken;
+    if (!plainToken) return json({ error: 'missing plainToken' }, 400);
+    const encryptedToken = await hmacHex(plainToken, WEBHOOK_SECRET);
+    await admin.from('webhook_log').insert({ event_type: event.event, signature_valid: true, payload: event });
+    return json({ plainToken, encryptedToken });
+  }
+
+  // ── Signature verification for every other event ──────────────────────────
+  const signature = req.headers.get('x-zm-signature') ?? '';
+  const timestamp = req.headers.get('x-zm-request-timestamp') ?? '';
+  const expected = `v0=${await hmacHex(`v0:${timestamp}:${rawBody}`, WEBHOOK_SECRET)}`;
+  const validSignature = signature === expected;
+
+  await admin.from('webhook_log').insert({
+    event_type: event.event ?? 'unknown',
+    signature_valid: validSignature,
+    payload: event,
+  });
+
+  if (!validSignature) {
+    return json({ error: 'invalid signature' }, 401);
+  }
+
+  if (event.event !== 'phone.sms_received') {
+    // Logged above; nothing further to do for events this function doesn't
+    // act on.
+    return json({ ok: true });
+  }
+
+  try {
+    const obj = event.payload?.object ?? event.payload ?? {};
+    // Confirmed against a real delivery: the number is nested under sender /
+    // to_members, not a flat field. Flat fallbacks are kept in case Zoom's
+    // shape ever varies by event sub-type, but the nested path is primary.
+    const fromRaw =
+      pick(obj.sender ?? {}, 'phone_number') ??
+      pick(obj, 'from_phone_number', 'from_number', 'sender_number', 'from') ??
+      '';
+    const toRaw =
+      pick(obj.to_members?.[0] ?? {}, 'phone_number') ??
+      pick(obj, 'to_phone_number', 'to_number', 'receiver_number', 'to') ??
+      '';
+    const body = pick(obj, 'message', 'body', 'content', 'text') ?? '';
+    const zoomMessageId = pick(obj, 'message_id', 'id', 'sms_id');
+    const attachments = Array.isArray(obj.attachments) ? obj.attachments : [];
+
+    const fromNorm = normalizePhone(fromRaw);
+    const reaction = isReactionMessage(body);
+
+    // Dedupe Zoom's retried deliveries. unique constraint + ignore-on-conflict
+    // means a retry is a harmless no-op rather than a second row or a thrown
+    // error that would make Zoom retry again.
+    const { data: inserted, error: insertErr } = await admin
+      .from('inbound_messages')
+      .insert({
+        from_phone: fromRaw,
+        to_phone: toRaw,
+        body,
+        zoom_message_id: zoomMessageId ?? null,
+        has_attachments: attachments.length > 0,
+        attachments,
+        is_reaction: reaction,
+      })
+      .select('id, received_at')
+      .single();
+
+    if (insertErr) {
+      // A unique-violation on zoom_message_id is an expected retry, not a
+      // failure — anything else gets recorded so it's visible.
+      if (insertErr.code !== '23505') {
+        await admin.from('webhook_log').insert({
+          event_type: 'phone.sms_received.error',
+          payload: event,
+          error: insertErr.message,
+        });
+      }
+      return json({ ok: true });
+    }
+
+    // Reactions stop here entirely — no lead match needed, no stage change,
+    // and (once Phase 4 exists) no AI call.
+    if (reaction) return json({ ok: true, reaction: true });
+
+    // Never attempt a match on a blank or malformed number. An empty fromNorm
+    // in an .or() filter is a real value to compare against, not "match
+    // nothing" — it can and did silently attach a real conversation to an
+    // unrelated lead whose own number was blank. A short-circuit here is the
+    // difference between "no match" and "wrong match".
+    const lead =
+      fromNorm.length === 10
+        ? (
+            await admin
+              .from('leads')
+              .select('id, stage, user_id')
+              .or(`phone_norm.eq.${fromNorm},phone2_norm.eq.${fromNorm}`)
+              .limit(1)
+          ).data?.[0]
+        : undefined;
+    if (lead) {
+      await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);
+
+      // Deterministic paths — checked before anything else touches this lead.
+      // Each ends the conversation without ever reaching the AI: no draft, no
+      // reply, straight to Dead + opted_out + paused.
+      const deterministicStop = isHardStopKeyword(body) || isDeclinePhrase(body) || isProfanity(body);
+
+      if (deterministicStop) {
+        await admin
+          .from('leads')
+          .update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true })
+          .eq('id', lead.id);
+        await admin.from('lead_activities').insert({
+          lead_id: lead.id,
+          user_id: lead.user_id,
+          type: 'sms',
+          body,
+          meta: { direction: 'inbound', from: fromRaw, to: toRaw, hasAttachments: attachments.length > 0, autoOptOut: true },
+        });
+        return json({ ok: true, matched: true, optedOut: true });
+      }
+
+      // Only advance forward. A lead already past 'replied' (in Negotiation,
+      // say) shouldn't be pulled backward by a new inbound text.
+      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted']);
+      if (ADVANCE_FROM.has(lead.stage)) {
+        await admin.from('leads').update({ stage: 'replied' }).eq('id', lead.id);
+      }
+
+      await admin.from('lead_activities').insert({
+        lead_id: lead.id,
+        // lead_activities.user_id is not-null; attributed to the lead's own
+        // owner since no human admin is "acting" on an inbound webhook.
+        user_id: lead.user_id,
+        type: 'sms',
+        body,
+        meta: { direction: 'inbound', from: fromRaw, to: toRaw, hasAttachments: attachments.length > 0 },
+      });
+
+      // Hand off to the AI engine as an independent, later invocation — do
+      // not await it here. This function must return to Zoom quickly, and
+      // the debounce logic inside ai-reply is specifically designed to work
+      // across separate invocations with no shared state, keyed only on
+      // "does a newer inbound_messages row exist for this lead" at wake time.
+      const triggerAi = fetch(`${SUPABASE_URL}/functions/v1/ai-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': SERVICE_ROLE_KEY },
+        body: JSON.stringify({
+          leadId: lead.id,
+          triggerMessageId: inserted.id,
+          triggerReceivedAt: inserted.received_at,
+        }),
+      }).catch(() => {});
+
+      // EdgeRuntime.waitUntil keeps this invocation alive to finish that
+      // fetch after the response below has already gone back to Zoom.
+      // @ts-ignore -- Supabase/Deno Deploy global, not in the standard lib types.
+      if (typeof EdgeRuntime !== 'undefined') {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(triggerAi);
+      } else {
+        await triggerAi;
+      }
+    }
+
+    return json({ ok: true, matched: !!lead });
+  } catch (e) {
+    await admin.from('webhook_log').insert({
+      event_type: 'phone.sms_received.exception',
+      payload: event,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    // Still 200 — Zoom will retry a non-2xx, and the failure is already
+    // captured above for debugging.
+    return json({ ok: true });
+  }
+});

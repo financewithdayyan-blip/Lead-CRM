@@ -5,33 +5,46 @@ export type AuctionTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | 'CRITICAL' | 'P
 export type LeadStage =
   | 'new'
   | 'voicemail'
+  | 'contacted'
+  | 'replied'
   | 'initial_contact'
   | 'followup'
   | 'negotiation'
   | 'contract'
   | 'dead_declined'
-  | 'onhold';
+  | 'onhold'
+  | 'others';
 
 export const STAGE_ORDER: LeadStage[] = [
   'new',
   'voicemail',
+  'contacted',
+  'replied',
   'initial_contact',
   'followup',
   'negotiation',
   'contract',
   'dead_declined',
   'onhold',
+  'others',
 ];
 
 export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> = {
   new: { label: 'Cold Lead', color: '#60a5fa' },
   voicemail: { label: 'Voicemail', color: '#f59e0b' },
-  initial_contact: { label: 'Initial Contact', color: '#a78bfa' },
+  // SMS outreach stages — a bulk text moves a lead here automatically, and a
+  // reply advances it again. See send-sms and the sms-webhook edge functions.
+  contacted: { label: 'Contacted', color: '#38bdf8' },
+  replied: { label: 'Replied', color: '#22d3ee' },
+  initial_contact: { label: 'Qualified', color: '#a78bfa' },
   followup: { label: 'Follow-Up', color: '#c084fc' },
   negotiation: { label: 'Negotiation', color: '#fb923c' },
   contract: { label: 'Contract', color: '#10b981' },
   dead_declined: { label: 'Dead / Declined', color: '#ef4444' },
   onhold: { label: 'On Hold', color: '#2dd4bf' },
+  // Catch-all — leads moved here manually for reasons that don't fit
+  // anywhere else in the pipeline. No automated flow ever sets this stage.
+  others: { label: 'Others', color: '#94a3b8' },
 };
 
 export interface Tag {
@@ -151,6 +164,10 @@ export interface Lead {
   earlyExitOverride: boolean;
   auctionTier: AuctionTier | null;
   lastAlertDate: string | null;
+  /** Set by a STOP/DNC request or a decline. Excludes the lead from all future bulk sends. */
+  optedOut: boolean;
+  /** Set once fully qualified, or once a human replies by hand. Stops the AI auto-reply. */
+  aiReplyPaused: boolean;
 }
 
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';

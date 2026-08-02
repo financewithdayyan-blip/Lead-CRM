@@ -67,6 +67,8 @@ export function dbToLead(row: any): Lead {
     earlyExitOverride: row.early_exit_override ?? false,
     auctionTier: (row.auction_tier as AuctionTier | null) ?? null,
     lastAlertDate: row.last_alert_date ?? null,
+    optedOut: row.opted_out ?? false,
+    aiReplyPaused: row.ai_reply_paused ?? false,
   };
 }
 
@@ -152,6 +154,8 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['earlyExitOverride', 'early_exit_override'],
   ['auctionTier', 'auction_tier'],
   ['lastAlertDate', 'last_alert_date'],
+  ['optedOut', 'opted_out'],
+  ['aiReplyPaused', 'ai_reply_paused'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {

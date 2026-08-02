@@ -4,6 +4,7 @@ import { useTags, useCreateTag, useDeleteTag, nextTagColor } from '@/hooks/useTa
 import { useUpdateProfile } from '@/hooks/useProfile';
 import { useBusinessCard } from '@/hooks/useBusinessCard';
 import { TagPill } from '@/components/ui/TagPill';
+import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const PRESETS = [
@@ -113,6 +114,8 @@ export function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+        {isAdmin && <AiFrameworkEditor />}
+
         <div className="card">
           <div className="text-sm font-semibold text-text">Business Card</div>
           <p className="mt-1 text-[13px] text-text-2">

@@ -64,7 +64,7 @@ type OutcomeKey = 'voicemail' | 'initial_contact' | 'followup' | 'onhold' | 'dea
 
 const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: typeof Voicemail }> = [
   { key: 'voicemail', label: 'Voicemail', stage: 'voicemail', icon: Voicemail },
-  { key: 'initial_contact', label: 'Initial Contact', stage: 'initial_contact', icon: PhoneIncoming },
+  { key: 'initial_contact', label: 'Qualified', stage: 'initial_contact', icon: PhoneIncoming },
   { key: 'followup', label: 'Follow-Up', stage: 'followup', icon: CalendarClock },
   { key: 'onhold', label: 'On Hold', stage: 'onhold', icon: PauseCircle },
   { key: 'dead', label: 'Dead', stage: 'dead_declined', icon: XCircle },

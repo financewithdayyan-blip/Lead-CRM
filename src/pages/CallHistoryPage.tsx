@@ -11,7 +11,7 @@ import { formatDateTime, formatPhone, localIsoDate } from '@/lib/utils';
 
 const OUTCOME_FILTERS: Array<{ key: string; label: string; color: string }> = [
   { key: 'voicemail', label: 'Voicemail', color: STAGE_CONFIG.voicemail.color },
-  { key: 'initial_contact', label: 'Initial Contact', color: STAGE_CONFIG.initial_contact.color },
+  { key: 'initial_contact', label: 'Qualified', color: STAGE_CONFIG.initial_contact.color },
   { key: 'followup', label: 'Follow-Up', color: STAGE_CONFIG.followup.color },
   { key: 'onhold', label: 'On Hold', color: STAGE_CONFIG.onhold.color },
   { key: 'dead', label: 'Dead', color: STAGE_CONFIG.dead_declined.color },

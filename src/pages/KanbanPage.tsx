@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, X as XIcon } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller } from '@/hooks/useLeadShares';
@@ -20,6 +20,8 @@ import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { VirtualCardList } from '@/components/kanban/VirtualCardList';
+import { BulkSmsModal } from '@/components/sms/BulkSmsModal';
+import { useReplyCounts } from '@/hooks/useLeadMessages';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { formatDate, formatPhone, localIsoDate } from '@/lib/utils';
@@ -121,6 +123,7 @@ function KanbanCardVisual({
   viewOnly,
   tags,
   sharedFrom,
+  replyCount = 0,
   selected,
   onToggleSelect,
   onCall,
@@ -133,6 +136,7 @@ function KanbanCardVisual({
   viewOnly: boolean;
   tags: Tag[];
   sharedFrom?: string;
+  replyCount?: number;
   selected: boolean;
   onToggleSelect: () => void;
   onCall: () => void;
@@ -181,7 +185,17 @@ function KanbanCardVisual({
             </div>
             <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
           </div>
-          <div className="mt-1 text-text-2">{formatPhone(lead.phone)}</div>
+          <div className="mt-1 flex items-center gap-1.5 text-text-2">
+            {formatPhone(lead.phone)}
+            {replyCount > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-semibold text-info-text"
+                title={`${replyCount} SMS repl${replyCount === 1 ? 'y' : 'ies'}`}
+              >
+                <MessageSquare size={9} /> {replyCount}
+              </span>
+            )}
+          </div>
           {lead.address && (
             <div className="mt-0.5 truncate text-text-3" title={lead.address}>
               📍 {lead.address}
@@ -313,6 +327,7 @@ const KanbanCard = memo(
     viewOnly,
     tags,
     sharedFrom,
+    replyCount,
     selected,
     onToggleSelect,
     onCall,
@@ -323,6 +338,7 @@ const KanbanCard = memo(
     viewOnly: boolean;
     tags: Tag[];
     sharedFrom?: string;
+    replyCount?: number;
     selected: boolean;
     onToggleSelect: () => void;
     onCall: () => void;
@@ -342,6 +358,7 @@ const KanbanCard = memo(
             viewOnly={viewOnly}
             tags={tags}
             sharedFrom={sharedFrom}
+            replyCount={replyCount}
             selected={selected}
             onToggleSelect={onToggleSelect}
             onCall={onCall}
@@ -359,6 +376,7 @@ const KanbanCard = memo(
     prev.viewOnly === next.viewOnly &&
     prev.tags === next.tags &&
     prev.sharedFrom === next.sharedFrom &&
+    prev.replyCount === next.replyCount &&
     prev.selected === next.selected,
 );
 
@@ -370,6 +388,7 @@ const KanbanColumn = memo(function KanbanColumn({
   viewOnly,
   tags,
   receivedShares,
+  replyCounts,
   selectedIds,
   onToggleSelect,
   onToggleSelectMany,
@@ -383,6 +402,7 @@ const KanbanColumn = memo(function KanbanColumn({
   viewOnly: boolean;
   tags: Tag[];
   receivedShares: Record<string, string>;
+  replyCounts: Record<string, number>;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectMany: (ids: string[], select: boolean) => void;
@@ -447,6 +467,7 @@ const KanbanColumn = memo(function KanbanColumn({
               viewOnly={viewOnly}
               tags={tags}
               sharedFrom={receivedShares[l.id]}
+              replyCount={replyCounts[l.id]}
               selected={selectedIds.has(l.id)}
               onToggleSelect={() => onToggleSelect(l.id)}
               onCall={() => onCall(l.id)}
@@ -465,9 +486,12 @@ const KanbanColumn = memo(function KanbanColumn({
 export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const { data: leads = [] } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const { data: receivedShares = {} } = useReceivedLeadShares();
+  // SMS is an admin-only feature — no reply-count query at all for callers.
+  const { data: replyCounts = {} } = useReplyCounts(isAdmin);
   const { data: teamMembers = [] } = useTeamMembers();
   const updateLead = useUpdateLead();
   const deleteLeads = useDeleteLeads();
@@ -487,6 +511,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const [showDeleteSelected, setShowDeleteSelected] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showBulkSms, setShowBulkSms] = useState(false);
   const [shareTargetId, setShareTargetId] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   // Optimistic stage overrides — applied immediately on drop, cleared once the
@@ -647,7 +672,6 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`);
   }, [navigate, targetUserId]);
 
-  const isAdmin = profile?.role === 'admin';
   const selCount = selectedIds.size;
 
   return (
@@ -707,6 +731,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
                 <Users size={13} /> Share with caller
               </button>
             )}
+            {isAdmin && (
+              <button
+                onClick={() => setShowBulkSms(true)}
+                className="btn btn-sm btn-primary flex items-center gap-1.5"
+              >
+                <MessageSquare size={13} /> Send SMS
+              </button>
+            )}
             <button
               onClick={() => setShowDeleteSelected(true)}
               disabled={deleteLeads.isPending}
@@ -745,6 +777,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               viewOnly={viewOnly}
               tags={tags}
               receivedShares={receivedShares}
+              replyCounts={replyCounts}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
               onToggleSelectMany={handleToggleSelectMany}
@@ -765,6 +798,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               viewOnly={viewOnly}
               tags={tags}
               sharedFrom={receivedShares[activeLead.id]}
+              replyCount={replyCounts[activeLead.id]}
               selected={false}
               onToggleSelect={() => {}}
               onCall={() => {}}
@@ -775,6 +809,13 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {showBulkSms && (
+        <BulkSmsModal
+          leads={filtered.filter((l) => selectedIds.has(l.id))}
+          onClose={() => setShowBulkSms(false)}
+        />
+      )}
 
       {/* ── Share modal ─────────────────────────────────────────────────────── */}
       {showShareModal && (

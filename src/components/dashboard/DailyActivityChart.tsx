@@ -87,7 +87,7 @@ export function DailyActivityChart({ data }: { data: DailyTrendPoint[] }) {
         <Area
           type="linear"
           dataKey="followupCombined"
-          name="Follow-Up + Initial Contact"
+          name="Follow-Up + Qualified"
           stroke="#10b981"
           fill="url(#gFollowup)"
           strokeWidth={2.5}
