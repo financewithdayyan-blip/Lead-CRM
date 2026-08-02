@@ -1,18 +1,23 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import type { SmsNumberKey } from '@/lib/smsNumbers';
 
 export interface BulkSmsResult {
   sent: number;
   skipped: { leadId: string; reason: string }[];
   failed: { leadId: string; error: string }[];
-  from: string;
+  /** How the send split across numbers. More than one lead auto-splits
+   * across every configured number; a single lead uses just the one picked. */
+  perNumber: { key: string; label: string; sent: number }[];
 }
 
 export interface BulkSmsInput {
   leadIds: string[];
   templatesByTag: Record<string, string>;
   defaultTemplate: string;
-  fromKey: '1' | '2';
+  /** Only used when leadIds has exactly one entry — a bulk send ignores this
+   * and auto-splits across every configured number instead. */
+  fromKey: SmsNumberKey;
   perMessageDelayMs?: number;
   dailyLimit?: number;
 }

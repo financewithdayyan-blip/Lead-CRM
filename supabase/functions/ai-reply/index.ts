@@ -25,6 +25,16 @@ const NUMBERS: Record<string, { phone: string; email: string; label: string }> =
     email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '',
     label: Deno.env.get('ZOOM_LABEL_2') ?? 'Number 2',
   },
+  '3': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_3') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_3') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_3') ?? 'Number 3',
+  },
+  '4': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_4') ?? 'Number 4',
+  },
 };
 
 // Only sms-webhook should ever call this. There is no end user auth on an
@@ -139,6 +149,8 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 FRAMEWORK for this lead:
 {{FRAMEWORK}}
 
+SUMMARY: whenever you set fully_qualified true, also fill in summary — a short, factual, labeled recap of what was actually established (condition, asking price and their reasoning if given, timeline, motivation if mentioned, mortgage details if this is a lien-adjacent lead, and ownership status). This is what a human reads instead of rereading the whole thread, so be complete but not padded, and never invent or infer anything not actually said. Leave summary as an empty string whenever fully_qualified is false.
+
 Call draft_reply with your response. fully_qualified is true only once every item the framework marks as required for that has actually been established in this conversation.`;
 
 // ── Handler ─────────────────────────────────────────────────────────────────
@@ -182,7 +194,7 @@ Deno.serve(async (req) => {
   // have taken over in the meantime.
   const { data: lead } = await admin
     .from('leads')
-    .select('id, user_id, first_name, last_name, stage, opted_out, ai_reply_paused, lead_tags(tags(id, name))')
+    .select('id, user_id, first_name, last_name, stage, notes, opted_out, ai_reply_paused, lead_tags(tags(id, name))')
     .eq('id', leadId)
     .single();
 
@@ -311,6 +323,11 @@ Deno.serve(async (req) => {
                 description:
                   'True if the lead is declining or asking not to be contacted, or this is a confirmed wrong-number dead-end being closed out. Not for a bare STOP-style keyword, which never reaches you.',
               },
+              summary: {
+                type: 'string',
+                description:
+                  "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (condition, price, timeline, motivation if mentioned, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
+              },
             },
             required: ['reply', 'fully_qualified', 'negative_reply'],
           },
@@ -337,10 +354,11 @@ Deno.serve(async (req) => {
     return json({ error: 'no draft produced' }, 502);
   }
 
-  const { reply, fully_qualified: fullyQualified, negative_reply: negativeReply } = toolUse.input as {
+  const { reply, fully_qualified: fullyQualified, negative_reply: negativeReply, summary } = toolUse.input as {
     reply: string;
     fully_qualified: boolean;
     negative_reply: boolean;
+    summary?: string;
   };
 
   if (triggerMessageId) {
@@ -414,10 +432,20 @@ Deno.serve(async (req) => {
   if (negativeReply) {
     await admin.from('leads').update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true }).eq('id', leadId);
   } else if (fullyQualified) {
-    await admin
-      .from('leads')
-      .update({ stage: hasPhotos ? 'followup' : 'initial_contact', ai_reply_paused: true })
-      .eq('id', leadId);
+    const updates: Record<string, unknown> = { stage: hasPhotos ? 'followup' : 'initial_contact', ai_reply_paused: true };
+
+    // Prepended, never overwritten — whatever a human already wrote in Notes
+    // stays intact below this. Photos come from hasPhotos (already verified
+    // against real inbound attachments) rather than asking the model to
+    // report on something it isn't the source of truth for.
+    if (summary && summary.trim()) {
+      const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const photosLine = `Photos: ${hasPhotos ? 'Received' : 'Not yet received'}`;
+      const block = `AI Qualification Summary — ${dateLabel}\n${summary.trim()}\n${photosLine}\n\n---\n\n`;
+      updates.notes = block + (lead.notes ?? '');
+    }
+
+    await admin.from('leads').update(updates).eq('id', leadId);
   }
 
   return json({ ok: true, sent: true, fullyQualified, negativeReply });

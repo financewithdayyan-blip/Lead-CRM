@@ -168,6 +168,8 @@ export interface Lead {
   optedOut: boolean;
   /** Set once fully qualified, or once a human replies by hand. Stops the AI auto-reply. */
   aiReplyPaused: boolean;
+  /** Set once, the first time this lead's stage enters Qualified-or-beyond — by a trigger, not app code. Null until then. */
+  qualifiedAt: string | null;
 }
 
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';

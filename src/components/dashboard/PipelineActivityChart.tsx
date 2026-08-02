@@ -1,34 +1,34 @@
 import { AreaChart, Area, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-interface DailyTrendPoint {
+interface ActivityTrendPoint {
   iso: string;
   label: string;
+  sent: number;
+  replies: number;
+  qualified: number;
   calls: number;
-  voicemail: number;
-  dead_declined: number;
-  followupCombined: number;
 }
 
-// Split into its own lazy-loaded chunk - recharts is the single heaviest
-// dependency in the app, and the dashboard shell shouldn't have to wait on
-// it just to show stats cards and the lead list.
-export function DailyActivityChart({ data }: { data: DailyTrendPoint[] }) {
+// One chart for the whole pipeline — SMS sends, replies, and calls to
+// qualified leads plotted together, instead of separate charts per channel.
+// Its own lazy chunk since recharts is the heaviest dependency in the app.
+export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) {
   return (
-    <ResponsiveContainer width="100%" height={270}>
+    <ResponsiveContainer width="100%" height={280}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           {[
-            ['gCalls', '#3b82f6'],
-            ['gVoicemail', '#f59e0b'],
-            ['gDead', '#ef4444'],
-            ['gFollowup', '#10b981'],
+            ['gSent', '#0ea5e9'],
+            ['gReplies', '#22d3ee'],
+            ['gQualified', '#a78bfa'],
+            ['gCalls', '#fb923c'],
           ].map(([id, color]) => (
             <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.32} />
               <stop offset="100%" stopColor={color} stopOpacity={0.02} />
             </linearGradient>
           ))}
-          <filter id="lineShadow" x="-20%" y="-40%" width="140%" height="200%">
+          <filter id="pipelineLineShadow" x="-20%" y="-40%" width="140%" height="200%">
             <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.18" />
           </filter>
         </defs>
@@ -50,49 +50,49 @@ export function DailyActivityChart({ data }: { data: DailyTrendPoint[] }) {
         <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
         <Area
           type="linear"
+          dataKey="sent"
+          name="SMS Sent"
+          stroke="#0ea5e9"
+          fill="url(#gSent)"
+          strokeWidth={2.5}
+          style={{ filter: 'url(#pipelineLineShadow)' }}
+          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#0ea5e9' }}
+          activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+          animationDuration={600}
+        />
+        <Area
+          type="linear"
+          dataKey="replies"
+          name="Replies"
+          stroke="#22d3ee"
+          fill="url(#gReplies)"
+          strokeWidth={2.5}
+          style={{ filter: 'url(#pipelineLineShadow)' }}
+          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#22d3ee' }}
+          activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+          animationDuration={600}
+        />
+        <Area
+          type="linear"
+          dataKey="qualified"
+          name="Newly Qualified"
+          stroke="#a78bfa"
+          fill="url(#gQualified)"
+          strokeWidth={2.5}
+          style={{ filter: 'url(#pipelineLineShadow)' }}
+          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#a78bfa' }}
+          activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+          animationDuration={600}
+        />
+        <Area
+          type="linear"
           dataKey="calls"
-          name="Total Calls"
-          stroke="#3b82f6"
+          name="Calls to Qualified Leads"
+          stroke="#fb923c"
           fill="url(#gCalls)"
           strokeWidth={2.5}
-          style={{ filter: 'url(#lineShadow)' }}
-          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#3b82f6' }}
-          activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-          animationDuration={600}
-        />
-        <Area
-          type="linear"
-          dataKey="voicemail"
-          name="Voicemail"
-          stroke="#f59e0b"
-          fill="url(#gVoicemail)"
-          strokeWidth={2.5}
-          style={{ filter: 'url(#lineShadow)' }}
-          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#f59e0b' }}
-          activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-          animationDuration={600}
-        />
-        <Area
-          type="linear"
-          dataKey="dead_declined"
-          name="Dead / Declined"
-          stroke="#ef4444"
-          fill="url(#gDead)"
-          strokeWidth={2.5}
-          style={{ filter: 'url(#lineShadow)' }}
-          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#ef4444' }}
-          activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-          animationDuration={600}
-        />
-        <Area
-          type="linear"
-          dataKey="followupCombined"
-          name="Follow-Up + Qualified"
-          stroke="#10b981"
-          fill="url(#gFollowup)"
-          strokeWidth={2.5}
-          style={{ filter: 'url(#lineShadow)' }}
-          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#10b981' }}
+          style={{ filter: 'url(#pipelineLineShadow)' }}
+          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#fb923c' }}
           activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
           animationDuration={600}
         />

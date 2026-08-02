@@ -1,0 +1,67 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+
+export interface SendLogRow {
+  id: string;
+  sentFrom: string;
+  createdAt: string;
+}
+
+/**
+ * The append-only outreach log — deliberately outlives the lead it refers
+ * to, so this is the only correct source for "how many have we ever sent",
+ * unlike lead_activities which disappears with the lead. Admin-only RLS
+ * means a caller's query here just comes back empty; `enabled` additionally
+ * skips firing it at all for a caller session.
+ */
+export function useSendLog(userId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['send_log_all', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('send_log')
+        .select('id, sent_from, sent_at')
+        .eq('user_id', userId)
+        .order('sent_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((r): SendLogRow => ({ id: r.id, sentFrom: r.sent_from, createdAt: r.sent_at }));
+    },
+    enabled,
+  });
+}
+
+export interface InboundRow {
+  id: string;
+  isReaction: boolean;
+  hasAttachments: boolean;
+  receivedAt: string;
+  leadId: string | null;
+}
+
+/**
+ * inbound_messages has no user_id column — Zoom delivers to the shared
+ * business number, not a specific CRM user — so this is account-wide by
+ * design, same as the webhook itself. Admin-only RLS, same as send_log.
+ */
+export function useInboundMessages(enabled: boolean) {
+  return useQuery({
+    queryKey: ['inbound_messages_all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('inbound_messages')
+        .select('id, is_reaction, has_attachments, received_at, lead_id')
+        .order('received_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(
+        (r): InboundRow => ({
+          id: r.id,
+          isReaction: r.is_reaction,
+          hasAttachments: r.has_attachments,
+          receivedAt: r.received_at,
+          leadId: r.lead_id,
+        }),
+      );
+    },
+    enabled,
+  });
+}

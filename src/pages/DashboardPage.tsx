@@ -1,18 +1,86 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, PhoneCall } from 'lucide-react';
+import { AlertTriangle, MapPin, PhoneCall } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
+import { useSendLog, useInboundMessages } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
-import { STAGE_CONFIG, STAGE_ORDER, type Profile } from '@/types/domain';
-import { localIsoDate } from '@/lib/utils';
+import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
+import { formatPhone, localIsoDate } from '@/lib/utils';
 
-const DailyActivityChart = lazy(() =>
-  import('@/components/dashboard/DailyActivityChart').then((m) => ({ default: m.DailyActivityChart })),
+const PipelineActivityChart = lazy(() =>
+  import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
+);
+const PipelineFunnel = lazy(() =>
+  import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
 );
 
 const WEEKDAY_LABELS = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
+
+type DateRange = 'today' | '7d' | '30d' | '90d' | 'all';
+
+const RANGE_OPTIONS: { key: DateRange; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7D' },
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
+  { key: 'all', label: 'All' },
+];
+
+function rangeCutoff(range: DateRange): Date | null {
+  const now = new Date();
+  switch (range) {
+    case 'today':
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case '7d':
+      return new Date(now.getTime() - 7 * 86400000);
+    case '30d':
+      return new Date(now.getTime() - 30 * 86400000);
+    case '90d':
+      return new Date(now.getTime() - 90 * 86400000);
+    case 'all':
+      return null;
+  }
+}
+
+// A lead currently sitting in one of these stages has, by definition, been
+// qualified — either the AI got there via the framework, or a human moved it
+// by hand. Calling is meant to happen only downstream of this line now.
+const QUALIFIED_PLUS_STAGES: LeadStage[] = ['initial_contact', 'followup', 'negotiation', 'contract'];
+
+// The main flow, in order. Every other stage (voicemail, dead_declined,
+// onhold, others) is an exit from this flow rather than a step within it —
+// see the off-funnel chips rendered alongside the funnel itself.
+// Starts at Contacted, not Cold — a "Cold" bar scaled against the whole
+// (mostly never-contacted) lead universe dwarfs every real funnel stage down
+// to the same minimum-width floor. Total/cold counts are shown as separate
+// context above the funnel instead of distorting its scale.
+const FUNNEL_ORDER = ['contacted', 'replied', 'qualified', 'negotiation', 'contract'] as const;
+type FunnelKey = (typeof FUNNEL_ORDER)[number];
+const FUNNEL_LABELS: Record<FunnelKey, string> = {
+  contacted: 'Contacted',
+  replied: 'Replied',
+  qualified: 'Qualified',
+  negotiation: 'Negotiation',
+  contract: 'Contract',
+};
+const FUNNEL_COLORS: Record<FunnelKey, string> = {
+  contacted: '#38bdf8',
+  replied: '#22d3ee',
+  qualified: '#a78bfa',
+  negotiation: '#fb923c',
+  contract: '#10b981',
+};
+
+function funnelBucket(stage: LeadStage): FunnelKey | null {
+  if (stage === 'contacted') return 'contacted';
+  if (stage === 'replied') return 'replied';
+  if (stage === 'initial_contact' || stage === 'followup') return 'qualified';
+  if (stage === 'negotiation') return 'negotiation';
+  if (stage === 'contract') return 'contract';
+  return null;
+}
 
 function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
@@ -67,49 +135,134 @@ export function DashboardView({
   userId,
   profile,
   heading = 'Dashboard',
-  subtitle = 'Your pipeline and activity at a glance',
+  subtitle = 'Your pipeline, from first text to closed contract',
   allowStartSession = false,
+  showSmsStats = false,
 }: {
   userId: string;
   profile: Profile | null;
   heading?: string;
   subtitle?: string;
   allowStartSession?: boolean;
+  /** SMS outreach is an admin-only feature (RLS enforces this server-side
+   * too — a caller's send_log/inbound_messages query just comes back empty),
+   * and it's account-wide rather than per-caller, so the unified pipeline
+   * view only ever renders on the admin's own "/" dashboard, never on a team
+   * member's individual dashboard. */
+  showSmsStats?: boolean;
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
   const { data: tags = [] } = useTags(userId);
+  const { data: sendLog = [] } = useSendLog(userId, showSmsStats);
+  const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
 
-  const [trendRange, setTrendRange] = useState<7 | 30>(7);
+  // One control drives the whole page — every range-scoped card and the
+  // trend chart below all read off this same cutoff, so nothing on screen
+  // can silently disagree about what "recent" means.
+  const [dateRange, setDateRange] = useState<DateRange>('30d');
+  const cutoff = useMemo(() => rangeCutoff(dateRange), [dateRange]);
+  const inRange = (iso: string) => !cutoff || new Date(iso) >= cutoff;
 
   const calls = useMemo(() => activities.filter((a) => a.type === 'call'), [activities]);
 
+  // Snapshot — which leads are, right now, past the qualification gate. Used
+  // both for the funnel and to check calling activity against the rule that
+  // calls should only go to already-qualified leads.
+  const qualifiedPlusIds = useMemo(
+    () => new Set(leads.filter((l) => QUALIFIED_PLUS_STAGES.includes(l.stage)).map((l) => l.id)),
+    [leads],
+  );
+
+  const funnel = useMemo(() => {
+    const buckets = leads.map((l) => funnelBucket(l.stage)).filter((b): b is FunnelKey => b !== null);
+    const stages = FUNNEL_ORDER.map((key, idx) => ({
+      key,
+      label: FUNNEL_LABELS[key],
+      color: FUNNEL_COLORS[key],
+      count: buckets.filter((b) => FUNNEL_ORDER.indexOf(b) >= idx).length,
+    }));
+    const offFunnel = [
+      { label: 'Dead / Declined', count: leads.filter((l) => l.stage === 'dead_declined').length, color: '#ef4444' },
+      { label: 'On Hold', count: leads.filter((l) => l.stage === 'onhold').length, color: '#2dd4bf' },
+      { label: 'Others', count: leads.filter((l) => l.stage === 'others').length, color: '#94a3b8' },
+      { label: 'Voicemail (legacy)', count: leads.filter((l) => l.stage === 'voicemail').length, color: '#f59e0b' },
+    ].filter((o) => o.count > 0);
+    return {
+      stages,
+      offFunnel,
+      totalLeads: leads.length,
+      coldCount: leads.filter((l) => l.stage === 'new').length,
+    };
+  }, [leads]);
+
   const stats = useMemo(() => {
     const total = leads.length;
-    // Leads still sitting at 'new' haven't had a call outcome selected yet,
-    // so they shouldn't dilute rate KPIs like voicemail/dead/contact rate.
-    const calledLeadsCount = leads.filter((l) => l.stage !== 'new').length;
-    const active = leads.filter((l) => ['initial_contact', 'followup', 'negotiation'].includes(l.stage)).length;
+    const contactedOrBeyond = leads.filter((l) => l.stage !== 'new').length;
+    const qualified = qualifiedPlusIds.size;
     const contracts = leads.filter((l) => l.stage === 'contract').length;
-    const deadDeclined = leads.filter((l) => l.stage === 'dead_declined').length;
-    const conversionRate = calledLeadsCount > 0 ? Math.round((contracts / calledLeadsCount) * 100) : 0;
+    const optedOut = leads.filter((l) => l.optedOut).length;
+    const inConversation = leads.filter((l) => l.stage === 'replied').length;
+
+    const qualifiedRate = contactedOrBeyond > 0 ? Math.round((qualified / contactedOrBeyond) * 100) : 0;
+    const contractRate = qualified > 0 ? Math.round((contracts / qualified) * 100) : 0;
+    const optOutRate = contactedOrBeyond > 0 ? Math.round((optedOut / contactedOrBeyond) * 100) : 0;
+
+    // ── Range-scoped activity ────────────────────────────────────────────
+    const callsInRange = calls.filter((a) => inRange(a.createdAt));
+    const sendLogInRange = sendLog.filter((r) => inRange(r.createdAt));
+    const repliesInRange = inboundMessages.filter((m) => !m.isReaction && inRange(m.receivedAt));
+    const repliedLeadIdsInRange = new Set(repliesInRange.filter((m) => m.leadId).map((m) => m.leadId));
+    const responseRate =
+      sendLogInRange.length > 0 ? Math.round((repliedLeadIdsInRange.size / sendLogInRange.length) * 100) : 0;
+    const photosReceived = repliesInRange.filter((m) => m.hasAttachments).length;
+
+    // The rule is calling happens only to already-qualified leads — this
+    // both reports the intended metric and flags when reality drifts from
+    // it, rather than assuming the rule is always followed.
+    const callsToQualified = callsInRange.filter((a) => qualifiedPlusIds.has(a.leadId)).length;
+    const callsOffProcess = callsInRange.length - callsToQualified;
+
+    const smsActivitiesInRange = activities.filter((a) => a.type === 'sms' && inRange(a.createdAt));
+    const aiRepliesSent = smsActivitiesInRange.filter((a) => {
+      const meta = a.meta as { direction?: string; aiGenerated?: boolean };
+      return meta?.direction === 'outbound' && meta?.aiGenerated;
+    }).length;
+
+    const sentToday = sendLog.filter((r) => localIsoDate(new Date(r.createdAt)) === localIsoDate(new Date())).length;
+
+    const byNumber = new Map<string, number>();
+    sendLogInRange.forEach((r) => byNumber.set(r.sentFrom, (byNumber.get(r.sentFrom) ?? 0) + 1));
+    const numberCounts = Array.from(byNumber.entries())
+      .map(([phone, count]) => ({ phone, label: formatPhone(phone), count }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── Closing efficiency (calling-quality detail, all-time so the ratios
+    // stay meaningful against the all-time contract count) ────────────────
+    const callsToQualifiedAllTime = calls.filter((a) => qualifiedPlusIds.has(a.leadId)).length;
+    const callsPerContract = contracts > 0 ? (callsToQualifiedAllTime / contracts).toFixed(1) : null;
+    const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
+    const declinedCount = outcomeCount('declined');
+    const pickupDenominator = outcomeCount('initial_contact') + outcomeCount('followup') + declinedCount;
+    const pickupRatio = pickupDenominator > 0 ? (calls.length / pickupDenominator).toFixed(1) : null;
 
     const todayIso = localIsoDate(new Date());
     const callsToday = calls.filter((a) => localIsoDate(new Date(a.createdAt)) === todayIso).length;
-
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const monthCalls = calls.filter((a) => {
       const d = new Date(a.createdAt);
       return d >= monthStart && d < nextMonthStart;
     }).length;
 
-    const dayOfWeek = now.getDay();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - dayOfWeek);
-    weekStart.setHours(0, 0, 0, 0);
-    const weekCalls = calls.filter((a) => new Date(a.createdAt) >= weekStart).length;
+    const callTimes = calls.map((a) => new Date(a.createdAt).getTime()).sort((a, b) => a - b);
+    let totalSessions = 0;
+    let lastTime: number | null = null;
+    for (const t of callTimes) {
+      if (lastTime === null || t - lastTime > 20 * 60 * 1000) totalSessions++;
+      lastTime = t;
+    }
 
     const stageCounts: Record<string, number> = {};
     STAGE_ORDER.forEach((s) => (stageCounts[s] = 0));
@@ -122,108 +275,78 @@ export function DashboardView({
       .filter((x) => x.count > 0)
       .sort((a, b) => b.count - a.count);
 
-    const callsMade = calls.length;
-    const dialedLeadIds = new Set(calls.map((a) => a.leadId));
-    const dialedPct = total > 0 ? Math.round((dialedLeadIds.size / total) * 100) : 0;
-
-    // Pipeline snapshot (matches the Pipeline Breakdown panel) - very few real
-    // calls have an outcome logged yet, so these rate cards read off each
-    // lead's current stage rather than the sparse per-call outcome data.
-    const voicemailCount = leads.filter((l) => l.stage === 'voicemail').length;
-    const deadDeclinedOutcomeCount = leads.filter((l) => l.stage === 'dead_declined').length;
-    const pipelineInitialContactCount = leads.filter((l) => l.stage === 'initial_contact').length;
-    const pipelineFollowupCount = leads.filter((l) => l.stage === 'followup').length;
-    const conversations = pipelineInitialContactCount + pipelineFollowupCount;
-
-    const contactRate = calledLeadsCount > 0 ? Math.round((conversations / calledLeadsCount) * 100) : 0;
-    const voicemailRate = calledLeadsCount > 0 ? Math.round((voicemailCount / calledLeadsCount) * 100) : 0;
-    const deadDeclinedRate = calledLeadsCount > 0 ? Math.round((deadDeclinedOutcomeCount / calledLeadsCount) * 100) : 0;
-
-    // Calling efficiency (dials per outcome) stays based on actual logged
-    // call outcomes, so it stays blank until enough real calls are logged.
-    const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
-    const followupCount = outcomeCount('followup');
-    const callConversations = outcomeCount('initial_contact') + followupCount;
-    const declinedCount = outcomeCount('declined');
-    const callsPerFollowup = pipelineFollowupCount > 0 ? (callsMade / pipelineFollowupCount).toFixed(1) : null;
-    const callsPerConversation = conversations > 0 ? (callsMade / conversations).toFixed(1) : null;
-    const pickupDenominator = outcomeCount('initial_contact') + followupCount + declinedCount;
-    const pickupRatio = pickupDenominator > 0 ? (callsMade / pickupDenominator).toFixed(1) : null;
-
-    // No dedicated session log exists yet - approximate a "session" as a run of
-    // calls with no gap longer than 20 minutes between consecutive dials.
-    const callTimes = calls.map((a) => new Date(a.createdAt).getTime()).sort((a, b) => a - b);
-    let totalSessions = 0;
-    let lastTime: number | null = null;
-    for (const t of callTimes) {
-      if (lastTime === null || t - lastTime > 20 * 60 * 1000) totalSessions++;
-      lastTime = t;
-    }
-
     return {
       total,
-      calledLeadsCount,
-      active,
+      qualified,
+      qualifiedRate,
       contracts,
-      deadDeclined,
-      conversionRate,
+      contractRate,
+      optedOut,
+      optOutRate,
+      inConversation,
+      sentInRange: sendLogInRange.length,
+      sentToday,
+      repliesInRange: repliesInRange.length,
+      repliedLeadCount: repliedLeadIdsInRange.size,
+      responseRate,
+      photosReceived,
+      callsToQualified,
+      callsOffProcess,
+      aiRepliesSent,
+      numberCounts,
+      callsPerContract,
+      pickupRatio,
       callsToday,
       monthCalls,
-      weekCalls,
+      totalSessions,
       stageCounts,
       ratingCounts,
       tagCounts,
-      callsMade,
-      dialedPct,
-      conversations,
-      contactRate,
-      voicemailCount,
-      voicemailRate,
-      deadDeclinedOutcomeCount,
-      deadDeclinedRate,
-      callsPerFollowup,
-      callsPerConversation,
-      pickupRatio,
-      totalSessions,
     };
-  }, [leads, calls, tags]);
+  }, [leads, calls, tags, activities, sendLog, inboundMessages, qualifiedPlusIds, cutoff]);
 
-  const dailyTrend = useMemo(() => {
-    const days: Array<{
-      iso: string;
-      label: string;
-      calls: number;
-      voicemail: number;
-      dead_declined: number;
-      followupCombined: number;
-    }> = [];
+  // Chart granularity follows the same global range rather than a second,
+  // independent control — Today and 7D both read as a 7-day chart since a
+  // single-day trend isn't a trend, and 90D/All cap at 90 days of buckets.
+  const trendDayCount = dateRange === '30d' ? 30 : dateRange === '90d' || dateRange === 'all' ? 90 : 7;
+
+  const activityTrend = useMemo(() => {
+    const days: Array<{ iso: string; label: string; sent: number; replies: number; qualified: number; calls: number }> = [];
     const today = new Date();
-    for (let i = trendRange - 1; i >= 0; i--) {
+    for (let i = trendDayCount - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
       const iso = localIsoDate(d);
       days.push({
         iso,
-        label: d.toLocaleDateString([], trendRange <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
+        label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
+        sent: 0,
+        replies: 0,
+        qualified: 0,
         calls: 0,
-        voicemail: 0,
-        dead_declined: 0,
-        followupCombined: 0,
       });
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
-    activities.forEach((a) => {
-      if (a.type !== 'call') return;
-      const iso = localIsoDate(new Date(a.createdAt));
-      const day = byIso.get(iso);
-      if (!day) return;
-      day.calls++;
-      const outcome = (a.meta as { outcome?: string })?.outcome;
-      if (outcome === 'voicemail') day.voicemail++;
-      else if (outcome === 'dead' || outcome === 'declined') day.dead_declined++;
-      else if (outcome === 'followup' || outcome === 'initial_contact') day.followupCombined++;
+    sendLog.forEach((r) => {
+      const day = byIso.get(localIsoDate(new Date(r.createdAt)));
+      if (day) day.sent++;
+    });
+    inboundMessages.forEach((m) => {
+      if (m.isReaction) return;
+      const day = byIso.get(localIsoDate(new Date(m.receivedAt)));
+      if (day) day.replies++;
+    });
+    leads.forEach((l) => {
+      if (!l.qualifiedAt) return;
+      const day = byIso.get(localIsoDate(new Date(l.qualifiedAt)));
+      if (day) day.qualified++;
+    });
+    calls.forEach((a) => {
+      if (!qualifiedPlusIds.has(a.leadId)) return;
+      const day = byIso.get(localIsoDate(new Date(a.createdAt)));
+      if (day) day.calls++;
     });
     return days;
-  }, [activities, trendRange]);
+  }, [sendLog, inboundMessages, leads, calls, qualifiedPlusIds, trendDayCount]);
 
   const heatmap = useMemo(() => {
     const byDay = new Map<string, number>();
@@ -322,6 +445,7 @@ export function DashboardView({
   const maxStage = Math.max(...Object.values(stats.stageCounts), 1);
   const maxRating = Math.max(...stats.ratingCounts, 1);
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
+  const maxNumber = Math.max(...stats.numberCounts.map((x) => x.count), 1);
 
   function intensity(count: number, max: number) {
     if (count === 0) return '#f1f5f9';
@@ -335,14 +459,31 @@ export function DashboardView({
     return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }
 
+  const rangeLabel = RANGE_OPTIONS.find((r) => r.key === dateRange)?.label ?? '';
+
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-text">{heading}</h1>
           <p className="text-sm text-text-3">{subtitle}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
+          {showSmsStats && (
+            <div className="flex gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
+              {RANGE_OPTIONS.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => setDateRange(r.key)}
+                  className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                    dateRange === r.key ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text-2'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
           {allowStartSession ? (
             <Link to="/session" className="btn btn-primary shrink-0">
               <PhoneCall size={15} /> Start Session
@@ -364,49 +505,80 @@ export function DashboardView({
       ) : (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Total Leads" value={stats.total} sub={`${stats.dialedPct}% dialed`} />
-            <StatCard label="Calls Made" value={stats.callsMade} sub={`out of ${stats.total} leads`} color="#4f46e5" />
-            <StatCard label="Conversations" value={stats.conversations} sub="initial + follow-ups" color="#a78bfa" />
-            <StatCard
-              label="Contact Rate"
-              value={`${stats.contactRate}%`}
-              sub={`${stats.conversations} contacts of ${stats.calledLeadsCount} called`}
-              color="#10b981"
-            />
-            <StatCard
-              label="Conversion Rate"
-              value={`${stats.conversionRate}%`}
-              sub={`${stats.contracts} contracts of ${stats.calledLeadsCount} called`}
-              color="#10b981"
-            />
-            <StatCard
-              label="Voicemail Rate"
-              value={`${stats.voicemailRate}%`}
-              sub={`${stats.voicemailCount} of ${stats.calledLeadsCount} called`}
-              color="#f59e0b"
-            />
-            <StatCard
-              label="Dead / Declined Rate"
-              value={`${stats.deadDeclinedRate}%`}
-              sub={`${stats.deadDeclinedOutcomeCount} of ${stats.calledLeadsCount} called`}
-              color="#ef4444"
-            />
-            <StatCard label="Total Sessions" value={stats.totalSessions} sub={`${stats.totalSessions} calling sessions run`} color="#4f46e5" />
-            <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#4f46e5" />
-            <StatCard label="Calls / Follow-Up" value={stats.callsPerFollowup ?? '—'} sub="avg dials to get a follow-up" color="#f59e0b" />
-            <StatCard
-              label="Calls / Conversation"
-              value={stats.callsPerConversation ?? '—'}
-              sub="avg dials to get a conversation"
-              color="#f59e0b"
-            />
-            <StatCard
-              label="Pickup Ratio"
-              value={stats.pickupRatio ?? '—'}
-              sub="calls per initial contact + follow-up + declined"
-              color="#0ea5e9"
-            />
+            {showSmsStats ? (
+              <>
+                <StatCard label="Total Leads" value={stats.total.toLocaleString()} sub={`${leads.filter((l) => l.stage === 'new').length} still cold`} />
+                <StatCard
+                  label="SMS Sent"
+                  value={stats.sentInRange.toLocaleString()}
+                  sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
+                  color="#0ea5e9"
+                />
+                <StatCard
+                  label="Replies"
+                  value={stats.repliesInRange.toLocaleString()}
+                  sub={`${stats.responseRate}% response rate`}
+                  color="#22d3ee"
+                />
+                <StatCard
+                  label="AI Auto-Replies"
+                  value={stats.aiRepliesSent.toLocaleString()}
+                  sub="drafted and sent, no human touch"
+                  color="#a78bfa"
+                />
+                <StatCard
+                  label="Qualified Leads"
+                  value={stats.qualified.toLocaleString()}
+                  sub={`${stats.qualifiedRate}% of contacted`}
+                  color="#a78bfa"
+                />
+                <StatCard
+                  label="Calls to Qualified Leads"
+                  value={stats.callsToQualified.toLocaleString()}
+                  sub={
+                    stats.callsOffProcess > 0
+                      ? `${stats.callsOffProcess} off-process this ${dateRange === 'today' ? 'day' : 'range'}`
+                      : 'all on-process'
+                  }
+                  color={stats.callsOffProcess > 0 ? '#f59e0b' : '#fb923c'}
+                />
+                <StatCard
+                  label="Contracts"
+                  value={stats.contracts.toLocaleString()}
+                  sub={`${stats.contractRate}% of qualified leads`}
+                  color="#10b981"
+                />
+                <StatCard
+                  label="Opted Out / DNC"
+                  value={stats.optedOut.toLocaleString()}
+                  sub={`${stats.optOutRate}% of contacted`}
+                  color="#ef4444"
+                />
+              </>
+            ) : (
+              <>
+                <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} />
+                <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#4f46e5" />
+                <StatCard label="Qualified Leads" value={stats.qualified} sub={`${stats.qualifiedRate}% of contacted`} color="#a78bfa" />
+                <StatCard label="Contracts" value={stats.contracts} sub={`${stats.contractRate}% of qualified`} color="#10b981" />
+                <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#4f46e5" />
+                <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#4f46e5" />
+                <StatCard label="Pickup Ratio" value={stats.pickupRatio ?? '—'} sub="calls per real outcome" color="#0ea5e9" />
+                <StatCard label="Opted Out / DNC" value={stats.optedOut} sub={`${stats.optOutRate}% of contacted`} color="#ef4444" />
+              </>
+            )}
           </div>
+
+          {showSmsStats && stats.callsOffProcess > 0 && (
+            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[13px] text-warning">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <div>
+                {stats.callsOffProcess} call{stats.callsOffProcess !== 1 ? 's were' : ' was'} logged against a lead
+                that isn't currently Qualified or further along — calling is meant to happen only after SMS
+                qualification now.
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <GoalBar label="Daily Call Goal" done={stats.callsToday} goal={profile?.dailyGoal ?? 20} periodLabel="today" />
@@ -424,25 +596,29 @@ export function DashboardView({
             />
           </div>
 
-          <div className="card">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text">Daily Activity</h3>
-              <div className="flex gap-1">
-                {([7, 30] as const).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setTrendRange(r)}
-                    className={`btn !px-2.5 !py-1 text-[12px] ${trendRange === r ? '!border-primary !text-primary-text' : ''}`}
-                  >
-                    {r}D
-                  </button>
-                ))}
+          {showSmsStats && (
+            <div className="card">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text">Pipeline Activity</h3>
+                <span className="text-[11px] text-text-3">SMS sent, replies, newly qualified, and calls to qualified leads · {rangeLabel}</span>
               </div>
+              <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                <PipelineActivityChart data={activityTrend} />
+              </Suspense>
             </div>
-            <Suspense fallback={<div className="flex h-[270px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-              <DailyActivityChart data={dailyTrend} />
-            </Suspense>
-          </div>
+          )}
+
+          {showSmsStats && (
+            <div className="card">
+              <div className="mb-1 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text">Pipeline</h3>
+                <span className="text-[11px] text-text-3">current snapshot, every lead</span>
+              </div>
+              <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
+                <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
+              </Suspense>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             <div className="card">
@@ -457,14 +633,40 @@ export function DashboardView({
                 <BarRow key={s} label={'★'.repeat(s) + '☆'.repeat(5 - s)} count={stats.ratingCounts[s - 1]} max={maxRating} color="#f59e0b" />
               ))}
             </div>
+            {showSmsStats ? (
+              <div className="card">
+                <h3 className="mb-2 text-sm font-semibold text-text">Sent By Number</h3>
+                {stats.numberCounts.length === 0 ? (
+                  <div className="text-[13px] text-text-3">No sends in this range.</div>
+                ) : (
+                  stats.numberCounts.map((n) => <BarRow key={n.phone} label={n.label} count={n.count} max={maxNumber} color="#0ea5e9" />)
+                )}
+              </div>
+            ) : (
+              <div className="card">
+                <h3 className="mb-2 text-sm font-semibold text-text">Tag Breakdown</h3>
+                {stats.tagCounts.length === 0 && <div className="text-[13px] text-text-3">No tagged leads yet.</div>}
+                {stats.tagCounts.map(({ tag, count }) => (
+                  <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {showSmsStats && (
             <div className="card">
               <h3 className="mb-2 text-sm font-semibold text-text">Tag Breakdown</h3>
-              {stats.tagCounts.length === 0 && <div className="text-[13px] text-text-3">No tagged leads yet.</div>}
-              {stats.tagCounts.map(({ tag, count }) => (
-                <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
-              ))}
+              {stats.tagCounts.length === 0 ? (
+                <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
+                  {stats.tagCounts.map(({ tag, count }) => (
+                    <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
@@ -556,5 +758,5 @@ export function DashboardPage() {
   const userId = session?.user.id ?? '';
 
   if (!session) return null;
-  return <DashboardView userId={userId} profile={profile} allowStartSession />;
+  return <DashboardView userId={userId} profile={profile} allowStartSession showSmsStats={profile?.role === 'admin'} />;
 }

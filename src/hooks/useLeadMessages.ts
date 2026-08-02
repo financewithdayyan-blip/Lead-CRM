@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import type { SmsNumberKey } from '@/lib/smsNumbers';
 
 export interface ThreadMessage {
   id: string;
@@ -100,7 +101,7 @@ export function useReplyCounts(enabled: boolean) {
 export function useSendManualReply() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ leadId, body, fromKey }: { leadId: string; body: string; fromKey: '1' | '2' }) => {
+    mutationFn: async ({ leadId, body, fromKey }: { leadId: string; body: string; fromKey: SmsNumberKey }) => {
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey, dailyLimit: 0 },
       });

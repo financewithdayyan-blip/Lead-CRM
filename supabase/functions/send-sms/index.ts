@@ -15,7 +15,9 @@ const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
 const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!;
 
-/** The two sending identities, selectable per send. */
+/** The sending identities. A bulk send auto-splits evenly across whichever
+ * of these are actually configured (phone + email both set) — see
+ * activeNumbers() below. A single/manual send still picks one by fromKey. */
 const NUMBERS: Record<string, { phone: string; email: string; label: string }> = {
   '1': {
     phone: Deno.env.get('ZOOM_FROM_NUMBER') ?? '',
@@ -27,7 +29,23 @@ const NUMBERS: Record<string, { phone: string; email: string; label: string }> =
     email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '',
     label: Deno.env.get('ZOOM_LABEL_2') ?? 'Number 2',
   },
+  '3': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_3') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_3') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_3') ?? 'Number 3',
+  },
+  '4': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_4') ?? 'Number 4',
+  },
 };
+
+/** Numbers actually configured, in key order — a Zoom account with only 2 of
+ * the 4 slots filled in still splits cleanly across just those 2. */
+function activeNumbers(): [string, { phone: string; email: string; label: string }][] {
+  return Object.entries(NUMBERS).filter(([, n]) => n.phone && n.email);
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -169,11 +187,24 @@ Deno.serve(async (req) => {
       dailyLimit?: number;
     };
 
-    const from = NUMBERS[fromKey];
-    if (!from?.phone || !from.email) {
-      return json({ error: `Sending number "${fromKey}" is not configured.` }, 400);
-    }
     if (!leadIds.length) return json({ error: 'No leads selected.' }, 400);
+
+    // Bulk (more than one lead) auto-splits evenly across every configured
+    // number, switching to the next once a number's share — or its own
+    // rolling 24h cap — is reached. A single send (a manual reply, or one
+    // lead picked in the bulk modal) instead uses exactly the number chosen
+    // via fromKey; splitting one message across numbers makes no sense.
+    let senders: [string, { phone: string; email: string; label: string }][];
+    if (leadIds.length > 1) {
+      senders = activeNumbers();
+      if (!senders.length) return json({ error: 'No sending numbers are configured.' }, 400);
+    } else {
+      const single = NUMBERS[fromKey];
+      if (!single?.phone || !single.email) {
+        return json({ error: `Sending number "${fromKey}" is not configured.` }, 400);
+      }
+      senders = [[fromKey, single]];
+    }
 
     // The window restricts bulk cold outreach only. A single send — a manual
     // reply to an already-open conversation, or a one-off text to one lead —
@@ -189,40 +220,71 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Each number's own remaining rolling-24h capacity, checked once up
+    // front. A number already at its cap is simply skipped by the rotation
+    // below rather than blocking the whole run.
+    const dailyRemaining = new Map<string, number>();
     if (dailyLimit > 0) {
-      const { data: used } = await admin.rpc('sends_in_window', { p_sent_from: from.phone, p_hours: 24 });
-      const remaining = dailyLimit - Number(used ?? 0);
-      if (remaining <= 0) {
+      await Promise.all(
+        senders.map(async ([key, n]) => {
+          const { data: used } = await admin.rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 });
+          dailyRemaining.set(key, Math.max(0, dailyLimit - Number(used ?? 0)));
+        }),
+      );
+      if (senders.every(([key]) => (dailyRemaining.get(key) ?? 0) <= 0)) {
         return json(
-          { error: `${from.label} has already sent ${used} messages in the last 24 hours (limit ${dailyLimit}).` },
-          422,
-        );
-      }
-      if (leadIds.length > remaining) {
-        return json(
-          { error: `Only ${remaining} sends left on ${from.label} in this rolling 24 hours. Select fewer leads.` },
+          { error: `Every configured number has already reached the rolling 24h limit (${dailyLimit}).` },
           422,
         );
       }
     }
 
     // Tag names come along so the right template can be chosen per lead.
-    const { data: leads, error: leadErr } = await admin
+    const { data: leadsById, error: leadErr } = await admin
       .from('leads')
       .select('id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, lead_tags(tag_id, tags(name))')
       .in('id', leadIds);
     if (leadErr) throw leadErr;
 
+    // Preserve the caller's own ordering rather than whatever order Postgres
+    // happens to return, so the round-robin split below is deterministic.
+    const byId = new Map((leadsById ?? []).map((l) => [l.id, l]));
+    const leads = leadIds.map((id) => byId.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
+
     const token = await zoomToken();
     // Resolved even though the send endpoint takes the number, because Zoom
     // rejects sends from a number the authed user doesn't own.
-    await zoomUserId(from.email, token);
+    await Promise.all(senders.map(([, n]) => zoomUserId(n.email, token)));
 
     const sent: string[] = [];
     const skipped: { leadId: string; reason: string }[] = [];
     const failed: { leadId: string; error: string }[] = [];
+    const sentByNumber = new Map<string, number>(senders.map(([key]) => [key, 0]));
 
-    for (const lead of leads ?? []) {
+    // Equal target share per number, rounded up — the trailing number simply
+    // absorbs whatever's left once the queue runs out. senderIndex only ever
+    // moves forward: once a number's share or its own daily cap is hit, the
+    // rotation advances and never returns to it.
+    const targetPerNumber = Math.ceil(leadIds.length / senders.length);
+    let senderIndex = 0;
+    let sentTowardTarget = 0;
+
+    function hasCapacity(key: string): boolean {
+      if (dailyLimit <= 0) return true;
+      return (sentByNumber.get(key) ?? 0) < (dailyRemaining.get(key) ?? 0);
+    }
+
+    function advance() {
+      while (
+        senderIndex < senders.length &&
+        (sentTowardTarget >= targetPerNumber || !hasCapacity(senders[senderIndex][0]))
+      ) {
+        senderIndex++;
+        sentTowardTarget = 0;
+      }
+    }
+
+    for (const lead of leads) {
       if (lead.opted_out) {
         skipped.push({ leadId: lead.id, reason: 'opted out' });
         continue;
@@ -243,6 +305,13 @@ Deno.serve(async (req) => {
         skipped.push({ leadId: lead.id, reason: 'no template for this lead\'s tags' });
         continue;
       }
+
+      advance();
+      if (senderIndex >= senders.length) {
+        skipped.push({ leadId: lead.id, reason: 'every configured number has reached its rolling 24h limit' });
+        continue;
+      }
+      const [key, from] = senders[senderIndex];
 
       const message = render(template, {
         first_name: lead.first_name,
@@ -282,6 +351,8 @@ Deno.serve(async (req) => {
         });
 
         sent.push(lead.id);
+        sentByNumber.set(key, (sentByNumber.get(key) ?? 0) + 1);
+        sentTowardTarget++;
       } catch (e) {
         failed.push({ leadId: lead.id, error: e instanceof Error ? e.message : String(e) });
       }
@@ -289,7 +360,12 @@ Deno.serve(async (req) => {
       if (perMessageDelayMs > 0) await sleep(perMessageDelayMs);
     }
 
-    return json({ sent: sent.length, skipped, failed, from: from.label });
+    return json({
+      sent: sent.length,
+      skipped,
+      failed,
+      perNumber: senders.map(([key, n]) => ({ key, label: n.label, sent: sentByNumber.get(key) ?? 0 })),
+    });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

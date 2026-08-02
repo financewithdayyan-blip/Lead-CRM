@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Loader2, Send } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useSendBulkSms, type BulkSmsResult } from '@/hooks/useSms';
 import { useTags } from '@/hooks/useTags';
+import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead, Tag } from '@/types/domain';
 
 const PLACEHOLDER_HINT =
@@ -31,7 +32,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
   const { data: tags = [] } = useTags();
   const sendBulk = useSendBulkSms();
 
-  const [fromKey, setFromKey] = useState<'1' | '2'>('1');
+  const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [defaultTemplate, setDefaultTemplate] = useState('');
   const [templatesByTag, setTemplatesByTag] = useState<Record<string, string>>({});
   const [dailyLimit, setDailyLimit] = useState('150');
@@ -75,8 +76,22 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
       {result ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-3 py-2 text-[13px] text-success">
-            <Check size={15} /> Sent {result.sent} message{result.sent !== 1 ? 's' : ''} from {result.from}.
+            <Check size={15} /> Sent {result.sent} message{result.sent !== 1 ? 's' : ''}.
           </div>
+          {result.perNumber.filter((p) => p.sent > 0).length > 1 && (
+            <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[12px] text-text-2">
+              <div className="mb-1 font-semibold text-text">Split across numbers</div>
+              <ul className="space-y-0.5">
+                {result.perNumber
+                  .filter((p) => p.sent > 0)
+                  .map((p) => (
+                    <li key={p.key}>
+                      {p.label}: {p.sent}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           {result.skipped.length > 0 && (
             <div className="rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[12px] text-text-2">
               <div className="font-semibold text-warning">{result.skipped.length} skipped</div>
@@ -120,23 +135,27 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
             )}
           </div>
 
-          <div>
-            <div className="label">Send from</div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setFromKey('1')}
-                className={`btn flex-1 justify-center ${fromKey === '1' ? 'btn-primary' : ''}`}
-              >
-                Number 1
-              </button>
-              <button
-                onClick={() => setFromKey('2')}
-                className={`btn flex-1 justify-center ${fromKey === '2' ? 'btn-primary' : ''}`}
-              >
-                Number 2
-              </button>
+          {leads.length > 1 ? (
+            <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[12px] text-text-2">
+              Splits evenly across every configured sending number, switching to the next once one reaches its
+              rolling 24h limit below.
             </div>
-          </div>
+          ) : (
+            <div>
+              <div className="label">Send from</div>
+              <div className="flex gap-2">
+                {SMS_NUMBER_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setFromKey(key)}
+                    className={`btn flex-1 justify-center ${fromKey === key ? 'btn-primary' : ''}`}
+                  >
+                    Number {key}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="label">Default message</label>
@@ -180,7 +199,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
           )}
 
           <label className="block max-w-[220px]">
-            <span className="label">Rolling 24h limit for this number</span>
+            <span className="label">Rolling 24h limit per number</span>
             <input
               className="input"
               inputMode="numeric"

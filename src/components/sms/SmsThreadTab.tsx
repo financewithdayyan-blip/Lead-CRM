@@ -3,6 +3,7 @@ import { Image as ImageIcon, Loader2, MessageSquare, Send, ThumbsUp } from 'luci
 import { useLeadThread, useSendManualReply } from '@/hooks/useLeadMessages';
 import { useAiSettings } from '@/hooks/useAiSettings';
 import { formatDateTime } from '@/lib/utils';
+import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead } from '@/types/domain';
 
 // ai-reply only ever texts a lead sitting in Contacted or Replied — any
@@ -44,7 +45,7 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   const { data: aiSettings } = useAiSettings();
   const sendReply = useSendManualReply();
   const [message, setMessage] = useState('');
-  const [fromKey, setFromKey] = useState<'1' | '2'>('1');
+  const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [error, setError] = useState<string | null>(null);
 
   const realMessages = thread.filter((m) => !m.isReaction);
@@ -129,12 +130,15 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1">
-              <button onClick={() => setFromKey('1')} className={`btn !px-2 !py-1 text-[12px] ${fromKey === '1' ? 'btn-primary' : ''}`}>
-                Number 1
-              </button>
-              <button onClick={() => setFromKey('2')} className={`btn !px-2 !py-1 text-[12px] ${fromKey === '2' ? 'btn-primary' : ''}`}>
-                Number 2
-              </button>
+              {SMS_NUMBER_KEYS.map((key) => (
+                <button
+                  key={key}
+                  onClick={() => setFromKey(key)}
+                  className={`btn !px-2 !py-1 text-[12px] ${fromKey === key ? 'btn-primary' : ''}`}
+                >
+                  Number {key}
+                </button>
+              ))}
             </div>
             <button
               onClick={handleSend}
