@@ -134,6 +134,42 @@ function pick(obj: any, ...keys: string[]): string | undefined {
   return undefined;
 }
 
+// ── Lead resolution ──────────────────────────────────────────────────────
+
+/**
+ * Duplicate leads sharing the same phone number are common in this data
+ * (repeated CSV imports without dedup — 522 phone numbers across 1,044
+ * leads at last count), so a phone-number match can return more than one
+ * candidate. When it does, disambiguate using whichever candidate's own
+ * property address was actually mentioned in something sent to this
+ * number — a bulk send's {{address}} placeholder puts the exact address
+ * text into send_log.body, which is a far stronger signal than guessing.
+ * Falls back to the oldest lead (the first entered for a contact is
+ * normally the canonical one) when there's no address signal, or an
+ * ambiguous one (e.g. two duplicates for the same property).
+ */
+async function resolveLead(admin: ReturnType<typeof createClient>, fromNorm: string) {
+  if (fromNorm.length !== 10) return undefined;
+
+  const { data: candidates } = await admin
+    .from('leads')
+    .select('id, stage, user_id, address, created_at')
+    .or(`phone_norm.eq.${fromNorm},phone2_norm.eq.${fromNorm}`)
+    .order('created_at', { ascending: true });
+
+  if (!candidates || candidates.length === 0) return undefined;
+  if (candidates.length === 1) return candidates[0];
+
+  const { data: sent } = await admin.from('send_log').select('body').eq('phone_norm', fromNorm);
+  const bodies = (sent ?? []).map((s) => (s.body || '').toLowerCase());
+
+  const addressMatches = candidates.filter(
+    (c) => c.address?.trim() && bodies.some((b) => b.includes(c.address!.trim().toLowerCase())),
+  );
+
+  return addressMatches.length === 1 ? addressMatches[0] : candidates[0];
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -239,17 +275,9 @@ Deno.serve(async (req) => {
     // in an .or() filter is a real value to compare against, not "match
     // nothing" — it can and did silently attach a real conversation to an
     // unrelated lead whose own number was blank. A short-circuit here is the
-    // difference between "no match" and "wrong match".
-    const lead =
-      fromNorm.length === 10
-        ? (
-            await admin
-              .from('leads')
-              .select('id, stage, user_id')
-              .or(`phone_norm.eq.${fromNorm},phone2_norm.eq.${fromNorm}`)
-              .limit(1)
-          ).data?.[0]
-        : undefined;
+    // difference between "no match" and "wrong match". See resolveLead for
+    // how a phone number matching more than one lead gets disambiguated.
+    const lead = await resolveLead(admin, fromNorm);
     if (lead) {
       await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);
 
