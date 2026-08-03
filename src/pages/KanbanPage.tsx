@@ -14,7 +14,7 @@ import {
 import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
-import { useReceivedLeadShares, useAdminShareLeadToCaller } from '@/hooks/useLeadShares';
+import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { useAddActivity } from '@/hooks/useActivities';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
@@ -497,6 +497,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const deleteLeads = useDeleteLeads();
   const addActivity = useAddActivity();
   const adminShare = useAdminShareLeadToCaller();
+  const transferToAdmin = useTransferLeadToAdmin();
 
   const [search, setSearch] = useState('');
   // The input stays bound to `search` so typing paints immediately; the 4000-lead
@@ -542,18 +543,32 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     return map;
   }, [filtered]);
 
+  // Whoever's leads are actually shown on this board — targetUserId when
+  // viewing a team member's board (MemberKanbanPage), otherwise the viewing
+  // admin's own. Transferring TO this person is the no-op to exclude, not
+  // transferring to the viewer — an admin looking at a caller's board is
+  // very much a valid transfer target (pulling the lead into their own
+  // pipeline), the same "take" action LeadsPage already offers per-lead.
+  const boardOwnerId = targetUserId ?? profile?.id;
   const callers = useMemo(
-    () => teamMembers.filter((m) => m.member.role === 'caller'),
-    [teamMembers],
+    () => teamMembers.filter((m) => m.member.role === 'caller' && m.memberId !== boardOwnerId),
+    [teamMembers, boardOwnerId],
   );
-  // Other admins on the team — excludes the current admin, since
-  // transferring a lead to yourself is a no-op. admin_share_lead_to_caller
+  // Other admins on the team — excludes whoever currently owns the leads on
+  // this board, since transferring a lead to yourself is a no-op. admin_share_lead_to_caller
   // has no server-side role restriction on its target despite the name; the
   // "callers only" behavior has always been purely this UI-layer filter.
   const otherAdmins = useMemo(
-    () => teamMembers.filter((m) => m.member.role === 'admin' && m.memberId !== profile?.id),
-    [teamMembers, profile?.id],
+    () => teamMembers.filter((m) => m.member.role === 'admin' && m.memberId !== boardOwnerId),
+    [teamMembers, boardOwnerId],
   );
+  // The founding admin's own account was never "invited" by anyone, so it
+  // has no team_members row at all and can never appear in otherAdmins no
+  // matter how that list is filtered — team_members only models invitees.
+  // "Myself" has to be offered explicitly whenever the board being viewed
+  // isn't already the viewer's own (e.g. viewing a caller's board and
+  // wanting to pull a lead back into your own pipeline).
+  const canTransferToSelf = isAdmin && !!boardOwnerId && boardOwnerId !== profile?.id;
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -618,9 +633,15 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     setIsSharing(true);
     try {
       const selectedLeads = filtered.filter((l) => selectedIds.has(l.id));
-      await Promise.all(
-        selectedLeads.map((l) => adminShare.mutateAsync({ leadId: l.id, toUserId: shareTargetId })),
-      );
+      if (shareTargetId === '__self__') {
+        // transfer_lead_to_admin always targets auth.uid() (no p_to_user_id
+        // param), which is exactly "myself" here — no separate lookup needed.
+        await Promise.all(selectedLeads.map((l) => transferToAdmin.mutateAsync(l.id)));
+      } else {
+        await Promise.all(
+          selectedLeads.map((l) => adminShare.mutateAsync({ leadId: l.id, toUserId: shareTargetId })),
+        );
+      }
       setShowShareModal(false);
       setShareTargetId('');
       setSelectedIds(new Set());
@@ -731,7 +752,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
             >
               <Download size={13} /> Export CSV
             </button>
-            {isAdmin && (callers.length > 0 || otherAdmins.length > 0) && (
+            {isAdmin && (callers.length > 0 || otherAdmins.length > 0 || canTransferToSelf) && (
               <button
                 onClick={() => setShowShareModal(true)}
                 className="btn btn-sm btn-primary flex items-center gap-1.5"
@@ -843,6 +864,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               onChange={(e) => setShareTargetId(e.target.value)}
             >
               <option value="">Select a team member…</option>
+              {canTransferToSelf && <option value="__self__">Myself</option>}
               {otherAdmins.length > 0 && (
                 <optgroup label="Admins">
                   {otherAdmins.map((m) => (

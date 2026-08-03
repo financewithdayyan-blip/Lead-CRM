@@ -8,7 +8,7 @@ import { useActivities, useAddActivity, useDeleteActivity, useUpdateActivity } f
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl } from '@/hooks/useLeadFiles';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
-import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller } from '@/hooks/useLeadShares';
+import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
@@ -130,6 +130,7 @@ function AdminShareToCallerButton({
   const { data: teamMembers = [] } = useTeamMembers();
   const { profile } = useAuth();
   const adminShare = useAdminShareLeadToCaller();
+  const transferToAdmin = useTransferLeadToAdmin();
   const [open, setOpen] = useState(false);
   const [selectedCallerId, setSelectedCallerId] = useState('');
 
@@ -138,14 +139,27 @@ function AdminShareToCallerButton({
     .filter((m) => m.role === 'caller' && m.id !== currentOwnerId);
   // Other admins on the team — admin_share_lead_to_caller has no server-side
   // role restriction on its target despite the name, so the same RPC covers
-  // transferring to another admin. Excludes the current owner and whoever's
-  // viewing this button, since transferring to either is a no-op.
-  const otherAdmins = teamMembers
-    .map((m) => m.member)
-    .filter((m) => m.role === 'admin' && m.id !== currentOwnerId && m.id !== profile?.id);
+  // transferring to another admin. Excludes only the current owner, since
+  // transferring to them is the no-op — NOT the viewer, who may well not
+  // currently own this lead and is a perfectly valid target.
+  const otherAdmins = teamMembers.map((m) => m.member).filter((m) => m.role === 'admin' && m.id !== currentOwnerId);
+  // The founding admin's own account has no team_members row at all (nobody
+  // "invited" them), so it can never appear in otherAdmins regardless of
+  // filtering — offered explicitly instead, whenever the viewer isn't
+  // already the current owner.
+  const canTransferToSelf = !!profile?.id && profile.id !== currentOwnerId;
 
   function handleShare() {
     if (!selectedCallerId) return;
+    if (selectedCallerId === '__self__') {
+      transferToAdmin.mutate(leadId, {
+        onSuccess: () => {
+          setOpen(false);
+          setSelectedCallerId('');
+        },
+      });
+      return;
+    }
     adminShare.mutate(
       { leadId, toUserId: selectedCallerId },
       {
@@ -172,6 +186,7 @@ function AdminShareToCallerButton({
               onChange={(e) => setSelectedCallerId(e.target.value)}
             >
               <option value="">Select a team member…</option>
+              {canTransferToSelf && <option value="__self__">Myself</option>}
               {otherAdmins.length > 0 && (
                 <optgroup label="Admins">
                   {otherAdmins.map((c) => (
@@ -191,13 +206,13 @@ function AdminShareToCallerButton({
                 </optgroup>
               )}
             </select>
-            {callers.length === 0 && otherAdmins.length === 0 && (
+            {callers.length === 0 && otherAdmins.length === 0 && !canTransferToSelf && (
               <p className="text-[12px] text-text-3">No other team members to transfer to.</p>
             )}
             <p className="text-[12px] text-text-3">
               This lead will be transferred to the selected team member immediately.
             </p>
-            {adminShare.isError && (
+            {(adminShare.isError || transferToAdmin.isError) && (
               <p className="text-[12px] text-danger">Transfer failed. Please try again.</p>
             )}
             <div className="flex justify-end gap-2">
@@ -212,10 +227,10 @@ function AdminShareToCallerButton({
               </button>
               <button
                 className="btn btn-primary text-[12px]"
-                disabled={!selectedCallerId || adminShare.isPending}
+                disabled={!selectedCallerId || adminShare.isPending || transferToAdmin.isPending}
                 onClick={handleShare}
               >
-                {adminShare.isPending ? 'Transferring…' : 'Transfer'}
+                {adminShare.isPending || transferToAdmin.isPending ? 'Transferring…' : 'Transfer'}
               </button>
             </div>
           </div>
