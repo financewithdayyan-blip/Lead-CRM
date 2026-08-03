@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { usePresence } from '@/contexts/PresenceContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   Ban,
-  CalendarClock,
-  CalendarDays,
   ChevronDown,
   Clock,
   Copy,
@@ -27,7 +25,6 @@ import {
   Trophy,
   Voicemail,
   Wrench,
-  X,
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,12 +57,11 @@ const REPAIR_OPTIONS: Array<{ key: keyof RepairFlags; label: string }> = [
   { key: 'flooring', label: 'Flooring' },
 ];
 
-type OutcomeKey = 'voicemail' | 'initial_contact' | 'followup' | 'onhold' | 'dead' | 'declined';
+type OutcomeKey = 'voicemail' | 'initial_contact' | 'onhold' | 'dead' | 'declined';
 
 const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: typeof Voicemail }> = [
   { key: 'voicemail', label: 'Voicemail', stage: 'voicemail', icon: Voicemail },
   { key: 'initial_contact', label: 'Qualified', stage: 'initial_contact', icon: PhoneIncoming },
-  { key: 'followup', label: 'Follow-Up', stage: 'followup', icon: CalendarClock },
   { key: 'onhold', label: 'On Hold', stage: 'onhold', icon: PauseCircle },
   { key: 'dead', label: 'Dead', stage: 'dead_declined', icon: XCircle },
   { key: 'declined', label: 'Declined', stage: 'dead_declined', icon: Ban },
@@ -73,12 +69,28 @@ const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: 
 
 const SHORTCUT_LEGEND: Array<{ key: string; label: string }> = [
   { key: 'V', label: 'Voicemail' },
-  { key: 'F', label: 'Follow-Up' },
   { key: 'D', label: 'Dead' },
   { key: 'H', label: 'Hold' },
   { key: 'N', label: 'Next' },
   { key: 'C', label: 'Copy #' },
 ];
+
+/** Shared by the cold queue, the in-session follow-up offer, and a
+ * dedicated Follow-Up session — auction-critical leads first, then
+ * soonest-to-auction, then plain lead order. */
+function sortByUrgency(list: Lead[]): Lead[] {
+  return [...list].sort((a, b) => {
+    const aDays = computeDaysToAuction(a.auctionDate);
+    const bDays = computeDaysToAuction(b.auctionDate);
+    const aCrit = aDays !== null && aDays >= 0 && aDays <= 3;
+    const bCrit = bDays !== null && bDays >= 0 && bDays <= 3;
+    if (aCrit !== bCrit) return aCrit ? -1 : 1;
+    if (aDays !== null && bDays !== null) return aDays - bDays;
+    if (aDays !== null) return -1;
+    if (bDays !== null) return 1;
+    return (a.leadNum ?? 0) - (b.leadNum ?? 0);
+  });
+}
 
 function formatElapsed(totalSeconds: number) {
   const h = Math.floor(totalSeconds / 3600);
@@ -189,6 +201,8 @@ function ScriptSay({ children }: { children: React.ReactNode }) {
 
 export function CallSessionPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const startInFollowUpMode = searchParams.get('mode') === 'followup';
   const { session, profile } = useAuth();
   const userId = session!.user.id;
 
@@ -216,7 +230,6 @@ export function CallSessionPage() {
   const [notes, setNotes] = useState('');
   const [repairs, setRepairs] = useState<RepairFlags>({});
   const [propertyRating, setPropertyRating] = useState<number | null>(null);
-  const [followUpDate, setFollowUpDate] = useState<string | null>(null);
   const [summaryText, setSummaryText] = useState('');
   const [summaryJustSubmitted, setSummaryJustSubmitted] = useState(false);
   // Set by "End Session" so stopping early still routes through the wrap-up
@@ -227,42 +240,22 @@ export function CallSessionPage() {
   const { cardDataUrl, copyCardToClipboard } = useBusinessCard();
   const [cardCopied, setCardCopied] = useState(false);
 
-  const followUpDays = useMemo(() => {
-    const today = new Date();
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-      return {
-        iso: localIsoDate(d),
-        weekday: i === 0 ? 'Today' : d.toLocaleDateString([], { weekday: 'short' }),
-        day: d.getDate(),
-        month: d.toLocaleDateString([], { month: 'short' }),
-      };
-    });
-  }, []);
-
   // Snapshot the queue once when leads finish loading so the order/membership
   // stays stable for the rest of the session, even as mutations refetch `leads`.
-  // Only cold (new-stage) leads go here — follow-up leads are offered as a
-  // separate session AFTER the daily goal is met and the summary is submitted.
+  // Two entry points: the default cold (new-stage) queue, with follow-up
+  // leads offered as a second phase after the daily goal is met — or, when
+  // reached via "Start Follow-Up Session" (mode=followup), the queue is
+  // follow-up-stage leads from the very start.
   useEffect(() => {
     if (queueIds === null && !isLoading) {
-      const cold = leads
-        .filter((l) => l.stage === 'new')
-        .sort((a, b) => {
-          const aDays = computeDaysToAuction(a.auctionDate);
-          const bDays = computeDaysToAuction(b.auctionDate);
-          const aCrit = aDays !== null && aDays >= 0 && aDays <= 3;
-          const bCrit = bDays !== null && bDays >= 0 && bDays <= 3;
-          if (aCrit !== bCrit) return aCrit ? -1 : 1;
-          if (aDays !== null && bDays !== null) return aDays - bDays;
-          if (aDays !== null) return -1;
-          if (bDays !== null) return 1;
-          return (a.leadNum ?? 0) - (b.leadNum ?? 0);
-        })
-        .map((l) => l.id);
-      setQueueIds(cold);
+      if (startInFollowUpMode) {
+        setQueueIds(sortByUrgency(leads.filter((l) => l.stage === 'followup')).map((l) => l.id));
+        setInFollowUpMode(true);
+        return;
+      }
+      setQueueIds(sortByUrgency(leads.filter((l) => l.stage === 'new')).map((l) => l.id));
     }
-  }, [isLoading, leads, queueIds]);
+  }, [isLoading, leads, queueIds, startInFollowUpMode]);
 
   useEffect(() => {
     const id = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -350,14 +343,7 @@ export function CallSessionPage() {
     setNotes(currentLead?.notes ?? '');
     setRepairs(currentLead?.repairs ?? {});
     setPropertyRating(currentLead?.propertyRating ?? null);
-    setFollowUpDate(null);
   }, [currentLeadId]);
-
-  useEffect(() => {
-    if (outcome === 'followup' && followUpDate === null) {
-      setFollowUpDate(followUpDays[0].iso);
-    }
-  }, [outcome, followUpDate, followUpDays]);
 
   const todayIso = localIsoDate(new Date());
   // Merge DB-backed today count with in-session leads logged on today's date.
@@ -379,28 +365,11 @@ export function CallSessionPage() {
   // hit — but there is nothing to summarise if no calls were made at all.
   const needsSummary = finished && callsToday > 0 && !todaySummary && !summaryJustSubmitted;
 
-  // Follow-up queue: any non-cold, non-dead lead whose nextFollowUp date has arrived.
+  // Follow-up queue: leads currently sitting in the Follow-Up stage.
   // CRITICAL leads (1–3 days to auction) are pinned to the top.
   const followUpLeads = useMemo(() => {
     if (inFollowUpMode) return [];
-    const todayStr = localIsoDate(new Date());
-    return leads
-      .filter((l) => {
-        if (sessionLeadIdsCalled.has(l.id)) return false;
-        if (l.stage === 'new' || l.stage === 'dead_declined') return false;
-        return !!l.nextFollowUp && l.nextFollowUp <= todayStr;
-      })
-      .sort((a, b) => {
-        const aDays = computeDaysToAuction(a.auctionDate);
-        const bDays = computeDaysToAuction(b.auctionDate);
-        const aCrit = aDays !== null && aDays >= 0 && aDays <= 3;
-        const bCrit = bDays !== null && bDays >= 0 && bDays <= 3;
-        if (aCrit !== bCrit) return aCrit ? -1 : 1;
-        if (aDays !== null && bDays !== null) return aDays - bDays;
-        if (aDays !== null) return -1;
-        if (bDays !== null) return 1;
-        return (a.leadNum ?? 0) - (b.leadNum ?? 0);
-      });
+    return sortByUrgency(leads.filter((l) => l.stage === 'followup' && !sessionLeadIdsCalled.has(l.id)));
   }, [inFollowUpMode, leads, sessionLeadIdsCalled]);
 
   function startFollowUpSession() {
@@ -504,7 +473,6 @@ export function CallSessionPage() {
     updateLead.mutate({
       id: currentLead.id,
       stage: finalStage,
-      ...(outcome === 'followup' && !touchesComplete ? { nextFollowUp: followUpDate } : {}),
       repairs,
       propertyRating,
       notes: notes.trim() || null,
@@ -535,8 +503,7 @@ export function CallSessionPage() {
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
       const inFollowUpStage = currentLead.stage === 'followup';
-      if (key === 'v') setOutcome(inFollowUpStage ? 'followup' : 'voicemail');
-      else if (key === 'f') setOutcome('followup');
+      if (key === 'v') { if (!inFollowUpStage) setOutcome('voicemail'); }
       else if (key === 'd') { if (!inFollowUpStage) setOutcome('dead'); }
       else if (key === 'h') setOutcome('onhold');
       else if (key === 'n') saveAndNext();
@@ -544,7 +511,7 @@ export function CallSessionPage() {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [finished, currentLead, outcome, notes, repairs, propertyRating, followUpDate]);
+  }, [finished, currentLead, outcome, notes, repairs, propertyRating]);
 
   if (queueIds === null) {
     return (
@@ -601,7 +568,7 @@ export function CallSessionPage() {
             {!inFollowUpMode && followUpLeads.length > 0 && (
               <div className="mt-1 flex w-full max-w-sm flex-col items-center gap-3 rounded-2xl border border-blue-900/50 bg-blue-950/30 p-5">
                 <div className="text-[13px] text-slate-300">
-                  You have <span className="font-semibold text-blue-300">{followUpLeads.length} follow-up{followUpLeads.length !== 1 ? 's' : ''} due</span> — leads whose follow-up date has arrived, whatever stage they sit in.
+                  You have <span className="font-semibold text-blue-300">{followUpLeads.length} lead{followUpLeads.length !== 1 ? 's' : ''}</span> sitting in the Follow-Up stage.
                 </div>
                 <button
                   onClick={startFollowUpSession}
@@ -916,48 +883,6 @@ export function CallSessionPage() {
               </button>
             )}
 
-            {outcome === 'followup' && (
-              <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  <CalendarDays size={11} /> Follow-Up Date
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {followUpDays.map((d) => {
-                    const active = followUpDate === d.iso;
-                    return (
-                      <button
-                        key={d.iso}
-                        type="button"
-                        onClick={() => setFollowUpDate(d.iso)}
-                        className={`flex flex-col items-center rounded-md border py-1 transition-colors ${
-                          active
-                            ? 'border-emerald-400 bg-emerald-400/10 text-emerald-300'
-                            : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-600'
-                        }`}
-                      >
-                        <span className="text-[8px] font-semibold uppercase">{d.weekday}</span>
-                        <span className="text-[12px] font-bold text-slate-100">{d.day}</span>
-                        <span className="text-[7.5px] uppercase text-slate-500">{d.month}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <span className="text-[10px] text-slate-500">Custom:</span>
-                  <input
-                    type="date"
-                    value={followUpDate ?? ''}
-                    onChange={(e) => setFollowUpDate(e.target.value || null)}
-                    className="flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200 outline-none focus:border-emerald-600"
-                  />
-                  {followUpDate && (
-                    <button type="button" onClick={() => setFollowUpDate(null)} className="text-slate-500 hover:text-slate-300">
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
 
             <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Notes for this call</div>
             <textarea

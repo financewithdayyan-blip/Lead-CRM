@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, MapPin, PhoneCall } from 'lucide-react';
+import { AlertTriangle, CalendarClock, MapPin, PhoneCall } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
@@ -14,6 +14,9 @@ const PipelineActivityChart = lazy(() =>
 );
 const PipelineFunnel = lazy(() =>
   import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
+);
+const CallProgressChart = lazy(() =>
+  import('@/components/dashboard/CallProgressChart').then((m) => ({ default: m.CallProgressChart })),
 );
 
 const WEEKDAY_LABELS = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
@@ -243,8 +246,18 @@ export function DashboardView({
     const callsPerContract = contracts > 0 ? (callsToQualifiedAllTime / contracts).toFixed(1) : null;
     const outcomeCount = (key: string) => calls.filter((a) => (a.meta as { outcome?: string })?.outcome === key).length;
     const declinedCount = outcomeCount('declined');
+    // 'followup' hasn't been a selectable call outcome since the session
+    // dropped it in favor of a dedicated Follow-Up session, but old calls
+    // logged before that change still carry it — keep counting it here so
+    // the ratio doesn't silently shift for historical data.
     const pickupDenominator = outcomeCount('initial_contact') + outcomeCount('followup') + declinedCount;
     const pickupRatio = pickupDenominator > 0 ? (calls.length / pickupDenominator).toFixed(1) : null;
+
+    // Caller-facing outcome ratios — share of all calls that landed on each
+    // outcome, all-time (this view has no date-range picker to scope against).
+    const voicemailRate = calls.length > 0 ? Math.round((outcomeCount('voicemail') / calls.length) * 100) : 0;
+    const deadRate = calls.length > 0 ? Math.round(((outcomeCount('dead') + declinedCount) / calls.length) * 100) : 0;
+    const qualifyingRate = calls.length > 0 ? Math.round((outcomeCount('initial_contact') / calls.length) * 100) : 0;
 
     const todayIso = localIsoDate(new Date());
     const callsToday = calls.filter((a) => localIsoDate(new Date(a.createdAt)) === todayIso).length;
@@ -296,6 +309,9 @@ export function DashboardView({
       numberCounts,
       callsPerContract,
       pickupRatio,
+      voicemailRate,
+      deadRate,
+      qualifyingRate,
       callsToday,
       monthCalls,
       totalSessions,
@@ -347,6 +363,36 @@ export function DashboardView({
     });
     return days;
   }, [sendLog, inboundMessages, leads, calls, qualifiedPlusIds, trendDayCount]);
+
+  // Caller-facing counterpart to activityTrend — driven by call outcomes
+  // instead of SMS activity, since callers never see SMS data at all.
+  const callsTrend = useMemo(() => {
+    const days: Array<{ iso: string; label: string; totalCalls: number; voicemails: number; dead: number; qualified: number }> = [];
+    const today = new Date();
+    for (let i = trendDayCount - 1; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const iso = localIsoDate(d);
+      days.push({
+        iso,
+        label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
+        totalCalls: 0,
+        voicemails: 0,
+        dead: 0,
+        qualified: 0,
+      });
+    }
+    const byIso = new Map(days.map((d) => [d.iso, d]));
+    calls.forEach((a) => {
+      const day = byIso.get(localIsoDate(new Date(a.createdAt)));
+      if (!day) return;
+      day.totalCalls++;
+      const callOutcome = (a.meta as { outcome?: string })?.outcome;
+      if (callOutcome === 'voicemail') day.voicemails++;
+      else if (callOutcome === 'dead' || callOutcome === 'declined') day.dead++;
+      else if (callOutcome === 'initial_contact') day.qualified++;
+    });
+    return days;
+  }, [calls, trendDayCount]);
 
   const heatmap = useMemo(() => {
     const byDay = new Map<string, number>();
@@ -460,6 +506,7 @@ export function DashboardView({
   }
 
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === dateRange)?.label ?? '';
+  const followupLeadsCount = leads.filter((l) => l.stage === 'followup').length;
 
   return (
     <div>
@@ -485,9 +532,16 @@ export function DashboardView({
             </div>
           )}
           {allowStartSession ? (
-            <Link to="/session" className="btn btn-primary shrink-0">
-              <PhoneCall size={15} /> Start Session
-            </Link>
+            <>
+              {followupLeadsCount > 0 && (
+                <Link to="/session?mode=followup" className="btn shrink-0">
+                  <CalendarClock size={15} /> Start Follow-Up Session ({followupLeadsCount})
+                </Link>
+              )}
+              <Link to="/session" className="btn btn-primary shrink-0">
+                <PhoneCall size={15} /> Start Session
+              </Link>
+            </>
           ) : (
             <button
               disabled
@@ -564,6 +618,9 @@ export function DashboardView({
                 <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#4f46e5" />
                 <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#4f46e5" />
                 <StatCard label="Pickup Ratio" value={stats.pickupRatio ?? '—'} sub="calls per real outcome" color="#0ea5e9" />
+                <StatCard label="Qualifying Ratio" value={`${stats.qualifyingRate}%`} sub="of calls end Qualified" color="#a78bfa" />
+                <StatCard label="Voicemail Ratio" value={`${stats.voicemailRate}%`} sub="of calls end Voicemail" color="#f59e0b" />
+                <StatCard label="Dead Ratio" value={`${stats.deadRate}%`} sub="of calls end Dead/Declined" color="#ef4444" />
                 <StatCard label="Opted Out / DNC" value={stats.optedOut} sub={`${stats.optOutRate}% of contacted`} color="#ef4444" />
               </>
             )}
@@ -604,6 +661,18 @@ export function DashboardView({
               </div>
               <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                 <PipelineActivityChart data={activityTrend} />
+              </Suspense>
+            </div>
+          )}
+
+          {!showSmsStats && (
+            <div className="card">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text">Calling Progress</h3>
+                <span className="text-[11px] text-text-3">Total calls, voicemails, dead, and qualified · last {trendDayCount} days</span>
+              </div>
+              <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                <CallProgressChart data={callsTrend} />
               </Suspense>
             </div>
           )}
