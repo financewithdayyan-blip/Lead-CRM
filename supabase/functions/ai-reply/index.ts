@@ -126,6 +126,11 @@ const LIEN_TAG_NAMES = ['lis pendens', 'pre-foreclosure', 'foreclosure', 'auctio
 
 const SYSTEM_RULES = `You are texting on behalf of Bluebird Acquisition, a real-estate acquisitions company that buys distressed properties as-is for cash, subject-to, or novation. You are texting as {{AGENT_NAME}}.
 
+WHAT YOU ACTUALLY KNOW ABOUT THIS LEAD — real data from the CRM, not something to recite as a list, only bring it up naturally when it's actually relevant (e.g. confirming which property you mean):
+{{LEAD_CONTEXT}}
+
+If a fact isn't given above and wasn't actually said earlier in this conversation, you don't know it. Never write a placeholder, template token, or bracketed stand-in like [ADDRESS], {{address}}, {address}, or [NAME] in place of a real value — that is never acceptable output, treat it exactly like inventing a fact outright. If you don't have something, say you'll check and get back to them, or ask, instead of putting anything in its place.
+
 STYLE — every reply, always:
 - Text like a real person, not a business. Short. One thought per message.
 - Break the reply into separate messages in reply_parts whenever there's more than one distinct thought, or a side reaction (a laugh, "no worries", "totally get it", "fair point") that a real person would send separately from the substantive point rather than cramming both into one text with a comma or dash. Usually 1-2 messages, 3 only if genuinely needed. This is what real texting looks like, not one long paragraph.
@@ -203,7 +208,7 @@ Deno.serve(async (req) => {
   // have taken over in the meantime.
   const { data: lead } = await admin
     .from('leads')
-    .select('id, user_id, first_name, last_name, stage, notes, opted_out, ai_reply_paused, lead_tags(tags(id, name))')
+    .select('id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, lead_tags(tags(id, name))')
     .eq('id', leadId)
     .single();
 
@@ -294,7 +299,25 @@ Deno.serve(async (req) => {
   const { data: ownerProfile } = await admin.from('profiles').select('full_name').eq('id', lead.user_id).single();
   const agentName = ownerProfile?.full_name || 'the Bluebird team';
 
-  const system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName).replace('{{FRAMEWORK}}', framework);
+  // The one fix directly behind this block: without it, the model has no
+  // real address at all, and when it needs to reference "the property" it
+  // has nothing to draw from — which is how it ended up texting the literal
+  // string "[ADDRESS]" to a real lead instead of her actual street address.
+  const addressLine = [lead.address, [lead.city, lead.state].filter(Boolean).join(', '), lead.zip]
+    .filter(Boolean)
+    .join(', ');
+  const leadContextLines = [
+    lead.first_name ? `Their first name: ${lead.first_name}` : null,
+    addressLine ? `Property address: ${addressLine}` : null,
+  ].filter(Boolean);
+  const leadContext =
+    leadContextLines.length > 0
+      ? leadContextLines.join('\n')
+      : 'No address or name on file for this lead in the CRM. If asked for the address, say you will check and get back to them rather than guessing at one.';
+
+  const system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName)
+    .replace('{{LEAD_CONTEXT}}', leadContext)
+    .replace('{{FRAMEWORK}}', framework);
 
   // Step 6: draft, via forced tool-call output so the three fields are
   // structured rather than parsed out of prose.
