@@ -140,7 +140,7 @@ STYLE — every reply, always:
 - Never invent facts, numbers, or offers that were not actually said in this conversation. Never state a specific dollar figure that has not actually been negotiated in this conversation.
 - Follow the framework's numbered steps in order — never jump ahead to a later step, and never revisit one already answered. The order across steps is fixed; within a step, phrase it naturally and respond to what they actually say.
 
-BEFORE DRAFTING: review the entire conversation below, both sides, everything said so far — not just the latest message in isolation. Don't re-ask something already answered. Don't contradict something you already said.
+BEFORE DRAFTING: review the entire conversation below, both sides, everything said so far, and any prior call/note history provided — not just the latest message in isolation. A frustrated or dismissive reply often has a real reason behind it (like an offer discussed on a call), not just a raw refusal; check the call/note history before assuming it's unexplained. Don't re-ask something already answered. Don't contradict something you already said or that's already on record from a call.
 
 SPECIAL CASES — these came from real conversations going wrong, follow them exactly:
 
@@ -158,7 +158,9 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 
 - Code Violation leads asking "what violation?": don't jump into ownership questions immediately. Redirect toward the cash-offer pitch first — mention you buy houses in any condition, violations included, for cash — and only move into qualification once they show real interest.
 
-- Negative or declining, or an explicit request to not be contacted again (in any phrasing, not just a bare "STOP" — plain STOP-style keywords are handled separately and never reach you): reply "Sorry to bother you, I won't reach out again." and set negative_reply true.
+- Negative or declining, or an explicit request to not be contacted again (in any phrasing, not just a bare "STOP" — plain STOP-style keywords are handled separately and never reach you): reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Also set hard_decline:
+  - false only if the decline is clearly and specifically about the price or offer amount (e.g. "too low", "not enough", "lowball", "insulting offer") and nothing else — not a refusal to sell at all, just this number. This stops you from texting them further without marking them permanently unreachable, since a different number or a human follow-up might still work.
+  - true for every other kind of decline — not interested, wrong time, doesn't want to sell, tired of being contacted, or anything not clearly and only about price. If genuinely unsure which one this is, set hard_decline true: treat it as the permanent, safer option rather than guess.
 
 FRAMEWORK for this lead:
 {{FRAMEWORK}}
@@ -238,7 +240,7 @@ Deno.serve(async (req) => {
   }
 
   // Step 4: build the transcript, both directions, chronological.
-  const [{ data: inbound }, { data: outboundActivity }] = await Promise.all([
+  const [{ data: inbound }, { data: outboundActivity }, { data: callAndNoteActivity }] = await Promise.all([
     admin
       .from('inbound_messages')
       .select('body, received_at, has_attachments')
@@ -251,6 +253,16 @@ Deno.serve(async (req) => {
       .eq('lead_id', leadId)
       .eq('type', 'sms')
       .order('created_at', { ascending: true }),
+    // Phone calls carry real negotiation context (an offer, a reason for a
+    // no) that never appears in the SMS thread at all — without this, a
+    // lead saying "your offer was a lowball" is unexplainable static to the
+    // model, since nothing in the text history ever mentioned a number.
+    admin
+      .from('lead_activities')
+      .select('body, meta, created_at, type')
+      .eq('lead_id', leadId)
+      .in('type', ['call', 'note'])
+      .order('created_at', { ascending: true }),
   ]);
 
   // A lead having sent at least one photo anywhere in the thread — not just
@@ -259,12 +271,13 @@ Deno.serve(async (req) => {
   // it already has.
   const hasPhotos = (inbound ?? []).some((m) => m.has_attachments);
 
-  type Turn = { who: 'LEAD' | 'YOU'; body: string; at: string };
+  type Turn = { who: 'LEAD' | 'YOU'; body: string; at: string; hasText?: boolean };
   const turns: Turn[] = [
     ...(inbound ?? []).map((m): Turn => ({
       who: 'LEAD',
       body: m.has_attachments ? `${m.body?.trim() ? `${m.body.trim()} ` : ''}[sent photo attachment(s)]` : m.body,
       at: m.received_at,
+      hasText: !!m.body?.trim(),
     })),
     ...(outboundActivity ?? [])
       .filter((a) => (a.meta as any)?.direction === 'outbound')
@@ -273,7 +286,30 @@ Deno.serve(async (req) => {
 
   if (turns.length === 0) return json({ aborted: true, reason: 'no_transcript' });
 
+  // Photos with no accompanying text don't need a reply — the lead is just
+  // sharing pictures, not asking or answering anything. Only skip when every
+  // LEAD turn since our last reply is text-free; a real question sitting
+  // alongside or after the photos still gets answered.
+  const lastYouIdx = turns.map((t) => t.who).lastIndexOf('YOU');
+  const unansweredLeadTurns = turns.slice(lastYouIdx + 1).filter((t) => t.who === 'LEAD');
+  if (unansweredLeadTurns.length > 0 && unansweredLeadTurns.every((t) => !t.hasText)) {
+    return json({ aborted: true, reason: 'image_only_no_reply' });
+  }
+
   const transcript = turns.map((t) => `${t.who}: ${t.body}`).join('\n');
+
+  // Background, not dialogue — kept as a separate block rather than merged
+  // into the LEAD/YOU transcript above, so the model never mistakes a call
+  // note for something either side actually typed in this text thread.
+  const callContext = (callAndNoteActivity ?? [])
+    .filter((a) => a.body?.trim())
+    .map((a) => {
+      const outcome = (a.meta as { outcome?: string })?.outcome;
+      const label = a.type === 'call' ? `Call${outcome ? ` (outcome: ${outcome})` : ''}` : 'Note';
+      const dateLabel = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `[${label}, ${dateLabel}] ${a.body!.trim()}`;
+    })
+    .join('\n');
 
   // Step 5: resolve the framework — first tag carrying its own saved text,
   // else Default, else the hardcoded fallback if nothing has been saved at
@@ -335,7 +371,7 @@ Deno.serve(async (req) => {
       messages: [
         {
           role: 'user',
-          content: `Conversation so far:\n\n${transcript}\n\nDraft the next reply.`,
+          content: `${callContext ? `Prior call/note history for this lead — real background, not part of this text thread, but relevant context for why they might be saying what they're saying:\n${callContext}\n\n` : ''}Conversation so far:\n\n${transcript}\n\nDraft the next reply.`,
         },
       ],
       tools: [
@@ -361,6 +397,11 @@ Deno.serve(async (req) => {
                 type: 'boolean',
                 description:
                   'True if the lead is declining or asking not to be contacted, or this is a confirmed wrong-number dead-end being closed out. Not for a bare STOP-style keyword, which never reaches you.',
+              },
+              hard_decline: {
+                type: 'boolean',
+                description:
+                  'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else, not a refusal to sell at all. True for every other kind of decline, including the wrong-number dead-end case, and true whenever unsure.',
               },
               summary: {
                 type: 'string',
@@ -393,12 +434,17 @@ Deno.serve(async (req) => {
     return json({ error: 'no draft produced' }, 502);
   }
 
-  const { reply_parts: rawParts, fully_qualified: fullyQualified, negative_reply: negativeReply, summary } = toolUse.input as {
+  const { reply_parts: rawParts, fully_qualified: fullyQualified, negative_reply: negativeReply, hard_decline: hardDeclineRaw, summary } = toolUse.input as {
     reply_parts: string[];
     fully_qualified: boolean;
     negative_reply: boolean;
+    hard_decline?: boolean;
     summary?: string;
   };
+  // Anything other than an explicit false defaults to the safer, permanent
+  // path — a missing or ambiguous field is not the same as a confident "this
+  // is just about price."
+  const hardDecline = hardDeclineRaw !== false;
 
   const replyParts = (Array.isArray(rawParts) ? rawParts : [])
     .map((p) => humanizePunctuation(String(p).trim()))
@@ -477,10 +523,14 @@ Deno.serve(async (req) => {
   // Step 8: route the pipeline and pause auto-reply where the outcome calls
   // for a human.
   //
-  // negative_reply is terminal for the AI on this lead — see the spec's own
-  // framing that a decline and a confirmed wrong number are "the same: end
-  // the conversation, mark Dead, exclude from future bulk sends" — there is
-  // no real lead at that number either way.
+  // negative_reply is terminal for the AI on this lead either way — it never
+  // texts them again regardless of which branch below fires. hard_decline
+  // decides how terminal: a genuine refusal (or a confirmed wrong number)
+  // marks Dead + opted_out, excluded from all future contact for good. A
+  // decline that's specifically about the price, and nothing else, instead
+  // goes to On Hold — the AI backs off, but a human can still follow up
+  // later with a different number or offer, since this isn't "there is no
+  // real lead at that number," it's "not at this price."
   //
   // fully_qualified always pauses the AI immediately — its only job is to
   // qualify, and once the framework interview (condition/price/timeline,
@@ -492,7 +542,11 @@ Deno.serve(async (req) => {
   // lead just stays in Replied for the whole back-and-forth. It only ever
   // leaves Replied once qualified, matching AI_ACTIVE_STAGES above.
   if (negativeReply) {
-    await admin.from('leads').update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true }).eq('id', leadId);
+    if (hardDecline) {
+      await admin.from('leads').update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true }).eq('id', leadId);
+    } else {
+      await admin.from('leads').update({ stage: 'onhold', ai_reply_paused: true }).eq('id', leadId);
+    }
   } else if (fullyQualified) {
     const updates: Record<string, unknown> = { stage: hasPhotos ? 'followup' : 'initial_contact', ai_reply_paused: true };
 
@@ -510,5 +564,5 @@ Deno.serve(async (req) => {
     await admin.from('leads').update(updates).eq('id', leadId);
   }
 
-  return json({ ok: true, sent: true, fullyQualified, negativeReply });
+  return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined });
 });

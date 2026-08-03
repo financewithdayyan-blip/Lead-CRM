@@ -9,3 +9,4 @@ dist-ssr
 *.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json
+supabase/.temp
