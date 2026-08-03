@@ -16,6 +16,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ 
 const LeadsPage = lazy(() => import('@/pages/LeadsPage').then((m) => ({ default: m.LeadsPage })));
 const LeadProfilePage = lazy(() => import('@/pages/LeadProfilePage').then((m) => ({ default: m.LeadProfilePage })));
 const KanbanPage = lazy(() => import('@/pages/KanbanPage').then((m) => ({ default: m.KanbanPage })));
+const BulkSmsPage = lazy(() => import('@/pages/BulkSmsPage').then((m) => ({ default: m.BulkSmsPage })));
 const CallHistoryPage = lazy(() => import('@/pages/CallHistoryPage').then((m) => ({ default: m.CallHistoryPage })));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -66,6 +67,7 @@ export default function App() {
                       <Route path="/leads" element={<LeadsPage />} />
                       <Route path="/leads/:id" element={<LeadProfilePage />} />
                       <Route path="/kanban" element={<KanbanPage />} />
+                      <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                       <Route path="/calls" element={<CallHistoryPage />} />
                       <Route path="/notifications" element={<NotificationsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />

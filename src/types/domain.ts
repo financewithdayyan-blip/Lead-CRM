@@ -176,6 +176,27 @@ export interface Lead {
   assignedSmsNumber: string | null;
 }
 
+export type BulkSmsJobStatus = 'running' | 'completed' | 'failed';
+export type BulkSmsItemStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped';
+
+export interface BulkSmsJob {
+  id: string;
+  status: BulkSmsJobStatus;
+  error: string | null;
+  total: number;
+  createdAt: string;
+}
+
+export interface BulkSmsJobItem {
+  id: string;
+  leadId: string | null;
+  leadName: string;
+  status: BulkSmsItemStatus;
+  sentFrom: string | null;
+  detail: string | null;
+  updatedAt: string;
+}
+
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';
 
 export interface LeadActivity {

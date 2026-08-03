@@ -60,6 +60,7 @@ function json(body: unknown, status = 200) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const nowIso = () => new Date().toISOString();
 
 // ── Sending window ──────────────────────────────────────────────────────────
 
@@ -158,9 +159,23 @@ function toE164(raw: string): string | null {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
+  // Declared out here so the outermost catch can still fail the job if
+  // something throws before or after the main body below.
+  let jobId: string | undefined;
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+  /** Fails the job (if one was passed) and returns the same error shape a
+   * caller with no job would get, so BulkSmsModal's own error handling
+   * still works unchanged for a same-turn failure (e.g. outside window). */
+  async function bail(message: string, status: number) {
+    if (jobId) {
+      await admin.from('bulk_sms_jobs').update({ status: 'failed', error: message, updated_at: nowIso() }).eq('id', jobId);
+    }
+    return json({ error: message }, status);
+  }
+
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     // Identify the caller and require admin.
     const { data: userData } = await admin.auth.getUser(authHeader.replace('Bearer ', ''));
@@ -178,6 +193,7 @@ Deno.serve(async (req) => {
       fromKey = '1',
       perMessageDelayMs = 1200,
       dailyLimit = 0,
+      jobId: jobIdIn,
     } = body as {
       leadIds: string[];
       templatesByTag: Record<string, string>;
@@ -185,9 +201,11 @@ Deno.serve(async (req) => {
       fromKey: string;
       perMessageDelayMs?: number;
       dailyLimit?: number;
+      jobId?: string;
     };
+    jobId = jobIdIn;
 
-    if (!leadIds.length) return json({ error: 'No leads selected.' }, 400);
+    if (!leadIds.length) return bail('No leads selected.', 400);
 
     // Tag names, and any number a lead is already pinned to from a prior
     // send, come along so both the per-lead template and the sender choice
@@ -223,13 +241,13 @@ Deno.serve(async (req) => {
     let senders: [string, { phone: string; email: string; label: string }][];
     if (leadIds.length > 1) {
       senders = activeNumbers();
-      if (!senders.length) return json({ error: 'No sending numbers are configured.' }, 400);
+      if (!senders.length) return bail('No sending numbers are configured.', 400);
     } else {
       const pinned = leads[0]?.assigned_sms_number as string | null | undefined;
       const effectiveKey = isActiveKey(pinned) ? pinned : fromKey;
       const single = NUMBERS[effectiveKey];
       if (!single?.phone || !single.email) {
-        return json({ error: `Sending number "${effectiveKey}" is not configured.` }, 400);
+        return bail(`Sending number "${effectiveKey}" is not configured.`, 400);
       }
       senders = [[effectiveKey, single]];
     }
@@ -239,11 +257,8 @@ Deno.serve(async (req) => {
     // is never cold in the same sense and always goes through, checked before
     // anything else so a blocked run costs no Zoom calls.
     if (leadIds.length > 1 && !withinSendWindow()) {
-      return json(
-        {
-          error:
-            'Outside the sending window. Bulk outreach runs 7pm-6am Pakistan time (9am-8pm US Eastern).',
-        },
+      return bail(
+        'Outside the sending window. Bulk outreach runs 7pm-6am Pakistan time (9am-8pm US Eastern).',
         422,
       );
     }
@@ -260,10 +275,7 @@ Deno.serve(async (req) => {
         }),
       );
       if (senders.every(([key]) => (dailyRemaining.get(key) ?? 0) <= 0)) {
-        return json(
-          { error: `Every configured number has already reached the rolling 24h limit (${dailyLimit}).` },
-          422,
-        );
+        return bail(`Every configured number has already reached the rolling 24h limit (${dailyLimit}).`, 422);
       }
     }
 
@@ -275,7 +287,16 @@ Deno.serve(async (req) => {
     const sent: string[] = [];
     const skipped: { leadId: string; reason: string }[] = [];
     const failed: { leadId: string; error: string }[] = [];
+    // Reflects real outcomes, only ever written by phase 2 — used solely for
+    // the perNumber summary in the response.
     const sentByNumber = new Map<string, number>(senders.map(([key]) => [key, 0]));
+    // Reflects the plan itself, written during phase 1 — this is what the
+    // daily-cap and target-share checks below actually gate on, since with
+    // sending split into its own concurrent phase 2, "has this number
+    // already sent enough" has to be answered from what's been assigned to
+    // it so far in this batch, not from completed sends that haven't
+    // happened yet.
+    const assignedCount = new Map<string, number>(senders.map(([key]) => [key, 0]));
 
     // Equal target share per number, rounded up — the trailing number simply
     // absorbs whatever's left once the queue runs out. senderIndex only ever
@@ -287,7 +308,7 @@ Deno.serve(async (req) => {
 
     function hasCapacity(key: string): boolean {
       if (dailyLimit <= 0) return true;
-      return (sentByNumber.get(key) ?? 0) < (dailyRemaining.get(key) ?? 0);
+      return (assignedCount.get(key) ?? 0) < (dailyRemaining.get(key) ?? 0);
     }
 
     function advance() {
@@ -300,15 +321,40 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Phase 1: plan — decide every lead's outcome (skip) or sender
+    // assignment up front, with no Zoom calls yet. This is what makes phase 2
+    // safe to parallelize: which number a lead uses never depends on when its
+    // send actually happens, only on this pass's fixed iteration order. ──────
+    type Planned = {
+      lead: NonNullable<(typeof leads)[number]>;
+      key: string;
+      from: { phone: string; email: string; label: string };
+      message: string;
+      to: string;
+      isPinned: boolean;
+    };
+    const planned: Planned[] = [];
+    const skipItemUpdates: Promise<unknown>[] = [];
+
+    function markSkipped(leadId: string, reason: string) {
+      skipped.push({ leadId, reason });
+      if (jobId) {
+        skipItemUpdates.push(
+          admin.from('bulk_sms_job_items').update({ status: 'skipped', detail: reason, updated_at: nowIso() })
+            .eq('job_id', jobId).eq('lead_id', leadId),
+        );
+      }
+    }
+
     for (const lead of leads) {
       if (lead.opted_out) {
-        skipped.push({ leadId: lead.id, reason: 'opted out' });
+        markSkipped(lead.id, 'opted out');
         continue;
       }
 
       const to = toE164(lead.phone ?? '');
       if (!to) {
-        skipped.push({ leadId: lead.id, reason: 'no usable phone number' });
+        markSkipped(lead.id, 'no usable phone number');
         continue;
       }
 
@@ -318,7 +364,7 @@ Deno.serve(async (req) => {
         .filter(Boolean);
       const template = tagNames.map((n) => templatesByTag[n]).find(Boolean) ?? defaultTemplate;
       if (!template) {
-        skipped.push({ leadId: lead.id, reason: 'no template for this lead\'s tags' });
+        markSkipped(lead.id, 'no template for this lead\'s tags');
         continue;
       }
 
@@ -334,7 +380,7 @@ Deno.serve(async (req) => {
 
       if (isPinned) {
         if (dailyLimit > 0 && !hasCapacity(pinned!)) {
-          skipped.push({ leadId: lead.id, reason: 'assigned number has reached its rolling 24h limit' });
+          markSkipped(lead.id, 'assigned number has reached its rolling 24h limit');
           continue;
         }
         key = pinned!;
@@ -342,11 +388,13 @@ Deno.serve(async (req) => {
       } else {
         advance();
         if (senderIndex >= senders.length) {
-          skipped.push({ leadId: lead.id, reason: 'every configured number has reached its rolling 24h limit' });
+          markSkipped(lead.id, 'every configured number has reached its rolling 24h limit');
           continue;
         }
         [key, from] = senders[senderIndex];
+        sentTowardTarget++;
       }
+      assignedCount.set(key, (assignedCount.get(key) ?? 0) + 1);
 
       const message = render(template, {
         first_name: lead.first_name,
@@ -357,47 +405,92 @@ Deno.serve(async (req) => {
         zip: lead.zip,
       });
 
-      try {
-        await sendZoomSms(from.phone, to, message, token);
+      planned.push({ lead, key, from, message, to, isPinned });
+    }
 
-        // Logged before anything else so a later failure can never lose the
-        // record that this number was contacted.
-        await admin.from('send_log').insert({
-          user_id: userId,
-          lead_id: lead.id,
-          phone: to,
-          phone_norm: lead.phone_norm,
-          sent_from: from.phone,
-          body: message,
-        });
+    if (skipItemUpdates.length) await Promise.all(skipItemUpdates);
 
-        // Cold leads advance to Contacted. Anything further along keeps its
-        // stage — a lead already in Negotiation shouldn't regress. The first
-        // time a lead is ever sent to, the number it went out from becomes
-        // its permanent home for every send after this one.
-        const leadUpdates: Record<string, unknown> = {};
-        if (lead.stage === 'new') leadUpdates.stage = 'contacted';
-        if (lead.assigned_sms_number !== key) leadUpdates.assigned_sms_number = key;
-        if (Object.keys(leadUpdates).length > 0) {
-          await admin.from('leads').update(leadUpdates).eq('id', lead.id);
+    // ── Phase 2: execute — one queue per number, run concurrently. Numbers
+    // are genuinely independent Zoom senders, so there's no shared rate limit
+    // between them; only sends on the *same* number stay paced with the
+    // per-message delay. This is what makes a 4-way-split bulk send finish in
+    // roughly a quarter of the old fully-serial wall time. ──────────────────
+    const groups = new Map<string, Planned[]>();
+    for (const item of planned) {
+      if (!groups.has(item.key)) groups.set(item.key, []);
+      groups.get(item.key)!.push(item);
+    }
+
+    async function processGroup(key: string, items: Planned[]) {
+      const from = NUMBERS[key];
+      for (const item of items) {
+        const { lead, message, to } = item;
+
+        if (jobId) {
+          await admin.from('bulk_sms_job_items').update({ status: 'sending', updated_at: nowIso() })
+            .eq('job_id', jobId).eq('lead_id', lead.id);
         }
 
-        await admin.from('lead_activities').insert({
-          lead_id: lead.id,
-          user_id: userId,
-          type: 'sms',
-          body: message,
-          meta: { direction: 'outbound', from: from.phone, to, label: from.label },
-        });
+        try {
+          await sendZoomSms(from.phone, to, message, token);
 
-        sent.push(lead.id);
-        sentByNumber.set(key, (sentByNumber.get(key) ?? 0) + 1);
-        if (!isPinned) sentTowardTarget++;
-      } catch (e) {
-        failed.push({ leadId: lead.id, error: e instanceof Error ? e.message : String(e) });
+          // Cold leads advance to Contacted. Anything further along keeps its
+          // stage — a lead already in Negotiation shouldn't regress. The
+          // first time a lead is ever sent to, the number it went out from
+          // becomes its permanent home for every send after this one.
+          const leadUpdates: Record<string, unknown> = {};
+          if (lead.stage === 'new') leadUpdates.stage = 'contacted';
+          if (lead.assigned_sms_number !== key) leadUpdates.assigned_sms_number = key;
+
+          // These three writes are independent of each other, so they run
+          // together rather than one-after-another — the send_log row is
+          // still guaranteed to exist before the function can return success,
+          // just no longer at the cost of three serial round trips.
+          await Promise.all([
+            admin.from('send_log').insert({
+              user_id: userId,
+              lead_id: lead.id,
+              phone: to,
+              phone_norm: lead.phone_norm,
+              sent_from: from.phone,
+              body: message,
+            }),
+            Object.keys(leadUpdates).length > 0
+              ? admin.from('leads').update(leadUpdates).eq('id', lead.id)
+              : Promise.resolve(null),
+            admin.from('lead_activities').insert({
+              lead_id: lead.id,
+              user_id: userId,
+              type: 'sms',
+              body: message,
+              meta: { direction: 'outbound', from: from.phone, to, label: from.label },
+            }),
+          ]);
+
+          sent.push(lead.id);
+          sentByNumber.set(key, (sentByNumber.get(key) ?? 0) + 1);
+
+          if (jobId) {
+            await admin.from('bulk_sms_job_items').update({ status: 'sent', sent_from: from.phone, updated_at: nowIso() })
+              .eq('job_id', jobId).eq('lead_id', lead.id);
+          }
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          failed.push({ leadId: lead.id, error: errMsg });
+          if (jobId) {
+            await admin.from('bulk_sms_job_items').update({ status: 'failed', detail: errMsg.slice(0, 500), updated_at: nowIso() })
+              .eq('job_id', jobId).eq('lead_id', lead.id);
+          }
+        }
+
+        if (perMessageDelayMs > 0) await sleep(perMessageDelayMs);
       }
+    }
 
-      if (perMessageDelayMs > 0) await sleep(perMessageDelayMs);
+    await Promise.all(Array.from(groups.entries()).map(([key, items]) => processGroup(key, items)));
+
+    if (jobId) {
+      await admin.from('bulk_sms_jobs').update({ status: 'completed', updated_at: nowIso() }).eq('id', jobId);
     }
 
     return json({
@@ -407,6 +500,10 @@ Deno.serve(async (req) => {
       perNumber: senders.map(([key, n]) => ({ key, label: n.label, sent: sentByNumber.get(key) ?? 0 })),
     });
   } catch (e) {
-    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    const message = e instanceof Error ? e.message : String(e);
+    if (jobId) {
+      await admin.from('bulk_sms_jobs').update({ status: 'failed', error: message, updated_at: nowIso() }).eq('id', jobId).catch(() => {});
+    }
+    return json({ error: message }, 500);
   }
 });

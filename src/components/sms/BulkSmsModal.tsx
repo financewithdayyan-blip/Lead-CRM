@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Check, Loader2, Send } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, Loader2, Send } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { useSendBulkSms, type BulkSmsResult } from '@/hooks/useSms';
+import { useCreateBulkSmsJob, useSendBulkSms } from '@/hooks/useSms';
 import { useTags } from '@/hooks/useTags';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead, Tag } from '@/types/domain';
@@ -29,15 +30,17 @@ function nextWindowOpensIn(): string {
 }
 
 export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () => void }) {
+  const navigate = useNavigate();
   const { data: tags = [] } = useTags();
   const sendBulk = useSendBulkSms();
+  const createJob = useCreateBulkSmsJob();
 
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [defaultTemplate, setDefaultTemplate] = useState('');
   const [templatesByTag, setTemplatesByTag] = useState<Record<string, string>>({});
   const [dailyLimit, setDailyLimit] = useState('150');
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<BulkSmsResult | null>(null);
+  const [starting, setStarting] = useState(false);
 
   // The window restricts genuine bulk sends only — selecting a single lead
   // here behaves like the thread view's manual reply and always goes through,
@@ -57,66 +60,38 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
 
   async function handleSend() {
     setError(null);
+    setStarting(true);
     try {
-      const res = await sendBulk.mutateAsync({
+      // Created up front so the Bulk SMS page has a job to show — and
+      // navigating there is itself what "starting" the send means — rather
+      // than waiting out the whole batch inside this modal before anything
+      // is visible at all.
+      const job = await createJob.mutateAsync(leads);
+
+      // Not awaited: send-sms keeps running server-side and writes its own
+      // progress into bulk_sms_job_items as it goes (including marking the
+      // job itself 'failed' with a reason for a same-turn problem like being
+      // outside the sending window) — the Bulk SMS page picks all of that up
+      // by polling, so this modal doesn't need to stay open to see it.
+      sendBulk.mutate({
         leadIds: leads.map((l) => l.id),
         templatesByTag,
         defaultTemplate,
         fromKey,
         dailyLimit: Number(dailyLimit) || 0,
+        jobId: job.id,
       });
-      setResult(res);
+
+      navigate(`/bulk-sms/${job.id}`);
+      onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Send failed.');
+      setError(e instanceof Error ? e.message : 'Could not start the send.');
+      setStarting(false);
     }
   }
 
   return (
     <Modal open onClose={onClose} title="Send Bulk SMS" width="lg">
-      {result ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-md border border-success/40 bg-success/10 px-3 py-2 text-[13px] text-success">
-            <Check size={15} /> Sent {result.sent} message{result.sent !== 1 ? 's' : ''}.
-          </div>
-          {result.perNumber.filter((p) => p.sent > 0).length > 1 && (
-            <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[12px] text-text-2">
-              <div className="mb-1 font-semibold text-text">Split across numbers</div>
-              <ul className="space-y-0.5">
-                {result.perNumber
-                  .filter((p) => p.sent > 0)
-                  .map((p) => (
-                    <li key={p.key}>
-                      {p.label}: {p.sent}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
-          {result.skipped.length > 0 && (
-            <div className="rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[12px] text-text-2">
-              <div className="font-semibold text-warning">{result.skipped.length} skipped</div>
-              <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
-                {result.skipped.map((s, i) => (
-                  <li key={i}>{s.reason}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {result.failed.length > 0 && (
-            <div className="rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[12px] text-text-2">
-              <div className="font-semibold text-danger">{result.failed.length} failed</div>
-              <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
-                {result.failed.map((f, i) => (
-                  <li key={i}>{f.error}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <button className="btn btn-primary w-full justify-center" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      ) : (
         <div className="space-y-4">
           {!inWindow && (
             <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[13px] text-warning">
@@ -215,17 +190,17 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
           )}
 
           <div className="flex justify-end gap-2 border-t border-border pt-3">
-            <button className="btn" onClick={onClose} disabled={sendBulk.isPending}>
+            <button className="btn" onClick={onClose} disabled={starting}>
               Cancel
             </button>
             <button
               className="btn btn-primary"
               onClick={handleSend}
-              disabled={sendBulk.isPending || !inWindow || (!defaultTemplate && !Object.values(templatesByTag).some(Boolean))}
+              disabled={starting || !inWindow || (!defaultTemplate && !Object.values(templatesByTag).some(Boolean))}
             >
-              {sendBulk.isPending ? (
+              {starting ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" /> Sending…
+                  <Loader2 size={14} className="animate-spin" /> Starting…
                 </>
               ) : (
                 <>
@@ -235,7 +210,6 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
             </button>
           </div>
         </div>
-      )}
     </Modal>
   );
 }
