@@ -434,7 +434,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-border">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -450,7 +450,9 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       {tab === 'overview' && <OverviewTab lead={lead} leadId={lead.id} />}
       {tab === 'property' && <PropertyTab lead={lead} />}
       {tab === 'packet' && <PacketTab lead={lead} />}
-      {tab === 'sms' && <SmsThreadTab lead={lead} />}
+      {/* SMS is an admin-only feature — texting leads isn't part of a
+          caller's job, which is manual cold calling only. */}
+      {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
       {tab === 'script' && <ScriptTab lead={lead} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
       {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}

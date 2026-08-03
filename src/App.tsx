@@ -67,12 +67,14 @@ export default function App() {
                       <Route path="/leads" element={<LeadsPage />} />
                       <Route path="/leads/:id" element={<LeadProfilePage />} />
                       <Route path="/kanban" element={<KanbanPage />} />
-                      <Route path="/bulk-sms" element={<BulkSmsPage />} />
-                      <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                       <Route path="/calls" element={<CallHistoryPage />} />
                       <Route path="/notifications" element={<NotificationsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route element={<ProtectedRoute requireOverseer />}>
+                        {/* Bulk SMS is admin-only — callers are cold-calling
+                            only, so this sits behind the same guard as /team. */}
+                        <Route path="/bulk-sms" element={<BulkSmsPage />} />
+                        <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                         <Route path="/team" element={<TeamPage />} />
                         <Route path="/team/:memberId" element={<MemberDashboardPage />} />
                         <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
