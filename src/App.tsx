@@ -67,6 +67,7 @@ export default function App() {
                       <Route path="/leads" element={<LeadsPage />} />
                       <Route path="/leads/:id" element={<LeadProfilePage />} />
                       <Route path="/kanban" element={<KanbanPage />} />
+                      <Route path="/bulk-sms" element={<BulkSmsPage />} />
                       <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                       <Route path="/calls" element={<CallHistoryPage />} />
                       <Route path="/notifications" element={<NotificationsPage />} />

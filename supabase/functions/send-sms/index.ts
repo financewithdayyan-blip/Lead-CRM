@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       templatesByTag = {},
       defaultTemplate = '',
       fromKey = '1',
-      perMessageDelayMs = 1200,
+      perMessageDelayMs = 500,
       dailyLimit = 0,
       jobId: jobIdIn,
     } = body as {
@@ -423,7 +423,8 @@ Deno.serve(async (req) => {
 
     async function processGroup(key: string, items: Planned[]) {
       const from = NUMBERS[key];
-      for (const item of items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         const { lead, message, to } = item;
 
         if (jobId) {
@@ -483,7 +484,11 @@ Deno.serve(async (req) => {
           }
         }
 
-        if (perMessageDelayMs > 0) await sleep(perMessageDelayMs);
+        // Only paces the *next* send on this same number — nothing left to
+        // protect after the last item, so no point making the caller (or a
+        // single manual reply, which is always a "group" of exactly one)
+        // wait out a delay that has nothing left to space out.
+        if (perMessageDelayMs > 0 && i < items.length - 1) await sleep(perMessageDelayMs);
       }
     }
 

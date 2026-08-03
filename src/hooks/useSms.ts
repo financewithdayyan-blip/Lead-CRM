@@ -118,6 +118,23 @@ export function useBulkSmsJob(jobId: string | undefined) {
   });
 }
 
+/** Recent jobs for the Bulk SMS landing page — the sidebar link has to open
+ * onto something even with no jobId in hand yet. */
+export function useBulkSmsJobs() {
+  return useQuery({
+    queryKey: ['bulk_sms_jobs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bulk_sms_jobs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []).map(dbToBulkSmsJob);
+    },
+  });
+}
+
 export function useBulkSmsJobItems(jobId: string | undefined, jobStatus: string | undefined) {
   return useQuery({
     queryKey: ['bulk_sms_job_items', jobId],

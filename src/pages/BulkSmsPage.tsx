@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Check, Clock, Loader2, Send, X } from 'lucide-react';
-import { useBulkSmsJob, useBulkSmsJobItems } from '@/hooks/useSms';
-import type { BulkSmsItemStatus } from '@/types/domain';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AlertTriangle, Check, ChevronRight, Clock, Loader2, Send, X } from 'lucide-react';
+import { useBulkSmsJob, useBulkSmsJobItems, useBulkSmsJobs } from '@/hooks/useSms';
+import { formatDateTime } from '@/lib/utils';
+import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
 const STATUS_CONFIG: Record<BulkSmsItemStatus, { label: string; color: string; icon: typeof Clock }> = {
   queued: { label: 'Queued', color: '#94a3b8', icon: Clock },
@@ -10,6 +11,12 @@ const STATUS_CONFIG: Record<BulkSmsItemStatus, { label: string; color: string; i
   sent: { label: 'Sent', color: '#10b981', icon: Check },
   failed: { label: 'Failed', color: '#ef4444', icon: X },
   skipped: { label: 'Skipped', color: '#f59e0b', icon: AlertTriangle },
+};
+
+const JOB_STATUS_CONFIG: Record<BulkSmsJobStatus, { label: string; color: string }> = {
+  running: { label: 'Running', color: '#4f46e5' },
+  completed: { label: 'Completed', color: '#10b981' },
+  failed: { label: 'Failed', color: '#ef4444' },
 };
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -25,6 +32,89 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 
 export function BulkSmsPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  return jobId ? <BulkSmsJobDetail jobId={jobId} /> : <BulkSmsHistory />;
+}
+
+/** The sidebar link's destination — every bulk send ever started, most
+ * recent first, since there's no jobId to land on until one is picked. */
+function BulkSmsHistory() {
+  const navigate = useNavigate();
+  const { data: jobs = [], isLoading } = useBulkSmsJobs();
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-text">
+            <Send size={20} /> Bulk SMS
+          </h1>
+          <p className="text-sm text-text-3">
+            Select leads in the Pipeline and start a send from there — every run shows up here.
+          </p>
+        </div>
+        <button className="btn" onClick={() => navigate('/kanban')}>
+          Go to Pipeline
+        </button>
+      </div>
+
+      <div className="card !p-0 overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center gap-2 p-8 text-[13px] text-text-3">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="p-8 text-center text-[13px] text-text-3">
+            No bulk sends yet — select leads in the Pipeline to start one.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-border-2 text-left text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                  <th className="px-3 py-2.5">Started</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5">Leads</th>
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => {
+                  const cfg = JOB_STATUS_CONFIG[job.status];
+                  return (
+                    <tr key={job.id} className="border-b border-border-2 last:border-0">
+                      <td className="px-3 py-2.5 text-text">
+                        <Link to={`/bulk-sms/${job.id}`} className="hover:underline">
+                          {formatDateTime(job.createdAt)}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: `${cfg.color}22`, color: cfg.color }}
+                        >
+                          {job.status === 'running' && <Loader2 size={11} className="animate-spin" />}
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-text-2">{job.total}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <Link to={`/bulk-sms/${job.id}`} className="inline-flex items-center gap-0.5 text-text-3 hover:text-primary">
+                          View <ChevronRight size={13} />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BulkSmsJobDetail({ jobId }: { jobId: string }) {
   const navigate = useNavigate();
   const { data: job, isLoading: jobLoading } = useBulkSmsJob(jobId);
   const { data: items = [], isLoading: itemsLoading } = useBulkSmsJobItems(jobId, job?.status);
@@ -50,9 +140,14 @@ export function BulkSmsPage() {
             {running ? `Sending — ${done} of ${total} done…` : job?.status === 'failed' ? 'This send failed to start.' : `Finished — ${total} lead${total !== 1 ? 's' : ''}.`}
           </p>
         </div>
-        <button className="btn" onClick={() => navigate('/kanban')}>
-          Back to Pipeline
-        </button>
+        <div className="flex gap-2">
+          <button className="btn" onClick={() => navigate('/bulk-sms')}>
+            All Sends
+          </button>
+          <button className="btn" onClick={() => navigate('/kanban')}>
+            Back to Pipeline
+          </button>
+        </div>
       </div>
 
       {job?.status === 'failed' && job.error && (

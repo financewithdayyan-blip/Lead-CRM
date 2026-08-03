@@ -208,6 +208,23 @@ Deno.serve(async (req) => {
       return json({ error: `Unknown mode "${mode}".` }, 400);
     }
 
+    // Backfill is a background, non-urgent catch-up job sharing the same
+    // Zoom account (and its real rate limits) with live bulk sends — a lead
+    // waiting on a real text should never queue behind old history being
+    // imported. Checked fresh on every page rather than once, so this
+    // naturally pauses the moment a bulk send starts and resumes the moment
+    // it finishes, with no direct coupling between the two functions beyond
+    // this shared table.
+    const { data: activeBulkJob } = await admin
+      .from('bulk_sms_jobs')
+      .select('id')
+      .eq('status', 'running')
+      .limit(1)
+      .maybeSingle();
+    if (activeBulkJob) {
+      return json({ paused: true, reason: 'A bulk SMS send is currently running; backfill paused until it finishes.' });
+    }
+
     // ── preview / commit — one page of sessions per invocation, fully
     // draining each session's messages within that page ────────────────────
     const sessionsRes = await zoomGet(

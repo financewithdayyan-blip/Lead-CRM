@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
-import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Settings, Shield, LogOut, Eye } from 'lucide-react';
+import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Send, Settings, Shield, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
@@ -154,6 +154,20 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
+        {isOverseer && !viewingId && (
+          <NavLink
+            to="/bulk-sms"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+              )
+            }
+          >
+            <Send size={16} />
+            Bulk SMS
+          </NavLink>
+        )}
         {isOverseer && !viewingId && (
           <NavLink
             to="/team"
