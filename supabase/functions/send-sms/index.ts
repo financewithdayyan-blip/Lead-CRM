@@ -189,21 +189,49 @@ Deno.serve(async (req) => {
 
     if (!leadIds.length) return json({ error: 'No leads selected.' }, 400);
 
+    // Tag names, and any number a lead is already pinned to from a prior
+    // send, come along so both the per-lead template and the sender choice
+    // below can use them — moved ahead of the sender logic because a single
+    // send now needs to know the pin before it can pick a number at all.
+    const { data: leadsById, error: leadErr } = await admin
+      .from('leads')
+      .select(
+        'id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, assigned_sms_number, lead_tags(tag_id, tags(name))',
+      )
+      .in('id', leadIds);
+    if (leadErr) throw leadErr;
+
+    // Preserve the caller's own ordering rather than whatever order Postgres
+    // happens to return, so the round-robin split below is deterministic.
+    const byId = new Map((leadsById ?? []).map((l) => [l.id, l]));
+    const leads = leadIds.map((id) => byId.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
+
+    function isActiveKey(key: string | null | undefined): key is string {
+      return !!key && !!NUMBERS[key]?.phone && !!NUMBERS[key]?.email;
+    }
+
     // Bulk (more than one lead) auto-splits evenly across every configured
     // number, switching to the next once a number's share — or its own
-    // rolling 24h cap — is reached. A single send (a manual reply, or one
-    // lead picked in the bulk modal) instead uses exactly the number chosen
-    // via fromKey; splitting one message across numbers makes no sense.
+    // rolling 24h cap — is reached (individual leads already pinned to a
+    // number, handled in the send loop below, sit outside this split
+    // entirely). A single send (a manual reply, or one lead picked in the
+    // bulk modal) instead uses exactly one number: whichever number this
+    // lead is already pinned to from an earlier send — so a reply always
+    // lands in the same Zoom thread as everything before it rather than
+    // wherever fromKey happens to default to — or, if this is the first
+    // message this lead has ever gotten, the number chosen via fromKey.
     let senders: [string, { phone: string; email: string; label: string }][];
     if (leadIds.length > 1) {
       senders = activeNumbers();
       if (!senders.length) return json({ error: 'No sending numbers are configured.' }, 400);
     } else {
-      const single = NUMBERS[fromKey];
+      const pinned = leads[0]?.assigned_sms_number as string | null | undefined;
+      const effectiveKey = isActiveKey(pinned) ? pinned : fromKey;
+      const single = NUMBERS[effectiveKey];
       if (!single?.phone || !single.email) {
-        return json({ error: `Sending number "${fromKey}" is not configured.` }, 400);
+        return json({ error: `Sending number "${effectiveKey}" is not configured.` }, 400);
       }
-      senders = [[fromKey, single]];
+      senders = [[effectiveKey, single]];
     }
 
     // The window restricts bulk cold outreach only. A single send — a manual
@@ -238,18 +266,6 @@ Deno.serve(async (req) => {
         );
       }
     }
-
-    // Tag names come along so the right template can be chosen per lead.
-    const { data: leadsById, error: leadErr } = await admin
-      .from('leads')
-      .select('id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, lead_tags(tag_id, tags(name))')
-      .in('id', leadIds);
-    if (leadErr) throw leadErr;
-
-    // Preserve the caller's own ordering rather than whatever order Postgres
-    // happens to return, so the round-robin split below is deterministic.
-    const byId = new Map((leadsById ?? []).map((l) => [l.id, l]));
-    const leads = leadIds.map((id) => byId.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
 
     const token = await zoomToken();
     // Resolved even though the send endpoint takes the number, because Zoom
@@ -306,12 +322,31 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      advance();
-      if (senderIndex >= senders.length) {
-        skipped.push({ leadId: lead.id, reason: 'every configured number has reached its rolling 24h limit' });
-        continue;
+      // A lead already pinned to a number (from an earlier send) sticks to
+      // it instead of the round robin, so replies keep landing in the same
+      // Zoom thread rather than fragmenting across numbers. This sits
+      // outside the round-robin state entirely — it neither advances
+      // senderIndex nor counts toward any number's target share.
+      let key: string;
+      let from: { phone: string; email: string; label: string };
+      const pinned = lead.assigned_sms_number as string | null | undefined;
+      const isPinned = leadIds.length > 1 && isActiveKey(pinned) && senders.some(([k]) => k === pinned);
+
+      if (isPinned) {
+        if (dailyLimit > 0 && !hasCapacity(pinned!)) {
+          skipped.push({ leadId: lead.id, reason: 'assigned number has reached its rolling 24h limit' });
+          continue;
+        }
+        key = pinned!;
+        from = NUMBERS[pinned!];
+      } else {
+        advance();
+        if (senderIndex >= senders.length) {
+          skipped.push({ leadId: lead.id, reason: 'every configured number has reached its rolling 24h limit' });
+          continue;
+        }
+        [key, from] = senders[senderIndex];
       }
-      const [key, from] = senders[senderIndex];
 
       const message = render(template, {
         first_name: lead.first_name,
@@ -337,9 +372,14 @@ Deno.serve(async (req) => {
         });
 
         // Cold leads advance to Contacted. Anything further along keeps its
-        // stage — a lead already in Negotiation shouldn't regress.
-        if (lead.stage === 'new') {
-          await admin.from('leads').update({ stage: 'contacted' }).eq('id', lead.id);
+        // stage — a lead already in Negotiation shouldn't regress. The first
+        // time a lead is ever sent to, the number it went out from becomes
+        // its permanent home for every send after this one.
+        const leadUpdates: Record<string, unknown> = {};
+        if (lead.stage === 'new') leadUpdates.stage = 'contacted';
+        if (lead.assigned_sms_number !== key) leadUpdates.assigned_sms_number = key;
+        if (Object.keys(leadUpdates).length > 0) {
+          await admin.from('leads').update(leadUpdates).eq('id', lead.id);
         }
 
         await admin.from('lead_activities').insert({
@@ -352,7 +392,7 @@ Deno.serve(async (req) => {
 
         sent.push(lead.id);
         sentByNumber.set(key, (sentByNumber.get(key) ?? 0) + 1);
-        sentTowardTarget++;
+        if (!isPinned) sentTowardTarget++;
       } catch (e) {
         failed.push({ leadId: lead.id, error: e instanceof Error ? e.message : String(e) });
       }

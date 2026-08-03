@@ -172,6 +172,8 @@ export interface Lead {
   aiReplyPaused: boolean;
   /** Set once, the first time this lead's stage enters Qualified-or-beyond — by a trigger, not app code. Null until then. */
   qualifiedAt: string | null;
+  /** The number ('1'-'4') this lead was first texted from. Every send after that — bulk or manual — sticks to it, so replies stay in the same Zoom thread. Null until the first send. */
+  assignedSmsNumber: string | null;
 }
 
 export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';

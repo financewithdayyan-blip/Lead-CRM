@@ -49,12 +49,16 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   const [error, setError] = useState<string | null>(null);
 
   const realMessages = thread.filter((m) => !m.isReaction);
+  // Once a lead has been texted, every send after that — bulk or manual —
+  // sticks to that same number server-side regardless of what's picked here.
+  // The picker only matters, and only shows, before that first send exists.
+  const pinnedNumber = lead.assignedSmsNumber as SmsNumberKey | null;
 
   async function handleSend() {
     if (!message.trim()) return;
     setError(null);
     try {
-      await sendReply.mutateAsync({ leadId: lead.id, body: message.trim(), fromKey });
+      await sendReply.mutateAsync({ leadId: lead.id, body: message.trim(), fromKey: pinnedNumber ?? fromKey });
       setMessage('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Send failed.');
@@ -129,17 +133,26 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
             />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-1">
-              {SMS_NUMBER_KEYS.map((key) => (
-                <button
-                  key={key}
-                  onClick={() => setFromKey(key)}
-                  className={`btn !px-2 !py-1 text-[12px] ${fromKey === key ? 'btn-primary' : ''}`}
-                >
-                  Number {key}
-                </button>
-              ))}
-            </div>
+            {pinnedNumber ? (
+              <span
+                className="rounded-full bg-border-2 px-2 py-1 text-[12px] font-semibold text-text-2"
+                title="This lead's whole thread lives on this number — every reply keeps going out from it."
+              >
+                Sending from Number {pinnedNumber}
+              </span>
+            ) : (
+              <div className="flex gap-1">
+                {SMS_NUMBER_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setFromKey(key)}
+                    className={`btn !px-2 !py-1 text-[12px] ${fromKey === key ? 'btn-primary' : ''}`}
+                  >
+                    Number {key}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               onClick={handleSend}
               disabled={sendReply.isPending || !message.trim()}

@@ -116,7 +116,7 @@ async function resolveLead(admin: ReturnType<typeof createClient>, fromNorm: str
 
   const { data: candidates } = await admin
     .from('leads')
-    .select('id, stage, user_id, address, created_at')
+    .select('id, stage, user_id, address, created_at, assigned_sms_number')
     .or(`phone_norm.eq.${fromNorm},phone2_norm.eq.${fromNorm}`)
     .order('created_at', { ascending: true });
 
@@ -247,6 +247,14 @@ Deno.serve(async (req) => {
         continue;
       }
       report.sessionsMatched++;
+
+      // This session is real evidence of which number this lead's thread
+      // actually lives on — same rule send-sms uses going forward: first
+      // number seen for a lead becomes its permanent home, never overwritten
+      // by a later, possibly-wrong session.
+      if (mode === 'commit' && !lead.assigned_sms_number) {
+        await admin.from('leads').update({ assigned_sms_number: fromKey }).eq('id', lead.id);
+      }
 
       const { data: leadRow } = await admin.from('leads').select('first_name, last_name, phone').eq('id', lead.id).single();
       const leadLabel = leadRow ? `${leadRow.first_name ?? ''} ${leadRow.last_name ?? ''}`.trim() || leadRow.phone : lead.id;
