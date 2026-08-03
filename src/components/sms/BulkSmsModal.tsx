@@ -1,14 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Loader2, Send } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useCreateBulkSmsJob, useSendBulkSms } from '@/hooks/useSms';
 import { useTags } from '@/hooks/useTags';
+import { useSmsTemplates } from '@/hooks/useSmsTemplates';
+import { MergeTagButtons } from './MergeTagButtons';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead, Tag } from '@/types/domain';
-
-const PLACEHOLDER_HINT =
-  'Use {{first_name}}, {{last_name}}, {{address}}, {{city}}, {{state}}, or {{zip}} — unmatched fields become blank.';
 
 /** UTC 14:00-01:00 is the 7pm-6am PKT cold-outreach window (see send-sms). */
 function withinWindow(): boolean {
@@ -32,6 +31,7 @@ function nextWindowOpensIn(): string {
 export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () => void }) {
   const navigate = useNavigate();
   const { data: tags = [] } = useTags();
+  const { data: savedTemplates = [], isSuccess: templatesLoaded } = useSmsTemplates();
   const sendBulk = useSendBulkSms();
   const createJob = useCreateBulkSmsJob();
 
@@ -41,6 +41,9 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
   const [dailyLimit, setDailyLimit] = useState('150');
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+
+  const defaultTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const tagTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   // The window restricts genuine bulk sends only — selecting a single lead
   // here behaves like the thread view's manual reply and always goes through,
@@ -54,6 +57,26 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
     for (const l of leads) for (const id of l.tagIds) ids.add(id);
     return tags.filter((t) => ids.has(t.id));
   }, [leads, tags]);
+
+  // Pre-fills from whatever's saved in Settings, once — composing a send is
+  // then normally just picking leads and hitting Send, not retyping a
+  // message from scratch. A guard rather than a dependency on the (empty by
+  // default) template arrays themselves, so it never overwrites something
+  // the admin has already started editing once the query resolves.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !templatesLoaded) return;
+    seededRef.current = true;
+    const byTagId = new Map(savedTemplates.map((t) => [t.tagId, t]));
+    const defaultSaved = byTagId.get(null)?.body;
+    if (defaultSaved) setDefaultTemplate(defaultSaved);
+    const perTag: Record<string, string> = {};
+    for (const tag of relevantTags) {
+      const saved = byTagId.get(tag.id)?.body;
+      if (saved) perTag[tag.name] = saved;
+    }
+    if (Object.keys(perTag).length) setTemplatesByTag((prev) => ({ ...perTag, ...prev }));
+  }, [templatesLoaded, savedTemplates, relevantTags]);
 
   const optedOutCount = leads.filter((l) => l.optedOut).length;
   const sendableCount = leads.length - optedOutCount;
@@ -135,12 +158,19 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
           <div>
             <label className="label">Default message</label>
             <textarea
+              ref={defaultTextareaRef}
               className="input min-h-[70px]"
               value={defaultTemplate}
               onChange={(e) => setDefaultTemplate(e.target.value)}
               placeholder="Hi {{first_name}}, this is Bluebird — we buy houses in {{city}} as-is..."
             />
-            <p className="mt-1 text-[11px] text-text-3">{PLACEHOLDER_HINT}</p>
+            <div className="mt-1.5">
+              <MergeTagButtons
+                getTextarea={() => defaultTextareaRef.current}
+                value={defaultTemplate}
+                onChange={setDefaultTemplate}
+              />
+            </div>
           </div>
 
           {relevantTags.length > 0 && (
@@ -162,11 +192,21 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
                       </span>
                     </div>
                     <textarea
+                      ref={(el) => {
+                        tagTextareaRefs.current[t.name] = el;
+                      }}
                       className="input min-h-[56px] text-[13px]"
                       value={templatesByTag[t.name] ?? ''}
                       onChange={(e) => setTemplatesByTag((p) => ({ ...p, [t.name]: e.target.value }))}
                       placeholder={`Message for ${t.name} leads (falls back to the default if left blank)`}
                     />
+                    <div className="mt-1">
+                      <MergeTagButtons
+                        getTextarea={() => tagTextareaRefs.current[t.name] ?? null}
+                        value={templatesByTag[t.name] ?? ''}
+                        onChange={(v) => setTemplatesByTag((p) => ({ ...p, [t.name]: v }))}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

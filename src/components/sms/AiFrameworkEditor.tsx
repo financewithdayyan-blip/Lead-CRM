@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { useTags } from '@/hooks/useTags';
 import {
   DEFAULT_FRAMEWORK,
@@ -75,11 +75,13 @@ export function AiFrameworkEditor() {
   const saveConfig = useSaveAiReplyConfig();
   const { data: aiSettings } = useAiSettings();
   const setAiEnabled = useSetAiEnabled();
-  const [expandedTagId, setExpandedTagId] = useState<string | null>(null);
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null); // null = Default
 
   const byTagId = new Map(configs.map((c) => [c.tagId, c]));
-  const defaultConfig = configs.find((c) => c.tagId === null);
   const enabled = aiSettings?.autoReplyEnabled ?? true;
+  const selectedTag = selectedTagId ? tags.find((t) => t.id === selectedTagId) : null;
+  const isLien = selectedTag ? LIEN_TAG_NAMES.some((n) => n.toLowerCase() === selectedTag.name.toLowerCase()) : false;
+  const selectedConfig = byTagId.get(selectedTagId);
 
   return (
     <div className="card">
@@ -107,69 +109,59 @@ export function AiFrameworkEditor() {
 
       <div className="my-4 border-t border-border" />
 
-      <div className="text-sm font-semibold text-text">Qualification frameworks</div>
-      <p className="mt-1 text-[13px] text-text-2">
-        What the AI tries to establish before handing a lead to a human. Each tag can have its own framework; a lead
-        whose tags have none saved uses Default.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-semibold text-text">Qualification frameworks</div>
+          <p className="mt-1 text-[13px] text-text-2">
+            What the AI tries to establish before handing a lead to a human. Each tag can have its own framework; a
+            lead whose tags have none saved uses Default.
+          </p>
+        </div>
+        {tags.length > 0 && (
+          <select
+            className="input max-w-[200px]"
+            value={selectedTagId ?? ''}
+            onChange={(e) => setSelectedTagId(e.target.value || null)}
+          >
+            <option value="">Default</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3">
+        {isLien && (
+          <div className="mb-2 flex items-center gap-2">
+            <TagPill tag={selectedTag!} />
+            <span
+              className="rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+              title="This tag always asks for mortgage balance and how far behind on payments too, in addition to whatever framework applies — that's a fixed rule, not something set here."
+            >
+              + mortgage question
+            </span>
+          </div>
+        )}
         <FrameworkBox
-          title="Default"
-          hint="Applies to any lead whose tags don't have a framework of their own."
-          initialValue={defaultConfig?.framework ?? ''}
+          title={selectedTag ? `${selectedTag.name} framework` : 'Default'}
+          hint={
+            selectedTag
+              ? 'Leave blank to fall back to Default.'
+              : "Applies to any lead whose tags don't have a framework of their own."
+          }
+          initialValue={selectedConfig?.framework ?? ''}
           placeholder={DEFAULT_FRAMEWORK}
-          onSave={(text) => saveConfig.mutateAsync({ tagId: null, framework: text })}
+          onSave={(text) => saveConfig.mutateAsync({ tagId: selectedTagId, framework: text })}
         />
 
-        {tags.length === 0 ? (
-          <div className="px-1 py-3 text-[12px] text-text-3">
+        {tags.length === 0 && (
+          <p className="mt-2 px-1 text-[12px] text-text-3">
             No tags yet — add tags on the Tags panel below, then come back here to give any of them their own
             framework.
-          </div>
-        ) : (
-          tags.map((tag) => {
-            const config = byTagId.get(tag.id);
-            const isLien = LIEN_TAG_NAMES.some((n) => n.toLowerCase() === tag.name.toLowerCase());
-            const expanded = expandedTagId === tag.id;
-            return (
-              <div key={tag.id} className="rounded-md border border-border-2">
-                <button
-                  onClick={() => setExpandedTagId(expanded ? null : tag.id)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <TagPill tag={tag} />
-                    {config?.framework ? (
-                      <span className="text-[11px] text-text-3">custom framework saved</span>
-                    ) : (
-                      <span className="text-[11px] text-text-3">using Default</span>
-                    )}
-                    {isLien && (
-                      <span
-                        className="rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning"
-                        title="This tag always asks for mortgage balance and how far behind on payments too, in addition to whatever framework applies — that's a fixed rule, not something set here."
-                      >
-                        + mortgage question
-                      </span>
-                    )}
-                  </div>
-                  <ChevronDown size={14} className={`text-text-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                </button>
-                {expanded && (
-                  <div className="border-t border-border-2 p-3">
-                    <FrameworkBox
-                      title={`${tag.name} framework`}
-                      hint="Leave blank to fall back to Default."
-                      initialValue={config?.framework ?? ''}
-                      placeholder={DEFAULT_FRAMEWORK}
-                      onSave={(text) => saveConfig.mutateAsync({ tagId: tag.id, framework: text })}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })
+          </p>
         )}
       </div>
     </div>

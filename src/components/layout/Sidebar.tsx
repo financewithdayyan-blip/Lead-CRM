@@ -109,6 +109,7 @@ export function Sidebar() {
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/leads', label: 'Leads', icon: Users },
         { to: '/kanban', label: 'Pipeline', icon: Kanban },
+        ...(isOverseer ? [{ to: '/bulk-sms', label: 'Bulk SMS', icon: Send }] : []),
         { to: '/calls', label: 'Call History', icon: History },
         { to: '/settings', label: 'Settings', icon: Settings },
       ];
@@ -154,20 +155,6 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
-        {isOverseer && !viewingId && (
-          <NavLink
-            to="/bulk-sms"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
-              )
-            }
-          >
-            <Send size={16} />
-            Bulk SMS
-          </NavLink>
-        )}
         {isOverseer && !viewingId && (
           <NavLink
             to="/team"
