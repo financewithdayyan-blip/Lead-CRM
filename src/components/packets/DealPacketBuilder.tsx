@@ -77,7 +77,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [requireLeadCapture, setRequireLeadCapture] = useState(false);
   const [comps, setComps] = useState<Omit<PacketComp, 'id'>[]>([]);
   const [repairs, setRepairs] = useState<Omit<PacketRepair, 'id'>[]>([]);
-  const [images, setImages] = useState<Omit<PacketImage, 'id'>[]>([]);
+  const [images, setImages] = useState<PacketImage[]>([]);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -110,7 +110,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setRequireLeadCapture(packet.requireLeadCapture);
     setComps(packet.comps.map(({ id: _id, ...c }) => c));
     setRepairs(packet.repairs.map(({ id: _id, ...r }) => r));
-    setImages(packet.images.map(({ id: _id, ...i }) => i));
+    setImages(packet.images);
   }, [packet?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const autoArv = useMemo(
@@ -161,9 +161,10 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setError(null);
     setUploading(true);
     try {
+      let sortOrder = images.length;
       for (const file of Array.from(files)) {
-        const path = await uploadImage.mutateAsync({ packetId, file });
-        setImages((prev) => [...prev, { storagePath: path, caption: null }]);
+        const img = await uploadImage.mutateAsync({ packetId, file, sortOrder: sortOrder++ });
+        setImages((prev) => [...prev, img]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Image upload failed.');
@@ -182,8 +183,8 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setError(null);
     setCopyingFileId(fileId);
     try {
-      const path = await copyLeadFile.mutateAsync({ packetId, storagePath, fileName });
-      setImages((prev) => [...prev, { storagePath: path, caption: null }]);
+      const img = await copyLeadFile.mutateAsync({ packetId, storagePath, fileName, sortOrder: images.length });
+      setImages((prev) => [...prev, img]);
       setImportedLeadFileIds((prev) => new Set(prev).add(fileId));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not copy that file into the packet.');
@@ -351,7 +352,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           <Section title="Property images" hint="Shown publicly on the packet. Uploads are immediate — removing a row unlinks it on save.">
             <div className="flex flex-wrap gap-3">
               {images.map((img, i) => (
-                <div key={img.storagePath} className="relative">
+                <div key={img.id} className="relative">
                   <img src={packetImageUrl(img.storagePath)} alt={img.caption ?? 'Property photo'}
                        className="h-24 w-32 rounded-md border border-border-2 object-cover" />
                   <button

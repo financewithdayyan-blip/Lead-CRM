@@ -575,10 +575,19 @@ export function useDeletePacket() {
   });
 }
 
-/** Uploads to the public packet-images bucket and returns the storage path. */
+/**
+ * Uploads to the public packet-images bucket AND creates the packet_images
+ * row right away, rather than waiting for the packet's own Save — the
+ * builder's UI already claims "uploads are immediate", but until this row
+ * exists the photo isn't actually part of the packet: only bytes sitting in
+ * storage with nothing pointing at them. Closing the builder with Cancel (or
+ * any other non-Save exit) right after uploading used to silently lose the
+ * photo even though the upload itself had "succeeded".
+ */
 export function useUploadPacketImage() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ packetId, file }: { packetId: string; file: File }) => {
+    mutationFn: async ({ packetId, file, sortOrder }: { packetId: string; file: File; sortOrder: number }): Promise<PacketImage> => {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const path = `${packetId}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from('packet-images').upload(path, file, {
@@ -586,8 +595,15 @@ export function useUploadPacketImage() {
         upsert: false,
       });
       if (error) throw error;
-      return path;
+      const { data, error: insertError } = await supabase
+        .from('packet_images')
+        .insert({ packet_id: packetId, storage_path: path, caption: null, sort_order: sortOrder })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      return { id: data.id, storagePath: data.storage_path, caption: data.caption };
     },
+    onSuccess: (_img, { packetId }) => qc.invalidateQueries({ queryKey: ['deal_packet', packetId] }),
   });
 }
 
@@ -601,8 +617,11 @@ export function useUploadPacketImage() {
  * the admin to download it and re-select it from disk.
  */
 export function useCopyLeadFileToPacket() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ packetId, storagePath, fileName }: { packetId: string; storagePath: string; fileName: string }) => {
+    mutationFn: async (
+      { packetId, storagePath, fileName, sortOrder }: { packetId: string; storagePath: string; fileName: string; sortOrder: number },
+    ): Promise<PacketImage> => {
       const { data, error: downloadError } = await supabase.storage.from('lead-files').download(storagePath);
       if (downloadError) throw downloadError;
       const ext = fileName.split('.').pop()?.toLowerCase() || 'jpg';
@@ -612,8 +631,18 @@ export function useCopyLeadFileToPacket() {
         upsert: false,
       });
       if (uploadError) throw uploadError;
-      return path;
+      // Same as useUploadPacketImage: the DB row is what actually makes this
+      // part of the packet, so it's created immediately rather than waiting
+      // on a Save that closing the builder any other way would skip.
+      const { data: row, error: insertError } = await supabase
+        .from('packet_images')
+        .insert({ packet_id: packetId, storage_path: path, caption: null, sort_order: sortOrder })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      return { id: row.id, storagePath: row.storage_path, caption: row.caption };
     },
+    onSuccess: (_img, { packetId }) => qc.invalidateQueries({ queryKey: ['deal_packet', packetId] }),
   });
 }
 
