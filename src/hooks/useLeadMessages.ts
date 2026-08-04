@@ -63,24 +63,42 @@ export function useLeadThread(leadId: string | undefined) {
 }
 
 /**
- * One reply-count map for the whole board, fetched once rather than per card.
- * A per-card query would re-fire on every scroll now that the Kanban columns
- * are virtualized — the same reason receivedShares is fetched once and passed
- * down instead of queried per KanbanCard.
+ * One message-count map for the whole board, fetched once rather than per
+ * card. A per-card query would re-fire on every scroll now that the Kanban
+ * columns are virtualized — the same reason receivedShares is fetched once
+ * and passed down instead of queried per KanbanCard.
+ *
+ * Counts both sides of the thread (inbound replies + outbound sends) for
+ * every lead regardless of stage — a card with an active outbound-only
+ * thread (sent, no reply yet) should still show that a conversation exists,
+ * not look identical to a lead that's never been texted at all.
  */
-export function useReplyCounts(enabled: boolean) {
+export function useThreadMessageCounts(enabled: boolean) {
   return useQuery({
-    queryKey: ['lead_reply_counts'],
+    queryKey: ['lead_thread_message_counts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inbound_messages')
-        .select('lead_id')
-        .eq('is_reaction', false)
-        .not('lead_id', 'is', null);
-      if (error) throw error;
+      const [inboundRes, outboundRes] = await Promise.all([
+        supabase
+          .from('inbound_messages')
+          .select('lead_id')
+          .eq('is_reaction', false)
+          .not('lead_id', 'is', null),
+        supabase
+          .from('lead_activities')
+          .select('lead_id, meta')
+          .eq('type', 'sms')
+          .not('lead_id', 'is', null),
+      ]);
+      if (inboundRes.error) throw inboundRes.error;
+      if (outboundRes.error) throw outboundRes.error;
       const counts: Record<string, number> = {};
-      for (const row of data) {
+      for (const row of inboundRes.data) {
         if (row.lead_id) counts[row.lead_id] = (counts[row.lead_id] ?? 0) + 1;
+      }
+      for (const row of outboundRes.data) {
+        if (row.lead_id && (row.meta as any)?.direction === 'outbound') {
+          counts[row.lead_id] = (counts[row.lead_id] ?? 0) + 1;
+        }
       }
       return counts;
     },
