@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
       sessionsPageSize = 10,
     } = body as {
       fromKey?: string;
-      mode?: 'inspect' | 'preview' | 'commit' | 'debug_secret';
+      mode?: 'inspect' | 'preview' | 'commit' | 'debug_secret' | 'backfill_from_log';
       dateFrom?: string;
       dateTo?: string;
       sessionsPageToken?: string;
@@ -170,7 +170,9 @@ Deno.serve(async (req) => {
     // since this project's actual configured value turned out to be the
     // newer sb_secret_ format and isn't otherwise retrievable in full to
     // compare against for direct diagnostic testing before any UI exists.
-    const isServiceCaller = req.headers.get('x-internal-secret') === Deno.env.get('SMS_BACKFILL_TEST_SECRET');
+    const isServiceCaller =
+      req.headers.get('x-internal-secret') === Deno.env.get('SMS_BACKFILL_TEST_SECRET') ||
+      authHeader.replace('Bearer ', '') === SERVICE_ROLE_KEY;
     if (!isServiceCaller) {
       const { data: userData } = await admin.auth.getUser(authHeader.replace('Bearer ', ''));
       const userId = userData?.user?.id;
@@ -178,6 +180,61 @@ Deno.serve(async (req) => {
 
       const { data: profile } = await admin.from('profiles').select('role').eq('id', userId).single();
       if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
+    }
+
+    // Pins every still-unpinned lead using send_log rows we already have —
+    // these were written by send-sms/this same function's own commit mode at
+    // the moment of sending, so no Zoom calls are needed at all. Earliest
+    // sent_at per lead wins, matching the "first number ever used is
+    // permanent" rule applied everywhere else this gets set.
+    if (mode === 'backfill_from_log') {
+      const { data: rows, error: logErr } = await admin
+        .from('send_log')
+        .select('lead_id, sent_from, sent_at')
+        .order('sent_at', { ascending: true });
+      if (logErr) return json({ error: logErr.message }, 500);
+
+      const phoneToKey = new Map<string, string>();
+      for (const [key, n] of Object.entries(NUMBERS)) {
+        if (n.phone) phoneToKey.set(toE164(n.phone), key);
+      }
+
+      const firstKeyByLead = new Map<string, string>();
+      for (const row of rows ?? []) {
+        if (!row.lead_id || firstKeyByLead.has(row.lead_id)) continue;
+        const key = phoneToKey.get(toE164(row.sent_from ?? ''));
+        if (key) firstKeyByLead.set(row.lead_id, key);
+      }
+
+      if (firstKeyByLead.size === 0) return json({ mode, matched: 0, updated: 0 });
+
+      const { data: unpinned, error: unpinnedErr } = await admin
+        .from('leads')
+        .select('id')
+        .in('id', Array.from(firstKeyByLead.keys()))
+        .is('assigned_sms_number', null);
+      if (unpinnedErr) return json({ error: unpinnedErr.message }, 500);
+
+      const idsByKey = new Map<string, string[]>();
+      for (const lead of unpinned ?? []) {
+        const key = firstKeyByLead.get(lead.id)!;
+        if (!idsByKey.has(key)) idsByKey.set(key, []);
+        idsByKey.get(key)!.push(lead.id);
+      }
+
+      let updated = 0;
+      for (const [key, ids] of idsByKey) {
+        const { error: updErr } = await admin.from('leads').update({ assigned_sms_number: key }).in('id', ids);
+        if (updErr) return json({ error: updErr.message }, 500);
+        updated += ids.length;
+      }
+
+      return json({
+        mode,
+        matched: firstKeyByLead.size,
+        updated,
+        byKey: Array.from(idsByKey.entries()).map(([key, ids]) => ({ key, count: ids.length })),
+      });
     }
 
     const from = NUMBERS[fromKey];
