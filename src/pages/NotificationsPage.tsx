@@ -247,7 +247,7 @@ export function NotificationsPage() {
   }
 
   for (const t of dueTasks) {
-    const id = `task:${t.id}`;
+    const id = `task:${t.id}:${t.dueDate}`;
     actions.push({
       id, category: 'task', at: t.dueDate!, unread: !readIds.has(id),
       icon: CheckSquare, accent: ACCENT.task, rank: dueRank(t.dueDate!, todayIso),
@@ -273,7 +273,7 @@ export function NotificationsPage() {
   }
 
   for (const l of dueFollowUps) {
-    const id = `followup:${l.id}`;
+    const id = `followup:${l.id}:${l.nextFollowUp}`;
     actions.push({
       id, category: 'task', at: l.nextFollowUp!, unread: !readIds.has(id),
       icon: CalendarClock, accent: ACCENT.followup, rank: dueRank(l.nextFollowUp!, todayIso),

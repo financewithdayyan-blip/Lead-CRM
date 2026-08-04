@@ -75,11 +75,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const isAdmin = profile?.role === 'admin';
   const userId = session?.user.id ?? '';
   const todayIso = localIsoDate(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayIso = localIsoDate(yesterday);
   const weekFromNow = new Date();
   weekFromNow.setDate(weekFromNow.getDate() + 7);
   const weekFromNowIso = localIsoDate(weekFromNow);
 
-  const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds(userId, todayIso));
+  const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds(userId));
 
   const { data: tasks = [] } = useTasks();
   const { data: leads = [] } = useLeads();
@@ -111,13 +114,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [tasks, weekFromNowIso],
   );
 
-  // Follow-ups due within 7 days (overdue + today + this week)
+  // Follow-ups due within the next 7 days, plus anything due today or
+  // yesterday. Anything overdue by more than a day stops showing here —
+  // the reminder is due-date, then one overdue day, then done, rather than
+  // piling up forever the longer a follow-up goes un-actioned.
   const dueFollowUps = useMemo(
     () =>
       leads
-        .filter((l) => l.nextFollowUp && l.nextFollowUp <= weekFromNowIso)
+        .filter((l) => l.nextFollowUp && l.nextFollowUp >= yesterdayIso && l.nextFollowUp <= weekFromNowIso)
         .sort((a, b) => (a.nextFollowUp ?? '').localeCompare(b.nextFollowUp ?? '')),
-    [leads, weekFromNowIso],
+    [leads, yesterdayIso, weekFromNowIso],
   );
 
   // Index leads by id for O(1) stage lookup when filtering db alerts.
@@ -181,10 +187,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     return events.sort((a, b) => b.at.localeCompare(a.at));
   }, [teamSessions, teamMembers]);
 
+  // Read state now persists permanently (see notificationReads.ts), so an id
+  // for a recurring due-date item has to carry the actual date with it —
+  // otherwise marking today's due reminder read would also silently
+  // suppress it forever the next time that same lead/task gets rescheduled.
   const allIds = useMemo(
     () => [
-      ...dueTasks.map((t) => `task:${t.id}`),
-      ...dueFollowUps.map((l) => `followup:${l.id}`),
+      ...dueTasks.map((t) => `task:${t.id}:${t.dueDate}`),
+      ...dueFollowUps.map((l) => `followup:${l.id}:${l.nextFollowUp}`),
       ...auctionAlerts.map((a) => `auction:${a.lead.id}:${a.milestone}`),
       ...sessionEvents.map((e) => e.id),
       ...(isAdmin ? teamSummaries.map((s) => `summary:${s.id}`) : []),
@@ -204,7 +214,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     setReadIds((prev) => {
       const next = new Set(prev);
       ids.forEach((id) => next.add(id));
-      saveReadIds(userId, todayIso, next);
+      saveReadIds(userId, next);
       return next;
     });
   }
