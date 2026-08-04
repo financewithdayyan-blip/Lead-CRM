@@ -19,6 +19,7 @@ import {
   Phone,
   PhoneIncoming,
   PhoneCall,
+  Reply,
   Send,
   Square,
   Target,
@@ -57,7 +58,7 @@ const REPAIR_OPTIONS: Array<{ key: keyof RepairFlags; label: string }> = [
   { key: 'flooring', label: 'Flooring' },
 ];
 
-type OutcomeKey = 'voicemail' | 'initial_contact' | 'onhold' | 'dead' | 'declined';
+type OutcomeKey = 'voicemail' | 'initial_contact' | 'onhold' | 'dead' | 'declined' | 'replied';
 
 const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: typeof Voicemail }> = [
   { key: 'voicemail', label: 'Voicemail', stage: 'voicemail', icon: Voicemail },
@@ -65,12 +66,14 @@ const OUTCOMES: Array<{ key: OutcomeKey; label: string; stage: LeadStage; icon: 
   { key: 'onhold', label: 'On Hold', stage: 'onhold', icon: PauseCircle },
   { key: 'dead', label: 'Dead', stage: 'dead_declined', icon: XCircle },
   { key: 'declined', label: 'Declined', stage: 'dead_declined', icon: Ban },
+  { key: 'replied', label: 'Replied', stage: 'replied', icon: Reply },
 ];
 
 const SHORTCUT_LEGEND: Array<{ key: string; label: string }> = [
   { key: 'V', label: 'Voicemail' },
   { key: 'D', label: 'Dead' },
   { key: 'H', label: 'Hold' },
+  { key: 'R', label: 'Replied' },
   { key: 'N', label: 'Next' },
   { key: 'C', label: 'Copy #' },
 ];
@@ -506,6 +509,7 @@ export function CallSessionPage() {
       if (key === 'v') { if (!inFollowUpStage) setOutcome('voicemail'); }
       else if (key === 'd') { if (!inFollowUpStage) setOutcome('dead'); }
       else if (key === 'h') setOutcome('onhold');
+      else if (key === 'r') setOutcome('replied');
       else if (key === 'n') saveAndNext();
       else if (key === 'c') copyPhone('phone');
     }
