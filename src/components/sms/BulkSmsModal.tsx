@@ -89,7 +89,10 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
       // navigating there is itself what "starting" the send means — rather
       // than waiting out the whole batch inside this modal before anything
       // is visible at all.
-      const job = await createJob.mutateAsync(leads);
+      const job = await createJob.mutateAsync({
+        leads,
+        config: { templatesByTag, defaultTemplate, fromKey, dailyLimit: Number(dailyLimit) || 0 },
+      });
 
       // Not awaited: send-sms keeps running server-side and writes its own
       // progress into bulk_sms_job_items as it goes (including marking the

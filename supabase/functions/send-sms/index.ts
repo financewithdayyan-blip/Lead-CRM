@@ -223,6 +223,15 @@ Deno.serve(async (req) => {
 
     if (!leadIds.length) return bail('No leads selected.', 400);
 
+    // A resumed job was sitting at 'failed' with its old error message —
+    // clear both back to 'running' the moment real work starts again on it,
+    // so the page's status badge reflects what's actually happening. Harmless
+    // no-op for a fresh job, which useCreateBulkSmsJob already inserts as
+    // 'running'.
+    if (jobId) {
+      await admin.from('bulk_sms_jobs').update({ status: 'running', error: null, updated_at: nowIso() }).eq('id', jobId);
+    }
+
     // Tag names, and any number a lead is already pinned to from a prior
     // send, come along so both the per-lead template and the sender choice
     // below can use them — moved ahead of the sender logic because a single
@@ -524,8 +533,21 @@ Deno.serve(async (req) => {
 
     await Promise.all(Array.from(groups.entries()).map(([key, items]) => processGroup(key, items)));
 
+    // A caller may only be sending one chunk of a much larger job (see
+    // useSendBulkSms, which splits anything past a few hundred leads across
+    // several invocations so no single one runs long enough to hit the
+    // platform's execution-time limit). Only flip the job to 'completed' once
+    // nothing is left queued or sending for it — otherwise the first chunk to
+    // finish would prematurely mark a 1000+ lead job done.
     if (jobId) {
-      await admin.from('bulk_sms_jobs').update({ status: 'completed', updated_at: nowIso() }).eq('id', jobId);
+      const { count: remaining } = await admin
+        .from('bulk_sms_job_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('job_id', jobId)
+        .in('status', ['queued', 'sending']);
+      if (!remaining) {
+        await admin.from('bulk_sms_jobs').update({ status: 'completed', updated_at: nowIso() }).eq('id', jobId);
+      }
     }
 
     return json({

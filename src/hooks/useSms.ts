@@ -27,23 +27,59 @@ export interface BulkSmsInput {
   jobId?: string;
 }
 
+// A single invocation processing a big batch can run long enough to hit the
+// edge function platform's execution-time limit and get killed mid-batch,
+// leaving the job stuck 'running' forever with no error — this happened
+// repeatedly on 1000+ lead sends (one measured run got cut off at ~152s after
+// only 238 of 1441 leads). Splitting into smaller sequential invocations
+// keeps each one comfortably short; send-sms itself only marks the job
+// 'completed' once nothing is left queued across every chunk, so this is
+// invisible to the caller beyond taking a few extra round trips.
+const BULK_CHUNK_SIZE = 100;
+
 /**
- * Calls the send-sms edge function. The window check, opt-out check and
- * rolling-limit check all happen server-side — this is a thin wrapper, not
- * where any of those rules live.
+ * Calls the send-sms edge function, one chunk of leads at a time. The window
+ * check, opt-out check and rolling-limit check all happen server-side — this
+ * is just the chunking wrapper, not where any of those rules live. Shared by
+ * useSendBulkSms (a fresh send) and useResumeBulkSmsJob (only the leads a
+ * stalled job never got to).
  */
+async function sendBulkSmsChunked(input: BulkSmsInput): Promise<BulkSmsResult> {
+  const { leadIds, ...rest } = input;
+  const chunks: string[][] = [];
+  for (let i = 0; i < leadIds.length; i += BULK_CHUNK_SIZE) chunks.push(leadIds.slice(i, i + BULK_CHUNK_SIZE));
+  if (!chunks.length) chunks.push([]);
+
+  const merged: BulkSmsResult = { sent: 0, skipped: [], failed: [], perNumber: [] };
+  const perNumberByKey = new Map<string, { key: string; label: string; sent: number }>();
+
+  for (const chunk of chunks) {
+    const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
+      body: { ...rest, leadIds: chunk },
+    });
+    if (error) {
+      const body = await error.context?.json?.().catch(() => null);
+      throw new Error(body?.error || error.message);
+    }
+    if ((data as any)?.error) throw new Error((data as any).error);
+    const result = data as BulkSmsResult;
+    merged.sent += result.sent;
+    merged.skipped.push(...result.skipped);
+    merged.failed.push(...result.failed);
+    for (const pn of result.perNumber) {
+      const existing = perNumberByKey.get(pn.key);
+      if (existing) existing.sent += pn.sent;
+      else perNumberByKey.set(pn.key, { ...pn });
+    }
+  }
+  merged.perNumber = Array.from(perNumberByKey.values());
+  return merged;
+}
+
 export function useSendBulkSms() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: BulkSmsInput) => {
-      const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', { body: input });
-      if (error) {
-        const body = await error.context?.json?.().catch(() => null);
-        throw new Error(body?.error || error.message);
-      }
-      if ((data as any)?.error) throw new Error((data as any).error);
-      return data as BulkSmsResult;
-    },
+    mutationFn: sendBulkSmsChunked,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -54,7 +90,14 @@ export function useSendBulkSms() {
 // ── Bulk SMS jobs — the live queue behind the Bulk SMS page ────────────────
 
 function dbToBulkSmsJob(row: any): BulkSmsJob {
-  return { id: row.id, status: row.status, error: row.error, total: row.total, createdAt: row.created_at };
+  return {
+    id: row.id,
+    status: row.status,
+    error: row.error,
+    total: row.total,
+    createdAt: row.created_at,
+    hasConfig: !!row.config,
+  };
 }
 
 function dbToBulkSmsJobItem(row: any): BulkSmsJobItem {
@@ -69,6 +112,10 @@ function dbToBulkSmsJobItem(row: any): BulkSmsJobItem {
   };
 }
 
+/** What a send was started with — saved on the job row so a stalled run can
+ * be resumed later without the admin retyping the message. */
+export type BulkSmsConfig = Omit<BulkSmsInput, 'leadIds' | 'jobId'>;
+
 /**
  * Creates the job row and one queued item per lead before send-sms is ever
  * called, so the Bulk SMS page has something to show — and something to
@@ -77,11 +124,11 @@ function dbToBulkSmsJobItem(row: any): BulkSmsJobItem {
 export function useCreateBulkSmsJob() {
   const { profile } = useAuth();
   return useMutation({
-    mutationFn: async (leads: Lead[]) => {
+    mutationFn: async ({ leads, config }: { leads: Lead[]; config: BulkSmsConfig }) => {
       if (!profile?.id) throw new Error('Not signed in.');
       const { data: job, error: jobErr } = await supabase
         .from('bulk_sms_jobs')
-        .insert({ user_id: profile.id, status: 'running', total: leads.length })
+        .insert({ user_id: profile.id, status: 'running', total: leads.length, config })
         .select()
         .single();
       if (jobErr) throw jobErr;
@@ -165,5 +212,50 @@ export function useBulkSmsJobItems(jobId: string | undefined, jobStatus: string 
     },
     enabled: !!jobId,
     refetchInterval: jobStatus === 'running' ? 1500 : false,
+  });
+}
+
+/**
+ * Picks a stalled or failed job back up — only the leads still sitting at
+ * 'queued' for it, using the same message/settings it was started with, so
+ * retrying never re-texts someone who already got a message. Requires the
+ * job to have a saved config (see useCreateBulkSmsJob); older jobs from
+ * before that existed can't be auto-resumed.
+ */
+export function useResumeBulkSmsJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const { data: job, error: jobErr } = await supabase.from('bulk_sms_jobs').select('*').eq('id', jobId).single();
+      if (jobErr) throw jobErr;
+      if (!job.config) {
+        throw new Error(
+          "This send started before Resume existed, so its message and settings weren't saved. Start a fresh send instead — leads already messaged from it have moved past the New stage, so they're safe to leave in your selection.",
+        );
+      }
+
+      const leadIds: string[] = [];
+      for (let from = 0; ; from += ITEMS_PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('bulk_sms_job_items')
+          .select('lead_id')
+          .eq('job_id', jobId)
+          .eq('status', 'queued')
+          .order('id', { ascending: true })
+          .range(from, from + ITEMS_PAGE_SIZE - 1);
+        if (error) throw error;
+        leadIds.push(...(data ?? []).map((r) => r.lead_id).filter((id): id is string => !!id));
+        if (!data || data.length < ITEMS_PAGE_SIZE) break;
+      }
+      if (!leadIds.length) throw new Error('Nothing left to resume — every lead in this job already has an outcome.');
+
+      return sendBulkSmsChunked({ ...(job.config as BulkSmsConfig), leadIds, jobId });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['activities'] });
+      qc.invalidateQueries({ queryKey: ['bulk_sms_job'] });
+      qc.invalidateQueries({ queryKey: ['bulk_sms_job_items'] });
+    },
   });
 }
