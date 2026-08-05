@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, Download, Eye, FileSignature, FileText, Loader2, Map, Send, Trash2, Upload } from 'lucide-react';
+import { Check, ChevronDown, Copy, Download, FileSignature, FileText, Inbox, Loader2, Map, Send, Trash2, Upload } from 'lucide-react';
 import { MergeTagButtons } from '@/components/sms/MergeTagButtons';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
@@ -7,6 +7,8 @@ import { LeadPicker } from '@/components/bluedocs/LeadPicker';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
 import { ContractPreviewModal } from '@/components/bluedocs/ContractPreviewModal';
+import { ContractInstanceRow } from '@/components/bluedocs/ContractInstanceRow';
+import { SignInboxModal } from '@/components/bluedocs/SignInboxModal';
 import {
   useDocTemplates,
   useSaveLoiTemplate,
@@ -216,9 +218,56 @@ function LoiGeneratorTab() {
   );
 }
 
+/** Small overflow menu — Download/Delete moved out of the main row into
+ * here, matching the Jotform-style document row this list is modeled on. */
+function MoreMenu({ onDownload, onDelete }: { onDownload: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button className="btn !px-2 !py-1.5 text-[11px]" onClick={() => setOpen((v) => !v)}>
+        More <ChevronDown size={12} />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border border-border bg-white py-1 shadow-popover">
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3"
+            onClick={() => {
+              setOpen(false);
+              onDownload();
+            }}
+          >
+            <Download size={12} /> Download
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-danger hover:bg-surface-3"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Contract Templates tab ─────────────────────────────────────────────────
 function ContractTemplatesTab() {
   const { data: templates = [] } = useDocTemplates('contract');
+  const { data: instances = [] } = useContractInstances();
   const upload = useUploadContractTemplate();
   const deleteTemplate = useDeleteDocTemplate();
   const getSignedUrl = useSignedTemplateUrl();
@@ -230,6 +279,7 @@ function ContractTemplatesTab() {
 
   const [mappingTarget, setMappingTarget] = useState<{ template: DocTemplate; pdfUrl: string } | null>(null);
   const [sendTarget, setSendTarget] = useState<DocTemplate | null>(null);
+  const [inboxTarget, setInboxTarget] = useState<DocTemplate | null>(null);
   const [buyerLink, setBuyerLink] = useState<string | null>(null);
 
   async function handlePdfFile(contractType: ContractType, file: File) {
@@ -317,46 +367,47 @@ function ContractTemplatesTab() {
               <p className="mt-2 text-[12px] text-text-3">No {ct.label.toLowerCase()} template uploaded yet.</p>
             ) : (
               <div className="mt-2 space-y-1.5">
-                {items.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <FileText size={14} className="shrink-0 text-text-3" />
-                      <span className="truncate text-[13px] font-medium text-text">{t.name}</span>
-                      {!t.mapped && (
-                        <span className="shrink-0 rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning">Not mapped</span>
-                      )}
-                      <span className="shrink-0 text-[11px] text-text-3">{formatDate(t.createdAt)}</span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {t.mapped ? (
-                        <>
-                          <button className="btn !px-2 !py-1 text-[11px]" onClick={() => setSendTarget(t)}>
-                            <Send size={12} /> Send Contract
+                {items.map((t) => {
+                  const inboxCount = instances.filter((i) => i.templateId === t.id).length;
+                  return (
+                    <div key={t.id} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <FileText size={20} className="shrink-0 text-primary" />
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-semibold text-text">{t.name}</div>
+                          <div className="text-[11px] text-text-3">Created {formatDate(t.createdAt)}</div>
+                        </div>
+                        {!t.mapped && (
+                          <span className="shrink-0 rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning">Not mapped</span>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {t.mapped ? (
+                          <>
+                            <button className="px-1 text-[12px] font-medium text-text-2 hover:text-text" onClick={() => openMapper(t)}>
+                              Edit
+                            </button>
+                            <button className="btn btn-primary !px-2.5 !py-1.5 text-[11px]" onClick={() => setSendTarget(t)}>
+                              <Send size={12} /> Invite to Sign
+                            </button>
+                            <button className="btn !px-2.5 !py-1.5 text-[11px]" onClick={() => setInboxTarget(t)}>
+                              <Inbox size={12} /> Sign Inbox
+                              <span className="ml-0.5 rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">{inboxCount}</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button className="btn btn-primary !px-2.5 !py-1.5 text-[11px]" onClick={() => openMapper(t)}>
+                            <Map size={12} /> Map Fields
                           </button>
-                          <button className="btn !px-2 !py-1 text-[11px]" onClick={() => openMapper(t)}>
-                            <Map size={12} /> Edit Mapping
-                          </button>
-                        </>
-                      ) : (
-                        <button className="btn btn-primary !px-2 !py-1 text-[11px]" onClick={() => openMapper(t)}>
-                          <Map size={12} /> Map Fields
-                        </button>
-                      )}
-                      <button
-                        className="btn !px-2 !py-1 text-[11px]"
-                        onClick={() => t.storagePath && handleDownload(t.storagePath, t.fileName || t.name)}
-                      >
-                        <Download size={12} />
-                      </button>
-                      <button
-                        className="btn !px-2 !py-1 text-[11px] text-danger"
-                        onClick={() => setDeleteTarget({ id: t.id, storagePath: t.storagePath, docxStoragePath: t.docxStoragePath })}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                        )}
+                        <MoreMenu
+                          onDownload={() => t.storagePath && handleDownload(t.storagePath, t.fileName || t.name)}
+                          onDelete={() => setDeleteTarget({ id: t.id, storagePath: t.storagePath, docxStoragePath: t.docxStoragePath })}
+                        />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -383,11 +434,13 @@ function ContractTemplatesTab() {
         />
       )}
 
+      {inboxTarget && <SignInboxModal template={inboxTarget} onClose={() => setInboxTarget(null)} />}
+
       {buyerLink && (
         <Modal open onClose={() => setBuyerLink(null)} title="Contract sent" width="md">
           <p className="text-[13px] text-text-2">
             Send this to the buyer — they'll fill in their fields and sign first. The seller's link unlocks
-            automatically once the buyer's done, and you can find it in the Contracts tab from that point on.
+            automatically once the buyer's done, and you can find it in their template's Sign Inbox from that point on.
           </p>
           <div className="mt-3">
             <SigningLinkRow label="Buyer link" url={buyerLink} />
@@ -438,20 +491,13 @@ function SigningLinkRow({ label, url }: { label: string; url: string }) {
   );
 }
 
-// ─── Contracts tab (partial / signed) ──────────────────────────────────────
+// ─── Contracts tab (partial / signed, across every template) ──────────────
 function ContractsTab() {
   const { data: instances = [] } = useContractInstances();
   const deleteInstance = useDeleteContractInstance();
   const getSignedUrl = useSignedTemplateUrl();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [previewTarget, setPreviewTarget] = useState<ContractInstance | null>(null);
-  const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
-
-  function copyPartyLink(id: string, token: string) {
-    navigator.clipboard.writeText(`${window.location.origin}/crm/sign/${token}`);
-    setCopiedPartyId(id);
-    setTimeout(() => setCopiedPartyId(null), 1500);
-  }
 
   const partial = instances.filter((i) => i.status === 'partial');
   const signed = instances.filter((i) => i.status === 'signed');
@@ -464,54 +510,6 @@ function ContractsTab() {
     a.click();
   }
 
-  function Row({ c }: { c: (typeof instances)[number] }) {
-    return (
-      <div className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium text-text">{c.name}</div>
-          <div className="truncate text-[11px] text-text-3">
-            {c.leadName || 'Unknown lead'} · {c.templateName} · {formatDate(c.createdAt)}
-          </div>
-          <div className="mt-1 flex gap-1.5">
-            {c.parties.map((p) => {
-              const unlocked = !c.parties.some((other) => other.signOrder < p.signOrder && other.status !== 'signed');
-              return (
-                <span
-                  key={p.id}
-                  className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold capitalize ${p.status === 'signed' ? 'bg-success-dim text-success' : 'bg-surface-2 text-text-3'}`}
-                >
-                  {p.role} {p.status === 'signed' ? '✓' : '· pending'}
-                  {p.status !== 'signed' && unlocked && (
-                    <button
-                      className="ml-0.5 text-text-3 hover:text-text"
-                      title="Copy their signing link"
-                      onClick={() => copyPartyLink(p.id, p.accessToken)}
-                    >
-                      {copiedPartyId === p.id ? <Check size={10} /> : <Copy size={10} />}
-                    </button>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button className="btn !px-2 !py-1 text-[11px]" onClick={() => setPreviewTarget(c)}>
-            <Eye size={12} /> Preview
-          </button>
-          {c.status === 'signed' && c.finalStoragePath && (
-            <button className="btn !px-2 !py-1 text-[11px]" onClick={() => download(c.finalStoragePath!, c.name)}>
-              <Download size={12} /> Download signed PDF
-            </button>
-          )}
-          <button className="btn !px-2 !py-1 text-[11px] text-danger" onClick={() => setDeleteTarget(c.id)}>
-            <Trash2 size={12} />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="card">
@@ -521,7 +519,7 @@ function ContractsTab() {
         ) : (
           <div className="space-y-1.5">
             {partial.map((c) => (
-              <Row key={c.id} c={c} />
+              <ContractInstanceRow key={c.id} instance={c} onPreview={() => setPreviewTarget(c)} onDownload={download} onDelete={() => setDeleteTarget(c.id)} />
             ))}
           </div>
         )}
@@ -533,7 +531,7 @@ function ContractsTab() {
         ) : (
           <div className="space-y-1.5">
             {signed.map((c) => (
-              <Row key={c.id} c={c} />
+              <ContractInstanceRow key={c.id} instance={c} onPreview={() => setPreviewTarget(c)} onDownload={download} onDelete={() => setDeleteTarget(c.id)} />
             ))}
           </div>
         )}

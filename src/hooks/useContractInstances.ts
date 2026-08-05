@@ -16,7 +16,7 @@ export interface ContractInstance {
   templateName: string | null;
   templateStoragePath: string | null;
   templateFields: ContractField[];
-  leadId: string;
+  leadId: string | null;
   leadName: string | null;
   name: string;
   fieldValues: Record<string, string>;
@@ -86,7 +86,7 @@ export function useGenerateContract() {
   return useMutation({
     mutationFn: async (input: {
       templateId: string;
-      leadId: string;
+      leadId?: string;
       name: string;
       fieldValues: Record<string, string>;
       parties: ContractParty[];
@@ -95,7 +95,7 @@ export function useGenerateContract() {
         .from('contract_instances')
         .insert({
           template_id: input.templateId,
-          lead_id: input.leadId,
+          lead_id: input.leadId ?? null,
           name: input.name,
           field_values: input.fieldValues,
           created_by: session!.user.id,

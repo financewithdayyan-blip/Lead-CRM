@@ -137,20 +137,14 @@ Deno.serve(async (req) => {
       const boxH = (field.hPct / 100) * pageH;
       const y = pageH * (1 - (field.yPct + field.hPct) / 100);
 
-      if (field.type === 'text' || field.type === 'full_name' || field.type === 'currency') {
+      if (field.type === 'text' || field.type === 'full_name' || field.type === 'currency' || field.type === 'date') {
         // By generation time these are already resolved into plain display
-        // strings (a combined name, or a formatted "$410,000") — stamped
-        // identically to a plain text field.
+        // strings (a combined name, a formatted "$410,000", or whatever date
+        // the signer actually typed) — stamped identically either way.
         const value = fieldValues[field.id] ?? '';
         if (!value) continue;
         const fontSize = Math.max(8, Math.min(14, boxH * 0.6));
         page.drawText(value, { x: x + 2, y: y + boxH * 0.25, size: fontSize, font, color: rgb(0.05, 0.05, 0.05) });
-      } else if (field.type === 'date') {
-        const p = partyByRole.get(field.role);
-        if (!p?.signed_at) continue;
-        const label = new Date(p.signed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const fontSize = Math.max(8, Math.min(14, boxH * 0.6));
-        page.drawText(label, { x: x + 2, y: y + boxH * 0.25, size: fontSize, font, color: rgb(0.05, 0.05, 0.05) });
       } else if (field.type === 'signature') {
         const p = partyByRole.get(field.role);
         if (!p?.signature_data_url) continue;

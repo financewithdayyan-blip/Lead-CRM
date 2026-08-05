@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import SignaturePad from 'signature_pad';
 import { CheckCircle2, Clock, FileText, Loader2 } from 'lucide-react';
 import { usePublicSigningParty, useSigningPdfUrl, useSubmitSignature, useLogSigningView } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
 import { formatCurrency } from '@/lib/currency';
+import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONT } from '@/lib/typedSignature';
 
 const PAGE_WIDTH = 680;
+const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date']);
 
 export function SignContractPage() {
   const { token } = useParams<{ token: string }>();
@@ -19,13 +20,15 @@ export function SignContractPage() {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
-  const [hasSignature, setHasSignature] = useState(false);
-  const padCanvasRef = useRef<HTMLCanvasElement>(null);
-  const padRef = useRef<SignaturePad | null>(null);
+  const [signatureName, setSignatureName] = useState('');
   const loggedRef = useRef(false);
   const seededRef = useRef(false);
 
   const ready = !!party && party.isTurn && party.status !== 'signed';
+
+  useEffect(() => {
+    loadSignatureFont();
+  }, []);
 
   // Logged once per page load regardless of turn state — an audit trail
   // needs "did they open it" on record even while they're still waiting.
@@ -40,28 +43,17 @@ export function SignContractPage() {
     getPdfUrl.mutateAsync(token).then((url) => loadPdf(url)).then(setPdf);
   }, [ready, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!ready || !padCanvasRef.current || padRef.current) return;
-    const pad = new SignaturePad(padCanvasRef.current, { backgroundColor: '#ffffff' });
-    // A ref update from drawing on the canvas doesn't itself trigger a
-    // re-render, so the Sign & Submit button needs its own reactive flag.
-    pad.addEventListener('endStroke', () => setHasSignature(!pad.isEmpty()));
-    padRef.current = pad;
-  }, [ready]);
-
   // My own not-yet-filled fields — a full-name one starts pre-filled with
   // the name already on record for me, still editable.
   const myPendingFields = useMemo(
-    () =>
-      (party?.templateFields ?? []).filter(
-        (f) => f.role === party?.role && (f.type === 'text' || f.type === 'full_name' || f.type === 'currency') && !party?.fieldValues[f.id],
-      ),
+    () => (party?.templateFields ?? []).filter((f) => f.role === party?.role && FILLABLE_TYPES.has(f.type) && !party?.fieldValues[f.id]),
     [party],
   );
 
   useEffect(() => {
     if (!ready || seededRef.current || !party) return;
     seededRef.current = true;
+    setSignatureName(party.name);
     setFieldInputs((prev) => {
       const next = { ...prev };
       for (const f of myPendingFields) {
@@ -75,11 +67,11 @@ export function SignContractPage() {
   const pageNums = useMemo(() => Array.from({ length: numPages }, (_, i) => i + 1), [numPages]);
 
   const allFieldsFilled = myPendingFields.every((f) => fieldInputs[f.id]?.trim());
-  const canSubmit = allFieldsFilled && hasSignature;
+  const canSubmit = allFieldsFilled && !!signatureName.trim();
 
   async function handleSubmit() {
-    if (!token || !padRef.current || padRef.current.isEmpty() || !allFieldsFilled) return;
-    const dataUrl = padRef.current.toDataURL('image/png');
+    if (!token || !canSubmit) return;
+    const dataUrl = await renderTypedSignature(signatureName.trim());
     const formatted = { ...fieldInputs };
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
@@ -166,19 +158,18 @@ export function SignContractPage() {
         )}
 
         <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-slate-700">Your signature</span>
-            <button
-              className="text-[12px] text-slate-500 underline"
-              onClick={() => {
-                padRef.current?.clear();
-                setHasSignature(false);
-              }}
-            >
-              Clear
-            </button>
+          <div className="mb-2 text-[13px] font-semibold text-slate-700">Your signature</div>
+          <input
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-slate-500"
+            placeholder="Type your full name"
+            value={signatureName}
+            onChange={(e) => setSignatureName(e.target.value)}
+          />
+          <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50">
+            <span style={{ fontFamily: `"${SIGNATURE_FONT}", cursive`, fontSize: 40, color: '#111827' }}>
+              {signatureName || ' '}
+            </span>
           </div>
-          <canvas ref={padCanvasRef} width={640} height={160} className="w-full rounded-md border border-slate-300" />
           {!allFieldsFilled && (
             <p className="mt-2 text-[12px] text-amber-600">Fill in every highlighted field above before signing.</p>
           )}

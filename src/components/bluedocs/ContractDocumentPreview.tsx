@@ -63,9 +63,7 @@ export function ContractDocumentPage({
       style={{ width: pageWidth }}
     >
       {pageFields.map((f) => {
-        if (f.type === 'date') return null;
-
-        if (f.type === 'text' || f.type === 'full_name' || f.type === 'currency') {
+        if (f.type === 'text' || f.type === 'full_name' || f.type === 'currency' || f.type === 'date') {
           const value = fieldValues[f.id];
           const isMine = f.role === activeRole;
 
@@ -76,6 +74,7 @@ export function ContractDocumentPage({
                   <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[11px] text-slate-500">$</span>
                 )}
                 <input
+                  type={f.type === 'date' ? 'date' : 'text'}
                   className={`h-full w-full rounded-sm border-2 border-dashed bg-white/95 text-[11px] text-slate-800 outline-none ${f.type === 'currency' ? 'pl-3.5' : 'px-1'}`}
                   style={{ borderColor: ROLE_COLOR[f.role] }}
                   placeholder={f.label}

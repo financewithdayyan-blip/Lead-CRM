@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { LeadPicker } from './LeadPicker';
-import { useLeadsForDocs, type LeadOption } from '@/hooks/useGeneratedLois';
 import { useGenerateContract } from '@/hooks/useContractInstances';
 import type { DocTemplate } from '@/hooks/useDocTemplates';
 
 /**
- * Just enough to identify the deal and both parties — neither party's own
- * contract fields (name, amount, etc.) are collected here anymore. Buyer
- * always signs first and fills in their own fields on their signing page;
- * the seller sees what the buyer entered and fills in the rest on theirs.
+ * Just enough to identify the deal and both parties — no CRM lead lookup,
+ * and neither party's own contract fields (name, amount, etc.) are collected
+ * here. Buyer always signs first and fills in their own fields on their
+ * signing page; the seller sees what the buyer entered and fills in the rest
+ * on theirs.
  */
 export function SendContractModal({
   template,
@@ -21,32 +20,23 @@ export function SendContractModal({
   onClose: () => void;
   onSent: (links: { seller: string; buyer: string }) => void;
 }) {
-  const { data: leads = [] } = useLeadsForDocs();
   const generate = useGenerateContract();
 
-  const [lead, setLead] = useState<LeadOption | null>(null);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(template.name);
   const [sellerName, setSellerName] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  function selectLead(l: LeadOption) {
-    setLead(l);
-    setName(`${template.name} — ${l.address || `${l.firstName} ${l.lastName}`.trim()}`);
-    if (!sellerName) setSellerName(`${l.firstName} ${l.lastName}`.trim());
-  }
-
-  const canSubmit = !!lead && name.trim() && sellerName.trim() && buyerName.trim();
+  const canSubmit = name.trim() && sellerName.trim() && buyerName.trim();
 
   async function handleSubmit() {
-    if (!lead || !canSubmit) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
       const { parties } = await generate.mutateAsync({
         templateId: template.id,
-        leadId: lead.id,
         name: name.trim(),
         fieldValues: {},
         parties: [
@@ -66,13 +56,8 @@ export function SendContractModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={`Send "${template.name}"`} width="md">
+    <Modal open onClose={onClose} title={`Invite to Sign — "${template.name}"`} width="md">
       <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-[12px] font-medium text-text-2">Lead / property</label>
-          <LeadPicker leads={leads} selected={lead} onSelect={selectLead} />
-        </div>
-
         <div>
           <label className="mb-1 block text-[12px] font-medium text-text-2">Contract name</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
@@ -102,7 +87,7 @@ export function SendContractModal({
           </button>
           <button className="btn btn-primary" disabled={!canSubmit || submitting} onClick={handleSubmit}>
             {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-            Send Contract
+            Invite to Sign
           </button>
         </div>
       </div>
