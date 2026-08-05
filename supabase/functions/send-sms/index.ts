@@ -193,7 +193,12 @@ Deno.serve(async (req) => {
     const userId = userData?.user?.id;
     if (!userId) return json({ error: 'Not signed in.' }, 401);
 
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', userId).single();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+      .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
     if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
 
     const body = await req.json();
@@ -222,18 +227,30 @@ Deno.serve(async (req) => {
     // send, come along so both the per-lead template and the sender choice
     // below can use them — moved ahead of the sender logic because a single
     // send now needs to know the pin before it can pick a number at all.
-    const { data: leadsById, error: leadErr } = await admin
-      .from('leads')
-      .select(
-        'id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, assigned_sms_number, lead_tags(tag_id, tags(name))',
-      )
-      .in('id', leadIds);
-    if (leadErr) throw leadErr;
+    // A single .in('id', leadIds) with a thousand-plus UUIDs turns into a URL
+    // tens of thousands of characters long — PostgREST/the CDN in front of it
+    // doesn't cleanly error on that, it just hangs, which is exactly how two
+    // separate 1441-lead jobs got stuck at 'running' forever with zero
+    // progress even after the Zoom timeouts were added below. Chunking keeps
+    // every single request's URL a sane size regardless of batch size.
+    const LEADS_CHUNK_SIZE = 150;
+    const leadsById = new Map<string, any>();
+    for (let i = 0; i < leadIds.length; i += LEADS_CHUNK_SIZE) {
+      const chunk = leadIds.slice(i, i + LEADS_CHUNK_SIZE);
+      const { data: chunkLeads, error: leadErr } = await admin
+        .from('leads')
+        .select(
+          'id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, assigned_sms_number, lead_tags(tag_id, tags(name))',
+        )
+        .in('id', chunk)
+        .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
+      if (leadErr) throw leadErr;
+      for (const l of chunkLeads ?? []) leadsById.set(l.id, l);
+    }
 
     // Preserve the caller's own ordering rather than whatever order Postgres
     // happens to return, so the round-robin split below is deterministic.
-    const byId = new Map((leadsById ?? []).map((l) => [l.id, l]));
-    const leads = leadIds.map((id) => byId.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
+    const leads = leadIds.map((id) => leadsById.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
 
     function isActiveKey(key: string | null | undefined): key is string {
       return !!key && !!NUMBERS[key]?.phone && !!NUMBERS[key]?.email;
@@ -281,7 +298,9 @@ Deno.serve(async (req) => {
     if (dailyLimit > 0) {
       await Promise.all(
         senders.map(async ([key, n]) => {
-          const { data: used } = await admin.rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 });
+          const { data: used } = await admin
+            .rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 })
+            .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
           dailyRemaining.set(key, Math.max(0, dailyLimit - Number(used ?? 0)));
         }),
       );
