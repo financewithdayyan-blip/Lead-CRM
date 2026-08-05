@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Check, Copy, Download, Eye, Trash2 } from 'lucide-react';
-import type { ContractInstance } from '@/hooks/useContractInstances';
+import { useMemo, useState } from 'react';
+import { Check, Copy, Download, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
 import { roleLabel } from '@/hooks/useDocTemplates';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 /** Shared row rendering for a generated contract — used by both the global
  * Contracts tab and a single template's Sign Inbox. */
@@ -20,6 +20,19 @@ export function ContractInstanceRow({
   onDelete: () => void;
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
+  const { data: events = [] } = useContractAuditEvents(c.id);
+
+  // Most recent "opened the link" moment per party, if any — lets an admin
+  // tell "sent but never opened" apart from "opened, just hasn't signed yet."
+  const lastViewedByParty = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of events) {
+      if (e.eventType !== 'viewed' || !e.partyId) continue;
+      const existing = map.get(e.partyId);
+      if (!existing || e.createdAt > existing) map.set(e.partyId, e.createdAt);
+    }
+    return map;
+  }, [events]);
 
   function copyPartyLink(id: string, token: string) {
     navigator.clipboard.writeText(`${window.location.origin}/crm/sign/${token}`);
@@ -38,12 +51,18 @@ export function ContractInstanceRow({
         <div className="mt-1 flex gap-1.5">
           {c.parties.map((p) => {
             const unlocked = !c.parties.some((other) => other.signOrder < p.signOrder && other.status !== 'signed');
+            const lastViewed = lastViewedByParty.get(p.id);
             return (
               <span
                 key={p.id}
                 className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${p.status === 'signed' ? 'bg-success-dim text-success' : 'bg-surface-2 text-text-3'}`}
               >
                 {roleLabel(p.role, c.templateType ?? 'contract')} {p.status === 'signed' ? '✓' : '· pending'}
+                {p.status !== 'signed' && unlocked && (
+                  <span title={lastViewed ? `Opened the link ${formatDateTime(lastViewed)}` : "Hasn't opened the link yet"}>
+                    {lastViewed ? <Eye size={10} className="text-info" /> : <EyeOff size={10} className="text-text-3" />}
+                  </span>
+                )}
                 {p.status !== 'signed' && unlocked && (
                   <button
                     className="ml-0.5 text-text-3 hover:text-text"
