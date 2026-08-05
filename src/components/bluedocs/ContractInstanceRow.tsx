@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Download, Eye, Trash2 } from 'lucide-react';
 import type { ContractInstance } from '@/hooks/useContractInstances';
+import { roleLabel } from '@/hooks/useDocTemplates';
 import { formatDate } from '@/lib/utils';
 
 /** Shared row rendering for a generated contract — used by both the global
@@ -40,9 +41,9 @@ export function ContractInstanceRow({
             return (
               <span
                 key={p.id}
-                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold capitalize ${p.status === 'signed' ? 'bg-success-dim text-success' : 'bg-surface-2 text-text-3'}`}
+                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${p.status === 'signed' ? 'bg-success-dim text-success' : 'bg-surface-2 text-text-3'}`}
               >
-                {p.role} {p.status === 'signed' ? '✓' : '· pending'}
+                {roleLabel(p.role, c.templateType ?? 'contract')} {p.status === 'signed' ? '✓' : '· pending'}
                 {p.status !== 'signed' && unlocked && (
                   <button
                     className="ml-0.5 text-text-3 hover:text-text"

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
-import type { ContractField, ContractFieldRole } from '@/hooks/useDocTemplates';
+import { roleLabel, type ContractField, type ContractFieldRole } from '@/hooks/useDocTemplates';
 
 export const ROLE_COLOR: Record<ContractFieldRole, string> = {
   buyer: '#0ea5e9',
@@ -23,6 +23,7 @@ export function ContractDocumentPage({
   fieldValues,
   signatures,
   activeRole,
+  docType = 'contract',
   editableValues,
   onEditableChange,
 }: {
@@ -33,6 +34,9 @@ export function ContractDocumentPage({
   fieldValues: Record<string, string>;
   signatures: Array<{ role: ContractFieldRole; signatureDataUrl: string }>;
   activeRole?: ContractFieldRole;
+  /** Only changes wording ("Us" vs "Buyer") — the underlying role stored on
+   * each field is the same either way. */
+  docType?: 'loi' | 'contract';
   /** When provided (the signer's own page only), a field belonging to
    * activeRole with no saved value yet renders as a live input instead of
    * staying blank — this is how the buyer/seller actually fill in their own
@@ -63,9 +67,10 @@ export function ContractDocumentPage({
       style={{ width: pageWidth }}
     >
       {pageFields.map((f) => {
-        if (f.type === 'text' || f.type === 'full_name' || f.type === 'currency' || f.type === 'date') {
+        if (f.type === 'text' || f.type === 'full_name' || f.type === 'currency' || f.type === 'date' || f.type === 'paragraph') {
           const value = fieldValues[f.id];
           const isMine = f.role === activeRole;
+          const isParagraph = f.type === 'paragraph';
 
           if (!value && isMine && editableValues && onEditableChange) {
             return (
@@ -73,15 +78,25 @@ export function ContractDocumentPage({
                 {f.type === 'currency' && (
                   <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-[11px] text-slate-500">$</span>
                 )}
-                <input
-                  type={f.type === 'date' ? 'date' : 'text'}
-                  className={`h-full w-full rounded-sm border-2 border-dashed bg-white/95 text-[11px] text-slate-800 outline-none ${f.type === 'currency' ? 'pl-3.5' : 'px-1'}`}
-                  style={{ borderColor: ROLE_COLOR[f.role] }}
-                  placeholder={f.label}
-                  inputMode={f.type === 'currency' ? 'decimal' : undefined}
-                  value={editableValues[f.id] ?? ''}
-                  onChange={(e) => onEditableChange(f.id, e.target.value)}
-                />
+                {isParagraph ? (
+                  <textarea
+                    className="h-full w-full resize-none rounded-sm border-2 border-dashed bg-white/95 p-1 text-[11px] leading-snug text-slate-800 outline-none"
+                    style={{ borderColor: ROLE_COLOR[f.role] }}
+                    placeholder={f.label}
+                    value={editableValues[f.id] ?? ''}
+                    onChange={(e) => onEditableChange(f.id, e.target.value)}
+                  />
+                ) : (
+                  <input
+                    type={f.type === 'date' ? 'date' : 'text'}
+                    className={`h-full w-full rounded-sm border-2 border-dashed bg-white/95 text-[11px] text-slate-800 outline-none ${f.type === 'currency' ? 'pl-3.5' : 'px-1'}`}
+                    style={{ borderColor: ROLE_COLOR[f.role] }}
+                    placeholder={f.label}
+                    inputMode={f.type === 'currency' ? 'decimal' : undefined}
+                    value={editableValues[f.id] ?? ''}
+                    onChange={(e) => onEditableChange(f.id, e.target.value)}
+                  />
+                )}
               </div>
             );
           }
@@ -90,7 +105,11 @@ export function ContractDocumentPage({
           return (
             <div
               key={f.id}
-              className="absolute flex items-center overflow-hidden truncate text-[11px] text-slate-800"
+              className={
+                isParagraph
+                  ? 'absolute overflow-y-auto whitespace-pre-wrap text-[10.5px] leading-snug text-slate-800'
+                  : 'absolute flex items-center overflow-hidden truncate text-[11px] text-slate-800'
+              }
               style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%` }}
             >
               {value}
@@ -120,8 +139,8 @@ export function ContractDocumentPage({
             className="absolute rounded-sm border-2 border-dashed"
             style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: ROLE_COLOR[f.role] }}
           >
-            <span className="pointer-events-none px-1 text-[9px] font-semibold capitalize" style={{ color: ROLE_COLOR[f.role] }}>
-              {isMine ? 'Sign below ↓' : `${f.role} — not yet signed`}
+            <span className="pointer-events-none px-1 text-[9px] font-semibold" style={{ color: ROLE_COLOR[f.role] }}>
+              {isMine ? 'Sign below ↓' : `${roleLabel(f.role, docType)} — not yet signed`}
             </span>
           </div>
         );

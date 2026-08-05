@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useGenerateContract } from '@/hooks/useContractInstances';
-import type { DocTemplate } from '@/hooks/useDocTemplates';
+import { roleLabel, type DocTemplate } from '@/hooks/useDocTemplates';
 
 /**
  * Just enough to identify the deal and both parties — no CRM lead lookup,
- * and neither party's own contract fields (name, amount, etc.) are collected
- * here. Buyer always signs first and fills in their own fields on their
- * signing page; the seller sees what the buyer entered and fills in the rest
- * on theirs.
+ * and neither party's own fields (name, amount, etc.) are collected here.
+ * The "buyer" role (shown as "Us" for an LOI) always goes first and fills in
+ * their own fields on their signing page; the seller sees what was already
+ * entered and fills in the rest on theirs.
  */
 export function SendContractModal({
   template,
@@ -21,11 +21,12 @@ export function SendContractModal({
   onSent: (links: { seller: string; buyer: string }) => void;
 }) {
   const generate = useGenerateContract();
+  const firstRoleLabel = roleLabel('buyer', template.type);
 
   const [name, setName] = useState(template.name);
   const [sellerName, setSellerName] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
-  const [buyerName, setBuyerName] = useState('');
+  const [buyerName, setBuyerName] = useState(template.type === 'loi' ? 'Us' : '');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -59,26 +60,27 @@ export function SendContractModal({
     <Modal open onClose={onClose} title={`Invite to Sign — "${template.name}"`} width="md">
       <div className="space-y-4">
         <div>
-          <label className="mb-1 block text-[12px] font-medium text-text-2">Contract name</label>
+          <label className="mb-1 block text-[12px] font-medium text-text-2">Document name</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border border-border-2 p-3">
-            <div className="mb-2 text-[12px] font-semibold text-text">Buyer — signs first</div>
+            <div className="mb-2 text-[12px] font-semibold text-text">{firstRoleLabel} — fills in first</div>
             <input className="input mb-1.5" placeholder="Name" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
             <input className="input" placeholder="Email (optional)" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} />
           </div>
           <div className="rounded-md border border-border-2 p-3">
-            <div className="mb-2 text-[12px] font-semibold text-text">Seller — signs after</div>
+            <div className="mb-2 text-[12px] font-semibold text-text">Seller — reviews after</div>
             <input className="input mb-1.5" placeholder="Name" value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
             <input className="input" placeholder="Email (optional)" value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
           </div>
         </div>
 
         <p className="text-[12px] text-text-3">
-          The buyer fills in their own fields and signs first. Once they're done, the seller's link unlocks — they'll
-          see everything the buyer entered, fill in the rest, and sign.
+          {firstRoleLabel === 'Us'
+            ? "We fill in our own fields and sign first. Once that's done, the seller's link unlocks — they'll see everything we entered, fill in the rest, and sign."
+            : "The buyer fills in their own fields and signs first. Once they're done, the seller's link unlocks — they'll see everything the buyer entered, fill in the rest, and sign."}
         </p>
 
         <div className="flex justify-end gap-2">

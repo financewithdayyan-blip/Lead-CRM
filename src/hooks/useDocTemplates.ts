@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export type ContractType = 'cash' | 'novation' | 'subject_to' | 'seller_finance';
-export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency';
+export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
 export type ContractFieldRole = 'buyer' | 'seller';
 
 export interface ContractField {
@@ -84,22 +84,35 @@ export function useSaveLoiTemplate() {
   });
 }
 
-/** Step 1 of the contract flow: upload the file(s), unmapped. A PDF is
+/** Step 1 of the contract/LOI flow: upload the file(s), unmapped. A PDF is
  * required (it's the only thing the field-mapping editor and the signer's
- * view can render); a Word original can ride along purely for reference. */
-export function useUploadContractTemplate() {
+ * view can render); a Word original can ride along purely for reference.
+ * Same upload for both doc types — an LOI is mapped and signed exactly like
+ * a contract, just with no contractType category underneath it. */
+export function useUploadDocTemplate() {
   const { session } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ contractType, pdfFile, docxFile }: { contractType: ContractType; pdfFile: File; docxFile?: File }) => {
+    mutationFn: async ({
+      docType,
+      contractType,
+      pdfFile,
+      docxFile,
+    }: {
+      docType: 'loi' | 'contract';
+      contractType?: ContractType;
+      pdfFile: File;
+      docxFile?: File;
+    }) => {
       const userId = session!.user.id;
-      const path = `contracts/${contractType}/${Date.now()}-${pdfFile.name}`;
+      const folder = docType === 'contract' ? `contracts/${contractType}` : 'loi';
+      const path = `${folder}/${Date.now()}-${pdfFile.name}`;
       const { error: uploadError } = await supabase.storage.from('blue-docs').upload(path, pdfFile);
       if (uploadError) throw uploadError;
 
       let docxStoragePath: string | null = null;
       if (docxFile) {
-        const docxPath = `contracts/${contractType}/${Date.now()}-${docxFile.name}`;
+        const docxPath = `${folder}/${Date.now()}-${docxFile.name}`;
         const { error: docxErr } = await supabase.storage.from('blue-docs').upload(docxPath, docxFile);
         if (docxErr) throw docxErr;
         docxStoragePath = docxPath;
@@ -109,8 +122,8 @@ export function useUploadContractTemplate() {
       const { data, error } = await supabase
         .from('doc_templates')
         .insert({
-          type: 'contract',
-          contract_type: contractType,
+          type: docType,
+          contract_type: docType === 'contract' ? contractType : null,
           name: defaultName,
           storage_path: path,
           file_name: pdfFile.name,
@@ -126,6 +139,14 @@ export function useUploadContractTemplate() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['doc_templates'] }),
   });
+}
+
+/** Buyer/seller are the stored roles everywhere, but an LOI isn't a sale
+ * contract — "buyer" there really means "us, the company sending it," so
+ * the UI shows that instead without needing a third role value in the schema. */
+export function roleLabel(role: ContractFieldRole, docType: 'loi' | 'contract'): string {
+  if (docType === 'loi' && role === 'buyer') return 'Us';
+  return role === 'buyer' ? 'Buyer' : 'Seller';
 }
 
 /** Step 2: the field-mapping editor's Save — names the template and marks it mapped. */

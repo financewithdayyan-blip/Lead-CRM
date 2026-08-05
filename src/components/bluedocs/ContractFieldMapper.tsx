@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Trash2, Type, Calendar, PenLine, User, DollarSign, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Trash2, Type, AlignLeft, Calendar, PenLine, User, DollarSign, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { loadPdf, renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
-import { useSaveContractMapping, type ContractField, type ContractFieldRole, type ContractFieldType, type DocTemplate } from '@/hooks/useDocTemplates';
+import { useSaveContractMapping, roleLabel, type ContractField, type ContractFieldRole, type ContractFieldType, type DocTemplate } from '@/hooks/useDocTemplates';
 
 const CANVAS_WIDTH = 700;
 
@@ -11,6 +11,7 @@ const FIELD_DEFAULTS: Record<ContractFieldType, { w: number; h: number; label: s
   full_name: { w: 18, h: 3.5, label: 'Full name' },
   currency: { w: 13, h: 3.5, label: 'Amount' },
   date: { w: 12, h: 3.5, label: 'Date' },
+  paragraph: { w: 32, h: 12, label: 'Clause' },
   signature: { w: 20, h: 6, label: 'Signature' },
 };
 
@@ -19,6 +20,7 @@ const FIELD_TYPE_BUTTONS: Array<{ type: ContractFieldType; label: string; icon: 
   { type: 'full_name', label: 'Full Name', icon: User },
   { type: 'currency', label: 'Currency', icon: DollarSign },
   { type: 'date', label: 'Date', icon: Calendar },
+  { type: 'paragraph', label: 'Paragraph', icon: AlignLeft },
   { type: 'signature', label: 'Signature', icon: PenLine },
 ];
 
@@ -219,7 +221,7 @@ export function ContractFieldMapper({
           style={placingRole === 'buyer' ? { background: ROLE_COLOR.buyer } : undefined}
           onClick={() => setPlacingRole('buyer')}
         >
-          Buyer
+          {roleLabel('buyer', template.type)}
         </button>
       </div>
 
@@ -307,7 +309,7 @@ export function ContractFieldMapper({
                   style={{ background: selected.role === 'buyer' ? ROLE_COLOR.buyer : '#cbd5e1' }}
                   onClick={() => updateSelected({ role: 'buyer' })}
                 >
-                  Buyer
+                  {roleLabel('buyer', template.type)}
                 </button>
               </div>
               <button className="btn btn-danger w-full !py-1 text-[12px]" onClick={deleteSelected}>

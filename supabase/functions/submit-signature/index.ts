@@ -10,7 +10,7 @@
 // briefly served a 2.112.1 build with a broken denonext auth-js subpath,
 // which failed every fresh bundle regardless of this function's own code.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
-import { PDFDocument, StandardFonts, rgb } from 'https://esm.sh/pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'https://esm.sh/pdf-lib@1.17.1';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -31,7 +31,7 @@ interface ContractField {
   yPct: number;
   wPct: number;
   hPct: number;
-  type: 'text' | 'signature' | 'date' | 'full_name' | 'currency';
+  type: 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
   role: 'buyer' | 'seller';
   label: string;
 }
@@ -42,6 +42,32 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+/** Greedy word-wrap against the font's actual measured width — a clause is
+ * whatever length the seller/buyer typed, so this is what turns that into
+ * lines that actually fit inside the mapped box on the real PDF page. */
+function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      lines.push('');
+      continue;
+    }
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (current && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) lines.push(current);
+  }
+  return lines;
 }
 
 Deno.serve(async (req) => {
@@ -145,6 +171,18 @@ Deno.serve(async (req) => {
         if (!value) continue;
         const fontSize = Math.max(8, Math.min(14, boxH * 0.6));
         page.drawText(value, { x: x + 2, y: y + boxH * 0.25, size: fontSize, font, color: rgb(0.05, 0.05, 0.05) });
+      } else if (field.type === 'paragraph') {
+        const value = fieldValues[field.id] ?? '';
+        if (!value) continue;
+        const fontSize = 9;
+        const lineHeight = fontSize * 1.25;
+        const maxLines = Math.max(1, Math.floor(boxH / lineHeight));
+        const lines = wrapText(value, font, fontSize, boxW - 4).slice(0, maxLines);
+        let lineY = y + boxH - fontSize;
+        for (const line of lines) {
+          page.drawText(line, { x: x + 2, y: lineY, size: fontSize, font, color: rgb(0.05, 0.05, 0.05) });
+          lineY -= lineHeight;
+        }
       } else if (field.type === 'signature') {
         const p = partyByRole.get(field.role);
         if (!p?.signature_data_url) continue;

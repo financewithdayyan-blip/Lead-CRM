@@ -14,6 +14,7 @@ export interface ContractInstance {
   id: string;
   templateId: string | null;
   templateName: string | null;
+  templateType: 'loi' | 'contract' | null;
   templateStoragePath: string | null;
   templateFields: ContractField[];
   leadId: string | null;
@@ -41,6 +42,7 @@ function fromRow(r: any): ContractInstance {
     id: r.id,
     templateId: r.template_id,
     templateName: r.doc_templates?.name ?? null,
+    templateType: r.doc_templates?.type ?? null,
     templateStoragePath: r.doc_templates?.storage_path ?? null,
     templateFields: r.doc_templates?.fields ?? [],
     leadId: r.lead_id,
@@ -64,7 +66,7 @@ function fromRow(r: any): ContractInstance {
   };
 }
 
-const INSTANCE_SELECT = '*, doc_templates(name, storage_path, fields), leads(first_name, last_name), contract_signing_parties(*)';
+const INSTANCE_SELECT = '*, doc_templates(name, storage_path, fields, type), leads(first_name, last_name), contract_signing_parties(*)';
 
 export function useContractInstances() {
   return useQuery({
@@ -152,6 +154,7 @@ export interface SigningPartyInfo {
   contractStatus: 'partial' | 'signed';
   templateStoragePath: string;
   templateFields: ContractField[];
+  templateType: 'loi' | 'contract';
   otherSignatures: Array<{ role: ContractFieldRole; signatureDataUrl: string }>;
 }
 
@@ -175,6 +178,7 @@ export function usePublicSigningParty(token: string | undefined) {
         contractStatus: d.contractStatus,
         templateStoragePath: d.templateStoragePath,
         templateFields: d.templateFields ?? [],
+        templateType: d.templateType ?? 'contract',
         otherSignatures: d.otherSignatures ?? [],
       } as SigningPartyInfo;
     },

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Eye, PenLine, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ContractDocumentPage } from './ContractDocumentPreview';
-import { useSignedTemplateUrl } from '@/hooks/useDocTemplates';
+import { useSignedTemplateUrl, roleLabel } from '@/hooks/useDocTemplates';
 import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { formatDateTime } from '@/lib/utils';
@@ -70,6 +70,7 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                 fields={instance.templateFields}
                 fieldValues={instance.fieldValues}
                 signatures={signatures}
+                docType={instance.templateType ?? 'contract'}
               />
             ))
           )}
@@ -95,7 +96,7 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] text-text">
-                        <span className="font-medium capitalize">{party?.role ?? 'Unknown party'}</span>
+                        <span className="font-medium">{party ? roleLabel(party.role, instance.templateType ?? 'contract') : 'Unknown party'}</span>
                         {party ? ` (${party.name})` : ''} {e.eventType === 'signed' ? 'signed the document' : 'opened the signing link'}
                       </div>
                       <div className="mt-0.5 text-[11px] text-text-3">

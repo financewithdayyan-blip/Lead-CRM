@@ -6,9 +6,10 @@ import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
 import { formatCurrency } from '@/lib/currency';
 import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONT } from '@/lib/typedSignature';
+import { roleLabel } from '@/hooks/useDocTemplates';
 
 const PAGE_WIDTH = 680;
-const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date']);
+const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph']);
 
 export function SignContractPage() {
   const { token } = useParams<{ token: string }>();
@@ -131,7 +132,7 @@ export function SignContractPage() {
         <div className="mb-4">
           <h1 className="text-lg font-semibold text-slate-800">{party.contractName}</h1>
           <p className="text-[13px] text-slate-500">
-            Signing as <span className="font-medium capitalize">{party.role}</span> — {party.name}
+            Signing as <span className="font-medium">{roleLabel(party.role, party.templateType)}</span> — {party.name}
             {myPendingFields.length > 0 ? ' — fill in the highlighted fields below, then sign.' : ''}
           </p>
         </div>
@@ -151,6 +152,7 @@ export function SignContractPage() {
               fieldValues={party.fieldValues}
               signatures={party.otherSignatures}
               activeRole={party.role}
+              docType={party.templateType}
               editableValues={fieldInputs}
               onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
             />
