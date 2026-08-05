@@ -157,7 +157,7 @@ export function DashboardView({
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
   const { data: tags = [] } = useTags(userId);
-  const { data: sendLog = [] } = useSendLog(userId, showSmsStats);
+  const { data: sendLog = [] } = useSendLog(showSmsStats);
   const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
 
   // One control drives the whole page — every range-scoped card and the

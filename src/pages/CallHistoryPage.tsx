@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, X } from 'lucide-react';
-import { useRecentActivities } from '@/hooks/useActivities';
+import { ClipboardList, Trash2, X } from 'lucide-react';
+import { useRecentActivities, useDeleteAllCallActivities } from '@/hooks/useActivities';
 import { useLeads } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_CONFIG } from '@/types/domain';
 import { formatDateTime, formatPhone, localIsoDate } from '@/lib/utils';
 
@@ -42,11 +43,13 @@ export function CallHistoryPage() {
   const { data: activities = [], isLoading } = useRecentActivities(undefined, 2000);
   const { data: leads = [] } = useLeads();
   const { data: tags = [] } = useTags();
+  const deleteAllCalls = useDeleteAllCallActivities();
 
   const [search, setSearch] = useState('');
   const [outcome, setOutcome] = useState('');
   const [time, setTime] = useState('all');
   const [rating, setRating] = useState('');
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const leadsById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
   const calls = useMemo(() => activities.filter((a) => a.type === 'call'), [activities]);
@@ -111,10 +114,30 @@ export function CallHistoryPage() {
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-2xl font-semibold text-text">Call History</h1>
-        <p className="text-sm text-text-3">Every call logged from your calling sessions</p>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-text">Call History</h1>
+          <p className="text-sm text-text-3">Every call logged from your calling sessions</p>
+        </div>
+        {calls.length > 0 && (
+          <button className="btn btn-danger shrink-0" onClick={() => setConfirmDeleteAll(true)}>
+            <Trash2 size={14} /> Delete All Call History
+          </button>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteAll}
+        title="Delete all call history?"
+        message={`This permanently deletes all ${calls.length} logged call${calls.length === 1 ? '' : 's'}. This can't be undone.`}
+        confirmLabel="Delete All"
+        danger
+        onConfirm={() => {
+          deleteAllCalls.mutate();
+          setConfirmDeleteAll(false);
+        }}
+        onCancel={() => setConfirmDeleteAll(false)}
+      />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Total Calls" value={stats.total} color="#10b981" />

@@ -10,18 +10,23 @@ export interface SendLogRow {
 /**
  * The append-only outreach log — deliberately outlives the lead it refers
  * to, so this is the only correct source for "how many have we ever sent",
- * unlike lead_activities which disappears with the lead. Admin-only RLS
- * means a caller's query here just comes back empty; `enabled` additionally
- * skips firing it at all for a caller session.
+ * unlike lead_activities which disappears with the lead. Account-wide, same
+ * as inbound_messages below: send_log.user_id records who/what triggered
+ * each send (the admin for a manual/bulk send, but the lead's own owner for
+ * an AI auto-reply or a backfilled historical message), not "which admin is
+ * viewing the dashboard" — filtering on the viewing admin's own id here
+ * silently dropped every AI/backfilled send from the SMS Sent trend while
+ * Replies stayed unscoped, making replies outnumber sends on the chart.
+ * Admin-only RLS means a caller's query here just comes back empty;
+ * `enabled` additionally skips firing it at all for a caller session.
  */
-export function useSendLog(userId: string, enabled: boolean) {
+export function useSendLog(enabled: boolean) {
   return useQuery({
-    queryKey: ['send_log_all', userId],
+    queryKey: ['send_log_all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('send_log')
         .select('id, sent_from, sent_at')
-        .eq('user_id', userId)
         .order('sent_at', { ascending: true });
       if (error) throw error;
       return (data ?? []).map((r): SendLogRow => ({ id: r.id, sentFrom: r.sent_from, createdAt: r.sent_at }));

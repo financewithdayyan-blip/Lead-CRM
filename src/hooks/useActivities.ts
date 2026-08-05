@@ -70,6 +70,26 @@ export function useDeleteActivity() {
   });
 }
 
+/** Wipes every logged call (type 'call') for the current user — Call History's "delete all". */
+export function useDeleteAllCallActivities() {
+  const { session } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('lead_activities')
+        .delete()
+        .eq('user_id', session!.user.id)
+        .eq('type', 'call');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recent_activities'] });
+      qc.invalidateQueries({ queryKey: ['activity_feed'] });
+    },
+  });
+}
+
 export function useUpdateActivity() {
   const qc = useQueryClient();
   return useMutation({
