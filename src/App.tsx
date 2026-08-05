@@ -29,6 +29,9 @@ const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then(
 const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) => ({ default: m.CallSessionPage })));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
+const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
+const PublicLoiPage = lazy(() => import('@/pages/PublicLoiPage').then((m) => ({ default: m.PublicLoiPage })));
+const SignContractPage = lazy(() => import('@/pages/SignContractPage').then((m) => ({ default: m.SignContractPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +63,8 @@ export default function App() {
                   <Route path="/accept-invite" element={<AcceptInvitePage />} />
                   {/* Public — investors reach this with no account and no session. */}
                   <Route path="/deal/:slug" element={<PublicPacketPage />} />
+                  <Route path="/loi/:slug" element={<PublicLoiPage />} />
+                  <Route path="/sign/:token" element={<SignContractPage />} />
                   <Route element={<ProtectedRoute />}>
                     <Route path="/session" element={<CallSessionPage />} />
                     <Route element={<AppShell />}>
@@ -75,6 +80,7 @@ export default function App() {
                             only, so this sits behind the same guard as /team. */}
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />
                         <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
+                        <Route path="/blue-docs" element={<BlueDocsPage />} />
                         <Route path="/team" element={<TeamPage />} />
                         <Route path="/team/:memberId" element={<MemberDashboardPage />} />
                         <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
