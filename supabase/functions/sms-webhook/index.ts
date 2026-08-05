@@ -9,6 +9,33 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET_TOKEN')!;
 
+// Phone only — mirrors the same slots in send-sms/ai-reply, but this
+// function never sends, only needs to recognize which of the 4 numbers a
+// recovered send_log row went out from.
+const NUMBER_PHONES: Record<string, string> = {
+  '1': Deno.env.get('ZOOM_FROM_NUMBER') ?? '',
+  '2': Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '',
+  '3': Deno.env.get('ZOOM_FROM_NUMBER_3') ?? '',
+  '4': Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '',
+};
+
+function keyForSentFrom(sentFrom: string): string | undefined {
+  const digits = sentFrom.replace(/[^0-9]/g, '').slice(-10);
+  return Object.entries(NUMBER_PHONES).find(([, phone]) => phone.replace(/[^0-9]/g, '').slice(-10) === digits)?.[0];
+}
+
+/**
+ * Best-effort only — a street address anchored to a trailing state+zip
+ * ("... 920 E Concord Ave, Orange, CA 92867 ..."), which is the one part of
+ * these templates reliable enough to regex out. Templates without a zip in
+ * the text (short-form ones) simply won't match, and that's fine: the AI
+ * asks the lead to confirm the address itself when it's still missing.
+ */
+function extractAddress(body: string): string | undefined {
+  const m = body.match(/\bat\s+(\d[^,]*(?:,[^,]*){1,3}?,\s*[A-Z]{2}\s*\d{5}(?:-\d{4})?)/);
+  return m?.[1]?.trim();
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-zm-signature, x-zm-request-timestamp',
@@ -170,6 +197,66 @@ async function resolveLead(admin: ReturnType<typeof createClient>, fromNorm: str
   return addressMatches.length === 1 ? addressMatches[0] : candidates[0];
 }
 
+/**
+ * A reply from a number with zero lead match at all — either the original
+ * outreach predates this CRM's tracking, went out through Zoom directly, or
+ * the lead record was deleted sometime after being texted. Rather than drop
+ * the reply on the floor (the old behavior — stored in inbound_messages with
+ * lead_id null and nothing else happens), recreate a minimal lead from
+ * whatever's recoverable, so the reply gets a real home and a real reply.
+ * Name and address are filled in conversationally by the AI's own
+ * missing-name/address special case when this function can't recover them.
+ */
+async function createLeadFromUnmatched(admin: ReturnType<typeof createClient>, fromRaw: string, fromNorm: string) {
+  const { data: priorSends } = await admin
+    .from('send_log')
+    .select('sent_from, body')
+    .eq('phone_norm', fromNorm)
+    .order('sent_at', { ascending: false })
+    .limit(5);
+
+  const assignedKey = priorSends?.[0] ? keyForSentFrom(priorSends[0].sent_from) : undefined;
+  const recoveredAddress = (priorSends ?? []).map((s) => extractAddress(s.body ?? '')).find(Boolean);
+
+  // Leads need a real owner (user_id is NOT NULL, FK to profiles) — the
+  // oldest admin account stands in since there's no logged-in user on an
+  // inbound webhook to attribute this to.
+  const { data: owner } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('role', 'admin')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!owner) return undefined;
+
+  const { data: created } = await admin
+    .from('leads')
+    .insert({
+      user_id: owner.id,
+      first_name: '',
+      last_name: '',
+      phone: fromRaw.startsWith('+') ? fromRaw : `+${fromRaw}`,
+      phone_norm: fromNorm,
+      address: recoveredAddress ?? null,
+      stage: 'replied',
+      assigned_sms_number: assignedKey ?? null,
+    })
+    .select('id, stage, user_id, address, created_at')
+    .single();
+
+  if (created) {
+    await admin.from('lead_activities').insert({
+      lead_id: created.id,
+      user_id: owner.id,
+      type: 'note',
+      body: 'Auto-created from an inbound reply with no matching lead in the CRM. Name/address not yet confirmed.',
+    });
+  }
+
+  return created ?? undefined;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -277,7 +364,7 @@ Deno.serve(async (req) => {
     // unrelated lead whose own number was blank. A short-circuit here is the
     // difference between "no match" and "wrong match". See resolveLead for
     // how a phone number matching more than one lead gets disambiguated.
-    const lead = await resolveLead(admin, fromNorm);
+    const lead = (await resolveLead(admin, fromNorm)) ?? (fromNorm.length === 10 ? await createLeadFromUnmatched(admin, fromRaw, fromNorm) : undefined);
     if (lead) {
       await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);
 

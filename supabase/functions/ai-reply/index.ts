@@ -158,6 +158,10 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 
 - Code Violation leads asking "what violation?": don't jump into ownership questions immediately. Redirect toward the cash-offer pitch first — mention you buy houses in any condition, violations included, for cash — and only move into qualification once they show real interest.
 
+- Their name and/or the property address are missing from WHAT YOU ACTUALLY KNOW above: get them confirmed before anything else, ahead of even step 1 of the framework. Ask naturally, not like an intake form ("Hey, this is {{AGENT_NAME}} — who am I speaking with, and just to confirm, is this about the property at [whatever address they mention, if any]?"). Once they answer, treat it as established fact for the rest of the conversation and move into the framework normally.
+
+- Replies with "help", "please help", "need help", or similar (distinct from the bare compliance HELP keyword, which never reaches you): this is them saying they want to move forward, not a request for customer support. Don't ask "help with what?" — briefly acknowledge and go straight into the framework's next step.
+
 - Negative or declining, or an explicit request to not be contacted again (in any phrasing, not just a bare "STOP" — plain STOP-style keywords are handled separately and never reach you): reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Also set hard_decline:
   - false only if the decline is clearly and specifically about the price or offer amount (e.g. "too low", "not enough", "lowball", "insulting offer") and nothing else — not a refusal to sell at all, just this number. This stops you from texting them further without marking them permanently unreachable, since a different number or a human follow-up might still work.
   - true for every other kind of decline — not interested, wrong time, doesn't want to sell, tired of being contacted, or anything not clearly and only about price. If genuinely unsure which one this is, set hard_decline true: treat it as the permanent, safer option rather than guess.
@@ -349,7 +353,7 @@ Deno.serve(async (req) => {
   const leadContext =
     leadContextLines.length > 0
       ? leadContextLines.join('\n')
-      : 'No address or name on file for this lead in the CRM. If asked for the address, say you will check and get back to them rather than guessing at one.';
+      : 'No address or name on file for this lead in the CRM yet. Before going further into the framework, ask them directly to confirm their name and the property address you\'re texting about, so their file is accurate. Never guess at either.';
 
   const system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName)
     .replace('{{LEAD_CONTEXT}}', leadContext)
@@ -408,6 +412,16 @@ Deno.serve(async (req) => {
                 description:
                   "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (condition, price, timeline, motivation if mentioned, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
               },
+              confirmed_first_name: {
+                type: 'string',
+                description:
+                  'Only fill in when their first name above was missing and they just stated it in this message for the first time. Empty string otherwise — never repeat a name that was already on file.',
+              },
+              confirmed_address: {
+                type: 'string',
+                description:
+                  'Only fill in when the property address above was missing and they just confirmed or stated it in this message for the first time. Empty string otherwise — never repeat an address that was already on file.',
+              },
             },
             required: ['reply_parts', 'fully_qualified', 'negative_reply'],
           },
@@ -434,13 +448,33 @@ Deno.serve(async (req) => {
     return json({ error: 'no draft produced' }, 502);
   }
 
-  const { reply_parts: rawParts, fully_qualified: fullyQualified, negative_reply: negativeReply, hard_decline: hardDeclineRaw, summary } = toolUse.input as {
+  const {
+    reply_parts: rawParts,
+    fully_qualified: fullyQualified,
+    negative_reply: negativeReply,
+    hard_decline: hardDeclineRaw,
+    summary,
+    confirmed_first_name: confirmedFirstName,
+    confirmed_address: confirmedAddress,
+  } = toolUse.input as {
     reply_parts: string[];
     fully_qualified: boolean;
     negative_reply: boolean;
     hard_decline?: boolean;
     summary?: string;
+    confirmed_first_name?: string;
+    confirmed_address?: string;
   };
+
+  // Fills in a name/address the CRM never had — independent of qualification
+  // outcome, since a lead can state their name on a message that doesn't
+  // otherwise complete the framework.
+  const recoveredFields: Record<string, unknown> = {};
+  if (confirmedFirstName?.trim() && !lead.first_name) recoveredFields.first_name = confirmedFirstName.trim();
+  if (confirmedAddress?.trim() && !lead.address) recoveredFields.address = confirmedAddress.trim();
+  if (Object.keys(recoveredFields).length > 0) {
+    await admin.from('leads').update(recoveredFields).eq('id', leadId);
+  }
   // Anything other than an explicit false defaults to the safer, permanent
   // path — a missing or ambiguous field is not the same as a confident "this
   // is just about price."
