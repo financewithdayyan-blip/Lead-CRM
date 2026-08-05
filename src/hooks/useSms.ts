@@ -135,17 +135,33 @@ export function useBulkSmsJobs() {
   });
 }
 
+const ITEMS_PAGE_SIZE = 1000;
+
 export function useBulkSmsJobItems(jobId: string | undefined, jobStatus: string | undefined) {
   return useQuery({
     queryKey: ['bulk_sms_job_items', jobId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('bulk_sms_job_items')
-        .select('*')
-        .eq('job_id', jobId!)
-        .order('updated_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map(dbToBulkSmsJobItem);
+      // PostgREST caps an unpaginated select at 1000 rows — a batch bigger
+      // than that (bulk sends regularly run 1000+ leads) would silently come
+      // back truncated, so the live counts stall short of the real total.
+      // Page through with .range() until a page comes back short. Ordered by
+      // id (stable) rather than updated_at — rows are actively being updated
+      // by send-sms while this loop runs, so sorting by a mutating column
+      // could shift a row between pages mid-fetch and drop or double it.
+      const rows: any[] = [];
+      for (let from = 0; ; from += ITEMS_PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('bulk_sms_job_items')
+          .select('*')
+          .eq('job_id', jobId!)
+          .order('id', { ascending: true })
+          .range(from, from + ITEMS_PAGE_SIZE - 1);
+        if (error) throw error;
+        rows.push(...(data ?? []));
+        if (!data || data.length < ITEMS_PAGE_SIZE) break;
+      }
+      rows.sort((a, b) => (a.updated_at < b.updated_at ? -1 : a.updated_at > b.updated_at ? 1 : 0));
+      return rows.map(dbToBulkSmsJobItem);
     },
     enabled: !!jobId,
     refetchInterval: jobStatus === 'running' ? 1500 : false,
