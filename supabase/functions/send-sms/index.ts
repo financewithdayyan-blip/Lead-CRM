@@ -84,13 +84,22 @@ export function withinSendWindow(now = new Date()): boolean {
 // per message would be both slow and needlessly rate-limited.
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// Every outbound fetch in this file gets this same cap. Without it, a Zoom
+// endpoint that hangs instead of erroring stalls the whole job forever —
+// bulk_sms_jobs sits at 'running' with nothing left to ever mark it failed,
+// since nothing ever throws. Found this the hard way: two separate jobs
+// (one with 1441 leads, one with just 5) both got stuck at exactly
+// created_at === updated_at, meaning execution never got past the very
+// first Zoom call. A timeout turns that hang into a real, caught error.
+const FETCH_TIMEOUT_MS = 15_000;
+
 async function zoomToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.token;
 
   const basic = btoa(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`);
   const res = await fetch(
     `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(ZOOM_ACCOUNT_ID)}`,
-    { method: 'POST', headers: { Authorization: `Basic ${basic}` } },
+    { method: 'POST', headers: { Authorization: `Basic ${basic}` }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
   );
 
   if (!res.ok) throw new Error(`Zoom auth failed (${res.status}): ${await res.text()}`);
@@ -113,6 +122,7 @@ async function zoomUserId(email: string, token: string): Promise<string> {
 
   const res = await fetch(`https://api.zoom.us/v2/users/${encodeURIComponent(email)}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Zoom user lookup failed for ${email} (${res.status}): ${await res.text()}`);
 
@@ -130,6 +140,7 @@ async function sendZoomSms(fromPhone: string, toPhone: string, message: string, 
       to_members: [{ phone_number: toPhone }],
       message,
     }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) throw new Error(`Zoom send failed (${res.status}): ${await res.text()}`);

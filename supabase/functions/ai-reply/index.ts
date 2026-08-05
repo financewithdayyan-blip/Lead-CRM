@@ -64,12 +64,19 @@ function humanizePunctuation(text: string): string {
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// A hung Zoom or Anthropic call with no timeout stalls this invocation
+// forever with nothing to ever surface the failure — the lead just never
+// gets a reply and nothing shows up as an error anywhere. Same class of bug
+// found and fixed in send-sms (see the note there): two bulk jobs got stuck
+// at 'running' forever because their own Zoom fetches had no timeout either.
+const FETCH_TIMEOUT_MS = 15_000;
+
 async function zoomToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.token;
   const basic = btoa(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`);
   const res = await fetch(
     `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(ZOOM_ACCOUNT_ID)}`,
-    { method: 'POST', headers: { Authorization: `Basic ${basic}` } },
+    { method: 'POST', headers: { Authorization: `Basic ${basic}` }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
   );
   if (!res.ok) throw new Error(`Zoom auth failed (${res.status}): ${await res.text()}`);
   const data = await res.json();
@@ -82,6 +89,7 @@ async function sendZoomSms(fromPhone: string, toPhone: string, message: string, 
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ sender: { phone_number: fromPhone }, to_members: [{ phone_number: toPhone }], message }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Zoom send failed (${res.status}): ${await res.text()}`);
 }
@@ -429,6 +437,7 @@ Deno.serve(async (req) => {
       ],
       tool_choice: { type: 'tool', name: 'draft_reply' },
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!aiRes.ok) {

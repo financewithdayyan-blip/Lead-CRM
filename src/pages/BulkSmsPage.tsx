@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Check, ChevronRight, Clock, Loader2, Send, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Send, X } from 'lucide-react';
 import { useBulkSmsJob, useBulkSmsJobItems, useBulkSmsJobs } from '@/hooks/useSms';
 import { formatDateTime } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
@@ -114,10 +114,13 @@ function BulkSmsHistory() {
   );
 }
 
+const PAGE_SIZE = 100;
+
 function BulkSmsJobDetail({ jobId }: { jobId: string }) {
   const navigate = useNavigate();
   const { data: job, isLoading: jobLoading } = useBulkSmsJob(jobId);
   const { data: items = [], isLoading: itemsLoading } = useBulkSmsJobItems(jobId, job?.status);
+  const [page, setPage] = useState(1);
 
   const counts = useMemo(() => {
     const c: Record<BulkSmsItemStatus, number> = { queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0 };
@@ -128,6 +131,10 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
   const running = job?.status === 'running';
   const done = counts.sent + counts.failed + counts.skipped;
   const total = job?.total ?? items.length;
+
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pageItems = items.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   return (
     <div>
@@ -183,7 +190,7 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {pageItems.map((item) => {
                   const cfg = STATUS_CONFIG[item.status];
                   const Icon = cfg.icon;
                   return (
@@ -207,6 +214,32 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
                 })}
               </tbody>
             </table>
+            {pageCount > 1 && (
+              <div className="flex items-center justify-between border-t border-border-2 px-3 py-2.5 text-[12px] text-text-2">
+                <span>
+                  Showing {(clampedPage - 1) * PAGE_SIZE + 1}–{Math.min(clampedPage * PAGE_SIZE, items.length)} of {items.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="btn !px-2 !py-1"
+                    disabled={clampedPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  <span className="text-text-3">
+                    Page {clampedPage} of {pageCount}
+                  </span>
+                  <button
+                    className="btn !px-2 !py-1"
+                    disabled={clampedPage >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
