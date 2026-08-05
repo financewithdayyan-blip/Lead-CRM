@@ -37,7 +37,7 @@ const CONTRACT_TYPES: Array<{ key: ContractType; label: string }> = [
 ];
 
 function publicLoiUrl(slug: string) {
-  return `${window.location.origin}/loi/${slug}`;
+  return `${window.location.origin}/crm/loi/${slug}`;
 }
 
 // ─── LOI Generator tab ──────────────────────────────────────────────────────
@@ -448,7 +448,7 @@ function ContractsTab() {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
 
   function copyPartyLink(id: string, token: string) {
-    navigator.clipboard.writeText(`${window.location.origin}/sign/${token}`);
+    navigator.clipboard.writeText(`${window.location.origin}/crm/sign/${token}`);
     setCopiedPartyId(id);
     setTimeout(() => setCopiedPartyId(null), 1500);
   }

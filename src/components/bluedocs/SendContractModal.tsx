@@ -57,8 +57,8 @@ export function SendContractModal({
       const seller = parties.find((p) => p.role === 'seller')!;
       const buyer = parties.find((p) => p.role === 'buyer')!;
       onSent({
-        seller: `${window.location.origin}/sign/${seller.access_token}`,
-        buyer: `${window.location.origin}/sign/${buyer.access_token}`,
+        seller: `${window.location.origin}/crm/sign/${seller.access_token}`,
+        buyer: `${window.location.origin}/crm/sign/${buyer.access_token}`,
       });
     } finally {
       setSubmitting(false);
