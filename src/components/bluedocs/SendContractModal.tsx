@@ -26,7 +26,7 @@ export function SendContractModal({
   const [name, setName] = useState(template.name);
   const [sellerName, setSellerName] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
-  const [buyerName, setBuyerName] = useState(template.type === 'loi' ? 'Us' : '');
+  const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -67,7 +67,12 @@ export function SendContractModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border border-border-2 p-3">
             <div className="mb-2 text-[12px] font-semibold text-text">{firstRoleLabel} — fills in first</div>
-            <input className="input mb-1.5" placeholder="Name" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
+            <input
+              className="input mb-1.5"
+              placeholder={firstRoleLabel === 'Us' ? 'Your name or company' : 'Name'}
+              value={buyerName}
+              onChange={(e) => setBuyerName(e.target.value)}
+            />
             <input className="input" placeholder="Email (optional)" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} />
           </div>
           <div className="rounded-md border border-border-2 p-3">

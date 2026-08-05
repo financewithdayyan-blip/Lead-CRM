@@ -198,7 +198,10 @@ export function useSubmitSignature() {
       fieldValues,
     }: {
       token: string;
-      signatureDataUrl: string;
+      /** Omitted entirely when this party's role has no signature field
+       * mapped — they still have to formally complete their turn, just
+       * without drawing/typing anything. */
+      signatureDataUrl?: string;
       fieldValues?: Record<string, string>;
     }) => {
       const { data, error } = await supabase.functions.invoke('submit-signature', {
@@ -209,7 +212,7 @@ export function useSubmitSignature() {
         throw new Error(errBody?.error || error.message);
       }
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+      return data as { ok: true; allSigned: boolean };
     },
   });
 }
@@ -218,6 +221,21 @@ export function useSigningPdfUrl() {
   return useMutation({
     mutationFn: async (token: string) => {
       const { data, error } = await supabase.functions.invoke('signing-pdf-url', { body: { token } });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      return (data as { url: string }).url;
+    },
+  });
+}
+
+/** The flattened, fully-executed PDF with the signing certificate appended
+ * — only resolves once the contract is actually fully signed. */
+export function useSignedFinalDocUrl() {
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const { data, error } = await supabase.functions.invoke('signing-pdf-url', { body: { token, final: true } });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);
         throw new Error(errBody?.error || error.message);

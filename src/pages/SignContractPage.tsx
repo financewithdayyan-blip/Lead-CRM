@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, FileText, Loader2 } from 'lucide-react';
-import { usePublicSigningParty, useSigningPdfUrl, useSubmitSignature, useLogSigningView } from '@/hooks/useContractInstances';
+import { CheckCircle2, Clock, Download, FileText, Loader2 } from 'lucide-react';
+import {
+  usePublicSigningParty,
+  useSigningPdfUrl,
+  useSubmitSignature,
+  useLogSigningView,
+  useSignedFinalDocUrl,
+} from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
 import { formatCurrency } from '@/lib/currency';
@@ -10,6 +16,29 @@ import { roleLabel } from '@/hooks/useDocTemplates';
 
 const PAGE_WIDTH = 680;
 const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph']);
+
+function DownloadCertificateButton({ token, docLabel }: { token: string; docLabel: string }) {
+  const getFinalUrl = useSignedFinalDocUrl();
+
+  async function handleDownload() {
+    const url = await getFinalUrl.mutateAsync(token);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${docLabel} (signed).pdf`;
+    a.click();
+  }
+
+  return (
+    <button
+      className="mt-4 flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={getFinalUrl.isPending}
+      onClick={handleDownload}
+    >
+      {getFinalUrl.isPending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+      Download {docLabel} with Audit Trail
+    </button>
+  );
+}
 
 export function SignContractPage() {
   const { token } = useParams<{ token: string }>();
@@ -20,6 +49,7 @@ export function SignContractPage() {
 
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [justCompletedAll, setJustCompletedAll] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState('');
   const loggedRef = useRef(false);
@@ -30,6 +60,13 @@ export function SignContractPage() {
   useEffect(() => {
     loadSignatureFont();
   }, []);
+
+  // The tab otherwise just says "BlueBird CRM" — a real giveaway that a
+  // seller is clicking a link into someone else's internal software rather
+  // than a document made for them.
+  useEffect(() => {
+    if (party) document.title = party.templateType === 'loi' ? 'LOI' : 'Contract';
+  }, [party]);
 
   // Logged once per page load regardless of turn state — an audit trail
   // needs "did they open it" on record even while they're still waiting.
@@ -51,6 +88,14 @@ export function SignContractPage() {
     [party],
   );
 
+  // Nothing to sign if this role has no signature field mapped at all — e.g.
+  // an LOI that's purely "we fill it in and send it," with the seller only
+  // ever meant to review it, not countersign anything.
+  const needsSignature = useMemo(
+    () => (party?.templateFields ?? []).some((f) => f.type === 'signature' && f.role === party?.role),
+    [party],
+  );
+
   useEffect(() => {
     if (!ready || seededRef.current || !party) return;
     seededRef.current = true;
@@ -68,16 +113,17 @@ export function SignContractPage() {
   const pageNums = useMemo(() => Array.from({ length: numPages }, (_, i) => i + 1), [numPages]);
 
   const allFieldsFilled = myPendingFields.every((f) => fieldInputs[f.id]?.trim());
-  const canSubmit = allFieldsFilled && !!signatureName.trim();
+  const canSubmit = allFieldsFilled && (!needsSignature || !!signatureName.trim());
 
   async function handleSubmit() {
     if (!token || !canSubmit) return;
-    const dataUrl = await renderTypedSignature(signatureName.trim());
+    const dataUrl = needsSignature ? await renderTypedSignature(signatureName.trim()) : undefined;
     const formatted = { ...fieldInputs };
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
     }
-    await submitSignature.mutateAsync({ token, signatureDataUrl: dataUrl, fieldValues: formatted });
+    const result = await submitSignature.mutateAsync({ token, signatureDataUrl: dataUrl, fieldValues: formatted });
+    setJustCompletedAll(result.allSigned);
     setSubmitted(true);
   }
 
@@ -101,13 +147,20 @@ export function SignContractPage() {
   }
 
   if (submitted || party.status === 'signed') {
+    const docLabel = party.templateType === 'loi' ? 'LOI' : 'Contract';
+    const fullyDone = justCompletedAll || party.contractStatus === 'signed';
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 text-center">
-        <div>
-          <CheckCircle2 size={40} className="mx-auto text-emerald-500" />
-          <p className="mt-3 text-lg font-semibold text-slate-800">You've signed {party.contractName}</p>
-          <p className="mt-1 text-slate-500">Thank you — you'll be notified once every party has completed signing.</p>
-        </div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4 text-center">
+        <CheckCircle2 size={40} className="mx-auto text-emerald-500" />
+        <p className="mt-3 text-lg font-semibold text-slate-800">
+          You've {needsSignature ? 'signed' : 'confirmed'} {party.contractName}
+        </p>
+        <p className="mt-1 text-slate-500">
+          {fullyDone
+            ? 'Every party has completed this document — you can download the final copy below.'
+            : "Thank you — you'll be notified once every party has completed signing."}
+        </p>
+        {fullyDone && token && <DownloadCertificateButton token={token} docLabel={docLabel} />}
       </div>
     );
   }
@@ -132,8 +185,9 @@ export function SignContractPage() {
         <div className="mb-4">
           <h1 className="text-lg font-semibold text-slate-800">{party.contractName}</h1>
           <p className="text-[13px] text-slate-500">
-            Signing as <span className="font-medium">{roleLabel(party.role, party.templateType)}</span> — {party.name}
-            {myPendingFields.length > 0 ? ' — fill in the highlighted fields below, then sign.' : ''}
+            Signing as <span className="font-medium">{roleLabel(party.role, party.templateType)}</span>
+            {party.name && party.name.toLowerCase() !== roleLabel(party.role, party.templateType).toLowerCase() ? ` — ${party.name}` : ''}
+            {myPendingFields.length > 0 ? ` — fill in the highlighted fields below, then ${needsSignature ? 'sign' : 'confirm'}.` : ''}
           </p>
         </div>
 
@@ -160,27 +214,35 @@ export function SignContractPage() {
         )}
 
         <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-2 text-[13px] font-semibold text-slate-700">Your signature</div>
-          <input
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-slate-500"
-            placeholder="Type your full name"
-            value={signatureName}
-            onChange={(e) => setSignatureName(e.target.value)}
-          />
-          <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50">
-            <span style={{ fontFamily: `"${SIGNATURE_FONT}", cursive`, fontSize: 40, color: '#111827' }}>
-              {signatureName || ' '}
-            </span>
-          </div>
+          {needsSignature ? (
+            <>
+              <div className="mb-2 text-[13px] font-semibold text-slate-700">Your signature</div>
+              <input
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-slate-500"
+                placeholder="Type your full name"
+                value={signatureName}
+                onChange={(e) => setSignatureName(e.target.value)}
+              />
+              <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50">
+                <span style={{ fontFamily: `"${SIGNATURE_FONT}", cursive`, fontSize: 40, color: '#111827' }}>
+                  {signatureName || ' '}
+                </span>
+              </div>
+            </>
+          ) : (
+            <p className="text-[13px] text-slate-600">
+              Nothing here needs your signature — just confirm below once you've reviewed everything above.
+            </p>
+          )}
           {!allFieldsFilled && (
-            <p className="mt-2 text-[12px] text-amber-600">Fill in every highlighted field above before signing.</p>
+            <p className="mt-2 text-[12px] text-amber-600">Fill in every highlighted field above before continuing.</p>
           )}
           <button
             className="mt-3 w-full rounded-md bg-slate-900 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!canSubmit || submitSignature.isPending}
             onClick={handleSubmit}
           >
-            {submitSignature.isPending ? 'Submitting…' : 'Sign & Submit'}
+            {submitSignature.isPending ? 'Submitting…' : needsSignature ? 'Sign & Submit' : 'Confirm & Submit'}
           </button>
         </div>
       </div>

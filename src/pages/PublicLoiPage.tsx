@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import { usePublicLoi } from '@/hooks/useGeneratedLois';
@@ -7,6 +8,12 @@ import { formatDate } from '@/lib/utils';
 export function PublicLoiPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: loi, isLoading, isError } = usePublicLoi(slug);
+
+  // The tab otherwise just says "BlueBird CRM" — a giveaway that a seller is
+  // clicking into internal company software rather than their own document.
+  useEffect(() => {
+    if (loi) document.title = 'LOI';
+  }, [loi]);
 
   if (isLoading) {
     return (

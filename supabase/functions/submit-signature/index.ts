@@ -2,15 +2,18 @@
 //
 // Public/unauthenticated, same posture as sms-webhook — the access_token
 // embedded in the signer's own URL is the credential, not a login. Records
-// one party's signature, and once every party on the contract has signed,
-// stamps every mapped field (pre-filled text, per-party dates, per-party
-// signature images) onto the template PDF with pdf-lib and stores the
-// flattened result as the contract's final executed document.
+// one party's completion (a drawn/typed signature if their role actually has
+// a signature field mapped, or just a plain confirmation if not — a party
+// with nothing assigned to sign still has to formally complete their turn so
+// the next party unlocks and the contract can finish). Once every party is
+// done, stamps every mapped field onto the template PDF with pdf-lib,
+// appends a signing-certificate page (who signed what, when, from where),
+// and stores the flattened result as the contract's final executed document.
 // Pinned rather than the floating @2 tag — esm.sh's "latest" resolution
 // briefly served a 2.112.1 build with a broken denonext auth-js subpath,
 // which failed every fresh bundle regardless of this function's own code.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'https://esm.sh/pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -70,12 +73,69 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
   return lines;
 }
 
+/** Small stateful cursor for the appended certificate page(s) — starts a new
+ * page automatically once the current one runs out of room. */
+class CertWriter {
+  doc: PDFDocument;
+  font: PDFFont;
+  bold: PDFFont;
+  width: number;
+  height: number;
+  margin = 56;
+  page: PDFPage;
+  y: number;
+
+  constructor(doc: PDFDocument, font: PDFFont, bold: PDFFont, width: number, height: number) {
+    this.doc = doc;
+    this.font = font;
+    this.bold = bold;
+    this.width = width;
+    this.height = height;
+    this.page = doc.addPage([width, height]);
+    this.y = height - this.margin;
+  }
+
+  private ensureRoom(lineHeight: number) {
+    if (this.y - lineHeight < this.margin) {
+      this.page = this.doc.addPage([this.width, this.height]);
+      this.y = this.height - this.margin;
+    }
+  }
+
+  heading(text: string) {
+    this.ensureRoom(24);
+    this.page.drawText(text, { x: this.margin, y: this.y, size: 16, font: this.bold, color: rgb(0.05, 0.05, 0.05) });
+    this.y -= 26;
+  }
+
+  subheading(text: string) {
+    this.ensureRoom(18);
+    this.page.drawText(text, { x: this.margin, y: this.y, size: 12, font: this.bold, color: rgb(0.05, 0.05, 0.05) });
+    this.y -= 18;
+  }
+
+  line(text: string, opts: { size?: number; color?: [number, number, number] } = {}) {
+    const size = opts.size ?? 10;
+    const [r, g, b] = opts.color ?? [0.2, 0.2, 0.2];
+    const maxWidth = this.width - this.margin * 2;
+    for (const wrapped of wrapText(text, this.font, size, maxWidth)) {
+      this.ensureRoom(size * 1.4);
+      this.page.drawText(wrapped, { x: this.margin, y: this.y, size, font: this.font, color: rgb(r, g, b) });
+      this.y -= size * 1.4;
+    }
+  }
+
+  gap(px = 10) {
+    this.y -= px;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
     const { token, signatureDataUrl, fieldValues: submittedFieldValues } = await req.json();
-    if (!token || !signatureDataUrl) return json({ error: 'Missing token or signature' }, 400);
+    if (!token) return json({ error: 'Missing token' }, 400);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -99,9 +159,12 @@ Deno.serve(async (req) => {
     if (blockedBy) return json({ error: `Waiting on ${blockedBy.name} to sign first` }, 409);
 
     const signedAt = new Date().toISOString();
+    const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+    const userAgent = req.headers.get('user-agent');
+
     const { error: updateErr } = await admin
       .from('contract_signing_parties')
-      .update({ status: 'signed', signature_data_url: signatureDataUrl, signed_at: signedAt })
+      .update({ status: 'signed', signature_data_url: signatureDataUrl ?? null, signed_at: signedAt })
       .eq('id', party.id);
     if (updateErr) throw updateErr;
 
@@ -109,8 +172,8 @@ Deno.serve(async (req) => {
       contract_instance_id: party.contract_instance_id,
       party_id: party.id,
       event_type: 'signed',
-      ip_address: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
-      user_agent: req.headers.get('user-agent'),
+      ip_address: ipAddress,
+      user_agent: userAgent,
     });
 
     // Whatever this party typed into their own fields (name, amount, etc.)
@@ -127,7 +190,7 @@ Deno.serve(async (req) => {
     }
 
     const updatedParties = (allParties ?? []).map((p) =>
-      p.id === party.id ? { ...p, status: 'signed', signature_data_url: signatureDataUrl, signed_at: signedAt } : p,
+      p.id === party.id ? { ...p, status: 'signed', signature_data_url: signatureDataUrl ?? null, signed_at: signedAt } : p,
     );
     const allSigned = updatedParties.every((p) => p.status === 'signed');
 
@@ -136,12 +199,12 @@ Deno.serve(async (req) => {
     // ── Every party has signed — flatten the final PDF. ──────────────────────
     const { data: instance, error: instErr } = await admin
       .from('contract_instances')
-      .select('*, doc_templates(storage_path, fields)')
+      .select('*, doc_templates(storage_path, fields, type, name)')
       .eq('id', party.contract_instance_id)
       .single();
     if (instErr) throw instErr;
 
-    const template = (instance as any).doc_templates as { storage_path: string; fields: ContractField[] };
+    const template = (instance as any).doc_templates as { storage_path: string; fields: ContractField[]; type: string; name: string };
     const fieldValues = (instance.field_values ?? {}) as Record<string, string>;
 
     const { data: pdfBlob, error: dlErr } = await admin.storage.from('blue-docs').download(template.storage_path);
@@ -150,6 +213,7 @@ Deno.serve(async (req) => {
 
     const pdfDoc = await PDFDocument.load(pdfBytes);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const pages = pdfDoc.getPages();
 
     const partyByRole = new Map(updatedParties.map((p) => [p.role, p]));
@@ -194,6 +258,46 @@ Deno.serve(async (req) => {
           // A malformed signature image shouldn't fail the whole document —
           // the field simply stays blank on the final PDF.
         }
+      }
+    }
+
+    // ── Append the signing certificate / audit trail page(s). ────────────────
+    const { data: auditEvents } = await admin
+      .from('contract_audit_events')
+      .select('party_id, event_type, ip_address, user_agent, created_at')
+      .eq('contract_instance_id', instance.id)
+      .order('created_at', { ascending: true });
+
+    const [firstPage] = pages;
+    const { width: certW, height: certH } = firstPage ? firstPage.getSize() : { width: 612, height: 792 };
+    const cert = new CertWriter(pdfDoc, font, boldFont, certW, certH);
+
+    const docKind = template.type === 'loi' ? 'Letter of Intent' : 'Contract';
+    cert.heading('Signing Certificate');
+    cert.line(`Document: ${instance.name} (${docKind})`);
+    cert.line(`Completed: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
+    cert.gap(14);
+
+    cert.subheading('Parties');
+    for (const p of updatedParties) {
+      const roleWord = template.type === 'loi' && p.role === 'buyer' ? 'Us' : p.role === 'buyer' ? 'Buyer' : 'Seller';
+      cert.line(`${roleWord}: ${p.name}${p.email ? ` <${p.email}>` : ''}`, { size: 10.5, color: [0.05, 0.05, 0.05] });
+      const event = (auditEvents ?? []).find((e) => e.party_id === p.id && e.event_type === 'signed');
+      if (p.signed_at) {
+        cert.line(`  Completed: ${new Date(p.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
+      }
+      if (event?.ip_address) cert.line(`  IP address: ${event.ip_address}`);
+      if (event?.user_agent) cert.line(`  Device: ${event.user_agent}`);
+      cert.line(`  Signature: ${p.signature_data_url ? 'Signed' : 'No signature required for this role'}`);
+      cert.gap(8);
+    }
+
+    const fieldsWithValues = (template.fields ?? []).filter((f) => f.type !== 'signature' && fieldValues[f.id]);
+    if (fieldsWithValues.length > 0) {
+      cert.gap(6);
+      cert.subheading('Fields Filled');
+      for (const f of fieldsWithValues) {
+        cert.line(`${f.label}: ${fieldValues[f.id]}`, { size: 10, color: [0.15, 0.15, 0.15] });
       }
     }
 
