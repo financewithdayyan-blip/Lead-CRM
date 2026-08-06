@@ -230,20 +230,35 @@ async function createLeadFromUnmatched(admin: ReturnType<typeof createClient>, f
     .maybeSingle();
   if (!owner) return undefined;
 
-  const { data: created } = await admin
+  // phone_norm is a generated column (derived from phone) — passing it
+  // explicitly makes Postgres reject the whole insert outright. That was
+  // happening on every single call here, silently (the error was never
+  // checked), so this function has never actually created a lead: every
+  // reply from a number the CRM didn't already recognize was landing with
+  // lead_id null forever, which also meant ai-reply — gated on a resolved
+  // lead — never fired for any of them.
+  const { data: created, error: createErr } = await admin
     .from('leads')
     .insert({
       user_id: owner.id,
       first_name: '',
       last_name: '',
       phone: fromRaw.startsWith('+') ? fromRaw : `+${fromRaw}`,
-      phone_norm: fromNorm,
       address: recoveredAddress ?? null,
       stage: 'replied',
       assigned_sms_number: assignedKey ?? null,
     })
     .select('id, stage, user_id, address, created_at')
     .single();
+
+  if (createErr) {
+    await admin.from('webhook_log').insert({
+      event_type: 'phone.sms_received.lead_create_failed',
+      payload: { fromRaw, fromNorm },
+      error: createErr.message,
+    });
+    return undefined;
+  }
 
   if (created) {
     await admin.from('lead_activities').insert({
