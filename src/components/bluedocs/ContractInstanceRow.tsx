@@ -1,8 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, Download, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Check, Copy, Download, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
 import { roleLabel } from '@/hooks/useDocTemplates';
 import { formatDate, formatDateTime } from '@/lib/utils';
+
+/** Every generated instance is named after its template ("Letter Of Intent to
+ * Purchase Real Estate"), which is identical across every deal — with no lead
+ * required to generate one anymore, that name alone can't tell two LOIs for
+ * different properties apart. Whatever field got mapped as the property
+ * address is the next best thing, once it's actually been filled in. */
+function findAddress(instance: ContractInstance): string | null {
+  const field = instance.templateFields.find((f) => f.type !== 'signature' && /address/i.test(f.label));
+  const value = field ? instance.fieldValues[field.id] : null;
+  return value?.trim() || null;
+}
 
 /** Shared row rendering for a generated contract — used by both the global
  * Contracts tab and a single template's Sign Inbox. */
@@ -21,6 +32,7 @@ export function ContractInstanceRow({
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
   const { data: events = [] } = useContractAuditEvents(c.id);
+  const address = useMemo(() => findAddress(c), [c]);
 
   // Most recent "opened the link" moment per party, if any — lets an admin
   // tell "sent but never opened" apart from "opened, just hasn't signed yet."
@@ -48,6 +60,11 @@ export function ContractInstanceRow({
           {showTemplateName && c.templateName ? `${c.templateName} · ` : ''}
           {formatDate(c.createdAt)}
         </div>
+        {address && (
+          <div className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-text-2" title={address}>
+            <MapPin size={11} className="shrink-0 text-text-3" /> {address}
+          </div>
+        )}
         <div className="mt-1 flex gap-1.5">
           {c.parties.map((p) => {
             const unlocked = !c.parties.some((other) => other.signOrder < p.signOrder && other.status !== 'signed');
