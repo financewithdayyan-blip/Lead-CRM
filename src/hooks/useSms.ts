@@ -21,7 +21,9 @@ export interface BulkSmsInput {
    * and auto-splits across every configured number instead. */
   fromKey: SmsNumberKey;
   perMessageDelayMs?: number;
-  dailyLimit?: number;
+  /** Per-number rolling 24h cap, keyed '1'-'4'. Missing or 0 for a key means
+   * unlimited for that number. */
+  dailyLimits?: Record<string, number>;
   /** When set, send-sms writes live per-lead progress to bulk_sms_job_items
    * as it works, instead of only returning a final summary at the end. */
   jobId?: string;
@@ -54,6 +56,14 @@ async function sendBulkSmsChunked(input: BulkSmsInput): Promise<BulkSmsResult> {
   const perNumberByKey = new Map<string, { key: string; label: string; sent: number }>();
 
   for (const chunk of chunks) {
+    // Checked between chunks, not mid-chunk — a chunk already in flight
+    // finishes (up to 100 leads), but no further one gets dispatched once
+    // an admin hits Stop. Cheap enough to check every time since each chunk
+    // itself takes tens of seconds.
+    if (rest.jobId) {
+      const { data: jobRow } = await supabase.from('bulk_sms_jobs').select('status').eq('id', rest.jobId).single();
+      if (jobRow?.status === 'paused') break;
+    }
     const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
       body: { ...rest, leadIds: chunk },
     });
@@ -216,11 +226,34 @@ export function useBulkSmsJobItems(jobId: string | undefined, jobStatus: string 
 }
 
 /**
- * Picks a stalled or failed job back up — only the leads still sitting at
- * 'queued' for it, using the same message/settings it was started with, so
- * retrying never re-texts someone who already got a message. Requires the
- * job to have a saved config (see useCreateBulkSmsJob); older jobs from
- * before that existed can't be auto-resumed.
+ * Stops a running send between chunks — the client-side loop in
+ * sendBulkSmsChunked checks for this and stops dispatching further batches,
+ * so a chunk already in flight (up to 100 leads) still finishes rather than
+ * being cut off mid-batch. Routed through a narrow RPC rather than a direct
+ * update, since bulk_sms_jobs has no client-side UPDATE policy at all — this
+ * is the one specific exception, and it can only ever move running->paused.
+ */
+export function usePauseBulkSmsJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await supabase.rpc('pause_bulk_sms_job', { p_job_id: jobId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bulk_sms_job'] });
+      qc.invalidateQueries({ queryKey: ['bulk_sms_jobs'] });
+    },
+  });
+}
+
+/**
+ * Picks a stalled, failed, or paused job back up — only the leads still
+ * sitting at 'queued' for it, using the same message/settings it was
+ * started with, so retrying never re-texts someone who already got a
+ * message. Requires the job to have a saved config (see
+ * useCreateBulkSmsJob); older jobs from before that existed can't be
+ * auto-resumed.
  */
 export function useResumeBulkSmsJob() {
   const qc = useQueryClient();

@@ -121,7 +121,7 @@ export function useSendManualReply() {
   return useMutation({
     mutationFn: async ({ leadId, body, fromKey }: { leadId: string; body: string; fromKey: SmsNumberKey }) => {
       const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey, dailyLimit: 0 },
+        body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);

@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
       defaultTemplate = '',
       fromKey = '1',
       perMessageDelayMs = 400,
-      dailyLimit = 0,
+      dailyLimits = {},
       jobId: jobIdIn,
     } = body as {
       leadIds: string[];
@@ -216,7 +216,9 @@ Deno.serve(async (req) => {
       defaultTemplate: string;
       fromKey: string;
       perMessageDelayMs?: number;
-      dailyLimit?: number;
+      /** Per-number rolling 24h cap, keyed '1'-'4' matching NUMBERS above.
+       * Missing or <= 0 for a key means unlimited for that number. */
+      dailyLimits?: Record<string, number>;
       jobId?: string;
     };
     jobId = jobIdIn;
@@ -300,22 +302,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Each number's own remaining rolling-24h capacity, checked once up
-    // front. A number already at its cap is simply skipped by the rotation
-    // below rather than blocking the whole run.
+    // Each number's own remaining rolling-24h capacity against its own
+    // configured limit, checked once up front. A number already at its cap
+    // is simply skipped by the rotation below rather than blocking the whole
+    // run — and a number with no limit set (or 0) never even gets checked,
+    // same as the old "dailyLimit <= 0" unlimited case, just per-number now.
     const dailyRemaining = new Map<string, number>();
-    if (dailyLimit > 0) {
-      await Promise.all(
-        senders.map(async ([key, n]) => {
-          const { data: used } = await admin
-            .rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 })
-            .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
-          dailyRemaining.set(key, Math.max(0, dailyLimit - Number(used ?? 0)));
-        }),
-      );
-      if (senders.every(([key]) => (dailyRemaining.get(key) ?? 0) <= 0)) {
-        return bail(`Every configured number has already reached the rolling 24h limit (${dailyLimit}).`, 422);
-      }
+    await Promise.all(
+      senders.map(async ([key, n]) => {
+        const limit = dailyLimits[key] ?? 0;
+        if (limit <= 0) return;
+        const { data: used } = await admin
+          .rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 })
+          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
+        dailyRemaining.set(key, Math.max(0, limit - Number(used ?? 0)));
+      }),
+    );
+    if (senders.every(([key]) => (dailyLimits[key] ?? 0) > 0 && (dailyRemaining.get(key) ?? 0) <= 0)) {
+      return bail('Every configured number has already reached its own rolling 24h limit.', 422);
     }
 
     const token = await zoomToken();
@@ -337,27 +341,28 @@ Deno.serve(async (req) => {
     // happened yet.
     const assignedCount = new Map<string, number>(senders.map(([key]) => [key, 0]));
 
-    // Equal target share per number, rounded up — the trailing number simply
-    // absorbs whatever's left once the queue runs out. senderIndex only ever
-    // moves forward: once a number's share or its own daily cap is hit, the
-    // rotation advances and never returns to it.
-    const targetPerNumber = Math.ceil(leadIds.length / senders.length);
-    let senderIndex = 0;
-    let sentTowardTarget = 0;
+    // True round robin — each non-pinned lead in sequence gets the NEXT
+    // number in rotation (1,2,3,4,1,2,3,4,...), not "fill number 1's whole
+    // share, then move to number 2". A number that's hit its own daily cap
+    // is simply skipped when its turn in the rotation comes up, rather than
+    // picked — the rotation itself keeps moving past it for later leads too.
+    let rotation = 0;
 
     function hasCapacity(key: string): boolean {
-      if (dailyLimit <= 0) return true;
+      if ((dailyLimits[key] ?? 0) <= 0) return true;
       return (assignedCount.get(key) ?? 0) < (dailyRemaining.get(key) ?? 0);
     }
 
-    function advance() {
-      while (
-        senderIndex < senders.length &&
-        (sentTowardTarget >= targetPerNumber || !hasCapacity(senders[senderIndex][0]))
-      ) {
-        senderIndex++;
-        sentTowardTarget = 0;
+    /** Next sender index in rotation with capacity, or -1 if every number is
+     * at its cap. Doesn't advance `rotation` itself — only actually assigning
+     * a lead does that, so a capacity-skip here doesn't throw off the
+     * sequence for leads after it. */
+    function nextSender(): number {
+      for (let i = 0; i < senders.length; i++) {
+        const idx = (rotation + i) % senders.length;
+        if (hasCapacity(senders[idx][0])) return idx;
       }
+      return -1;
     }
 
     // ── Phase 1: plan — decide every lead's outcome (skip) or sender
@@ -410,28 +415,27 @@ Deno.serve(async (req) => {
       // A lead already pinned to a number (from an earlier send) sticks to
       // it instead of the round robin, so replies keep landing in the same
       // Zoom thread rather than fragmenting across numbers. This sits
-      // outside the round-robin state entirely — it neither advances
-      // senderIndex nor counts toward any number's target share.
+      // outside the rotation entirely — it never advances `rotation`.
       let key: string;
       let from: { phone: string; email: string; label: string };
       const pinned = lead.assigned_sms_number as string | null | undefined;
       const isPinned = leadIds.length > 1 && isActiveKey(pinned) && senders.some(([k]) => k === pinned);
 
       if (isPinned) {
-        if (dailyLimit > 0 && !hasCapacity(pinned!)) {
+        if (!hasCapacity(pinned!)) {
           markSkipped(lead.id, 'assigned number has reached its rolling 24h limit');
           continue;
         }
         key = pinned!;
         from = NUMBERS[pinned!];
       } else {
-        advance();
-        if (senderIndex >= senders.length) {
+        const idx = nextSender();
+        if (idx === -1) {
           markSkipped(lead.id, 'every configured number has reached its rolling 24h limit');
           continue;
         }
-        [key, from] = senders[senderIndex];
-        sentTowardTarget++;
+        [key, from] = senders[idx];
+        rotation = (idx + 1) % senders.length;
       }
       assignedCount.set(key, (assignedCount.get(key) ?? 0) + 1);
 

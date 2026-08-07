@@ -40,7 +40,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [defaultTemplate, setDefaultTemplate] = useState('');
   const [templatesByTag, setTemplatesByTag] = useState<Record<string, string>>({});
-  const [dailyLimit, setDailyLimit] = useState(String(DEFAULT_SMS_SEND_SETTINGS.dailyLimitPerNumber));
+  const [dailyLimits, setDailyLimits] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -54,7 +54,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
   useEffect(() => {
     if (settingsSeededRef.current || !sendSettings) return;
     settingsSeededRef.current = true;
-    setDailyLimit(String(sendSettings.dailyLimitPerNumber));
+    setDailyLimits(Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, String(sendSettings.dailyLimits[k] ?? 0)])));
   }, [sendSettings]);
 
   // The window restricts genuine bulk sends only — selecting a single lead
@@ -102,9 +102,12 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
       // than waiting out the whole batch inside this modal before anything
       // is visible at all.
       const perMessageDelayMs = sendSettings?.perMessageDelayMs ?? DEFAULT_SMS_SEND_SETTINGS.perMessageDelayMs;
+      const normalizedLimits = Object.fromEntries(
+        SMS_NUMBER_KEYS.map((k) => [k, Math.max(0, Number(dailyLimits[k]) || 0)]),
+      );
       const job = await createJob.mutateAsync({
         leads,
-        config: { templatesByTag, defaultTemplate, fromKey, dailyLimit: Number(dailyLimit) || 0, perMessageDelayMs },
+        config: { templatesByTag, defaultTemplate, fromKey, dailyLimits: normalizedLimits, perMessageDelayMs },
       });
 
       // Not awaited: send-sms keeps running server-side and writes its own
@@ -117,7 +120,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
         templatesByTag,
         defaultTemplate,
         fromKey,
-        dailyLimit: Number(dailyLimit) || 0,
+        dailyLimits: normalizedLimits,
         perMessageDelayMs,
         jobId: job.id,
       });
@@ -152,8 +155,8 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
 
           {leads.length > 1 ? (
             <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[12px] text-text-2">
-              Splits evenly across every configured sending number, switching to the next once one reaches its
-              rolling 24h limit below.
+              Rotates through every configured sending number one lead at a time (1, 2, 3, 4, 1, 2, …), skipping a
+              number once it hits its own rolling 24h limit below.
             </div>
           ) : (
             <div>
@@ -230,19 +233,26 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
             </div>
           )}
 
-          <label className="block max-w-[260px]">
+          <div>
             <span className="label">Rolling 24h limit per number</span>
-            <input
-              className="input"
-              inputMode="numeric"
-              value={dailyLimit}
-              onChange={(e) => setDailyLimit(e.target.value)}
-            />
-            <p className="mt-1 text-[11px] text-text-3">
-              The most texts a single number will send in any trailing 24 hours before this send rotates to the next
-              number. Pre-filled from Settings — change it there to update the default for every future send.
+            <p className="mt-1 mb-2 text-[11px] text-text-3">
+              The most texts each number will send in any trailing 24 hours before this send rotates to the next
+              one. Pre-filled from Settings — change it there to update the default for every future send.
             </p>
-          </label>
+            <div className="flex flex-wrap gap-3">
+              {SMS_NUMBER_KEYS.map((key) => (
+                <label key={key} className="block w-[100px]">
+                  <span className="text-[11px] text-text-3">Number {key}</span>
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    value={dailyLimits[key] ?? ''}
+                    onChange={(e) => setDailyLimits((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
 
           {error && (
             <div className="rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">

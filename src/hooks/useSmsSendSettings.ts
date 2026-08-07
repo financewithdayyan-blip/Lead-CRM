@@ -3,17 +3,19 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface SmsSendSettings {
-  dailyLimitPerNumber: number;
+  /** Rolling 24h cap per sending number, keyed '1'-'4'. Missing or 0 for a
+   * key means unlimited for that number. */
+  dailyLimits: Record<string, number>;
   perMessageDelayMs: number;
 }
 
 /** Matches the table's own column defaults — used before the row has ever
  * loaded, and as the fallback for an admin who's never touched this yet. */
-export const DEFAULT_SMS_SEND_SETTINGS: SmsSendSettings = { dailyLimitPerNumber: 150, perMessageDelayMs: 400 };
+export const DEFAULT_SMS_SEND_SETTINGS: SmsSendSettings = { dailyLimits: {}, perMessageDelayMs: 400 };
 
 /** The bulk-SMS sending defaults BulkSmsModal pre-fills from, so an admin
- * sets the rolling daily limit and per-message delay once instead of
- * re-entering them on every send. */
+ * sets each number's own rolling daily limit and the per-message delay once
+ * instead of re-entering them on every send. */
 export function useSmsSendSettings() {
   const { session } = useAuth();
   return useQuery({
@@ -21,12 +23,12 @@ export function useSmsSendSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sms_send_settings')
-        .select('daily_limit_per_number, per_message_delay_ms')
+        .select('daily_limits, per_message_delay_ms')
         .eq('user_id', session!.user.id)
         .maybeSingle();
       if (error) throw error;
       return {
-        dailyLimitPerNumber: data?.daily_limit_per_number ?? DEFAULT_SMS_SEND_SETTINGS.dailyLimitPerNumber,
+        dailyLimits: (data?.daily_limits as Record<string, number>) ?? DEFAULT_SMS_SEND_SETTINGS.dailyLimits,
         perMessageDelayMs: data?.per_message_delay_ms ?? DEFAULT_SMS_SEND_SETTINGS.perMessageDelayMs,
       } as SmsSendSettings;
     },
@@ -42,7 +44,7 @@ export function useSaveSmsSendSettings() {
       const { error } = await supabase.from('sms_send_settings').upsert(
         {
           user_id: session!.user.id,
-          daily_limit_per_number: settings.dailyLimitPerNumber,
+          daily_limits: settings.dailyLimits,
           per_message_delay_ms: settings.perMessageDelayMs,
           updated_at: new Date().toISOString(),
         },

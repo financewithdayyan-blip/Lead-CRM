@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { useSmsSendSettings, useSaveSmsSendSettings } from '@/hooks/useSmsSendSettings';
+import { SMS_NUMBER_KEYS } from '@/lib/smsNumbers';
 
-/** Bulk-send defaults (rolling daily limit per number, delay between
- * messages) — set once here instead of re-entering on every send. */
+/** Bulk-send defaults (each number's own rolling daily limit, delay between
+ * messages) — set once here instead of re-entering on every send. Every
+ * slot is offered regardless of which are actually configured, same as the
+ * manual single-send picker — the client has no visibility into that. */
 export function BulkSmsSettingsEditor() {
   const { data: settings } = useSmsSendSettings();
   const save = useSaveSmsSendSettings();
-  const [dailyLimit, setDailyLimit] = useState('150');
+  const [limits, setLimits] = useState<Record<string, string>>({});
   const [delaySeconds, setDelaySeconds] = useState('0.4');
   const [saved, setSaved] = useState(false);
   const seededRef = useRef(false);
@@ -15,18 +18,19 @@ export function BulkSmsSettingsEditor() {
   useEffect(() => {
     if (!settings || seededRef.current) return;
     seededRef.current = true;
-    setDailyLimit(String(settings.dailyLimitPerNumber));
+    setLimits(Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, String(settings.dailyLimits[k] ?? 0)])));
     setDelaySeconds(String(settings.perMessageDelayMs / 1000));
   }, [settings]);
 
+  const normalizedLimits = Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, Math.max(0, Number(limits[k]) || 0)]));
   const dirty =
     !!settings &&
-    (Number(dailyLimit) !== settings.dailyLimitPerNumber ||
+    (SMS_NUMBER_KEYS.some((k) => normalizedLimits[k] !== (settings.dailyLimits[k] ?? 0)) ||
       Math.round((Number(delaySeconds) || 0) * 1000) !== settings.perMessageDelayMs);
 
   async function handleSave() {
     await save.mutateAsync({
-      dailyLimitPerNumber: Math.max(0, Number(dailyLimit) || 0),
+      dailyLimits: normalizedLimits,
       perMessageDelayMs: Math.max(0, Math.round((Number(delaySeconds) || 0) * 1000)),
     });
     setSaved(true);
@@ -49,17 +53,29 @@ export function BulkSmsSettingsEditor() {
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-4">
-        <label className="block max-w-[260px]">
-          <span className="label">Rolling 24h limit per number</span>
-          <input className="input" inputMode="numeric" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
-          <p className="mt-1 text-[11px] text-text-3">
-            The most texts any one sending number will go out from in any trailing 24 hours — a sliding window, not a
-            midnight reset. Once a number hits it, a bulk send rotates to the next configured number instead, which
-            keeps any single number from tripping carrier/10DLC volume filtering.
-          </p>
-        </label>
+      <div className="mt-3">
+        <span className="label">Rolling 24h limit per number</span>
+        <p className="mt-1 mb-2 text-[11px] text-text-3">
+          The most texts each number will go out from in any trailing 24 hours — a sliding window, not a midnight
+          reset. Once a number hits its own limit, a bulk send rotates to the next one instead, which keeps any
+          single number from tripping carrier/10DLC volume filtering. Leave a number at 0 for no cap.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {SMS_NUMBER_KEYS.map((key) => (
+            <label key={key} className="block w-[110px]">
+              <span className="text-[11px] text-text-3">Number {key}</span>
+              <input
+                className="input"
+                inputMode="numeric"
+                value={limits[key] ?? ''}
+                onChange={(e) => setLimits((prev) => ({ ...prev, [key]: e.target.value }))}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
 
+      <div className="mt-4">
         <label className="block max-w-[200px]">
           <span className="label">Delay between messages</span>
           <div className="flex items-center gap-1.5">

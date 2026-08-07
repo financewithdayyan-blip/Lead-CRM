@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, RotateCw, Send, X } from 'lucide-react';
-import { useBulkSmsJob, useBulkSmsJobItems, useBulkSmsJobs, useResumeBulkSmsJob } from '@/hooks/useSms';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Pause, RotateCw, Send, X } from 'lucide-react';
+import { useBulkSmsJob, useBulkSmsJobItems, useBulkSmsJobs, usePauseBulkSmsJob, useResumeBulkSmsJob } from '@/hooks/useSms';
 import { formatDateTime } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
@@ -17,6 +17,7 @@ const JOB_STATUS_CONFIG: Record<BulkSmsJobStatus, { label: string; color: string
   running: { label: 'Running', color: '#4f46e5' },
   completed: { label: 'Completed', color: '#10b981' },
   failed: { label: 'Failed', color: '#ef4444' },
+  paused: { label: 'Paused', color: '#f59e0b' },
 };
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
@@ -122,6 +123,7 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
   const { data: items = [], isLoading: itemsLoading } = useBulkSmsJobItems(jobId, job?.status);
   const [page, setPage] = useState(1);
   const resumeJob = useResumeBulkSmsJob();
+  const pauseJob = usePauseBulkSmsJob();
 
   const counts = useMemo(() => {
     const c: Record<BulkSmsItemStatus, number> = { queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0 };
@@ -132,7 +134,8 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
   const running = job?.status === 'running';
   const done = counts.sent + counts.failed + counts.skipped;
   const total = job?.total ?? items.length;
-  const canResume = job?.status === 'failed' && job.hasConfig && counts.queued > 0;
+  const canResume = (job?.status === 'failed' || job?.status === 'paused') && job.hasConfig && counts.queued > 0;
+  const canPause = running;
 
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
@@ -148,14 +151,29 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
           <p className="text-sm text-text-3">
             {running
               ? `Sending — ${done} of ${total} done…`
-              : job?.status === 'failed'
-                ? done > 0
-                  ? `Stopped after ${done} of ${total} — ${counts.queued} never got a message.`
-                  : 'This send failed to start.'
-                : `Finished — ${total} lead${total !== 1 ? 's' : ''}.`}
+              : job?.status === 'paused'
+                ? `Paused after ${done} of ${total} — ${counts.queued} still waiting.`
+                : job?.status === 'failed'
+                  ? done > 0
+                    ? `Stopped after ${done} of ${total} — ${counts.queued} never got a message.`
+                    : 'This send failed to start.'
+                  : `Finished — ${total} lead${total !== 1 ? 's' : ''}.`}
           </p>
         </div>
         <div className="flex gap-2">
+          {canPause && (
+            <button className="btn" disabled={pauseJob.isPending} onClick={() => pauseJob.mutate(jobId)}>
+              {pauseJob.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Stopping…
+                </>
+              ) : (
+                <>
+                  <Pause size={14} /> Stop
+                </>
+              )}
+            </button>
+          )}
           {canResume && (
             <button className="btn btn-primary" disabled={resumeJob.isPending} onClick={() => resumeJob.mutate(jobId)}>
               {resumeJob.isPending ? (
@@ -188,6 +206,13 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
         <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
           {resumeJob.error instanceof Error ? resumeJob.error.message : 'Could not resume this send.'}
+        </div>
+      )}
+
+      {pauseJob.isError && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          {pauseJob.error instanceof Error ? pauseJob.error.message : 'Could not stop this send.'}
         </div>
       )}
 

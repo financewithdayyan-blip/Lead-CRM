@@ -180,7 +180,7 @@ export interface Lead {
   scheduledCallbackNote: string | null;
 }
 
-export type BulkSmsJobStatus = 'running' | 'completed' | 'failed';
+export type BulkSmsJobStatus = 'running' | 'completed' | 'failed' | 'paused';
 export type BulkSmsItemStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped';
 
 export interface BulkSmsJob {
