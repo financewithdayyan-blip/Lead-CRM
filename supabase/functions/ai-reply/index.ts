@@ -707,5 +707,34 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Asked for photos, still don't have them — only Replied (mid-interview)
+  // and Qualified (fully_qualified without hasPhotos lands here, see the
+  // stage above) ever actually need this nudge; Follow-Up+ already has
+  // photos by definition. Deterministic rather than left to next_action's
+  // own judgment, since this is exactly the concrete gap that's easy for a
+  // model to gloss over, and de-duped against any already-open one so it
+  // doesn't re-insert on every single follow-up message in the thread.
+  const stageNow = fullyQualified ? (hasPhotos as boolean ? 'followup' : 'initial_contact') : lead.stage;
+  if (!hasPhotos && (stageNow === 'replied' || stageNow === 'initial_contact')) {
+    const askedForPhotos = turns.some((t) => t.who === 'YOU' && /photo|pictur/i.test(t.body));
+    if (askedForPhotos) {
+      const { count: alreadyHasOne } = await admin
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('lead_id', leadId)
+        .eq('completed', false)
+        .ilike('title', '%photo%');
+      if (!alreadyHasOne) {
+        await admin.from('tasks').insert({
+          user_id: lead.user_id,
+          lead_id: leadId,
+          title: `Get photos from ${lead.first_name || 'lead'} — asked but not received yet`,
+          due_date: new Date().toISOString().slice(0, 10),
+          auto_created: true,
+        });
+      }
+    }
+  }
+
   return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined });
 });
