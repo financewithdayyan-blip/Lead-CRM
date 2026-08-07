@@ -6,6 +6,7 @@ import { useBusinessCard } from '@/hooks/useBusinessCard';
 import { TagPill } from '@/components/ui/TagPill';
 import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
 import { SmsTemplateEditor } from '@/components/sms/SmsTemplateEditor';
+import { BulkSmsSettingsEditor } from '@/components/sms/BulkSmsSettingsEditor';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const PRESETS = [
@@ -116,6 +117,7 @@ export function SettingsPage() {
 
       <div className="space-y-4">
         {isAdmin && <AiFrameworkEditor />}
+        {isAdmin && <BulkSmsSettingsEditor />}
         {isAdmin && <SmsTemplateEditor />}
 
         <div className="card">

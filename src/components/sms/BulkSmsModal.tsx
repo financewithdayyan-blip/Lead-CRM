@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useCreateBulkSmsJob, useSendBulkSms } from '@/hooks/useSms';
 import { useTags } from '@/hooks/useTags';
 import { useSmsTemplates } from '@/hooks/useSmsTemplates';
+import { useSmsSendSettings, DEFAULT_SMS_SEND_SETTINGS } from '@/hooks/useSmsSendSettings';
 import { MergeTagButtons } from './MergeTagButtons';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead, Tag } from '@/types/domain';
@@ -32,18 +33,29 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
   const navigate = useNavigate();
   const { data: tags = [] } = useTags();
   const { data: savedTemplates = [], isSuccess: templatesLoaded } = useSmsTemplates();
+  const { data: sendSettings } = useSmsSendSettings();
   const sendBulk = useSendBulkSms();
   const createJob = useCreateBulkSmsJob();
 
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [defaultTemplate, setDefaultTemplate] = useState('');
   const [templatesByTag, setTemplatesByTag] = useState<Record<string, string>>({});
-  const [dailyLimit, setDailyLimit] = useState('150');
+  const [dailyLimit, setDailyLimit] = useState(String(DEFAULT_SMS_SEND_SETTINGS.dailyLimitPerNumber));
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
   const defaultTextareaRef = useRef<HTMLTextAreaElement>(null);
   const tagTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  // Pre-fills from the saved Settings default, once, the same guarded
+  // pattern used for the message templates below — never overwrites
+  // something the admin has already changed once the setting loads in.
+  const settingsSeededRef = useRef(false);
+  useEffect(() => {
+    if (settingsSeededRef.current || !sendSettings) return;
+    settingsSeededRef.current = true;
+    setDailyLimit(String(sendSettings.dailyLimitPerNumber));
+  }, [sendSettings]);
 
   // The window restricts genuine bulk sends only — selecting a single lead
   // here behaves like the thread view's manual reply and always goes through,
@@ -89,9 +101,10 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
       // navigating there is itself what "starting" the send means — rather
       // than waiting out the whole batch inside this modal before anything
       // is visible at all.
+      const perMessageDelayMs = sendSettings?.perMessageDelayMs ?? DEFAULT_SMS_SEND_SETTINGS.perMessageDelayMs;
       const job = await createJob.mutateAsync({
         leads,
-        config: { templatesByTag, defaultTemplate, fromKey, dailyLimit: Number(dailyLimit) || 0 },
+        config: { templatesByTag, defaultTemplate, fromKey, dailyLimit: Number(dailyLimit) || 0, perMessageDelayMs },
       });
 
       // Not awaited: send-sms keeps running server-side and writes its own
@@ -105,6 +118,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
         defaultTemplate,
         fromKey,
         dailyLimit: Number(dailyLimit) || 0,
+        perMessageDelayMs,
         jobId: job.id,
       });
 
@@ -216,7 +230,7 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
             </div>
           )}
 
-          <label className="block max-w-[220px]">
+          <label className="block max-w-[260px]">
             <span className="label">Rolling 24h limit per number</span>
             <input
               className="input"
@@ -224,6 +238,10 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
               value={dailyLimit}
               onChange={(e) => setDailyLimit(e.target.value)}
             />
+            <p className="mt-1 text-[11px] text-text-3">
+              The most texts a single number will send in any trailing 24 hours before this send rotates to the next
+              number. Pre-filled from Settings — change it there to update the default for every future send.
+            </p>
           </label>
 
           {error && (

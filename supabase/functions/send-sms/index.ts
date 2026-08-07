@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
       templatesByTag = {},
       defaultTemplate = '',
       fromKey = '1',
-      perMessageDelayMs = 500,
+      perMessageDelayMs = 400,
       dailyLimit = 0,
       jobId: jobIdIn,
     } = body as {
