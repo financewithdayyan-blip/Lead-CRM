@@ -1,11 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
-import { roleLabel, type ContractField, type ContractFieldRole, type PartyRole } from '@/hooks/useDocTemplates';
-
-export const ROLE_COLOR: Record<ContractFieldRole, string> = {
-  buyer: '#0ea5e9',
-  seller: '#a78bfa',
-};
+import { roleLabel, roleColor, type ContractField, type PartyRole, type PartyRoleDef } from '@/hooks/useDocTemplates';
 
 /**
  * Renders one page of a contract with every mapped field overlaid — filled
@@ -24,6 +19,7 @@ export function ContractDocumentPage({
   signatures,
   activeRole,
   docType = 'contract',
+  partyRoles = [],
   editableValues,
   onEditableChange,
 }: {
@@ -37,6 +33,9 @@ export function ContractDocumentPage({
   /** Only changes wording ("Us" vs "Buyer") — the underlying role stored on
    * each field is the same either way. */
   docType?: 'loi' | 'contract';
+  /** The template's own extra signee roles, so a custom role id (e.g.
+   * "extra_1") renders as its real label ("Witness") instead of a fallback. */
+  partyRoles?: PartyRoleDef[];
   /** When provided (the signer's own page only), a field belonging to
    * activeRole with no saved value yet renders as a live input instead of
    * staying blank — this is how the buyer/seller actually fill in their own
@@ -81,7 +80,7 @@ export function ContractDocumentPage({
                 {isParagraph ? (
                   <textarea
                     className="h-full w-full resize-none rounded-sm border-2 border-dashed bg-white/95 p-1 text-[11px] leading-snug text-slate-800 outline-none"
-                    style={{ borderColor: ROLE_COLOR[f.role] }}
+                    style={{ borderColor: roleColor(f.role) }}
                     placeholder={f.label}
                     value={editableValues[f.id] ?? ''}
                     onChange={(e) => onEditableChange(f.id, e.target.value)}
@@ -90,7 +89,7 @@ export function ContractDocumentPage({
                   <input
                     type={f.type === 'date' ? 'date' : 'text'}
                     className={`h-full w-full rounded-sm border-2 border-dashed bg-white/95 text-[11px] text-slate-800 outline-none ${f.type === 'currency' ? 'pl-3.5' : 'px-1'}`}
-                    style={{ borderColor: ROLE_COLOR[f.role] }}
+                    style={{ borderColor: roleColor(f.role) }}
                     placeholder={f.label}
                     inputMode={f.type === 'currency' ? 'decimal' : undefined}
                     value={editableValues[f.id] ?? ''}
@@ -137,10 +136,10 @@ export function ContractDocumentPage({
           <div
             key={f.id}
             className="absolute rounded-sm border-2 border-dashed"
-            style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: ROLE_COLOR[f.role] }}
+            style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: roleColor(f.role) }}
           >
-            <span className="pointer-events-none px-1 text-[9px] font-semibold" style={{ color: ROLE_COLOR[f.role] }}>
-              {isMine ? 'Sign below ↓' : `${roleLabel(f.role, docType)} — not yet signed`}
+            <span className="pointer-events-none px-1 text-[9px] font-semibold" style={{ color: roleColor(f.role) }}>
+              {isMine ? 'Sign below ↓' : `${roleLabel(f.role, docType, partyRoles)} — not yet signed`}
             </span>
           </div>
         );

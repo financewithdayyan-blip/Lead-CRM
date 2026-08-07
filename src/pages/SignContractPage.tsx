@@ -185,8 +185,10 @@ export function SignContractPage() {
         <div className="mb-4">
           <h1 className="text-lg font-semibold text-slate-800">{party.contractName}</h1>
           <p className="text-[13px] text-slate-500">
-            Signing as <span className="font-medium">{roleLabel(party.role, party.templateType)}</span>
-            {party.name && party.name.toLowerCase() !== roleLabel(party.role, party.templateType).toLowerCase() ? ` — ${party.name}` : ''}
+            Signing as <span className="font-medium">{roleLabel(party.role, party.templateType, party.templatePartyRoles)}</span>
+            {party.name && party.name.toLowerCase() !== roleLabel(party.role, party.templateType, party.templatePartyRoles).toLowerCase()
+              ? ` — ${party.name}`
+              : ''}
             {myPendingFields.length > 0 ? ` — fill in the highlighted fields below, then ${needsSignature ? 'sign' : 'confirm'}.` : ''}
           </p>
         </div>
@@ -207,6 +209,7 @@ export function SignContractPage() {
               signatures={party.otherSignatures}
               activeRole={party.role}
               docType={party.templateType}
+              partyRoles={party.templatePartyRoles}
               editableValues={fieldInputs}
               onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
             />

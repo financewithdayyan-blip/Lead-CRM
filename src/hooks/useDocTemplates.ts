@@ -4,11 +4,33 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export type ContractType = 'cash' | 'novation' | 'subject_to' | 'seller_finance';
 export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
-// Fields can only ever be mapped to the two roles that actually fill in
-// document data. A signing PARTY can additionally be 'other' — a signer with
-// no fields of their own (e.g. a witness or a co-seller) — see PartyRole.
-export type ContractFieldRole = 'buyer' | 'seller';
-export type PartyRole = ContractFieldRole | 'other';
+// 'buyer' and 'seller' are the two built-in roles every template starts
+// with. A template can define any number of extra roles at mapping time
+// (id is arbitrary, e.g. "extra_1") — see DocTemplate.partyRoles. A signing
+// PARTY can also be 'other' — an ad-hoc reviewer added at send time with no
+// role defined on the template and no fields of their own.
+export type ContractFieldRole = string;
+export type PartyRole = string;
+
+/** One extra signee role a template defines beyond buyer/seller, e.g.
+ * { id: 'extra_1', label: 'Witness' }. Fields tagged with that id belong to
+ * whoever fills that role when the contract is generated. */
+export interface PartyRoleDef {
+  id: string;
+  label: string;
+}
+
+const BUILT_IN_ROLE_COLORS: Record<string, string> = { buyer: '#0ea5e9', seller: '#a78bfa' };
+const EXTRA_ROLE_COLORS = ['#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
+
+/** Deterministic so the same role always gets the same color without having
+ * to thread the full role list through every component that draws one. */
+export function roleColor(role: string): string {
+  if (BUILT_IN_ROLE_COLORS[role]) return BUILT_IN_ROLE_COLORS[role];
+  let hash = 0;
+  for (let i = 0; i < role.length; i++) hash = (hash * 31 + role.charCodeAt(i)) >>> 0;
+  return EXTRA_ROLE_COLORS[hash % EXTRA_ROLE_COLORS.length];
+}
 
 export interface ContractField {
   id: string;
@@ -33,6 +55,8 @@ export interface DocTemplate {
   docxStoragePath: string | null;
   docxFileName: string | null;
   fields: ContractField[];
+  /** Extra signee roles this template defines beyond buyer/seller. */
+  partyRoles: PartyRoleDef[];
   mapped: boolean;
   createdAt: string;
 }
@@ -49,6 +73,7 @@ function fromRow(r: any): DocTemplate {
     docxStoragePath: r.docx_storage_path,
     docxFileName: r.docx_file_name,
     fields: r.fields ?? [],
+    partyRoles: r.party_roles ?? [],
     mapped: r.mapped,
     createdAt: r.created_at,
   };
@@ -145,24 +170,36 @@ export function useUploadDocTemplate() {
   });
 }
 
-/** Buyer/seller are the stored roles everywhere, but an LOI isn't a sale
- * contract — "buyer" there really means "us, the company sending it," so
- * the UI shows that instead. A third+ signer (role 'other') has no fields of
- * their own, so there's nothing document-specific to label them by. */
-export function roleLabel(role: PartyRole, docType: 'loi' | 'contract'): string {
+/** Buyer/seller are the two built-in roles, but an LOI isn't a sale contract
+ * — "buyer" there really means "us, the company sending it," so the UI shows
+ * that instead. 'other' is an ad-hoc reviewer with no role on the template.
+ * Anything else is looked up in the template's own partyRoles. */
+export function roleLabel(role: PartyRole, docType: 'loi' | 'contract', partyRoles: PartyRoleDef[] = []): string {
+  if (role === 'buyer') return docType === 'loi' ? 'Us' : 'Buyer';
+  if (role === 'seller') return 'Seller';
   if (role === 'other') return 'Additional Signer';
-  if (docType === 'loi' && role === 'buyer') return 'Us';
-  return role === 'buyer' ? 'Buyer' : 'Seller';
+  return partyRoles.find((r) => r.id === role)?.label ?? 'Additional Signer';
 }
 
-/** Step 2: the field-mapping editor's Save — names the template and marks it mapped. */
+/** Step 2: the field-mapping editor's Save — names the template, its extra
+ * signee roles, and the placed fields, and marks it mapped. */
 export function useSaveContractMapping() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, name, fields }: { id: string; name: string; fields: ContractField[] }) => {
+    mutationFn: async ({
+      id,
+      name,
+      fields,
+      partyRoles,
+    }: {
+      id: string;
+      name: string;
+      fields: ContractField[];
+      partyRoles: PartyRoleDef[];
+    }) => {
       const { error } = await supabase
         .from('doc_templates')
-        .update({ name, fields, mapped: true, updated_at: new Date().toISOString() })
+        .update({ name, fields, party_roles: partyRoles, mapped: true, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
     },

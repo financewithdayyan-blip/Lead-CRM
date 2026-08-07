@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import type { ContractField, PartyRole } from './useDocTemplates';
+import type { ContractField, PartyRole, PartyRoleDef } from './useDocTemplates';
 
 export interface ContractParty {
   role: PartyRole;
@@ -17,6 +17,7 @@ export interface ContractInstance {
   templateType: 'loi' | 'contract' | null;
   templateStoragePath: string | null;
   templateFields: ContractField[];
+  templatePartyRoles: PartyRoleDef[];
   leadId: string | null;
   leadName: string | null;
   name: string;
@@ -45,6 +46,7 @@ function fromRow(r: any): ContractInstance {
     templateType: r.doc_templates?.type ?? null,
     templateStoragePath: r.doc_templates?.storage_path ?? null,
     templateFields: r.doc_templates?.fields ?? [],
+    templatePartyRoles: r.doc_templates?.party_roles ?? [],
     leadId: r.lead_id,
     leadName: r.leads ? `${r.leads.first_name ?? ''} ${r.leads.last_name ?? ''}`.trim() : null,
     name: r.name,
@@ -66,7 +68,8 @@ function fromRow(r: any): ContractInstance {
   };
 }
 
-const INSTANCE_SELECT = '*, doc_templates(name, storage_path, fields, type), leads(first_name, last_name), contract_signing_parties(*)';
+const INSTANCE_SELECT =
+  '*, doc_templates(name, storage_path, fields, type, party_roles), leads(first_name, last_name), contract_signing_parties(*)';
 
 export function useContractInstances() {
   return useQuery({
@@ -154,6 +157,7 @@ export interface SigningPartyInfo {
   contractStatus: 'partial' | 'signed';
   templateStoragePath: string;
   templateFields: ContractField[];
+  templatePartyRoles: PartyRoleDef[];
   templateType: 'loi' | 'contract';
   otherSignatures: Array<{ role: PartyRole; signatureDataUrl: string }>;
 }
@@ -178,6 +182,7 @@ export function usePublicSigningParty(token: string | undefined) {
         contractStatus: d.contractStatus,
         templateStoragePath: d.templateStoragePath,
         templateFields: d.templateFields ?? [],
+        templatePartyRoles: d.templatePartyRoles ?? [],
         templateType: d.templateType ?? 'contract',
         otherSignatures: d.otherSignatures ?? [],
       } as SigningPartyInfo;

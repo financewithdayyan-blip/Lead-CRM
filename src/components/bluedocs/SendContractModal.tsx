@@ -12,13 +12,14 @@ interface PartyDraft {
 }
 
 /**
- * Buyer and Seller are always present — their fields are the ones actually
- * mapped on the template, so both need a name to fill them in. Any number of
- * additional signers ("Additional Signer") can be added on top for people who
- * just need to review and sign, with no fields of their own. Signing order is
- * simply each party's position in the list, reorderable with the up/down
- * arrows — first row signs first, and each next party's link only unlocks
- * once the one above them is done.
+ * Buyer, Seller, and any extra roles the template itself defines (mapped in
+ * the field editor — a Witness, a Co-Buyer, etc.) are always present, since
+ * each has fields on the document that need a name to fill them in. On top
+ * of those, any number of ad-hoc "Additional Signer" rows can be added for
+ * people who just need to review and sign, with no fields of their own.
+ * Signing order is simply each party's position in the list, reorderable
+ * with the up/down arrows — first row signs first, and each next party's
+ * link only unlocks once the one above them is done.
  */
 export function SendContractModal({
   template,
@@ -36,6 +37,7 @@ export function SendContractModal({
   const [parties, setParties] = useState<PartyDraft[]>([
     { key: 'buyer', role: 'buyer', name: '', email: '' },
     { key: 'seller', role: 'seller', name: '', email: '' },
+    ...template.partyRoles.map((r) => ({ key: r.id, role: r.id, name: '', email: '' })),
   ]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -75,7 +77,7 @@ export function SendContractModal({
       });
       const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
       onSent({
-        label: `${roleLabel(first.role, template.type)}${first.name ? ` — ${first.name}` : ''}`,
+        label: `${roleLabel(first.role, template.type, template.partyRoles)}${first.name ? ` — ${first.name}` : ''}`,
         url: `${window.location.origin}/crm/sign/${first.access_token}`,
       });
     } finally {
@@ -100,7 +102,7 @@ export function SendContractModal({
           </div>
           <div className="space-y-2">
             {parties.map((p, i) => {
-              const label = p.role === 'other' ? `Additional Signer` : roleLabel(p.role, template.type);
+              const label = roleLabel(p.role, template.type, template.partyRoles);
               return (
                 <div key={p.key} className="rounded-md border border-border-2 p-3">
                   <div className="mb-2 flex items-center justify-between">

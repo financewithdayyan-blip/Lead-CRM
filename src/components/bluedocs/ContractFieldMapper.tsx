@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Trash2, Type, AlignLeft, Calendar, PenLine, User, DollarSign, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Trash2, Type, AlignLeft, Calendar, PenLine, User, DollarSign, X, Plus, Check } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { loadPdf, renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
-import { useSaveContractMapping, roleLabel, type ContractField, type ContractFieldRole, type ContractFieldType, type DocTemplate } from '@/hooks/useDocTemplates';
+import {
+  useSaveContractMapping,
+  roleLabel,
+  roleColor,
+  type ContractField,
+  type ContractFieldType,
+  type DocTemplate,
+  type PartyRoleDef,
+} from '@/hooks/useDocTemplates';
 
 const CANVAS_WIDTH = 700;
 
@@ -23,11 +31,6 @@ const FIELD_TYPE_BUTTONS: Array<{ type: ContractFieldType; label: string; icon: 
   { type: 'paragraph', label: 'Paragraph', icon: AlignLeft },
   { type: 'signature', label: 'Signature', icon: PenLine },
 ];
-
-const ROLE_COLOR: Record<ContractFieldRole, string> = {
-  buyer: '#0ea5e9',
-  seller: '#a78bfa',
-};
 
 interface DragState {
   fieldId: string;
@@ -56,10 +59,35 @@ export function ContractFieldMapper({
   const [loadingPage, setLoadingPage] = useState(true);
   const [fields, setFields] = useState<ContractField[]>(template.fields);
   const [name, setName] = useState(template.name);
+  const [partyRoles, setPartyRoles] = useState<PartyRoleDef[]>(template.partyRoles);
   const [placingType, setPlacingType] = useState<ContractFieldType | null>(null);
-  const [placingRole, setPlacingRole] = useState<ContractFieldRole>('seller');
+  const [placingRole, setPlacingRole] = useState<string>('seller');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [addingRole, setAddingRole] = useState(false);
+  const [newRoleLabel, setNewRoleLabel] = useState('');
+
+  // Seller/buyer are always available; anything the template itself defines
+  // rides after them in the order they were added.
+  const roles = ['seller', 'buyer', ...partyRoles.map((r) => r.id)];
+
+  function confirmAddRole() {
+    const label = newRoleLabel.trim();
+    if (!label) return;
+    const id = `extra_${Date.now()}`;
+    setPartyRoles((prev) => [...prev, { id, label }]);
+    setPlacingRole(id);
+    setNewRoleLabel('');
+    setAddingRole(false);
+  }
+
+  function removeRole(id: string) {
+    // Fields already placed under this role would be orphaned — a deleted
+    // party with nothing to sign is worse than a role that lingers unused.
+    if (fields.some((f) => f.role === id)) return;
+    setPartyRoles((prev) => prev.filter((r) => r.id !== id));
+    if (placingRole === id) setPlacingRole('seller');
+  }
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -178,7 +206,7 @@ export function ContractFieldMapper({
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await saveMapping.mutateAsync({ id: template.id, name: name.trim(), fields });
+      await saveMapping.mutateAsync({ id: template.id, name: name.trim(), fields, partyRoles });
       onSaved();
     } finally {
       setSaving(false);
@@ -209,20 +237,51 @@ export function ContractFieldMapper({
         ))}
         <div className="mx-1 h-5 w-px bg-border-2" />
         <span className="text-[12px] text-text-3">Placing as:</span>
-        <button
-          className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${placingRole === 'seller' ? 'text-white' : 'bg-surface-3 text-text-2'}`}
-          style={placingRole === 'seller' ? { background: ROLE_COLOR.seller } : undefined}
-          onClick={() => setPlacingRole('seller')}
-        >
-          Seller
-        </button>
-        <button
-          className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${placingRole === 'buyer' ? 'text-white' : 'bg-surface-3 text-text-2'}`}
-          style={placingRole === 'buyer' ? { background: ROLE_COLOR.buyer } : undefined}
-          onClick={() => setPlacingRole('buyer')}
-        >
-          {roleLabel('buyer', template.type)}
-        </button>
+        {roles.map((r) => (
+          <span key={r} className="group relative inline-flex items-center">
+            <button
+              className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${placingRole === r ? 'text-white' : 'bg-surface-3 text-text-2'}`}
+              style={placingRole === r ? { background: roleColor(r) } : undefined}
+              onClick={() => setPlacingRole(r)}
+            >
+              {roleLabel(r, template.type, partyRoles)}
+            </button>
+            {r !== 'seller' && r !== 'buyer' && !fields.some((f) => f.role === r) && (
+              <button
+                className="ml-0.5 text-text-3 hover:text-danger"
+                title="Remove this signee"
+                onClick={() => removeRole(r)}
+              >
+                <X size={11} />
+              </button>
+            )}
+          </span>
+        ))}
+        {addingRole ? (
+          <span className="inline-flex items-center gap-1">
+            <input
+              autoFocus
+              className="input !w-32 !py-1 text-[12px]"
+              placeholder="e.g. Witness"
+              value={newRoleLabel}
+              onChange={(e) => setNewRoleLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmAddRole();
+                if (e.key === 'Escape') setAddingRole(false);
+              }}
+            />
+            <button className="btn !p-1.5" disabled={!newRoleLabel.trim()} onClick={confirmAddRole}>
+              <Check size={12} />
+            </button>
+            <button className="btn !p-1.5" onClick={() => setAddingRole(false)}>
+              <X size={12} />
+            </button>
+          </span>
+        ) : (
+          <button className="btn !px-2 !py-1 text-[11px]" onClick={() => setAddingRole(true)}>
+            <Plus size={12} /> Add Signee
+          </button>
+        )}
       </div>
 
       <div className="flex gap-4">
@@ -263,21 +322,21 @@ export function ContractFieldMapper({
                   top: `${f.yPct}%`,
                   width: `${f.wPct}%`,
                   height: `${f.hPct}%`,
-                  borderColor: ROLE_COLOR[f.role],
-                  background: `${ROLE_COLOR[f.role]}22`,
-                  boxShadow: selectedId === f.id ? `0 0 0 2px ${ROLE_COLOR[f.role]}` : undefined,
+                  borderColor: roleColor(f.role),
+                  background: `${roleColor(f.role)}22`,
+                  boxShadow: selectedId === f.id ? `0 0 0 2px ${roleColor(f.role)}` : undefined,
                 }}
               >
                 <span
                   className="pointer-events-none block truncate px-1 text-[9px] font-semibold"
-                  style={{ color: ROLE_COLOR[f.role] }}
+                  style={{ color: roleColor(f.role) }}
                 >
                   {f.label}
                 </span>
                 <div
                   onMouseDown={(e) => startDrag(e, f, 'resize')}
                   className="absolute bottom-0 right-0 h-2.5 w-2.5 cursor-nwse-resize rounded-tl bg-current"
-                  style={{ color: ROLE_COLOR[f.role] }}
+                  style={{ color: roleColor(f.role) }}
                 />
               </div>
             ))}
@@ -296,21 +355,17 @@ export function ContractFieldMapper({
                 onChange={(e) => updateSelected({ label: e.target.value })}
                 placeholder="Label"
               />
-              <div className="flex gap-1.5">
-                <button
-                  className="flex-1 rounded-md px-2 py-1 text-[12px] font-semibold text-white"
-                  style={{ background: selected.role === 'seller' ? ROLE_COLOR.seller : '#cbd5e1' }}
-                  onClick={() => updateSelected({ role: 'seller' })}
-                >
-                  Seller
-                </button>
-                <button
-                  className="flex-1 rounded-md px-2 py-1 text-[12px] font-semibold text-white"
-                  style={{ background: selected.role === 'buyer' ? ROLE_COLOR.buyer : '#cbd5e1' }}
-                  onClick={() => updateSelected({ role: 'buyer' })}
-                >
-                  {roleLabel('buyer', template.type)}
-                </button>
+              <div className="flex flex-wrap gap-1.5">
+                {roles.map((r) => (
+                  <button
+                    key={r}
+                    className="flex-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold text-white"
+                    style={{ background: selected.role === r ? roleColor(r) : '#cbd5e1' }}
+                    onClick={() => updateSelected({ role: r })}
+                  >
+                    {roleLabel(r, template.type, partyRoles)}
+                  </button>
+                ))}
               </div>
               <button className="btn btn-danger w-full !py-1 text-[12px]" onClick={deleteSelected}>
                 <Trash2 size={12} /> Delete field
@@ -329,7 +384,7 @@ export function ContractFieldMapper({
                 }}
                 className={`flex w-full items-center justify-between gap-1 rounded-md border px-2 py-1 text-left text-[11px] ${selectedId === f.id ? 'border-primary' : 'border-border-2'}`}
               >
-                <span className="truncate" style={{ color: ROLE_COLOR[f.role] }}>
+                <span className="truncate" style={{ color: roleColor(f.role) }}>
                   {f.label}
                 </span>
                 <span className="shrink-0 text-text-3">p{f.page}</span>

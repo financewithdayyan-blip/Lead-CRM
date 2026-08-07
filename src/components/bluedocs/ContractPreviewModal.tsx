@@ -71,6 +71,7 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                 fieldValues={instance.fieldValues}
                 signatures={signatures}
                 docType={instance.templateType ?? 'contract'}
+                partyRoles={instance.templatePartyRoles}
               />
             ))
           )}
@@ -96,7 +97,9 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] text-text">
-                        <span className="font-medium">{party ? roleLabel(party.role, instance.templateType ?? 'contract') : 'Unknown party'}</span>
+                        <span className="font-medium">
+                          {party ? roleLabel(party.role, instance.templateType ?? 'contract', instance.templatePartyRoles) : 'Unknown party'}
+                        </span>
                         {party ? ` (${party.name})` : ''} {e.eventType === 'signed' ? 'signed the document' : 'opened the signing link'}
                       </div>
                       <div className="mt-0.5 text-[11px] text-text-3">

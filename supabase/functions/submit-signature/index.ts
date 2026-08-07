@@ -35,8 +35,21 @@ interface ContractField {
   wPct: number;
   hPct: number;
   type: 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
-  role: 'buyer' | 'seller';
+  // 'buyer' | 'seller', or a template-defined extra role id (e.g. "extra_1").
+  role: string;
   label: string;
+}
+
+interface PartyRoleDef {
+  id: string;
+  label: string;
+}
+
+function roleWordFor(role: string, docType: string, partyRoles: PartyRoleDef[]): string {
+  if (role === 'other') return 'Additional Signer';
+  if (role === 'buyer') return docType === 'loi' ? 'Us' : 'Buyer';
+  if (role === 'seller') return 'Seller';
+  return partyRoles.find((r) => r.id === role)?.label ?? 'Additional Signer';
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -199,12 +212,19 @@ Deno.serve(async (req) => {
     // ── Every party has signed — flatten the final PDF. ──────────────────────
     const { data: instance, error: instErr } = await admin
       .from('contract_instances')
-      .select('*, doc_templates(storage_path, fields, type, name)')
+      .select('*, doc_templates(storage_path, fields, type, name, party_roles)')
       .eq('id', party.contract_instance_id)
       .single();
     if (instErr) throw instErr;
 
-    const template = (instance as any).doc_templates as { storage_path: string; fields: ContractField[]; type: string; name: string };
+    const template = (instance as any).doc_templates as {
+      storage_path: string;
+      fields: ContractField[];
+      type: string;
+      name: string;
+      party_roles: PartyRoleDef[];
+    };
+    const partyRoles = template.party_roles ?? [];
     const fieldValues = (instance.field_values ?? {}) as Record<string, string>;
 
     const { data: pdfBlob, error: dlErr } = await admin.storage.from('blue-docs').download(template.storage_path);
@@ -280,8 +300,7 @@ Deno.serve(async (req) => {
 
     cert.subheading('Parties');
     for (const p of updatedParties) {
-      const roleWord =
-        p.role === 'other' ? 'Additional Signer' : template.type === 'loi' && p.role === 'buyer' ? 'Us' : p.role === 'buyer' ? 'Buyer' : 'Seller';
+      const roleWord = roleWordFor(p.role, template.type, partyRoles);
       cert.line(`${roleWord}: ${p.name}${p.email ? ` <${p.email}>` : ''}`, { size: 10.5, color: [0.05, 0.05, 0.05] });
       const event = (auditEvents ?? []).find((e) => e.party_id === p.id && e.event_type === 'signed');
       if (p.signed_at) {
