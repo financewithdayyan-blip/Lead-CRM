@@ -36,8 +36,11 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   // reply advances it again. See send-sms and the sms-webhook edge functions.
   contacted: { label: 'Contacted', color: '#38bdf8' },
   replied: { label: 'Replied', color: '#22d3ee' },
-  initial_contact: { label: 'Qualified', color: '#a78bfa' },
-  followup: { label: 'Follow-Up', color: '#c084fc' },
+  // "Partial Qualified" / "Qualified" here specifically, not "Follow-Up":
+  // fully qualified now means photos are actually in hand (see hasPhotos in
+  // ai-reply and send-reminders), not just that the interview is done.
+  initial_contact: { label: 'Partial Qualified', color: '#a78bfa' },
+  followup: { label: 'Qualified', color: '#c084fc' },
   negotiation: { label: 'Negotiation', color: '#fb923c' },
   contract: { label: 'Contract', color: '#10b981' },
   dead_declined: { label: 'Dead / Declined', color: '#ef4444' },

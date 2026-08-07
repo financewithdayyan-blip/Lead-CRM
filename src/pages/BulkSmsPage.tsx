@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Pause, RotateCw, Send, X } from 'lucide-react';
-import { useBulkSmsJob, useBulkSmsJobItems, useBulkSmsJobs, usePauseBulkSmsJob, useResumeBulkSmsJob } from '@/hooks/useSms';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Pause, RotateCw, Send, Trash2, X } from 'lucide-react';
+import {
+  useBulkSmsJob,
+  useBulkSmsJobItems,
+  useBulkSmsJobs,
+  useDeleteBulkSmsJob,
+  usePauseBulkSmsJob,
+  useResumeBulkSmsJob,
+} from '@/hooks/useSms';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatDateTime } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
@@ -41,6 +49,8 @@ export function BulkSmsPage() {
 function BulkSmsHistory() {
   const navigate = useNavigate();
   const { data: jobs = [], isLoading } = useBulkSmsJobs();
+  const deleteJob = useDeleteBulkSmsJob();
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   return (
     <div>
@@ -98,10 +108,19 @@ function BulkSmsHistory() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-text-2">{job.total}</td>
-                      <td className="px-3 py-2.5 text-right">
-                        <Link to={`/bulk-sms/${job.id}`} className="inline-flex items-center gap-0.5 text-text-3 hover:text-primary">
-                          View <ChevronRight size={13} />
-                        </Link>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link to={`/bulk-sms/${job.id}`} className="inline-flex items-center gap-0.5 text-text-3 hover:text-primary">
+                            View <ChevronRight size={13} />
+                          </Link>
+                          <button
+                            className="text-text-3 hover:text-danger"
+                            title="Delete this send from the list"
+                            onClick={() => setDeleteTarget(job.id)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -111,6 +130,19 @@ function BulkSmsHistory() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this send?"
+        message="Removes it from this list only — leads that already got a text keep it, and this can't be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (deleteTarget) deleteJob.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

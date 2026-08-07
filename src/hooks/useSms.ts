@@ -192,6 +192,20 @@ export function useBulkSmsJobs() {
   });
 }
 
+/** Removes a job from the All Sends list — bulk_sms_job_items cascades on
+ * delete, so its per-lead rows go with it. Doesn't touch any lead or SMS
+ * that already went out, just the history record of the send itself. */
+export function useDeleteBulkSmsJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await supabase.from('bulk_sms_jobs').delete().eq('id', jobId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bulk_sms_jobs'] }),
+  });
+}
+
 const ITEMS_PAGE_SIZE = 1000;
 
 export function useBulkSmsJobItems(jobId: string | undefined, jobStatus: string | undefined) {
@@ -289,6 +303,38 @@ export function useResumeBulkSmsJob() {
       qc.invalidateQueries({ queryKey: ['activities'] });
       qc.invalidateQueries({ queryKey: ['bulk_sms_job'] });
       qc.invalidateQueries({ queryKey: ['bulk_sms_job_items'] });
+    },
+  });
+}
+
+export interface SendRemindersResult {
+  sent: number;
+  rescheduled: number;
+  promoted: number;
+  skipped: number;
+  totalEligible: number;
+  errors: { leadId: string; error: string }[];
+}
+
+/** Runs the same daily reminder sweep the cron job runs on its own schedule
+ * — for every lead in Replied or Partial-Qualified due for a nudge right
+ * now, drafts and sends a check-in about whatever's still outstanding, or
+ * reschedules quietly if they've already promised a specific day. */
+export function useSendReminders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke<SendRemindersResult>('send-reminders', { body: {} });
+      if (error) {
+        const body = await error.context?.json?.().catch(() => null);
+        throw new Error(body?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as SendRemindersResult;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['activities'] });
     },
   });
 }

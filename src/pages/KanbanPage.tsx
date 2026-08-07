@@ -11,10 +11,11 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, X as XIcon } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
+import { useSendReminders } from '@/hooks/useSms';
 import { useAddActivity } from '@/hooks/useActivities';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useAuth } from '@/contexts/AuthContext';
@@ -513,6 +514,8 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showBulkSms, setShowBulkSms] = useState(false);
+  const sendReminders = useSendReminders();
+  const [reminderSummary, setReminderSummary] = useState<string | null>(null);
   const [shareTargetId, setShareTargetId] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   // Optimistic stage overrides — applied immediately on drop, cleared once the
@@ -703,6 +706,22 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
 
   const selCount = selectedIds.size;
 
+  async function handleSendReminders() {
+    setReminderSummary(null);
+    try {
+      const result = await sendReminders.mutateAsync();
+      const parts = [`${result.sent} sent`];
+      if (result.rescheduled > 0) parts.push(`${result.rescheduled} rescheduled`);
+      if (result.promoted > 0) parts.push(`${result.promoted} moved to Qualified`);
+      if (result.errors.length > 0) parts.push(`${result.errors.length} failed`);
+      setReminderSummary(
+        result.totalEligible === 0 ? 'Nobody was due for a reminder right now.' : parts.join(' · '),
+      );
+    } catch (e) {
+      setReminderSummary(e instanceof Error ? e.message : 'Could not send reminders.');
+    }
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -713,6 +732,20 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
             {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
           </p>
         </div>
+        {isAdmin && !viewOnly && (
+          <div className="flex flex-col items-end gap-1">
+            <button
+              className="btn btn-sm flex items-center gap-1.5"
+              disabled={sendReminders.isPending}
+              onClick={handleSendReminders}
+              title="Checks every Replied / Partial Qualified lead due for a nudge and texts them about whatever's still outstanding"
+            >
+              {sendReminders.isPending ? <Loader2 size={13} className="animate-spin" /> : <BellRing size={13} />}
+              {sendReminders.isPending ? 'Sending…' : 'Send Reminder Messages'}
+            </button>
+            {reminderSummary && <span className="text-[11px] text-text-3">{reminderSummary}</span>}
+          </div>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
