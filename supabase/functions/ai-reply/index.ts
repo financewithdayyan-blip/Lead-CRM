@@ -687,7 +687,7 @@ Deno.serve(async (req) => {
     await admin.from('tasks').insert({
       user_id: lead.user_id,
       lead_id: leadId,
-      title: nextAction?.trim() || `Run the numbers for ${lead.first_name || 'lead'} — ARV, repairs, and offer`,
+      title: nextAction?.trim() || `Follow up with ${lead.first_name || 'lead'} — confirm numbers and next steps`,
       due_date: new Date().toISOString().slice(0, 10),
       auto_created: true,
     });
