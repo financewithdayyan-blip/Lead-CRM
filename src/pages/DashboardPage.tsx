@@ -665,7 +665,7 @@ export function DashboardView({
           )}
 
           {showSmsStats && (
-            <div className="card">
+            <div className="card chart-layer">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-text">Pipeline Activity</h3>
                 <span className="text-[11px] text-text-3">SMS sent, replies, newly qualified, and calls to qualified leads · {rangeLabel}</span>
@@ -689,7 +689,7 @@ export function DashboardView({
           )}
 
           {showSmsStats && (
-            <div className="card">
+            <div className="card chart-layer">
               <div className="mb-1 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-text">Pipeline</h3>
                 <span className="text-[11px] text-text-3">current snapshot, every lead</span>

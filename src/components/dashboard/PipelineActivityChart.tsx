@@ -28,9 +28,6 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
               <stop offset="100%" stopColor={color} stopOpacity={0.02} />
             </linearGradient>
           ))}
-          <filter id="pipelineLineShadow" x="-20%" y="-40%" width="140%" height="200%">
-            <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.18" />
-          </filter>
         </defs>
         <CartesianGrid stroke="#e2e8f0" vertical={false} />
         <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
@@ -55,7 +52,6 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           stroke="#0ea5e9"
           fill="url(#gSent)"
           strokeWidth={2.5}
-          style={{ filter: 'url(#pipelineLineShadow)' }}
           dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#0ea5e9' }}
           activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
           animationDuration={600}
@@ -67,7 +63,6 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           stroke="#22d3ee"
           fill="url(#gReplies)"
           strokeWidth={2.5}
-          style={{ filter: 'url(#pipelineLineShadow)' }}
           dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#22d3ee' }}
           activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
           animationDuration={600}
@@ -79,7 +74,6 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           stroke="#a78bfa"
           fill="url(#gQualified)"
           strokeWidth={2.5}
-          style={{ filter: 'url(#pipelineLineShadow)' }}
           dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#a78bfa' }}
           activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
           animationDuration={600}
@@ -91,7 +85,6 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           stroke="#fb923c"
           fill="url(#gCalls)"
           strokeWidth={2.5}
-          style={{ filter: 'url(#pipelineLineShadow)' }}
           dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#fb923c' }}
           activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
           animationDuration={600}
