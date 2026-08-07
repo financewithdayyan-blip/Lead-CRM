@@ -26,8 +26,13 @@ const NUMBERS: Record<string, { phone: string; email: string }> = {
   '4': { phone: Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '' },
 };
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -77,7 +82,7 @@ const LIEN_TAG_NAMES = ['lis pendens', 'pre-foreclosure', 'foreclosure', 'auctio
 const TAX_TAG_NAMES = ['tax delinquent'];
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok');
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
