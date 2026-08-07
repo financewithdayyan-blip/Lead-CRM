@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import type { ContractField, ContractFieldRole } from './useDocTemplates';
+import type { ContractField, PartyRole } from './useDocTemplates';
 
 export interface ContractParty {
-  role: ContractFieldRole;
+  role: PartyRole;
   name: string;
   email: string;
   signOrder: number;
@@ -27,7 +27,7 @@ export interface ContractInstance {
   completedAt: string | null;
   parties: Array<{
     id: string;
-    role: ContractFieldRole;
+    role: PartyRole;
     name: string;
     status: 'pending' | 'signed';
     accessToken: string;
@@ -117,12 +117,12 @@ export function useGenerateContract() {
             sign_order: p.signOrder,
           })),
         )
-        .select('role, access_token');
+        .select('role, name, access_token, sign_order');
       if (partiesErr) throw partiesErr;
 
       return {
         instanceId: instance.id as string,
-        parties: parties as Array<{ role: ContractFieldRole; access_token: string }>,
+        parties: parties as Array<{ role: PartyRole; name: string; access_token: string; sign_order: number }>,
       };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
@@ -143,7 +143,7 @@ export function useDeleteContractInstance() {
 // ── Public signing side ─────────────────────────────────────────────────────
 
 export interface SigningPartyInfo {
-  role: ContractFieldRole;
+  role: PartyRole;
   name: string;
   status: 'pending' | 'signed';
   signOrder: number;
@@ -155,7 +155,7 @@ export interface SigningPartyInfo {
   templateStoragePath: string;
   templateFields: ContractField[];
   templateType: 'loi' | 'contract';
-  otherSignatures: Array<{ role: ContractFieldRole; signatureDataUrl: string }>;
+  otherSignatures: Array<{ role: PartyRole; signatureDataUrl: string }>;
 }
 
 export function usePublicSigningParty(token: string | undefined) {

@@ -280,7 +280,8 @@ Deno.serve(async (req) => {
 
     cert.subheading('Parties');
     for (const p of updatedParties) {
-      const roleWord = template.type === 'loi' && p.role === 'buyer' ? 'Us' : p.role === 'buyer' ? 'Buyer' : 'Seller';
+      const roleWord =
+        p.role === 'other' ? 'Additional Signer' : template.type === 'loi' && p.role === 'buyer' ? 'Us' : p.role === 'buyer' ? 'Buyer' : 'Seller';
       cert.line(`${roleWord}: ${p.name}${p.email ? ` <${p.email}>` : ''}`, { size: 10.5, color: [0.05, 0.05, 0.05] });
       const event = (auditEvents ?? []).find((e) => e.party_id === p.id && e.event_type === 'signed');
       if (p.signed_at) {

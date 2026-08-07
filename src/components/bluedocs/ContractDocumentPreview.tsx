@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
-import { roleLabel, type ContractField, type ContractFieldRole } from '@/hooks/useDocTemplates';
+import { roleLabel, type ContractField, type ContractFieldRole, type PartyRole } from '@/hooks/useDocTemplates';
 
 export const ROLE_COLOR: Record<ContractFieldRole, string> = {
   buyer: '#0ea5e9',
@@ -32,8 +32,8 @@ export function ContractDocumentPage({
   pageWidth: number;
   fields: ContractField[];
   fieldValues: Record<string, string>;
-  signatures: Array<{ role: ContractFieldRole; signatureDataUrl: string }>;
-  activeRole?: ContractFieldRole;
+  signatures: Array<{ role: PartyRole; signatureDataUrl: string }>;
+  activeRole?: PartyRole;
   /** Only changes wording ("Us" vs "Buyer") — the underlying role stored on
    * each field is the same either way. */
   docType?: 'loi' | 'contract';

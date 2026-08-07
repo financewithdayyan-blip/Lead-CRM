@@ -46,7 +46,7 @@ function useDocFlow() {
   const [mappingTarget, setMappingTarget] = useState<{ template: DocTemplate; pdfUrl: string } | null>(null);
   const [sendTarget, setSendTarget] = useState<DocTemplate | null>(null);
   const [inboxTarget, setInboxTarget] = useState<DocTemplate | null>(null);
-  const [buyerLink, setBuyerLink] = useState<string | null>(null);
+  const [firstSignerLink, setFirstSignerLink] = useState<{ label: string; url: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; storagePath: string | null; docxStoragePath: string | null } | null>(null);
 
   async function openMapper(t: DocTemplate) {
@@ -61,8 +61,8 @@ function useDocFlow() {
     setSendTarget,
     inboxTarget,
     setInboxTarget,
-    buyerLink,
-    setBuyerLink,
+    firstSignerLink,
+    setFirstSignerLink,
     deleteTarget,
     setDeleteTarget,
     openMapper,
@@ -89,24 +89,24 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
           onClose={() => flow.setSendTarget(null)}
           onSent={(l) => {
             flow.setSendTarget(null);
-            flow.setBuyerLink(l.buyer);
+            flow.setFirstSignerLink(l);
           }}
         />
       )}
 
       {flow.inboxTarget && <SignInboxModal template={flow.inboxTarget} onClose={() => flow.setInboxTarget(null)} />}
 
-      {flow.buyerLink && (
-        <Modal open onClose={() => flow.setBuyerLink(null)} title="Invitation sent" width="md">
+      {flow.firstSignerLink && (
+        <Modal open onClose={() => flow.setFirstSignerLink(null)} title="Invitation sent" width="md">
           <p className="text-[13px] text-text-2">
-            Send this link to fill in and sign first. The other party's link unlocks automatically once this one's
-            done, and you can find it in this template's Sign Inbox from that point on.
+            Send this link to fill in and sign first. Each next party's link unlocks automatically once the one
+            before them is done, and you can find it in this template's Sign Inbox from that point on.
           </p>
           <div className="mt-3">
-            <SigningLinkRow label="First signer's link" url={flow.buyerLink} />
+            <SigningLinkRow label={flow.firstSignerLink.label} url={flow.firstSignerLink.url} />
           </div>
           <div className="mt-4 flex justify-end">
-            <button className="btn btn-primary" onClick={() => flow.setBuyerLink(null)}>
+            <button className="btn btn-primary" onClick={() => flow.setFirstSignerLink(null)}>
               Done
             </button>
           </div>

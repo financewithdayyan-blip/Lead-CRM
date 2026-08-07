@@ -74,7 +74,7 @@ export function ContractInstanceRow({
                 key={p.id}
                 className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${p.status === 'signed' ? 'bg-success-dim text-success' : 'bg-surface-2 text-text-3'}`}
               >
-                {roleLabel(p.role, c.templateType ?? 'contract')} {p.status === 'signed' ? '✓' : '· pending'}
+                {p.role === 'other' ? p.name : roleLabel(p.role, c.templateType ?? 'contract')} {p.status === 'signed' ? '✓' : '· pending'}
                 {p.status !== 'signed' && unlocked && (
                   <span title={lastViewed ? `Opened the link ${formatDateTime(lastViewed)}` : "Hasn't opened the link yet"}>
                     {lastViewed ? <Eye size={10} className="text-info" /> : <EyeOff size={10} className="text-text-3" />}

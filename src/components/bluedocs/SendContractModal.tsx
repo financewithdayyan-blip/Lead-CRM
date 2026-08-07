@@ -1,15 +1,24 @@
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Loader2, Plus, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useGenerateContract } from '@/hooks/useContractInstances';
-import { roleLabel, type DocTemplate } from '@/hooks/useDocTemplates';
+import { roleLabel, type DocTemplate, type PartyRole } from '@/hooks/useDocTemplates';
+
+interface PartyDraft {
+  key: string;
+  role: PartyRole;
+  name: string;
+  email: string;
+}
 
 /**
- * Just enough to identify the deal and both parties — no CRM lead lookup,
- * and neither party's own fields (name, amount, etc.) are collected here.
- * The "buyer" role (shown as "Us" for an LOI) always goes first and fills in
- * their own fields on their signing page; the seller sees what was already
- * entered and fills in the rest on theirs.
+ * Buyer and Seller are always present — their fields are the ones actually
+ * mapped on the template, so both need a name to fill them in. Any number of
+ * additional signers ("Additional Signer") can be added on top for people who
+ * just need to review and sign, with no fields of their own. Signing order is
+ * simply each party's position in the list, reorderable with the up/down
+ * arrows — first row signs first, and each next party's link only unlocks
+ * once the one above them is done.
  */
 export function SendContractModal({
   template,
@@ -18,38 +27,56 @@ export function SendContractModal({
 }: {
   template: DocTemplate;
   onClose: () => void;
-  onSent: (links: { seller: string; buyer: string }) => void;
+  onSent: (link: { label: string; url: string }) => void;
 }) {
   const generate = useGenerateContract();
   const firstRoleLabel = roleLabel('buyer', template.type);
 
   const [name, setName] = useState(template.name);
-  const [sellerName, setSellerName] = useState('');
-  const [sellerEmail, setSellerEmail] = useState('');
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerEmail, setBuyerEmail] = useState('');
+  const [parties, setParties] = useState<PartyDraft[]>([
+    { key: 'buyer', role: 'buyer', name: '', email: '' },
+    { key: 'seller', role: 'seller', name: '', email: '' },
+  ]);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = name.trim() && sellerName.trim() && buyerName.trim();
+  const canSubmit = name.trim() && parties.every((p) => p.name.trim());
+
+  function updateParty(key: string, patch: Partial<PartyDraft>) {
+    setParties((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
+  }
+
+  function addParty() {
+    setParties((prev) => [...prev, { key: crypto.randomUUID(), role: 'other', name: '', email: '' }]);
+  }
+
+  function removeParty(key: string) {
+    setParties((prev) => prev.filter((p) => p.key !== key));
+  }
+
+  function moveParty(index: number, dir: -1 | 1) {
+    setParties((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
 
   async function handleSubmit() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const { parties } = await generate.mutateAsync({
+      const { parties: created } = await generate.mutateAsync({
         templateId: template.id,
         name: name.trim(),
         fieldValues: {},
-        parties: [
-          { role: 'buyer', name: buyerName.trim(), email: buyerEmail.trim(), signOrder: 1 },
-          { role: 'seller', name: sellerName.trim(), email: sellerEmail.trim(), signOrder: 2 },
-        ],
+        parties: parties.map((p, i) => ({ role: p.role, name: p.name.trim(), email: p.email.trim(), signOrder: i + 1 })),
       });
-      const seller = parties.find((p) => p.role === 'seller')!;
-      const buyer = parties.find((p) => p.role === 'buyer')!;
+      const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
       onSent({
-        seller: `${window.location.origin}/crm/sign/${seller.access_token}`,
-        buyer: `${window.location.origin}/crm/sign/${buyer.access_token}`,
+        label: `${roleLabel(first.role, template.type)}${first.name ? ` — ${first.name}` : ''}`,
+        url: `${window.location.origin}/crm/sign/${first.access_token}`,
       });
     } finally {
       setSubmitting(false);
@@ -64,28 +91,69 @@ export function SendContractModal({
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-md border border-border-2 p-3">
-            <div className="mb-2 text-[12px] font-semibold text-text">{firstRoleLabel} — fills in first</div>
-            <input
-              className="input mb-1.5"
-              placeholder={firstRoleLabel === 'Us' ? 'Your name or company' : 'Name'}
-              value={buyerName}
-              onChange={(e) => setBuyerName(e.target.value)}
-            />
-            <input className="input" placeholder="Email (optional)" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} />
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-[12px] font-medium text-text-2">Signing order</label>
+            <button className="btn !px-2 !py-1 text-[11px]" onClick={addParty}>
+              <Plus size={12} /> Add another signer
+            </button>
           </div>
-          <div className="rounded-md border border-border-2 p-3">
-            <div className="mb-2 text-[12px] font-semibold text-text">Seller — reviews after</div>
-            <input className="input mb-1.5" placeholder="Name" value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
-            <input className="input" placeholder="Email (optional)" value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
+          <div className="space-y-2">
+            {parties.map((p, i) => {
+              const label = p.role === 'other' ? `Additional Signer` : roleLabel(p.role, template.type);
+              return (
+                <div key={p.key} className="rounded-md border border-border-2 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-[12px] font-semibold text-text">
+                      {i + 1}. {label}
+                      {i === 0 && <span className="ml-1.5 font-normal text-text-3">— fills in first</span>}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="btn !p-1"
+                        disabled={i === 0}
+                        title="Move earlier in signing order"
+                        onClick={() => moveParty(i, -1)}
+                      >
+                        <ArrowUp size={12} />
+                      </button>
+                      <button
+                        className="btn !p-1"
+                        disabled={i === parties.length - 1}
+                        title="Move later in signing order"
+                        onClick={() => moveParty(i, 1)}
+                      >
+                        <ArrowDown size={12} />
+                      </button>
+                      {p.role === 'other' && (
+                        <button className="btn !p-1 text-danger" title="Remove this signer" onClick={() => removeParty(p.key)}>
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    className="input mb-1.5"
+                    placeholder={label === 'Us' ? 'Your name or company' : 'Name'}
+                    value={p.name}
+                    onChange={(e) => updateParty(p.key, { name: e.target.value })}
+                  />
+                  <input
+                    className="input"
+                    placeholder="Email (optional)"
+                    value={p.email}
+                    onChange={(e) => updateParty(p.key, { email: e.target.value })}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
 
         <p className="text-[12px] text-text-3">
-          {firstRoleLabel === 'Us'
-            ? "We fill in our own fields and sign first. Once that's done, the seller's link unlocks — they'll see everything we entered, fill in the rest, and sign."
-            : "The buyer fills in their own fields and signs first. Once they're done, the seller's link unlocks — they'll see everything the buyer entered, fill in the rest, and sign."}
+          Parties sign in the order above — each one's link only unlocks once everyone before them is done. You'll get{' '}
+          {firstRoleLabel === 'Us' ? 'our' : "the first signer's"} link right away; the rest become copyable from this
+          template's Sign Inbox as they unlock.
         </p>
 
         <div className="flex justify-end gap-2">

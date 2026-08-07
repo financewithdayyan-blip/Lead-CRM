@@ -4,7 +4,11 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export type ContractType = 'cash' | 'novation' | 'subject_to' | 'seller_finance';
 export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
+// Fields can only ever be mapped to the two roles that actually fill in
+// document data. A signing PARTY can additionally be 'other' — a signer with
+// no fields of their own (e.g. a witness or a co-seller) — see PartyRole.
 export type ContractFieldRole = 'buyer' | 'seller';
+export type PartyRole = ContractFieldRole | 'other';
 
 export interface ContractField {
   id: string;
@@ -143,8 +147,10 @@ export function useUploadDocTemplate() {
 
 /** Buyer/seller are the stored roles everywhere, but an LOI isn't a sale
  * contract — "buyer" there really means "us, the company sending it," so
- * the UI shows that instead without needing a third role value in the schema. */
-export function roleLabel(role: ContractFieldRole, docType: 'loi' | 'contract'): string {
+ * the UI shows that instead. A third+ signer (role 'other') has no fields of
+ * their own, so there's nothing document-specific to label them by. */
+export function roleLabel(role: PartyRole, docType: 'loi' | 'contract'): string {
+  if (role === 'other') return 'Additional Signer';
   if (docType === 'loi' && role === 'buyer') return 'Us';
   return role === 'buyer' ? 'Buyer' : 'Seller';
 }
