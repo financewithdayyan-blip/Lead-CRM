@@ -666,28 +666,13 @@ Deno.serve(async (req) => {
       updates.notes = block + (lead.notes ?? '');
     }
 
+    // "Run the numbers" / "Send LOI or Contract" tasks are created by a DB
+    // trigger (handle_lead_qualified_tasks) reacting to the stage change
+    // just below, not here — that covers every path a lead can reach a
+    // qualified-plus stage through (Kanban drag, the profile's stage
+    // dropdown, a call outcome), not only this AI-driven one, with no risk
+    // of double-creating them for this same transition.
     await admin.from('leads').update(updates).eq('id', leadId);
-
-    // A freshly qualified lead needs two distinct, concrete things from a
-    // human, not one vague "follow up" — run the numbers to actually decide
-    // an offer, and get the paperwork moving once terms are agreed. Separate
-    // tasks rather than one, since they're genuinely different work and the
-    // second one only makes sense once the first is actually done.
-    const todayStr = new Date().toISOString().slice(0, 10);
-    await admin.from('tasks').insert([
-      {
-        user_id: lead.user_id,
-        lead_id: leadId,
-        title: `Run the numbers for ${lead.first_name || 'lead'} — ARV, repairs, and offer`,
-        due_date: todayStr,
-      },
-      {
-        user_id: lead.user_id,
-        lead_id: leadId,
-        title: `Send LOI or Contract to ${lead.first_name || 'lead'} once terms are agreed`,
-        due_date: todayStr,
-      },
-    ]);
   }
 
   // Independent of the branch above — a callback time can land on the same
