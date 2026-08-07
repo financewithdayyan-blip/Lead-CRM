@@ -4,6 +4,7 @@ import { useTags } from '@/hooks/useTags';
 import {
   DEFAULT_FRAMEWORK,
   LIEN_TAG_NAMES,
+  TAX_TAG_NAMES,
   useAiReplyConfigs,
   useSaveAiReplyConfig,
 } from '@/hooks/useAiReplyConfig';
@@ -81,6 +82,7 @@ export function AiFrameworkEditor() {
   const enabled = aiSettings?.autoReplyEnabled ?? true;
   const selectedTag = selectedTagId ? tags.find((t) => t.id === selectedTagId) : null;
   const isLien = selectedTag ? LIEN_TAG_NAMES.some((n) => n.toLowerCase() === selectedTag.name.toLowerCase()) : false;
+  const isTaxDelinquent = selectedTag ? TAX_TAG_NAMES.some((n) => n.toLowerCase() === selectedTag.name.toLowerCase()) : false;
   const selectedConfig = byTagId.get(selectedTagId);
 
   return (
@@ -142,6 +144,17 @@ export function AiFrameworkEditor() {
               title="This tag always asks for mortgage balance and how far behind on payments too, in addition to whatever framework applies — that's a fixed rule, not something set here."
             >
               + mortgage question
+            </span>
+          </div>
+        )}
+        {isTaxDelinquent && (
+          <div className="mb-2 flex items-center gap-2">
+            <TagPill tag={selectedTag!} />
+            <span
+              className="rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning"
+              title="This tag always asks how much they owe in back taxes and how many years behind, in addition to whatever framework applies — that's a fixed rule, not something set here."
+            >
+              + taxes question
             </span>
           </div>
         )}

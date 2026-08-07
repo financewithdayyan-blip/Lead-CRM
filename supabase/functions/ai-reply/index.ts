@@ -131,6 +131,12 @@ If they mention "a plan": ask whether it involves an attorney postponing the auc
 
 const LIEN_TAG_NAMES = ['lis pendens', 'pre-foreclosure', 'foreclosure', 'auction'];
 
+const TAX_ADDENDUM = `
+
+This lead is tax delinquent. Insert a TAXES step immediately after CONDITION and before PRICE: ask how much they owe in back taxes, and how many years behind they are. Do not ask about a mortgage unless they bring it up themselves. This taxes step is also required for fully_qualified on this tag, alongside condition, price and timeline.`;
+
+const TAX_TAG_NAMES = ['tax delinquent'];
+
 // Appended to every framework, tag-specific or Default — a saved custom tag
 // framework has no way to know about this on its own, so it can't be left up
 // to whatever framework text happens to be active. Kept intentionally
@@ -357,6 +363,8 @@ Deno.serve(async (req) => {
 
   const isLienLead = tagNames.some((n) => LIEN_TAG_NAMES.includes(n.toLowerCase()));
   if (isLienLead) framework += LIEN_ADDENDUM;
+  const isTaxDelinquentLead = tagNames.some((n) => TAX_TAG_NAMES.includes(n.toLowerCase()));
+  if (isTaxDelinquentLead) framework += TAX_ADDENDUM;
   // Unconditional — every framework, Default or any tag's own custom text,
   // gets the callback step appended regardless of what it already says.
   framework += CALLBACK_ADDENDUM;

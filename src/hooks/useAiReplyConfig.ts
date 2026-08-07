@@ -48,6 +48,13 @@ If they mention "a plan": ask whether it involves an attorney postponing the auc
 /** Tags this addendum auto-applies to when a tag has no framework of its own yet. */
 export const LIEN_TAG_NAMES = ['Lis Pendens', 'Pre-Foreclosure', 'Foreclosure', 'Auction'];
 
+/** Appended to the Default text (or the tag's own framework) for Tax Delinquent leads. */
+export const TAX_ADDENDUM = `
+
+This lead is tax delinquent. Insert a TAXES step immediately after CONDITION and before PRICE: ask how much they owe in back taxes, and how many years behind they are. Do not ask about a mortgage unless they bring it up themselves. This taxes step is also required for fully_qualified on this tag, alongside condition, price and timeline.`;
+
+export const TAX_TAG_NAMES = ['Tax Delinquent'];
+
 export function useAiReplyConfigs() {
   const { session } = useAuth();
   return useQuery({
