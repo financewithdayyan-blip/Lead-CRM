@@ -470,6 +470,11 @@ Deno.serve(async (req) => {
                 description:
                   'Only fill in together with scheduled_callback_at, on that same message. The callback time in their own words, e.g. "Tomorrow around 3pm" or "Thursday morning" — for a human to read alongside the parsed time.',
               },
+              next_action: {
+                type: 'string',
+                description:
+                  'Only meaningful when fully_qualified is true — empty string otherwise. One concrete, specific next step for a human to do, informed by what was actually said in this conversation, not a generic template. E.g. "Run comps and confirm an offer near her $210k ask, roof is 20 years old" or "Text the LOI for a subject-to deal at $180k, he agreed to the number on the call" or "Call to finalize numbers before Friday, she has another offer to compare against". Always name what makes THIS lead specific (a number mentioned, a deadline, a condition issue) rather than restating the framework steps.',
+              },
             },
             required: ['reply_parts', 'fully_qualified', 'negative_reply'],
           },
@@ -507,6 +512,7 @@ Deno.serve(async (req) => {
     confirmed_address: confirmedAddress,
     scheduled_callback_at: scheduledCallbackAtRaw,
     scheduled_callback_note: scheduledCallbackNote,
+    next_action: nextAction,
   } = toolUse.input as {
     reply_parts: string[];
     fully_qualified: boolean;
@@ -517,6 +523,7 @@ Deno.serve(async (req) => {
     confirmed_address?: string;
     scheduled_callback_at?: string;
     scheduled_callback_note?: string;
+    next_action?: string;
   };
 
   // Fills in a name/address the CRM never had, and a callback time once the
@@ -650,6 +657,7 @@ Deno.serve(async (req) => {
         lead_id: leadId,
         title: `Message ${lead.first_name || 'lead'} with a revised offer — declined on price, may still be workable`,
         due_date: new Date().toISOString().slice(0, 10),
+        auto_created: true,
       });
     }
   } else if (fullyQualified) {
@@ -666,13 +674,23 @@ Deno.serve(async (req) => {
       updates.notes = block + (lead.notes ?? '');
     }
 
-    // "Run the numbers" / "Send LOI or Contract" tasks are created by a DB
-    // trigger (handle_lead_qualified_tasks) reacting to the stage change
-    // just below, not here — that covers every path a lead can reach a
-    // qualified-plus stage through (Kanban drag, the profile's stage
-    // dropdown, a call outcome), not only this AI-driven one, with no risk
-    // of double-creating them for this same transition.
     await admin.from('leads').update(updates).eq('id', leadId);
+
+    // One task, written from what was actually said in this conversation —
+    // not the generic "run the numbers" pair the DB trigger creates for
+    // every OTHER path a lead can reach a qualified-plus stage through
+    // (Kanban drag, the profile's stage dropdown, a call outcome). The
+    // trigger (handle_lead_qualified_tasks) detects this exact branch — the
+    // same update that also flips ai_reply_paused true — and skips its own
+    // generic pair specifically so a lead qualified over text doesn't end up
+    // with three tasks instead of one.
+    await admin.from('tasks').insert({
+      user_id: lead.user_id,
+      lead_id: leadId,
+      title: nextAction?.trim() || `Run the numbers for ${lead.first_name || 'lead'} — ARV, repairs, and offer`,
+      due_date: new Date().toISOString().slice(0, 10),
+      auto_created: true,
+    });
   }
 
   // Independent of the branch above — a callback time can land on the same
@@ -685,6 +703,7 @@ Deno.serve(async (req) => {
       lead_id: leadId,
       title: `Call back ${lead.first_name || 'lead'}${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`,
       due_date: String(recoveredFields.scheduled_callback_at).slice(0, 10),
+      auto_created: true,
     });
   }
 

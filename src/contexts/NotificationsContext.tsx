@@ -105,11 +105,15 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const declineAdminShare = useDeclineAdminLeadShare();
   const updateLead = useUpdateLead();
 
-  // Tasks due within 7 days (overdue + today + this week)
+  // Tasks due within 7 days (overdue + today + this week) — auto-created
+  // ones (the AI, or the qualified-stage trigger) are excluded here on
+  // purpose; the notification bell is for a human's own reminders, and a
+  // single qualification event can create several of these at once. They
+  // still show on the Tasks dashboard card either way.
   const dueTasks = useMemo(
     () =>
       tasks
-        .filter((t) => !t.completed && t.dueDate && t.dueDate <= weekFromNowIso)
+        .filter((t) => !t.completed && !t.autoCreated && t.dueDate && t.dueDate <= weekFromNowIso)
         .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
     [tasks, weekFromNowIso],
   );

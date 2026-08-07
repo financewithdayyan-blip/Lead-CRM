@@ -207,6 +207,7 @@ export function dbToTask(row: any): Task {
     dueDate: row.due_date,
     completed: row.completed,
     createdAt: row.created_at,
+    autoCreated: row.auto_created ?? false,
   };
 }
 

@@ -4,8 +4,6 @@ import { PhoneCall } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
-const MAX_ROWS = 8;
-
 /** How urgent this callback reads at a glance — same overdue/today/upcoming
  * scheme the Kanban card already uses for nextFollowUp, applied here to an
  * exact timestamp rather than a plain date. */
@@ -49,8 +47,8 @@ export function ScheduledCallsCard({ leads }: { leads: Lead[] }) {
           No calls scheduled yet — the AI books these automatically once a seller gives an actual callback time.
         </p>
       ) : (
-        <div className="space-y-1.5">
-          {scheduled.slice(0, MAX_ROWS).map((lead) => {
+        <div className="no-scrollbar max-h-[340px] space-y-1.5 overflow-y-auto pr-0.5">
+          {scheduled.map((lead) => {
             const u = urgency(lead.scheduledCallbackAt);
             const style = URGENCY_STYLE[u];
             return (
@@ -76,9 +74,6 @@ export function ScheduledCallsCard({ leads }: { leads: Lead[] }) {
               </Link>
             );
           })}
-          {scheduled.length > MAX_ROWS && (
-            <div className="pt-1 text-center text-[11px] text-text-3">+{scheduled.length - MAX_ROWS} more</div>
-          )}
         </div>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToTask } from '@/lib/mappers';
@@ -6,6 +7,26 @@ import { useAuth } from '@/contexts/AuthContext';
 export function useTasks(targetUserId?: string) {
   const { session } = useAuth();
   const userId = targetUserId ?? session?.user.id;
+  const qc = useQueryClient();
+
+  // Live — a task the AI creates in the background, or gets checked off from
+  // another tab/device, shows up here without waiting on a manual refresh or
+  // an unrelated mutation to happen to invalidate this query.
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`tasks:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ['tasks', userId] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, qc]);
+
   return useQuery({
     queryKey: ['tasks', userId],
     queryFn: async () => {

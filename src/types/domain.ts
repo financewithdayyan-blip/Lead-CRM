@@ -227,6 +227,11 @@ export interface Task {
   dueDate: string | null;
   completed: boolean;
   createdAt: string;
+  /** Created by the AI or the qualified-stage trigger rather than typed in by
+   * hand — kept out of the notification bell, which is for a human's own
+   * reminders, not a firehose of auto-generated busywork. Still shows on the
+   * Tasks dashboard card either way. */
+  autoCreated: boolean;
 }
 
 export interface DailySummary {

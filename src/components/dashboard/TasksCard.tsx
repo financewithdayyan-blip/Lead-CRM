@@ -4,12 +4,11 @@ import { ListChecks } from 'lucide-react';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { formatDate, localIsoDate } from '@/lib/utils';
 
-const MAX_ROWS = 8;
-
 /** Every open task across the whole pipeline — both ones an admin added by
  * hand and ones the AI created on its own (a qualified handoff, a scheduled
  * callback, a price-only decline worth revisiting) — sorted soonest-due
- * first so the ones with no due date at all don't bury the ones that do. */
+ * first so the ones with no due date at all don't bury the ones that do.
+ * Updates live (see useTasks) rather than waiting on a manual refresh. */
 export function TasksCard({ userId }: { userId: string }) {
   const { data: tasks = [] } = useTasks(userId);
   const toggleTask = useToggleTask();
@@ -37,8 +36,8 @@ export function TasksCard({ userId }: { userId: string }) {
           Nothing open — tasks show up here whether you add them on a lead or the AI creates one automatically.
         </p>
       ) : (
-        <div className="space-y-1.5">
-          {open.slice(0, MAX_ROWS).map((t) => {
+        <div className="no-scrollbar max-h-[340px] space-y-1.5 overflow-y-auto pr-0.5">
+          {open.map((t) => {
             const overdue = !!t.dueDate && t.dueDate < todayStr;
             const isToday = t.dueDate === todayStr;
             return (
@@ -72,7 +71,6 @@ export function TasksCard({ userId }: { userId: string }) {
               </div>
             );
           })}
-          {open.length > MAX_ROWS && <div className="pt-1 text-center text-[11px] text-text-3">+{open.length - MAX_ROWS} more</div>}
         </div>
       )}
     </div>
