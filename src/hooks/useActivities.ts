@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { dbToActivity } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
 import { localIsoDate } from '@/lib/utils';
+import { fetchAllPages } from '@/lib/paginate';
 import type { ActivityType } from '@/types/domain';
 
 export interface AdminNoteNotif {
@@ -133,14 +134,16 @@ export function useActivityFeed(targetUserId?: string, sinceIso?: string) {
   return useQuery({
     queryKey: ['activity_feed', userId, since],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('lead_activities')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('created_at', since)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data.map(dbToActivity);
+      const rows = await fetchAllPages<any>((from, to) =>
+        supabase
+          .from('lead_activities')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('created_at', since)
+          .order('created_at', { ascending: false })
+          .range(from, to),
+      );
+      return rows.map(dbToActivity);
     },
     enabled: !!userId,
   });

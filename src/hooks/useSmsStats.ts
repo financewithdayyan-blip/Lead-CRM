@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { fetchAllPages } from '@/lib/paginate';
 
 export interface SendLogRow {
   id: string;
@@ -24,12 +25,10 @@ export function useSendLog(enabled: boolean) {
   return useQuery({
     queryKey: ['send_log_all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('send_log')
-        .select('id, sent_from, sent_at')
-        .order('sent_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map((r): SendLogRow => ({ id: r.id, sentFrom: r.sent_from, createdAt: r.sent_at }));
+      const rows = await fetchAllPages<{ id: string; sent_from: string; sent_at: string }>((from, to) =>
+        supabase.from('send_log').select('id, sent_from, sent_at').order('sent_at', { ascending: true }).range(from, to),
+      );
+      return rows.map((r): SendLogRow => ({ id: r.id, sentFrom: r.sent_from, createdAt: r.sent_at }));
     },
     enabled,
   });
@@ -52,12 +51,20 @@ export function useInboundMessages(enabled: boolean) {
   return useQuery({
     queryKey: ['inbound_messages_all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('inbound_messages')
-        .select('id, is_reaction, has_attachments, received_at, lead_id')
-        .order('received_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map(
+      const rows = await fetchAllPages<{
+        id: string;
+        is_reaction: boolean;
+        has_attachments: boolean;
+        received_at: string;
+        lead_id: string | null;
+      }>((from, to) =>
+        supabase
+          .from('inbound_messages')
+          .select('id, is_reaction, has_attachments, received_at, lead_id')
+          .order('received_at', { ascending: true })
+          .range(from, to),
+      );
+      return rows.map(
         (r): InboundRow => ({
           id: r.id,
           isReaction: r.is_reaction,
