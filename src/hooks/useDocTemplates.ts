@@ -105,7 +105,7 @@ export function useUploadDocTemplate() {
       docxFile?: File;
     }) => {
       const userId = session!.user.id;
-      const folder = docType === 'contract' ? `contracts/${contractType}` : 'loi';
+      const folder = docType === 'contract' ? `contracts/${contractType ?? 'other'}` : 'loi';
       const path = `${folder}/${Date.now()}-${pdfFile.name}`;
       const { error: uploadError } = await supabase.storage.from('blue-docs').upload(path, pdfFile);
       if (uploadError) throw uploadError;
@@ -123,7 +123,7 @@ export function useUploadDocTemplate() {
         .from('doc_templates')
         .insert({
           type: docType,
-          contract_type: docType === 'contract' ? contractType : null,
+          contract_type: docType === 'contract' ? (contractType ?? null) : null,
           name: defaultName,
           storage_path: path,
           file_name: pdfFile.name,

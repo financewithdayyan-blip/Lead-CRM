@@ -170,6 +170,16 @@ function ContractTemplatesTab() {
           onDeleteTarget={flow.setDeleteTarget}
         />
       ))}
+      <TemplateCategoryCard
+        label="Other Contracts"
+        docType="contract"
+        items={templates.filter((t) => t.contractType === null)}
+        multi
+        onOpenMapper={flow.openMapper}
+        onSend={flow.setSendTarget}
+        onOpenInbox={flow.setInboxTarget}
+        onDeleteTarget={flow.setDeleteTarget}
+      />
       <DocFlowModals flow={flow} />
     </div>
   );

@@ -67,6 +67,7 @@ export function TemplateCategoryCard({
   docType,
   contractType,
   items,
+  multi,
   onOpenMapper,
   onSend,
   onOpenInbox,
@@ -76,6 +77,12 @@ export function TemplateCategoryCard({
   docType: 'loi' | 'contract';
   contractType?: ContractType;
   items: DocTemplate[];
+  /** Cards for the four fixed deal types hold one template each — the
+   * upload button hides once that slot is filled. This card is an
+   * open-ended bucket (e.g. "Other Contracts"), so the button stays
+   * visible to add more, and its label reads as adding a new contract
+   * rather than filling the category's one slot. */
+  multi?: boolean;
   onOpenMapper: (t: DocTemplate) => void;
   onSend: (t: DocTemplate) => void;
   onOpenInbox: (t: DocTemplate) => void;
@@ -113,7 +120,7 @@ export function TemplateCategoryCard({
     <div className="card">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-text">{label}</div>
-        {items.length === 0 && (
+        {(items.length === 0 || multi) && (
           <div className="flex items-center gap-1.5">
             <button
               className="btn !px-2.5 !py-1.5 text-[11px]"
@@ -124,7 +131,7 @@ export function TemplateCategoryCard({
             </button>
             <button className="btn !px-3 !py-1.5 text-[12px]" disabled={uploading} onClick={() => pdfInput.current?.click()}>
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-              Upload template
+              {multi ? 'Add Contract' : 'Upload template'}
             </button>
           </div>
         )}
@@ -156,7 +163,9 @@ export function TemplateCategoryCard({
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-2 text-[12px] text-text-3">No {label.toLowerCase()} template uploaded yet.</p>
+        <p className="mt-2 text-[12px] text-text-3">
+          {multi ? 'No contracts added here yet.' : `No ${label.toLowerCase()} template uploaded yet.`}
+        </p>
       ) : (
         <div className="mt-2 space-y-1.5">
           {items.map((t) => {
