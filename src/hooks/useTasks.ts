@@ -11,19 +11,30 @@ export function useTasks(targetUserId?: string) {
 
   // Live — a task the AI creates in the background, or gets checked off from
   // another tab/device, shows up here without waiting on a manual refresh or
-  // an unrelated mutation to happen to invalidate this query.
+  // an unrelated mutation to happen to invalidate this query. This hook is
+  // consumed from NotificationsContext, which wraps every authenticated
+  // page — a failure here must never throw into that render tree, so it's
+  // entirely best-effort: caught, and reported through .subscribe()'s own
+  // status callback rather than assumed to succeed.
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel(`tasks:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ['tasks', userId] }),
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    try {
+      channel = supabase
+        .channel(`tasks:${userId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },
+          () => qc.invalidateQueries({ queryKey: ['tasks', userId] }),
+        )
+        .subscribe((status, err) => {
+          if (err) console.error('tasks realtime subscription error', err);
+        });
+    } catch (e) {
+      console.error('tasks realtime subscription failed to start', e);
+    }
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId, qc]);
 
