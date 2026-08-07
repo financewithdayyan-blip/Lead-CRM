@@ -73,6 +73,8 @@ export function dbToLead(row: any): Lead {
     aiReplyPaused: row.ai_reply_paused ?? false,
     qualifiedAt: row.qualified_at ?? null,
     assignedSmsNumber: row.assigned_sms_number ?? null,
+    scheduledCallbackAt: row.scheduled_callback_at ?? null,
+    scheduledCallbackNote: row.scheduled_callback_note ?? null,
   };
 }
 

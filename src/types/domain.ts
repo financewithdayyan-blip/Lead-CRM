@@ -174,6 +174,10 @@ export interface Lead {
   qualifiedAt: string | null;
   /** The number ('1'-'4') this lead was first texted from. Every send after that — bulk or manual — sticks to it, so replies stay in the same Zoom thread. Null until the first send. */
   assignedSmsNumber: string | null;
+  /** When the seller told the AI to call back — set from a real answer during qualification, not a placeholder. Null until they actually give one. */
+  scheduledCallbackAt: string | null;
+  /** The callback time in the seller's own words (e.g. "Tomorrow around 3pm"), kept alongside the parsed timestamp for context. */
+  scheduledCallbackNote: string | null;
 }
 
 export type BulkSmsJobStatus = 'running' | 'completed' | 'failed';

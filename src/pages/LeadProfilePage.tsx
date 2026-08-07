@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -303,6 +303,16 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 {lead.address}
                 {lead.city ? `, ${lead.city}` : ''}
                 {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
+              </div>
+            )}
+            {lead.scheduledCallbackAt && (
+              <div
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-info-dim px-2 py-1 text-[12px] font-medium text-info"
+                title={lead.scheduledCallbackNote ?? undefined}
+              >
+                <PhoneCall size={12} />
+                Callback scheduled: {formatDateTime(lead.scheduledCallbackAt)}
+                {lead.scheduledCallbackNote ? ` — "${lead.scheduledCallbackNote}"` : ''}
               </div>
             )}
           </div>

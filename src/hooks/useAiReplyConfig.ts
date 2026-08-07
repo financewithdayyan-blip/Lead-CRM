@@ -30,9 +30,10 @@ Steps, in this exact order:
    - How old the roof is.
 3. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
 4. TIMELINE — ask if there's a timeline they're looking to close within.
-5. PHOTOS — last: ask for interior photos so the current condition can actually be seen.
+5. PHOTOS — ask for interior photos so the current condition can actually be seen.
+6. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
-A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there.`;
+A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
 
 /**
  * Appended to the Default text (or the tag's own framework, if the admin has

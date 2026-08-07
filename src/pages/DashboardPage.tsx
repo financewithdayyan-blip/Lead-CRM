@@ -8,6 +8,8 @@ import { useSendLog, useInboundMessages } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
 import { formatPhone, localIsoDate } from '@/lib/utils';
+import { ScheduledCallsCard } from '@/components/dashboard/ScheduledCallsCard';
+import { TasksCard } from '@/components/dashboard/TasksCard';
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
@@ -637,21 +639,30 @@ export function DashboardView({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <GoalBar label="Daily Call Goal" done={stats.callsToday} goal={profile?.dailyGoal ?? 20} periodLabel="today" />
-            <GoalBar
-              label="Monthly Call Goal"
-              done={stats.monthCalls}
-              goal={profile?.monthlyGoal ?? 400}
-              periodLabel={(() => {
-                const n = new Date();
-                const s = new Date(n.getFullYear(), n.getMonth(), 1);
-                const e = new Date(n.getFullYear(), n.getMonth() + 1, 1);
-                const fmt = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                return `${fmt(s)} – ${fmt(e)}`;
-              })()}
-            />
-          </div>
+          {showSmsStats && (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <ScheduledCallsCard leads={leads} />
+              <TasksCard userId={userId} />
+            </div>
+          )}
+
+          {!showSmsStats && (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <GoalBar label="Daily Call Goal" done={stats.callsToday} goal={profile?.dailyGoal ?? 20} periodLabel="today" />
+              <GoalBar
+                label="Monthly Call Goal"
+                done={stats.monthCalls}
+                goal={profile?.monthlyGoal ?? 400}
+                periodLabel={(() => {
+                  const n = new Date();
+                  const s = new Date(n.getFullYear(), n.getMonth(), 1);
+                  const e = new Date(n.getFullYear(), n.getMonth() + 1, 1);
+                  const fmt = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                  return `${fmt(s)} – ${fmt(e)}`;
+                })()}
+              />
+            </div>
+          )}
 
           {showSmsStats && (
             <div className="card">

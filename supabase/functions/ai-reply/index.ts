@@ -118,9 +118,10 @@ Steps, in this exact order:
    - How old the roof is.
 3. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
 4. TIMELINE — ask if there's a timeline they're looking to close within.
-5. PHOTOS — last: ask for interior photos so the current condition can actually be seen.
+5. PHOTOS — ask for interior photos so the current condition can actually be seen.
+6. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
-A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there.`;
+A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
 
 const LIEN_ADDENDUM = `
 
@@ -130,9 +131,20 @@ If they mention "a plan": ask whether it involves an attorney postponing the auc
 
 const LIEN_TAG_NAMES = ['lis pendens', 'pre-foreclosure', 'foreclosure', 'auction'];
 
+// Appended to every framework, tag-specific or Default — a saved custom tag
+// framework has no way to know about this on its own, so it can't be left up
+// to whatever framework text happens to be active. Kept intentionally
+// separate from DEFAULT_FRAMEWORK's own CALLBACK step above (which a custom
+// tag framework overrides entirely) so the requirement survives regardless.
+const CALLBACK_ADDENDUM = `
+
+CALLBACK STEP — required for every lead regardless of anything else above: after condition, price, timeline (and mortgage, if this is a lien-adjacent lead) are established and you've asked for interior photos, ask one more thing before the interview counts as complete: what's a good time to call them back tomorrow. This is not done just by asking — wait for them to actually name a real day and time. Only once they do can fully_qualified be true (assuming everything else required is also already established). When they give you a time, fill in scheduled_callback_at and scheduled_callback_note on the same turn.`;
+
 // ── Deterministic style + special-case rules (Phase 3 spec, verbatim) ──────
 
 const SYSTEM_RULES = `You are texting on behalf of Bluebird Acquisition, a real-estate acquisitions company that buys distressed properties as-is for cash, subject-to, or novation. You are texting as {{AGENT_NAME}}.
+
+TODAY'S DATE is {{TODAY}} — the only basis you have for turning something like "tomorrow" or "Thursday afternoon" into an actual date for the CALLBACK step below.
 
 WHAT YOU ACTUALLY KNOW ABOUT THIS LEAD — real data from the CRM, not something to recite as a list, only bring it up naturally when it's actually relevant (e.g. confirming which property you mean):
 {{LEAD_CONTEXT}}
@@ -345,9 +357,24 @@ Deno.serve(async (req) => {
 
   const isLienLead = tagNames.some((n) => LIEN_TAG_NAMES.includes(n.toLowerCase()));
   if (isLienLead) framework += LIEN_ADDENDUM;
+  // Unconditional — every framework, Default or any tag's own custom text,
+  // gets the callback step appended regardless of what it already says.
+  framework += CALLBACK_ADDENDUM;
 
   const { data: ownerProfile } = await admin.from('profiles').select('full_name').eq('id', lead.user_id).single();
   const agentName = ownerProfile?.full_name || 'the Bluebird team';
+
+  // Anchors "tomorrow"/"Thursday"/etc for the CALLBACK step — without a
+  // concrete today, the model has no basis to turn what the lead said into
+  // an actual date. US Eastern, matching the single reference timezone
+  // send-sms already anchors its own sending window to.
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'America/New_York',
+  });
 
   // The one fix directly behind this block: without it, the model has no
   // real address at all, and when it needs to reference "the property" it
@@ -367,6 +394,7 @@ Deno.serve(async (req) => {
 
   const system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName)
     .replace('{{LEAD_CONTEXT}}', leadContext)
+    .replace('{{TODAY}}', todayLabel)
     .replace('{{FRAMEWORK}}', framework);
 
   // Step 6: draft, via forced tool-call output so the three fields are
@@ -432,6 +460,16 @@ Deno.serve(async (req) => {
                 description:
                   'Only fill in when the property address above was missing and they just confirmed or stated it in this message for the first time. Empty string otherwise — never repeat an address that was already on file.',
               },
+              scheduled_callback_at: {
+                type: 'string',
+                description:
+                  'Only fill in on the message where they actually name a specific day and time to call them back (the CALLBACK step) — empty string otherwise, including every earlier turn where you\'ve only asked but not yet gotten a real answer. An ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY\'S DATE above and what they said, e.g. today being a Wednesday and them saying "tomorrow at 3pm" becomes tomorrow\'s date at 15:00:00. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.',
+              },
+              scheduled_callback_note: {
+                type: 'string',
+                description:
+                  'Only fill in together with scheduled_callback_at, on that same message. The callback time in their own words, e.g. "Tomorrow around 3pm" or "Thursday morning" — for a human to read alongside the parsed time.',
+              },
             },
             required: ['reply_parts', 'fully_qualified', 'negative_reply'],
           },
@@ -467,6 +505,8 @@ Deno.serve(async (req) => {
     summary,
     confirmed_first_name: confirmedFirstName,
     confirmed_address: confirmedAddress,
+    scheduled_callback_at: scheduledCallbackAtRaw,
+    scheduled_callback_note: scheduledCallbackNote,
   } = toolUse.input as {
     reply_parts: string[];
     fully_qualified: boolean;
@@ -475,14 +515,24 @@ Deno.serve(async (req) => {
     summary?: string;
     confirmed_first_name?: string;
     confirmed_address?: string;
+    scheduled_callback_at?: string;
+    scheduled_callback_note?: string;
   };
 
-  // Fills in a name/address the CRM never had — independent of qualification
-  // outcome, since a lead can state their name on a message that doesn't
-  // otherwise complete the framework.
+  // Fills in a name/address the CRM never had, and a callback time once the
+  // seller actually gives one — all independent of qualification outcome,
+  // since any of these can land on a message that doesn't itself complete
+  // the framework.
   const recoveredFields: Record<string, unknown> = {};
   if (confirmedFirstName?.trim() && !lead.first_name) recoveredFields.first_name = confirmedFirstName.trim();
   if (confirmedAddress?.trim() && !lead.address) recoveredFields.address = confirmedAddress.trim();
+  if (scheduledCallbackAtRaw?.trim()) {
+    const parsed = new Date(scheduledCallbackAtRaw.trim());
+    if (!isNaN(parsed.getTime())) {
+      recoveredFields.scheduled_callback_at = parsed.toISOString();
+      recoveredFields.scheduled_callback_note = scheduledCallbackNote?.trim() || null;
+    }
+  }
   if (Object.keys(recoveredFields).length > 0) {
     await admin.from('leads').update(recoveredFields).eq('id', leadId);
   }
@@ -591,6 +641,16 @@ Deno.serve(async (req) => {
       await admin.from('leads').update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true }).eq('id', leadId);
     } else {
       await admin.from('leads').update({ stage: 'onhold', ai_reply_paused: true }).eq('id', leadId);
+      // Only the price-specific decline — a human revisiting later with a
+      // different number or offer is the whole reason this goes On Hold
+      // instead of Dead, so that revisit needs its own task or it's easy to
+      // forget this lead is still workable.
+      await admin.from('tasks').insert({
+        user_id: lead.user_id,
+        lead_id: leadId,
+        title: `Message ${lead.first_name || 'lead'} with a revised offer — declined on price, may still be workable`,
+        due_date: new Date().toISOString().slice(0, 10),
+      });
     }
   } else if (fullyQualified) {
     const updates: Record<string, unknown> = { stage: hasPhotos ? 'followup' : 'initial_contact', ai_reply_paused: true };
@@ -607,6 +667,40 @@ Deno.serve(async (req) => {
     }
 
     await admin.from('leads').update(updates).eq('id', leadId);
+
+    // A freshly qualified lead needs two distinct, concrete things from a
+    // human, not one vague "follow up" — run the numbers to actually decide
+    // an offer, and get the paperwork moving once terms are agreed. Separate
+    // tasks rather than one, since they're genuinely different work and the
+    // second one only makes sense once the first is actually done.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    await admin.from('tasks').insert([
+      {
+        user_id: lead.user_id,
+        lead_id: leadId,
+        title: `Run the numbers for ${lead.first_name || 'lead'} — ARV, repairs, and offer`,
+        due_date: todayStr,
+      },
+      {
+        user_id: lead.user_id,
+        lead_id: leadId,
+        title: `Send LOI or Contract to ${lead.first_name || 'lead'} once terms are agreed`,
+        due_date: todayStr,
+      },
+    ]);
+  }
+
+  // Independent of the branch above — a callback time can land on the same
+  // turn fully_qualified does (the usual case, per the CALLBACK step), but
+  // nothing here depends on that; any turn that actually captures one gets
+  // its own task so it shows up as something concrete to act on.
+  if (recoveredFields.scheduled_callback_at) {
+    await admin.from('tasks').insert({
+      user_id: lead.user_id,
+      lead_id: leadId,
+      title: `Call back ${lead.first_name || 'lead'}${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`,
+      due_date: String(recoveredFields.scheduled_callback_at).slice(0, 10),
+    });
   }
 
   return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined });
