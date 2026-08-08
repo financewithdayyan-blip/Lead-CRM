@@ -1,6 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Trash2, Type, AlignLeft, Calendar, PenLine, User, DollarSign, X, Plus, Check } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlignLeft,
+  Calendar,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  DollarSign,
+  Loader2,
+  PenLine,
+  Plus,
+  Trash2,
+  Type,
+  User,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { loadPdf, renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
 import {
   useSaveContractMapping,
@@ -12,7 +27,9 @@ import {
   type PartyRoleDef,
 } from '@/hooks/useDocTemplates';
 
-const CANVAS_WIDTH = 700;
+const BASE_WIDTH = 760;
+const ZOOM_STEPS = [0.6, 0.75, 1, 1.25, 1.5, 1.75, 2];
+const DEFAULT_ZOOM_INDEX = 2; // 1x
 
 const FIELD_DEFAULTS: Record<ContractFieldType, { w: number; h: number; label: string }> = {
   text: { w: 16, h: 3.5, label: 'Text field' },
@@ -57,6 +74,7 @@ export function ContractFieldMapper({
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageNum, setPageNum] = useState(1);
   const [loadingPage, setLoadingPage] = useState(true);
+  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [fields, setFields] = useState<ContractField[]>(template.fields);
   const [name, setName] = useState(template.name);
   const [partyRoles, setPartyRoles] = useState<PartyRoleDef[]>(template.partyRoles);
@@ -66,6 +84,9 @@ export function ContractFieldMapper({
   const [saving, setSaving] = useState(false);
   const [addingRole, setAddingRole] = useState(false);
   const [newRoleLabel, setNewRoleLabel] = useState('');
+
+  const zoom = ZOOM_STEPS[zoomIndex];
+  const canvasWidth = Math.round(BASE_WIDTH * zoom);
 
   // Seller/buyer are always available; anything the template itself defines
   // rides after them in the order they were added.
@@ -106,16 +127,48 @@ export function ContractFieldMapper({
   useEffect(() => {
     if (!pdf || !containerRef.current) return;
     setLoadingPage(true);
-    renderPdfPageToCanvas(pdf, pageNum, CANVAS_WIDTH).then(({ canvas }) => {
+    renderPdfPageToCanvas(pdf, pageNum, canvasWidth).then(({ canvas }) => {
       const container = containerRef.current;
       if (!container) return;
       container.querySelectorAll('canvas').forEach((c) => c.remove());
       container.insertBefore(canvas, container.firstChild);
       setLoadingPage(false);
     });
-  }, [pdf, pageNum]);
+  }, [pdf, pageNum, canvasWidth]);
+
+  // Escape cancels an active placement instead of closing the whole editor —
+  // losing a half-mapped document to a stray Escape press would be a much
+  // worse outcome than the key doing nothing extra.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const typing = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
+      if (e.key === 'Escape' && placingType) {
+        setPlacingType(null);
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !typing) {
+        e.preventDefault();
+        setFields((prev) => prev.filter((f) => f.id !== selectedId));
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [placingType, selectedId]);
 
   const pageFields = fields.filter((f) => f.page === pageNum);
+  const numPages = pdf?.numPages ?? 1;
+  const pageNumbers = useMemo(() => Array.from({ length: numPages }, (_, i) => i + 1), [numPages]);
+
+  // Fields grouped and ordered by page, so a long multi-page contract reads
+  // as a document outline instead of one flat, order-of-creation list.
+  const fieldsByPage = useMemo(() => {
+    const map = new Map<number, ContractField[]>();
+    for (const f of fields) {
+      if (!map.has(f.page)) map.set(f.page, []);
+      map.get(f.page)!.push(f);
+    }
+    return [...map.entries()].sort(([a], [b]) => a - b);
+  }, [fields]);
 
   function addField(clickXPct: number, clickYPct: number) {
     if (!placingType) return;
@@ -197,9 +250,9 @@ export function ContractFieldMapper({
     setFields((prev) => prev.map((f) => (f.id === selectedId ? { ...f, ...patch } : f)));
   }
 
-  function deleteSelected() {
-    setFields((prev) => prev.filter((f) => f.id !== selectedId));
-    setSelectedId(null);
+  function deleteField(id: string) {
+    setFields((prev) => prev.filter((f) => f.id !== id));
+    if (selectedId === id) setSelectedId(null);
   }
 
   async function handleSave() {
@@ -214,18 +267,19 @@ export function ContractFieldMapper({
   }
 
   const selected = fields.find((f) => f.id === selectedId) ?? null;
-  const numPages = pdf?.numPages ?? 1;
 
   return (
-    <Modal open onClose={onClose} title="Map contract fields" width="xl">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg">
+      {/* ── Top bar — name, field palette, role palette, and the two exits
+          (Cancel/Save) all live here so nothing requires scrolling to reach. */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-4 py-2.5 shadow-sm">
         <input
-          className="input max-w-[240px]"
+          className="input !w-52 shrink-0"
           placeholder="Template name (e.g. PSA Cash)"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <div className="mx-1 h-5 w-px bg-border-2" />
+        <div className="h-6 w-px shrink-0 bg-border-2" />
         {FIELD_TYPE_BUTTONS.map(({ type, label, icon: Icon }) => (
           <button
             key={type}
@@ -235,8 +289,8 @@ export function ContractFieldMapper({
             <Icon size={13} /> {label}
           </button>
         ))}
-        <div className="mx-1 h-5 w-px bg-border-2" />
-        <span className="text-[12px] text-text-3">Placing as:</span>
+        <div className="h-6 w-px shrink-0 bg-border-2" />
+        <span className="shrink-0 text-[12px] text-text-3">Placing as:</span>
         {roles.map((r) => (
           <span key={r} className="group relative inline-flex items-center">
             <button
@@ -247,11 +301,7 @@ export function ContractFieldMapper({
               {roleLabel(r, template.type, partyRoles)}
             </button>
             {r !== 'seller' && r !== 'buyer' && !fields.some((f) => f.role === r) && (
-              <button
-                className="ml-0.5 text-text-3 hover:text-danger"
-                title="Remove this signee"
-                onClick={() => removeRole(r)}
-              >
+              <button className="ml-0.5 text-text-3 hover:text-danger" title="Remove this signee" onClick={() => removeRole(r)}>
                 <X size={11} />
               </button>
             )}
@@ -282,127 +332,188 @@ export function ContractFieldMapper({
             <Plus size={12} /> Add Signee
           </button>
         )}
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <button className="btn !px-3 !py-1.5 text-[13px]" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary !px-3 !py-1.5 text-[13px]" disabled={!name.trim() || saving} onClick={handleSave}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+            Save mapping
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <div className="mb-2 flex items-center justify-between">
+      {/* ── Main workspace — canvas on the left (its own toolbar for page nav
+          and zoom), field list on the right. Both scroll independently so a
+          long document and a long field list never fight over one scrollbar. */}
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-white px-4 py-2">
             <div className="flex items-center gap-1.5">
               <button className="btn !p-1.5" disabled={pageNum <= 1} onClick={() => setPageNum((p) => p - 1)}>
                 <ChevronLeft size={14} />
               </button>
-              <span className="text-[12px] text-text-2">
-                Page {pageNum} / {numPages}
-              </span>
+              {numPages <= 10 ? (
+                <div className="flex items-center gap-1">
+                  {pageNumbers.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setPageNum(n)}
+                      className={`flex h-6 w-6 items-center justify-center rounded text-[11px] font-medium ${
+                        n === pageNum ? 'bg-primary text-white' : 'text-text-3 hover:bg-surface-3 hover:text-text'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[12px] text-text-2">
+                  Page {pageNum} / {numPages}
+                </span>
+              )}
               <button className="btn !p-1.5" disabled={pageNum >= numPages} onClick={() => setPageNum((p) => p + 1)}>
                 <ChevronRight size={14} />
               </button>
             </div>
-            {placingType && <span className="text-[12px] font-medium text-primary">Click on the document to place the field</span>}
+
+            <div className="flex items-center gap-2">
+              {placingType && <span className="text-[12px] font-medium text-primary">Click on the document to place the field</span>}
+              <div className="flex items-center gap-0.5 rounded-md border border-border-2 p-0.5">
+                <button className="btn !border-0 !p-1" disabled={zoomIndex === 0} onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}>
+                  <ZoomOut size={13} />
+                </button>
+                <span className="w-10 text-center text-[11.5px] tabular-nums text-text-2">{Math.round(zoom * 100)}%</span>
+                <button
+                  className="btn !border-0 !p-1"
+                  disabled={zoomIndex === ZOOM_STEPS.length - 1}
+                  onClick={() => setZoomIndex((i) => Math.min(ZOOM_STEPS.length - 1, i + 1))}
+                >
+                  <ZoomIn size={13} />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div
-            ref={containerRef}
-            onClick={handleCanvasClick}
-            className={`relative overflow-hidden rounded-md border border-border-2 ${placingType ? 'cursor-crosshair' : ''}`}
-            style={{ width: CANVAS_WIDTH }}
-          >
-            {loadingPage && (
-              <div className="flex h-96 items-center justify-center text-text-3">
-                <Loader2 size={20} className="animate-spin" />
+          <div className="min-h-0 flex-1 overflow-auto bg-surface-2 px-6 py-6">
+            <div
+              ref={containerRef}
+              onClick={handleCanvasClick}
+              className={`relative mx-auto overflow-hidden rounded-md border border-border-2 bg-white shadow-card ${placingType ? 'cursor-crosshair' : ''}`}
+              style={{ width: canvasWidth }}
+            >
+              {loadingPage && (
+                <div className="flex h-96 items-center justify-center text-text-3">
+                  <Loader2 size={20} className="animate-spin" />
+                </div>
+              )}
+              {pageFields.map((f) => (
+                <div
+                  key={f.id}
+                  onMouseDown={(e) => startDrag(e, f, 'move')}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute cursor-move rounded-sm border-2"
+                  style={{
+                    left: `${f.xPct}%`,
+                    top: `${f.yPct}%`,
+                    width: `${f.wPct}%`,
+                    height: `${f.hPct}%`,
+                    borderColor: roleColor(f.role),
+                    background: `${roleColor(f.role)}22`,
+                    boxShadow: selectedId === f.id ? `0 0 0 2px ${roleColor(f.role)}` : undefined,
+                  }}
+                >
+                  <span className="pointer-events-none block truncate px-1 text-[9px] font-semibold" style={{ color: roleColor(f.role) }}>
+                    {f.label}
+                  </span>
+                  <div
+                    onMouseDown={(e) => startDrag(e, f, 'resize')}
+                    className="absolute bottom-0 right-0 h-2.5 w-2.5 cursor-nwse-resize rounded-tl bg-current"
+                    style={{ color: roleColor(f.role) }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex w-72 shrink-0 flex-col border-l border-border bg-white">
+          <div className="border-b border-border p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Selected field</div>
+            {!selected ? (
+              <p className="mt-2 text-[12px] text-text-3">
+                Click a field on the document to edit it, or pick a field type above and click the document to add one.
+              </p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                <input className="input" value={selected.label} onChange={(e) => updateSelected({ label: e.target.value })} placeholder="Label" />
+                <div className="flex flex-wrap gap-1.5">
+                  {roles.map((r) => (
+                    <button
+                      key={r}
+                      className="flex-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold text-white"
+                      style={{ background: selected.role === r ? roleColor(r) : '#cbd5e1' }}
+                      onClick={() => updateSelected({ role: r })}
+                    >
+                      {roleLabel(r, template.type, partyRoles)}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn btn-danger w-full !py-1 text-[12px]" onClick={() => deleteField(selected.id)}>
+                  <Trash2 size={12} /> Delete field
+                  <span className="ml-1 text-[10px] opacity-75">(Del)</span>
+                </button>
               </div>
             )}
-            {pageFields.map((f) => (
-              <div
-                key={f.id}
-                onMouseDown={(e) => startDrag(e, f, 'move')}
-                className="absolute cursor-move rounded-sm border-2"
-                style={{
-                  left: `${f.xPct}%`,
-                  top: `${f.yPct}%`,
-                  width: `${f.wPct}%`,
-                  height: `${f.hPct}%`,
-                  borderColor: roleColor(f.role),
-                  background: `${roleColor(f.role)}22`,
-                  boxShadow: selectedId === f.id ? `0 0 0 2px ${roleColor(f.role)}` : undefined,
-                }}
-              >
-                <span
-                  className="pointer-events-none block truncate px-1 text-[9px] font-semibold"
-                  style={{ color: roleColor(f.role) }}
-                >
-                  {f.label}
-                </span>
-                <div
-                  onMouseDown={(e) => startDrag(e, f, 'resize')}
-                  className="absolute bottom-0 right-0 h-2.5 w-2.5 cursor-nwse-resize rounded-tl bg-current"
-                  style={{ color: roleColor(f.role) }}
-                />
-              </div>
-            ))}
           </div>
-        </div>
 
-        <div className="w-56 shrink-0">
-          <div className="text-[12px] font-semibold uppercase tracking-wide text-text-3">Selected field</div>
-          {!selected ? (
-            <p className="mt-2 text-[12px] text-text-3">Click a field on the document to edit it, or pick a field type above and click the document to add one.</p>
-          ) : (
-            <div className="mt-2 space-y-2">
-              <input
-                className="input"
-                value={selected.label}
-                onChange={(e) => updateSelected({ label: e.target.value })}
-                placeholder="Label"
-              />
-              <div className="flex flex-wrap gap-1.5">
-                {roles.map((r) => (
-                  <button
-                    key={r}
-                    className="flex-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold text-white"
-                    style={{ background: selected.role === r ? roleColor(r) : '#cbd5e1' }}
-                    onClick={() => updateSelected({ role: r })}
-                  >
-                    {roleLabel(r, template.type, partyRoles)}
-                  </button>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">All fields ({fields.length})</div>
+            {fieldsByPage.length === 0 ? (
+              <p className="mt-2 text-[12px] text-text-3">No fields placed yet.</p>
+            ) : (
+              <div className="mt-2 space-y-3">
+                {fieldsByPage.map(([page, pageFieldList]) => (
+                  <div key={page}>
+                    <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
+                      Page {page} <span className="font-normal normal-case text-text-3/70">· {pageFieldList.length}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {pageFieldList.map((f) => (
+                        <div
+                          key={f.id}
+                          className={`group flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${
+                            selectedId === f.id ? 'border-primary' : 'border-border-2'
+                          }`}
+                        >
+                          <button
+                            className="min-w-0 flex-1 truncate text-left"
+                            style={{ color: roleColor(f.role) }}
+                            onClick={() => {
+                              setPageNum(f.page);
+                              setSelectedId(f.id);
+                            }}
+                          >
+                            {f.label}
+                          </button>
+                          <button
+                            className="shrink-0 text-text-3 opacity-0 hover:text-danger group-hover:opacity-100"
+                            title="Delete this field"
+                            onClick={() => deleteField(f.id)}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
-              <button className="btn btn-danger w-full !py-1 text-[12px]" onClick={deleteSelected}>
-                <Trash2 size={12} /> Delete field
-              </button>
-            </div>
-          )}
-
-          <div className="mt-4 text-[12px] font-semibold uppercase tracking-wide text-text-3">All fields ({fields.length})</div>
-          <div className="mt-1.5 space-y-1">
-            {fields.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => {
-                  setPageNum(f.page);
-                  setSelectedId(f.id);
-                }}
-                className={`flex w-full items-center justify-between gap-1 rounded-md border px-2 py-1 text-left text-[11px] ${selectedId === f.id ? 'border-primary' : 'border-border-2'}`}
-              >
-                <span className="truncate" style={{ color: roleColor(f.role) }}>
-                  {f.label}
-                </span>
-                <span className="shrink-0 text-text-3">p{f.page}</span>
-              </button>
-            ))}
+            )}
           </div>
         </div>
       </div>
-
-      <div className="mt-4 flex justify-end gap-2">
-        <button className="btn" onClick={onClose}>
-          <X size={14} /> Cancel
-        </button>
-        <button className="btn btn-primary" disabled={!name.trim() || saving} onClick={handleSave}>
-          {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-          Save mapping
-        </button>
-      </div>
-    </Modal>
+    </div>
   );
 }
