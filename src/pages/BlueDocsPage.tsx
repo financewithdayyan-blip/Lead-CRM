@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, FileSignature, ScrollText, Send } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
@@ -135,7 +135,7 @@ function LoiGeneratorTab() {
   const flow = useDocFlow();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <TemplateCategoryCard
         label="Letter of Intent"
         docType="loi"
@@ -156,7 +156,7 @@ function ContractTemplatesTab() {
   const flow = useDocFlow();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {CONTRACT_TYPES.map((ct) => (
         <TemplateCategoryCard
           key={ct.key}
@@ -190,23 +190,31 @@ export function BlueDocsPage() {
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-2xl font-semibold text-text">Blue Docs</h1>
-        <p className="text-sm text-text-3">Contract templates, e-signing, and the LOI generator</p>
+      <div className="mb-6 flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <FileSignature size={20} />
+        </span>
+        <div>
+          <h1 className="text-2xl font-semibold text-text">Blue Docs</h1>
+          <p className="text-sm text-text-3">Contract templates, e-signing, and the LOI generator</p>
+        </div>
       </div>
 
-      <div className="mb-4 flex gap-1 border-b border-border">
+      <div className="mb-5 flex gap-1 border-b border-border">
         {(
           [
-            ['loi', 'LOI Generator'],
-            ['templates', 'Contracts'],
+            ['loi', 'LOI Generator', Send],
+            ['templates', 'Contracts', ScrollText],
           ] as const
-        ).map(([key, label]) => (
+        ).map(([key, label, Icon]) => (
           <button
             key={key}
-            className={`px-4 py-2 text-[13px] font-medium ${tab === key ? 'border-b-2 border-primary text-primary' : 'text-text-3 hover:text-text'}`}
+            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+              tab === key ? 'border-primary text-primary' : 'border-transparent text-text-3 hover:text-text'
+            }`}
             onClick={() => setTab(key)}
           >
+            <Icon size={14} />
             {label}
           </button>
         ))}

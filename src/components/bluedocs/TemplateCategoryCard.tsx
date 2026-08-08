@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Download, FileText, Inbox, Loader2, Map, Send, Trash2, Upload } from 'lucide-react';
+import { ChevronDown, Download, FilePlus2, FileText, Inbox, Loader2, Map, Send, Trash2, Upload } from 'lucide-react';
 import {
   useUploadDocTemplate,
   useDeleteDocTemplate,
@@ -119,7 +119,15 @@ export function TemplateCategoryCard({
   return (
     <div className="card">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-text">{label}</div>
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <FileText size={14} />
+          </span>
+          <div className="text-sm font-semibold text-text">{label}</div>
+          {items.length > 0 && (
+            <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-text-3">{items.length}</span>
+          )}
+        </div>
         {(items.length === 0 || multi) && (
           <div className="flex items-center gap-1.5">
             <button
@@ -129,7 +137,7 @@ export function TemplateCategoryCard({
             >
               + Word (optional)
             </button>
-            <button className="btn !px-3 !py-1.5 text-[12px]" disabled={uploading} onClick={() => pdfInput.current?.click()}>
+            <button className="btn btn-primary !px-3 !py-1.5 text-[12px]" disabled={uploading} onClick={() => pdfInput.current?.click()}>
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
               {multi ? 'Add Contract' : 'Upload template'}
             </button>
@@ -163,17 +171,23 @@ export function TemplateCategoryCard({
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-2 text-[12px] text-text-3">
-          {multi ? 'No contracts added here yet.' : `No ${label.toLowerCase()} template uploaded yet.`}
-        </p>
+        <div className="mt-3 flex items-center gap-2.5 rounded-md border border-dashed border-border-2 px-3 py-3 text-text-3">
+          <FilePlus2 size={16} className="shrink-0" />
+          <p className="text-[12px]">{multi ? 'No contracts added here yet.' : `No ${label.toLowerCase()} template uploaded yet.`}</p>
+        </div>
       ) : (
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-3 space-y-1.5">
           {items.map((t) => {
             const inboxCount = instances.filter((i) => i.templateId === t.id).length;
             return (
-              <div key={t.id} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
+              <div
+                key={t.id}
+                className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5 transition-colors hover:border-border hover:bg-surface-2"
+              >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <FileText size={20} className="shrink-0 text-primary" />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <FileText size={17} />
+                  </span>
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-semibold text-text">{t.name}</div>
                     <div className="text-[11px] text-text-3">Created {formatDate(t.createdAt)}</div>
@@ -185,7 +199,7 @@ export function TemplateCategoryCard({
                 <div className="flex shrink-0 items-center gap-1.5">
                   {t.mapped ? (
                     <>
-                      <button className="px-1 text-[12px] font-medium text-text-2 hover:text-text" onClick={() => onOpenMapper(t)}>
+                      <button className="btn !px-2.5 !py-1.5 text-[11px]" onClick={() => onOpenMapper(t)}>
                         Edit
                       </button>
                       <button className="btn btn-primary !px-2.5 !py-1.5 text-[11px]" onClick={() => onSend(t)}>

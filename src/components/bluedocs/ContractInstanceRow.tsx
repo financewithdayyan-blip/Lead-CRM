@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, Download, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
+import { Check, CheckCircle2, Copy, Download, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
 import { roleLabel } from '@/hooks/useDocTemplates';
 import { formatDate, formatDateTime } from '@/lib/utils';
@@ -52,10 +52,19 @@ export function ContractInstanceRow({
     setTimeout(() => setCopiedPartyId(null), 1500);
   }
 
+  const signed = c.status === 'signed';
+
   return (
-    <div className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
+    <div
+      className={`flex items-center justify-between rounded-md border px-3 py-2.5 ${
+        signed ? 'border-success/30 bg-success-dim' : 'border-border-2 bg-surface-3'
+      }`}
+    >
       <div className="min-w-0">
-        <div className="truncate text-[13px] font-medium text-text">{c.name}</div>
+        <div className="flex items-center gap-1.5 truncate text-[13px] font-medium text-text">
+          {signed && <CheckCircle2 size={14} className="shrink-0 text-success" />}
+          {c.name}
+        </div>
         <div className="truncate text-[11px] text-text-3">
           {showTemplateName && c.templateName ? `${c.templateName} · ` : ''}
           {formatDate(c.createdAt)}
