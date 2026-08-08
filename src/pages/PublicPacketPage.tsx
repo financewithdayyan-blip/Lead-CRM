@@ -5,7 +5,7 @@ import { useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
 const PacketMap = lazy(() => import('@/components/packets/PacketMap').then((m) => ({ default: m.PacketMap })));
-import { analyzeDeal, compSetConfidence, estimateMarketArv, type CompScore, type DealAnalysis, type MarketEstimate, type SetConfidence } from '@/hooks/useDealPackets';
+import { analyzeDeal, compSetConfidence, estimateComparableArv, type CompScore, type ComparableEstimate, type DealAnalysis, type SetConfidence } from '@/hooks/useDealPackets';
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
@@ -256,7 +256,7 @@ function Line({
 }
 
 /** Verdict, an itemised breakdown, and the rule the verdict comes from. */
-function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; arv: number | null; market: MarketEstimate | null }) {
+function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; arv: number | null; market: ComparableEstimate | null }) {
   const style = VERDICT_STYLE[analysis.verdict];
   // Tracks headroom against the ceiling, the same measure the verdict uses, so
   // the bar and the badge can never disagree. Full at 25% under max.
@@ -309,9 +309,9 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
               label="Comparable average"
               value={market.value}
               hint={
-                market.soldCount && market.listingCount
-                  ? `${market.total} properties · ${market.soldCount} sold, ${market.listingCount} listed`
-                  : `${market.total} ${market.listingCount ? 'listed' : 'sold'} propert${market.total === 1 ? 'y' : 'ies'}`
+                market.method === 'per_sqft'
+                  ? `${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'} · price/sqft basis`
+                  : `${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'} · flat average`
               }
             />
           )}
@@ -408,8 +408,14 @@ export function PublicPacketPage() {
     [packet?.comps],
   );
 
-  // Averaged across every comp and listing carrying both a price and a size.
-  const market = useMemo(() => estimateMarketArv(packet?.comps ?? []), [packet?.comps]);
+  // Sold comps only — average price-per-sqft applied to this property's own
+  // sqft, more accurate than a flat average whenever comps (or the subject)
+  // vary in size. Falls back to a flat average of sold prices if sqft data
+  // isn't there to support the per-sqft method.
+  const market = useMemo(
+    () => estimateComparableArv(packet?.comps ?? [], packet?.sqft ?? null),
+    [packet?.comps, packet?.sqft],
+  );
 
   // How alike the comps actually are to this property — what qualifies the
   // comparable average rather than presenting it as a bare number.
@@ -607,10 +613,10 @@ export function PublicPacketPage() {
               <div>
                 <div className="text-3xl font-bold tabular-nums text-text">{money(market.value)}</div>
                 <div className="mt-0.5 text-[12.5px] text-text-3">
-                  across {market.total} propert{market.total === 1 ? 'y' : 'ies'}
-                  {market.soldCount > 0 && market.listingCount > 0
-                    ? ` — ${market.soldCount} sold, ${market.listingCount} listed`
-                    : ''}
+                  {market.method === 'per_sqft'
+                    ? `price/sqft across ${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'}, applied to this property's sq ft`
+                    : `flat average across ${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'}`}
+                  {market.listingCount > 0 ? ` (${market.listingCount} active listing${market.listingCount === 1 ? '' : 's'} shown above for reference only)` : ''}
                 </div>
               </div>
 
@@ -627,9 +633,18 @@ export function PublicPacketPage() {
               )}
             </div>
 
-            <p className="mt-2 text-[12.5px] leading-snug text-text-3">
-              Every price above added together and divided by how many there are.
-            </p>
+            {market.method === 'per_sqft' ? (
+              <div className="mt-3 grid grid-cols-3 gap-3 border-t border-border pt-3">
+                <Stat label="Avg sale price" value={money(market.avgSalePrice)} />
+                <Stat label="Avg sq ft" value={market.avgSqft?.toLocaleString() ?? '—'} />
+                <Stat label="Avg $/sq ft" value={market.avgPricePerSqft != null ? money(Math.round(market.avgPricePerSqft)) : '—'} />
+              </div>
+            ) : (
+              <p className="mt-2 text-[12.5px] leading-snug text-text-3">
+                Sold comp prices added together and divided by how many there are — square footage wasn't available
+                to price this per square foot instead.
+              </p>
+            )}
 
             {confidence && <ConfidenceBlock confidence={confidence} />}
           </Card>

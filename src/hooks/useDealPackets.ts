@@ -84,54 +84,74 @@ function dbToView(row: any): PacketView {
 
 // ── Derived values ──────────────────────────────────────────────────────────
 
-/** Straight average of comp price-per-sqft applied to the subject's sqft. */
-export function computeArvFromComps(comps: PacketComp[], subjectSqft: number | null): number | null {
-  if (!subjectSqft) return null;
-  // Listings are asking prices, not achieved ones — only sold comps set ARV.
-  const usable = comps.filter((c) => c.kind !== 'listing' && c.salePrice && c.sqft);
-  if (!usable.length) return null;
-  const avgPerSqft = usable.reduce((sum, c) => sum + c.salePrice! / c.sqft!, 0) / usable.length;
-  return Math.round(avgPerSqft * subjectSqft);
-}
-
 export function repairTotal(repairs: PacketRepair[]): number {
   return repairs.reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
 }
 
-export interface MarketEstimate {
-  /** Mean price across every comparable, sold and listed alike. */
+export interface ComparableEstimate {
+  /** The ARV estimate: avgPricePerSqft × the subject's own sqft, or a flat
+   * average of sold prices when sqft data isn't there to support the
+   * per-sqft method — see `method`. */
   value: number;
+  method: 'per_sqft' | 'flat_average';
+  /** Mean sale price across sold comps (informational — not itself the ARV
+   * once `method` is 'per_sqft', since that applies the subject's own sqft
+   * rather than the comps' average size). */
+  avgSalePrice: number;
+  /** Mean sqft across sold comps that have one recorded. Null if none do. */
+  avgSqft: number | null;
+  /** Mean of each sold comp's OWN price ÷ its own sqft, then averaged — not
+   * avgSalePrice ÷ avgSqft. Averaging each comp's own ratio first means one
+   * unusually large or expensive comp can't skew the set the way it would
+   * if the two averages were computed separately and then divided. Null if
+   * no sold comp has both a price and a sqft. */
+  avgPricePerSqft: number | null;
   soldCount: number;
   listingCount: number;
   total: number;
 }
 
 /**
- * Cost-averaged ARV: every comparable price added together and divided by how
- * many there are, sold and currently-listed alike.
+ * The packet's comparable-average ARV. Sold comps only — a listing is an
+ * asking price, not an achieved one, so it doesn't belong in a value
+ * estimate (it still appears in its own "currently on the market" table and
+ * still gets a match score, just doesn't move this number).
  *
- * A flat mean of prices rather than an average price per square foot — it does
- * not need the subject's footprint, so it still produces a figure when sq ft is
- * missing from the packet or from individual comps.
+ * Prefers price-per-square-foot over a flat average of sale prices: each
+ * sold comp's own $/sqft is averaged, then applied to the subject's own
+ * sqft, which is more accurate than a flat average whenever comps vary in
+ * size (as they almost always do) or the subject's own size differs from
+ * theirs. Falls back to a flat average of sold prices only when there's no
+ * sqft to work with — the subject's, or every sold comp's.
  *
- * This is the operative ARV on the packet whenever comps exist; the figure
- * entered by the admin is the fallback for when they don't. computeArvFromComps
- * (sold prices only) still feeds the admin's own in-builder suggestion.
+ * This is the operative ARV on the packet whenever a sold comp exists; the
+ * figure entered by the admin is the fallback for when none do.
  */
-export function estimateMarketArv(
-  comps: Pick<PacketComp, 'kind' | 'salePrice'>[],
-): MarketEstimate | null {
-  const usable = comps.filter((c) => c.salePrice != null && c.salePrice > 0);
-  if (!usable.length) return null;
+export function estimateComparableArv(
+  comps: Pick<PacketComp, 'kind' | 'salePrice' | 'sqft'>[],
+  subjectSqft: number | null,
+): ComparableEstimate | null {
+  const priced = comps.filter((c) => c.salePrice != null && c.salePrice > 0);
+  if (!priced.length) return null;
 
-  const sum = usable.reduce((acc, c) => acc + c.salePrice!, 0);
+  const sold = priced.filter((c) => c.kind !== 'listing');
+  const listingCount = priced.length - sold.length;
+  if (!sold.length) return null; // only listings on file — nothing sold to anchor a value on
 
-  return {
-    value: Math.round(sum / usable.length),
-    soldCount: usable.filter((c) => c.kind !== 'listing').length,
-    listingCount: usable.filter((c) => c.kind === 'listing').length,
-    total: usable.length,
-  };
+  const avgSalePrice = Math.round(sold.reduce((sum, c) => sum + c.salePrice!, 0) / sold.length);
+
+  const withSqft = sold.filter((c) => c.sqft && c.sqft > 0);
+  const avgSqft = withSqft.length ? Math.round(withSqft.reduce((sum, c) => sum + c.sqft!, 0) / withSqft.length) : null;
+  const avgPricePerSqft = withSqft.length
+    ? withSqft.reduce((sum, c) => sum + c.salePrice! / c.sqft!, 0) / withSqft.length
+    : null;
+
+  const base = { avgSalePrice, avgSqft, avgPricePerSqft, soldCount: sold.length, listingCount, total: priced.length };
+
+  if (subjectSqft && avgPricePerSqft) {
+    return { ...base, value: Math.round(avgPricePerSqft * subjectSqft), method: 'per_sqft' };
+  }
+  return { ...base, value: avgSalePrice, method: 'flat_average' };
 }
 
 // ── Comp confidence ─────────────────────────────────────────────────────────
@@ -229,12 +249,16 @@ export interface SetConfidence {
  * Confidence in the comparable average as a whole — the honest answer to "how
  * much should I trust this ARV".
  *
- * Starts from the mean comp score, then discounts for the two things that
- * undermine an average regardless of how alike the individual properties are:
- * too few data points, and prices scattered too widely to average meaningfully.
+ * Every comp passed in gets its own match score in `byId` (so a listing still
+ * shows a badge in its own table), but the aggregate score — the number that
+ * actually qualifies the ARV — is computed from sold comps only, since a
+ * listing doesn't move the ARV either. Starts from their mean comp score,
+ * then discounts for the two things that undermine an average regardless of
+ * how alike the individual properties are: too few data points, and prices
+ * scattered too widely to average meaningfully.
  */
 export function compSetConfidence(
-  comps: (Pick<PacketComp, 'sqft' | 'beds' | 'baths' | 'salePrice'> & { id: string })[],
+  comps: (Pick<PacketComp, 'kind' | 'sqft' | 'beds' | 'baths' | 'salePrice'> & { id: string })[],
   subject: SubjectSpec,
 ): SetConfidence | null {
   if (!comps.length) return null;
@@ -242,25 +266,28 @@ export function compSetConfidence(
   const byId: Record<string, CompScore> = {};
   for (const c of comps) byId[c.id] = scoreComp(c, subject);
 
+  const sold = comps.filter((c) => c.kind !== 'listing');
+  if (!sold.length) return null; // only listings on file — nothing sold to have confidence in
+
   const notes: string[] = [];
   // Averaged over the rounded scores actually shown, so the overall figure
   // always reconciles with the individual badges.
-  const mean = comps.reduce((sum, c) => sum + byId[c.id].score, 0) / comps.length;
+  const mean = sold.reduce((sum, c) => sum + byId[c.id].score, 0) / sold.length;
   let score = mean;
 
-  if (comps.length < 3) {
+  if (sold.length < 3) {
     score *= 0.8;
-    notes.push(`Only ${comps.length} comparable${comps.length === 1 ? '' : 's'} — a small sample to average.`);
-  } else if (comps.length < 5) {
+    notes.push(`Only ${sold.length} sold comparable${sold.length === 1 ? '' : 's'} — a small sample to average.`);
+  } else if (sold.length < 5) {
     score *= 0.92;
-    notes.push(`${comps.length} comparables is a workable sample, though more would tighten the estimate.`);
+    notes.push(`${sold.length} sold comparables is a workable sample, though more would tighten the estimate.`);
   } else {
-    notes.push(`${comps.length} comparables is a solid sample.`);
+    notes.push(`${sold.length} sold comparables is a solid sample.`);
   }
 
   // Coefficient of variation on price: a wide spread means the average sits in
   // the middle of numbers that don't agree with each other.
-  const priced = comps.filter((c) => c.salePrice && c.salePrice > 0);
+  const priced = sold.filter((c) => c.salePrice && c.salePrice > 0);
   if (priced.length >= 2) {
     const avg = priced.reduce((s, c) => s + c.salePrice!, 0) / priced.length;
     const sd = Math.sqrt(priced.reduce((s, c) => s + (c.salePrice! - avg) ** 2, 0) / priced.length);

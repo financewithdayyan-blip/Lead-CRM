@@ -3,9 +3,8 @@ import { Check, Copy, FolderInput, Loader2, Plus, Trash2, Upload, X } from 'luci
 import { Modal } from '@/components/ui/Modal';
 import {
   analyzeDeal,
-  computeArvFromComps,
   compSetConfidence,
-  estimateMarketArv,
+  estimateComparableArv,
   packetImageUrl,
   packetUrl,
   repairTotal,
@@ -108,10 +107,11 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setImages(packet.images);
   }, [packet?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const autoArv = useMemo(
-    () => computeArvFromComps(comps as PacketComp[], num(sqft)),
+  const comparable = useMemo(
+    () => estimateComparableArv(comps as PacketComp[], num(sqft)),
     [comps, sqft],
   );
+  const autoArv = comparable?.value ?? null;
   const effectiveArv = arvIsManual ? num(arvManual) : autoArv;
   const totalRepairs = repairTotal(repairs as PacketRepair[]);
 
@@ -134,10 +134,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
 
   // Investors are shown the comparable average as the ARV, so the preview has
   // to price off the same number rather than the entered one.
-  const adjustedArv = useMemo(
-    () => estimateMarketArv(comps as PacketComp[])?.value ?? effectiveArv,
-    [comps, effectiveArv],
-  );
+  const adjustedArv = comparable?.value ?? effectiveArv;
 
   // Recomputed as you type, so the verdict is visible before you publish.
   const analysis = useMemo(
@@ -542,7 +539,15 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
               ) : (
                 <span className="text-[13px] text-text-2">
                   Calculated ARV: <strong className="text-text">{autoArv != null ? money(autoArv) : '—'}</strong>
-                  {autoArv == null && <span className="ml-1 text-[12px] text-text-3">(needs comps with price + sq ft, and this property's sq ft)</span>}
+                  {autoArv == null && <span className="ml-1 text-[12px] text-text-3">(needs a sold comp with price + sq ft, and this property's sq ft)</span>}
+                  {comparable?.method === 'per_sqft' && comparable.avgPricePerSqft != null && (
+                    <span className="ml-1 text-[12px] text-text-3">
+                      ({money(Math.round(comparable.avgPricePerSqft))}/sqft avg across {comparable.soldCount} sold comp{comparable.soldCount === 1 ? '' : 's'} × this property's sq ft)
+                    </span>
+                  )}
+                  {comparable?.method === 'flat_average' && (
+                    <span className="ml-1 text-[12px] text-text-3">(flat average — sq ft missing from comps or this property)</span>
+                  )}
                 </span>
               )}
             </div>
