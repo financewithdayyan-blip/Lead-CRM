@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -39,5 +39,26 @@ export function useSignedFileUrl() {
       if (error) throw error;
       return data.signedUrl;
     },
+  });
+}
+
+/** One signed URL per path in a single call, for rendering a whole list of
+ * thumbnails at once — the bucket is private, so there's no public URL to
+ * fall back to and each row would otherwise need its own round trip. */
+export function useSignedFileUrls(storagePaths: string[]) {
+  const key = storagePaths.join('|');
+  return useQuery({
+    queryKey: ['lead-file-signed-urls', key],
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from('lead-files').createSignedUrls(storagePaths, 60 * 60);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data ?? []) {
+        if (row.signedUrl && row.path) map[row.path] = row.signedUrl;
+      }
+      return map;
+    },
+    enabled: storagePaths.length > 0,
+    staleTime: 55 * 60 * 1000,
   });
 }

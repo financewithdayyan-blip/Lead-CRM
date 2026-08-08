@@ -4,6 +4,14 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+/** Anything with an image mime type or a common photo extension — a lead's
+ * uploaded files can be photos, PDFs, or spreadsheets, but only photos get
+ * a thumbnail preview. */
+export function isImageFile(fileType: string | null, fileName: string): boolean {
+  if (fileType?.startsWith('image/')) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(fileName);
+}
+
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '').slice(-10);
