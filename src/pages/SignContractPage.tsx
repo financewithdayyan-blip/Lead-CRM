@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Clock, Download, FileText, Loader2 } from 'lucide-react';
+import { Clock, Download, FileSignature, FileText, Loader2, PenLine, Type } from 'lucide-react';
 import {
   usePublicSigningParty,
   useSigningPdfUrl,
@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
+import { SignaturePad, type SignaturePadHandle } from '@/components/bluedocs/SignaturePad';
 import { formatCurrency } from '@/lib/currency';
 import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONT } from '@/lib/typedSignature';
 import { roleLabel } from '@/hooks/useDocTemplates';
@@ -42,6 +43,37 @@ function SignSuccessCheck() {
   );
 }
 
+/** Shared shell for the loading / invalid-link / waiting-your-turn states —
+ * an icon in a soft colored circle, a headline, a line of body copy. Keeps
+ * those states visually on par with the success screen instead of reading
+ * like a plain error page. */
+function StatusScreen({
+  icon,
+  tone = 'slate',
+  spin,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  tone?: 'slate' | 'primary';
+  spin?: boolean;
+  title?: string;
+  body?: string;
+}) {
+  const ring = tone === 'primary' ? 'bg-primary/10 text-primary' : 'bg-slate-200/70 text-slate-400';
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4 text-center">
+      <div>
+        <span className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${ring} ${spin ? 'animate-spin' : ''}`}>
+          {icon}
+        </span>
+        {title && <p className="mt-4 text-lg font-semibold text-text">{title}</p>}
+        {body && <p className="mt-1 max-w-sm text-[13.5px] text-text-3">{body}</p>}
+      </div>
+    </div>
+  );
+}
+
 function DownloadCertificateButton({ token, docLabel }: { token: string; docLabel: string }) {
   const getFinalUrl = useSignedFinalDocUrl();
 
@@ -55,7 +87,7 @@ function DownloadCertificateButton({ token, docLabel }: { token: string; docLabe
 
   return (
     <button
-      className="mt-4 flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+      className="mt-5 flex items-center gap-1.5 rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-50"
       disabled={getFinalUrl.isPending}
       onClick={handleDownload}
     >
@@ -77,6 +109,9 @@ export function SignContractPage() {
   const [justCompletedAll, setJustCompletedAll] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState('');
+  const [signatureMode, setSignatureMode] = useState<'draw' | 'type'>('draw');
+  const [hasDrawing, setHasDrawing] = useState(false);
+  const padRef = useRef<SignaturePadHandle>(null);
   const loggedRef = useRef(false);
   const seededRef = useRef(false);
 
@@ -137,12 +172,20 @@ export function SignContractPage() {
   const numPages = pdf?.numPages ?? 0;
   const pageNums = useMemo(() => Array.from({ length: numPages }, (_, i) => i + 1), [numPages]);
 
-  const allFieldsFilled = myPendingFields.every((f) => fieldInputs[f.id]?.trim());
-  const canSubmit = allFieldsFilled && (!needsSignature || !!signatureName.trim());
+  const filledCount = myPendingFields.filter((f) => fieldInputs[f.id]?.trim()).length;
+  const allFieldsFilled = filledCount === myPendingFields.length;
+  const signatureReady = signatureMode === 'draw' ? hasDrawing : !!signatureName.trim();
+  const canSubmit = allFieldsFilled && (!needsSignature || signatureReady);
 
   async function handleSubmit() {
     if (!token || !canSubmit) return;
-    const dataUrl = needsSignature ? await renderTypedSignature(signatureName.trim()) : undefined;
+    let dataUrl: string | undefined;
+    if (needsSignature) {
+      dataUrl =
+        signatureMode === 'draw' && padRef.current && !padRef.current.isEmpty()
+          ? padRef.current.toDataUrl()
+          : await renderTypedSignature(signatureName.trim());
+    }
     const formatted = { ...fieldInputs };
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
@@ -153,21 +196,16 @@ export function SignContractPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-400">
-        <Loader2 size={20} className="animate-spin" />
-      </div>
-    );
+    return <StatusScreen icon={<Loader2 size={22} />} spin tone="primary" />;
   }
 
   if (isError || !party) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 text-center">
-        <div>
-          <FileText size={32} className="mx-auto text-slate-300" />
-          <p className="mt-3 text-slate-500">This signing link is no longer valid.</p>
-        </div>
-      </div>
+      <StatusScreen
+        icon={<FileText size={24} />}
+        title="This link is no longer valid"
+        body="It may have already been used, or the contract it points to was removed. Reach out to whoever sent it if that's unexpected."
+      />
     );
   }
 
@@ -175,12 +213,12 @@ export function SignContractPage() {
     const docLabel = party.templateType === 'loi' ? 'LOI' : 'Contract';
     const fullyDone = justCompletedAll || party.contractStatus === 'signed';
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-4 text-center">
         <SignSuccessCheck />
-        <p className="mt-3 text-lg font-semibold text-slate-800">
+        <p className="mt-3 text-lg font-semibold text-text">
           You've {needsSignature ? 'signed' : 'confirmed'} {party.contractName}
         </p>
-        <p className="mt-1 text-slate-500">
+        <p className="mt-1 text-[13.5px] text-text-3">
           {fullyDone
             ? 'Every party has completed this document — you can download the final copy below.'
             : "Thank you — you'll be notified once every party has completed signing."}
@@ -192,35 +230,52 @@ export function SignContractPage() {
 
   if (!party.isTurn) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 text-center">
-        <div>
-          <Clock size={32} className="mx-auto text-slate-400" />
-          <p className="mt-3 text-lg font-semibold text-slate-800">Waiting on {party.waitingOn}</p>
-          <p className="mt-1 text-slate-500">
-            {party.waitingOn} needs to sign {party.contractName} before it's your turn. This page will update automatically.
-          </p>
-        </div>
-      </div>
+      <StatusScreen
+        icon={<Clock size={22} />}
+        tone="primary"
+        title={`Waiting on ${party.waitingOn}`}
+        body={`${party.waitingOn} needs to sign ${party.contractName} before it's your turn. This page updates automatically — no need to refresh.`}
+      />
     );
   }
 
+  const roleName = roleLabel(party.role, party.templateType, party.templatePartyRoles);
+  const showName = party.name && party.name.toLowerCase() !== roleName.toLowerCase();
+
   return (
-    <div className="min-h-screen bg-slate-100 px-4 py-8">
-      <div className="mx-auto max-w-[720px]">
-        <div className="mb-4">
-          <h1 className="text-lg font-semibold text-slate-800">{party.contractName}</h1>
-          <p className="text-[13px] text-slate-500">
-            Signing as <span className="font-medium">{roleLabel(party.role, party.templateType, party.templatePartyRoles)}</span>
-            {party.name && party.name.toLowerCase() !== roleLabel(party.role, party.templateType, party.templatePartyRoles).toLowerCase()
-              ? ` — ${party.name}`
-              : ''}
-            {myPendingFields.length > 0 ? ` — fill in the highlighted fields below, then ${needsSignature ? 'sign' : 'confirm'}.` : ''}
-          </p>
+    <div className="min-h-screen bg-bg pb-28">
+      {/* Sticky header — brand + doc identity stay visible while scrolling a
+          long contract, and the field counter gives a sense of progress. */}
+      <div className="sticky top-0 z-10 border-b border-border bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FileSignature size={16} />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-[14px] font-semibold text-text">{party.contractName}</div>
+              <div className="truncate text-[11.5px] text-text-3">
+                Signing as <span className="font-medium text-text-2">{roleName}</span>
+                {showName ? ` — ${party.name}` : ''}
+              </div>
+            </div>
+          </div>
+          {myPendingFields.length > 0 && (
+            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-primary">
+              {filledCount}/{myPendingFields.length} fields
+            </span>
+          )}
         </div>
+      </div>
+
+      <div className="mx-auto max-w-[720px] px-4 py-5">
+        {myPendingFields.length > 0 && (
+          <p className="mb-4 text-[13px] text-text-3">Fill in the highlighted fields below, then {needsSignature ? 'sign' : 'confirm'}.</p>
+        )}
 
         {!pdf ? (
-          <div className="flex h-96 items-center justify-center rounded-md border border-slate-200 bg-white">
-            <Loader2 size={20} className="animate-spin text-slate-400" />
+          <div className="flex h-96 items-center justify-center rounded-md border border-border bg-white">
+            <Loader2 size={20} className="animate-spin text-text-3" />
           </div>
         ) : (
           pageNums.map((n) => (
@@ -241,35 +296,80 @@ export function SignContractPage() {
           ))
         )}
 
-        <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-          {needsSignature ? (
-            <>
-              <div className="mb-2 text-[13px] font-semibold text-slate-700">Your signature</div>
-              <input
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-slate-500"
-                placeholder="Type your full name"
-                value={signatureName}
-                onChange={(e) => setSignatureName(e.target.value)}
-              />
-              <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50">
-                <span style={{ fontFamily: `"${SIGNATURE_FONT}", cursive`, fontSize: 40, color: '#111827' }}>
-                  {signatureName || ' '}
-                </span>
+        {needsSignature ? (
+          <div className="rounded-md border border-border bg-white p-4 shadow-card">
+            <div className="mb-2.5 flex items-center justify-between">
+              <div className="text-[13px] font-semibold text-text">Your signature</div>
+              <div className="flex rounded-md border border-border-2 p-0.5">
+                <button
+                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
+                    signatureMode === 'draw' ? 'bg-primary text-white' : 'text-text-3 hover:text-text'
+                  }`}
+                  onClick={() => setSignatureMode('draw')}
+                >
+                  <PenLine size={12} /> Draw
+                </button>
+                <button
+                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
+                    signatureMode === 'type' ? 'bg-primary text-white' : 'text-text-3 hover:text-text'
+                  }`}
+                  onClick={() => setSignatureMode('type')}
+                >
+                  <Type size={12} /> Type
+                </button>
               </div>
-            </>
-          ) : (
-            <p className="text-[13px] text-slate-600">
-              Nothing here needs your signature — just confirm below once you've reviewed everything above.
-            </p>
-          )}
-          {!allFieldsFilled && (
-            <p className="mt-2 text-[12px] text-amber-600">Fill in every highlighted field above before continuing.</p>
-          )}
+            </div>
+
+            {signatureMode === 'draw' ? (
+              <>
+                <div className="relative h-32 overflow-hidden rounded-md border border-dashed border-border-2 bg-surface-3">
+                  <SignaturePad ref={padRef} onChange={setHasDrawing} />
+                  {!hasDrawing && (
+                    <span className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-[11.5px] text-text-3">
+                      Sign above with your finger, stylus, or mouse
+                    </span>
+                  )}
+                </div>
+                <button
+                  className="mt-1.5 text-[11.5px] font-medium text-text-3 hover:text-text disabled:opacity-40"
+                  disabled={!hasDrawing}
+                  onClick={() => padRef.current?.clear()}
+                >
+                  Clear
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  className="input"
+                  placeholder="Type your full name"
+                  value={signatureName}
+                  onChange={(e) => setSignatureName(e.target.value)}
+                />
+                <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-border-2 bg-surface-3">
+                  <span style={{ fontFamily: `"${SIGNATURE_FONT}", cursive`, fontSize: 40, color: '#111827' }}>{signatureName || ' '}</span>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-md border border-border bg-white p-4 shadow-card">
+            <p className="text-[13px] text-text-2">Nothing here needs your signature — just confirm below once you've reviewed everything above.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Sticky bottom action bar — the submit button stays reachable on a
+          long, multi-page contract instead of requiring a scroll back down. */}
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto max-w-[720px]">
+          {!allFieldsFilled && <p className="mb-1.5 text-[12px] text-warning">Fill in every highlighted field above before continuing.</p>}
           <button
-            className="mt-3 w-full rounded-md bg-slate-900 py-2.5 text-[14px] font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-primary w-full !py-2.5 text-[14px]"
             disabled={!canSubmit || submitSignature.isPending}
             onClick={handleSubmit}
           >
+            {submitSignature.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
             {submitSignature.isPending ? 'Submitting…' : needsSignature ? 'Sign & Submit' : 'Confirm & Submit'}
           </button>
         </div>
