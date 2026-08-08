@@ -11,29 +11,31 @@ export interface AiReplyConfigRow {
 
 /**
  * The framework used when a lead's tags have none of their own saved. Steps
- * run in a fixed order (condition, then price, then timeline, photos last) —
- * asking out of order is what causes a lead to reply with a bare number like
- * "500k" with no context. CONDITION, PRICE and TIMELINE are what mark a lead
- * fully qualified and pause AI auto-reply; ownership confirmation and the
- * photo itself arriving don't block the handoff to a human. Lien-adjacent
- * tags (Lis Pendens, Pre-Foreclosure, Auction) insert a mortgage step as a
- * fourth requirement via their own tag-specific framework below.
+ * run in a fixed order (motivation, then condition, then price, then
+ * timeline, photos last) — asking out of order is what causes a lead to
+ * reply with a bare number like "500k" with no context. MOTIVATION,
+ * CONDITION, PRICE and TIMELINE are what mark a lead fully qualified and
+ * pause AI auto-reply; ownership confirmation and the photo itself arriving
+ * don't block the handoff to a human. Lien-adjacent tags (Lis Pendens,
+ * Pre-Foreclosure, Auction) insert a mortgage step as a fifth requirement via
+ * their own tag-specific framework below.
  */
 export const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversation, but follow the steps below in a fixed order. Do not jump ahead to price or timeline before condition is covered, and don't backtrack to something already answered. Going out of order is exactly how a lead ends up replying with a bare number like "500k" with no context behind it — stay on the current step until it is actually answered before moving to the next.
 
 Steps, in this exact order:
 1. Confirm you're speaking with the owner, or someone who can speak for them (see the standing rules on non-owners and wrong numbers).
-2. CONDITION — cover these one at a time, in order:
+2. MOTIVATION — ask why they're looking to sell, or what's going on with the property. A brief, natural answer is enough — don't push for more than they volunteer, and don't turn it into an interrogation.
+3. CONDITION — cover these one at a time, in order:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
    - Any major repairs needed — HVAC, electrical, plumbing, etc.
    - How old the roof is.
-3. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
-4. TIMELINE — ask if there's a timeline they're looking to close within.
-5. PHOTOS — ask for interior photos so the current condition can actually be seen.
-6. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
+4. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
+5. TIMELINE — ask if there's a timeline they're looking to close within.
+6. PHOTOS — ask for interior photos so the current condition can actually be seen.
+7. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
-A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
+A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
 
 /**
  * Appended to the Default text (or the tag's own framework, if the admin has
@@ -41,7 +43,7 @@ A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human �
  */
 export const LIEN_ADDENDUM = `
 
-This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after CONDITION and before PRICE: ask their monthly payment, total remaining balance owed, and interest rate. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside condition, price and timeline.
+This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after CONDITION and before PRICE: ask their monthly payment, total remaining balance owed, and interest rate. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline.
 
 If they mention "a plan": ask whether it involves an attorney postponing the auction. If so, explain that a postponement only delays the auction — it doesn't resolve the underlying situation.`;
 
@@ -51,7 +53,7 @@ export const LIEN_TAG_NAMES = ['Lis Pendens', 'Pre-Foreclosure', 'Foreclosure', 
 /** Appended to the Default text (or the tag's own framework) for Tax Delinquent leads. */
 export const TAX_ADDENDUM = `
 
-This lead is tax delinquent. Insert a TAXES step immediately after CONDITION and before PRICE: ask how much they owe in back taxes, and how many years behind they are. Do not ask about a mortgage unless they bring it up themselves. This taxes step is also required for fully_qualified on this tag, alongside condition, price and timeline.`;
+This lead is tax delinquent. Insert a TAXES step immediately after CONDITION and before PRICE: ask how much they owe in back taxes, and how many years behind they are. Do not ask about a mortgage unless they bring it up themselves. This taxes step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline.`;
 
 export const TAX_TAG_NAMES = ['Tax Delinquent'];
 

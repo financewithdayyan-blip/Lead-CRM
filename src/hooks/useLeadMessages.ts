@@ -129,7 +129,11 @@ export function useSendManualReply() {
       }
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      await supabase.from('leads').update({ ai_reply_paused: true }).eq('id', leadId);
+      // photo_wait_ai_active: false is what actually silences ai-reply's
+      // photo-wait mode for a Partial Qualified lead — a human just took
+      // this conversation over by hand, same as ai_reply_paused means for
+      // every other stage.
+      await supabase.from('leads').update({ ai_reply_paused: true, photo_wait_ai_active: false }).eq('id', leadId);
 
       return data;
     },

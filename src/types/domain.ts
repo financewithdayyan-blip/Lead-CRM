@@ -173,6 +173,10 @@ export interface Lead {
   optedOut: boolean;
   /** Set once fully qualified, or once a human replies by hand. Stops the AI auto-reply. */
   aiReplyPaused: boolean;
+  /** True while the AI is still allowed to text this lead despite aiReplyPaused —
+   * only meaningful in the Partial Qualified stage, waiting on photos or a
+   * callback time. A human manually replying clears it. */
+  photoWaitAiActive: boolean;
   /** Set once, the first time this lead's stage enters Qualified-or-beyond — by a trigger, not app code. Null until then. */
   qualifiedAt: string | null;
   /** The number ('1'-'4') this lead was first texted from. Every send after that — bulk or manual — sticks to it, so replies stay in the same Zoom thread. Null until the first send. */

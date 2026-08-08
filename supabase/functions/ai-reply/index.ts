@@ -111,21 +111,22 @@ const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversatio
 
 Steps, in this exact order:
 1. Confirm you're speaking with the owner, or someone who can speak for them (see the standing rules on non-owners and wrong numbers).
-2. CONDITION — cover these one at a time, in order:
+2. MOTIVATION — ask why they're looking to sell, or what's going on with the property. A brief, natural answer is enough — don't push for more than they volunteer, and don't turn it into an interrogation.
+3. CONDITION — cover these one at a time, in order:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
    - Any major repairs needed — HVAC, electrical, plumbing, etc.
    - How old the roof is.
-3. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
-4. TIMELINE — ask if there's a timeline they're looking to close within.
-5. PHOTOS — ask for interior photos so the current condition can actually be seen.
-6. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
+4. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
+5. TIMELINE — ask if there's a timeline they're looking to close within.
+6. PHOTOS — ask for interior photos so the current condition can actually be seen.
+7. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
-A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
+A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
 
 const LIEN_ADDENDUM = `
 
-This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after CONDITION and before PRICE: ask their monthly payment, total remaining balance owed, and interest rate. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside condition, price and timeline.
+This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after CONDITION and before PRICE: ask their monthly payment, total remaining balance owed, and interest rate. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline.
 
 If they mention "a plan": ask whether it involves an attorney postponing the auction. If so, explain that a postponement only delays the auction — it doesn't resolve the underlying situation.`;
 
@@ -133,7 +134,7 @@ const LIEN_TAG_NAMES = ['lis pendens', 'pre-foreclosure', 'foreclosure', 'auctio
 
 const TAX_ADDENDUM = `
 
-This lead is tax delinquent. Insert a TAXES step immediately after CONDITION and before PRICE: ask how much they owe in back taxes, and how many years behind they are. Do not ask about a mortgage unless they bring it up themselves. This taxes step is also required for fully_qualified on this tag, alongside condition, price and timeline.`;
+This lead is tax delinquent. Insert a TAXES step immediately after CONDITION and before PRICE: ask how much they owe in back taxes, and how many years behind they are. Do not ask about a mortgage unless they bring it up themselves. This taxes step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline.`;
 
 const TAX_TAG_NAMES = ['tax delinquent'];
 
@@ -144,7 +145,38 @@ const TAX_TAG_NAMES = ['tax delinquent'];
 // tag framework overrides entirely) so the requirement survives regardless.
 const CALLBACK_ADDENDUM = `
 
-CALLBACK STEP — required for every lead regardless of anything else above: after condition, price, timeline (and mortgage, if this is a lien-adjacent lead) are established and you've asked for interior photos, ask one more thing before the interview counts as complete: what's a good time to call them back tomorrow. This is not done just by asking — wait for them to actually name a real day and time. Only once they do can fully_qualified be true (assuming everything else required is also already established). When they give you a time, fill in scheduled_callback_at and scheduled_callback_note on the same turn.`;
+CALLBACK STEP — required for every lead regardless of anything else above: after motivation, condition, price, timeline (and mortgage, if this is a lien-adjacent lead) are established and you've asked for interior photos, ask one more thing before the interview counts as complete: what's a good time to call them back tomorrow. This is not done just by asking — wait for them to actually name a real day and time. Only once they do can fully_qualified be true (assuming everything else required is also already established). When they give you a time, fill in scheduled_callback_at and scheduled_callback_note on the same turn.`;
+
+// ── Photo-wait mode — a lead sitting in Partial Qualified (initial_contact).
+// Everything the regular framework asks for is already answered; the only
+// open item is interior photos, so this replaces the framework prompt
+// entirely rather than layering onto it, and the tool below drops every
+// qualification-specific field (fully_qualified, summary, next_action, ...)
+// that no longer applies. ─────────────────────────────────────────────────
+const PHOTO_WAIT_SYSTEM = `You are texting on behalf of Bluebird Acquisition, a real-estate acquisitions company that buys distressed properties as-is for cash, subject-to, or novation. You are texting as {{AGENT_NAME}}.
+
+TODAY'S DATE is {{TODAY}} — the only basis you have for turning something like "tomorrow" or "Thursday afternoon" into an actual date.
+
+WHAT YOU ACTUALLY KNOW ABOUT THIS LEAD:
+{{LEAD_CONTEXT}}
+
+This lead already answered every qualification question — motivation, condition, price, timeline, and mortgage or back taxes if applicable. The ONLY thing still outstanding is interior photos of the property. Never ask about motivation, condition, price, timeline, mortgage, or taxes again — all of that is already settled, and re-asking will only confuse them.
+
+Read their message and the conversation so far, then reply naturally, the way a real person texts:
+- If this message includes photos: thank them briefly, there is nothing else to ask for.
+- If they say when they'll send photos, ask a question, or are just chatting: reply briefly and naturally.
+- If they ask to be called instead, or name a specific day and time to call them back, fill in scheduled_callback_at and scheduled_callback_note — an ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY'S DATE above. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.
+- If they're declining or asking not to be contacted again, in any phrasing: reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Set hard_decline false only if the decline is clearly and specifically about the price/offer amount and nothing else; true for every other kind of decline, including if unsure.
+
+STYLE:
+- Text like a real person, not a business. Short. One thought per message.
+- Break the reply into separate messages in reply_parts whenever there's more than one distinct thought.
+- No "Dear", no signature, no sign-off.
+- Never use an em dash, en dash, or semicolon. Use a comma, a period, or a new message in reply_parts instead.
+- A casual emoji is fine occasionally, not in every message.
+- Never invent facts, numbers, or offers not actually said in this conversation.
+
+Call draft_photo_wait_reply with your response.`;
 
 // ── Deterministic style + special-case rules (Phase 3 spec, verbatim) ──────
 
@@ -197,7 +229,7 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 FRAMEWORK for this lead:
 {{FRAMEWORK}}
 
-SUMMARY: whenever you set fully_qualified true, also fill in summary — a short, factual, labeled recap of what was actually established (condition, asking price and their reasoning if given, timeline, motivation if mentioned, mortgage details if this is a lien-adjacent lead, and ownership status). This is what a human reads instead of rereading the whole thread, so be complete but not padded, and never invent or infer anything not actually said. Leave summary as an empty string whenever fully_qualified is false.
+SUMMARY: whenever you set fully_qualified true, also fill in summary — a short, factual, labeled recap of what was actually established (motivation, condition, asking price and their reasoning if given, timeline, mortgage details if this is a lien-adjacent lead, and ownership status). This is what a human reads instead of rereading the whole thread, so be complete but not padded, and never invent or infer anything not actually said. Leave summary as an empty string whenever fully_qualified is false.
 
 Call draft_reply with your response, reply_parts broken into separate messages per the STYLE rules above. fully_qualified is true only once every item the framework marks as required for that has actually been established in this conversation.`;
 
@@ -242,13 +274,28 @@ Deno.serve(async (req) => {
   // have taken over in the meantime.
   const { data: lead } = await admin
     .from('leads')
-    .select('id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, lead_tags(tags(id, name))')
+    .select(
+      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, lead_tags(tags(id, name))',
+    )
     .eq('id', leadId)
     .single();
 
   if (!lead) return json({ aborted: true, reason: 'lead_not_found' });
   if (lead.opted_out) return json({ aborted: true, reason: 'opted_out' });
-  if (lead.ai_reply_paused) return json({ aborted: true, reason: 'ai_reply_paused' });
+
+  // Qualified-plus normally means ai_reply_paused is true and stays true —
+  // except Partial Qualified (initial_contact), which only ever got there
+  // because everything but photos is already done. That transition still
+  // sets ai_reply_paused true (the qualified-tasks trigger relies on that
+  // exact flip to skip its own generic task pair), so photo_wait_ai_active is
+  // a second, narrower flag: true only while the AI itself is still allowed
+  // to chase photos/a callback time for this lead. A human manually replying
+  // (useSendManualReply) clears it, which is what actually silences the AI
+  // here — the stage never changes just because a human sent one message.
+  const photoWaitActive = lead.stage === 'initial_contact' && lead.photo_wait_ai_active;
+  if (lead.ai_reply_paused && !photoWaitActive) {
+    return json({ aborted: true, reason: 'ai_reply_paused' });
+  }
 
   // A lead can leave the AI-active part of the pipeline without
   // ai_reply_paused ever being set — a manual drag on the Kanban board, or a
@@ -256,8 +303,13 @@ Deno.serve(async (req) => {
   // fact. The AI must never text a lead sitting in Qualified, Follow-Up,
   // Negotiation or any later stage regardless of how it got there, so this is
   // a second, independent gate rather than trusting ai_reply_paused alone.
+  // initial_contact (Partial Qualified) is the one exception, gated above by
+  // photoWaitActive rather than by stage alone — a lead landing there any
+  // other way (a manual drag, say) has photo_wait_ai_active false and stays
+  // silent same as before.
   const AI_ACTIVE_STAGES = new Set(['contacted', 'replied']);
-  if (!AI_ACTIVE_STAGES.has(lead.stage)) {
+  const isPhotoWaitMode = photoWaitActive; // already implies stage === 'initial_contact'
+  if (!AI_ACTIVE_STAGES.has(lead.stage) && !isPhotoWaitMode) {
     return json({ aborted: true, reason: 'stage_not_ai_active', stage: lead.stage });
   }
 
@@ -321,10 +373,12 @@ Deno.serve(async (req) => {
   // Photos with no accompanying text don't need a reply — the lead is just
   // sharing pictures, not asking or answering anything. Only skip when every
   // LEAD turn since our last reply is text-free; a real question sitting
-  // alongside or after the photos still gets answered.
+  // alongside or after the photos still gets answered. Photo-wait mode is the
+  // one exception: a bare photo-only message is exactly the signal it exists
+  // to catch, so it always continues through to promote the lead.
   const lastYouIdx = turns.map((t) => t.who).lastIndexOf('YOU');
   const unansweredLeadTurns = turns.slice(lastYouIdx + 1).filter((t) => t.who === 'LEAD');
-  if (unansweredLeadTurns.length > 0 && unansweredLeadTurns.every((t) => !t.hasText)) {
+  if (!isPhotoWaitMode && unansweredLeadTurns.length > 0 && unansweredLeadTurns.every((t) => !t.hasText)) {
     return json({ aborted: true, reason: 'image_only_no_reply' });
   }
 
@@ -342,32 +396,6 @@ Deno.serve(async (req) => {
       return `[${label}, ${dateLabel}] ${a.body!.trim()}`;
     })
     .join('\n');
-
-  // Step 5: resolve the framework — first tag carrying its own saved text,
-  // else Default, else the hardcoded fallback if nothing has been saved at
-  // all yet. Lien-adjacent tags always layer the mortgage addendum on top,
-  // regardless of whether that tag has a custom framework, so customizing a
-  // tag's text can't accidentally drop the mortgage question.
-  const tagNames: string[] = (lead.lead_tags ?? []).map((lt: any) => lt.tags?.name).filter(Boolean);
-  const tagIds: string[] = (lead.lead_tags ?? []).map((lt: any) => lt.tags?.id).filter(Boolean);
-
-  const { data: configs } = await admin
-    .from('ai_reply_config')
-    .select('tag_id, framework')
-    .eq('user_id', lead.user_id)
-    .or(`tag_id.is.null,tag_id.in.(${tagIds.length ? tagIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
-
-  const tagFramework = (configs ?? []).find((c) => c.tag_id !== null && c.framework?.trim());
-  const defaultFramework = (configs ?? []).find((c) => c.tag_id === null && c.framework?.trim())?.framework;
-  let framework = tagFramework?.framework || defaultFramework || DEFAULT_FRAMEWORK;
-
-  const isLienLead = tagNames.some((n) => LIEN_TAG_NAMES.includes(n.toLowerCase()));
-  if (isLienLead) framework += LIEN_ADDENDUM;
-  const isTaxDelinquentLead = tagNames.some((n) => TAX_TAG_NAMES.includes(n.toLowerCase()));
-  if (isTaxDelinquentLead) framework += TAX_ADDENDUM;
-  // Unconditional — every framework, Default or any tag's own custom text,
-  // gets the callback step appended regardless of what it already says.
-  framework += CALLBACK_ADDENDUM;
 
   const { data: ownerProfile } = await admin.from('profiles').select('full_name').eq('id', lead.user_id).single();
   const agentName = ownerProfile?.full_name || 'the Bluebird team';
@@ -400,10 +428,46 @@ Deno.serve(async (req) => {
       ? leadContextLines.join('\n')
       : 'No address or name on file for this lead in the CRM yet. Before going further into the framework, ask them directly to confirm their name and the property address you\'re texting about, so their file is accurate. Never guess at either.';
 
-  const system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName)
-    .replace('{{LEAD_CONTEXT}}', leadContext)
-    .replace('{{TODAY}}', todayLabel)
-    .replace('{{FRAMEWORK}}', framework);
+  let system: string;
+  if (isPhotoWaitMode) {
+    // Step 5 (photo-wait mode): no framework to resolve — the interview is
+    // already done, this is a fixed prompt with nothing tag- or
+    // account-specific layered on.
+    system = PHOTO_WAIT_SYSTEM.replace('{{AGENT_NAME}}', agentName)
+      .replace('{{LEAD_CONTEXT}}', leadContext)
+      .replace('{{TODAY}}', todayLabel);
+  } else {
+    // Step 5: resolve the framework — first tag carrying its own saved text,
+    // else Default, else the hardcoded fallback if nothing has been saved at
+    // all yet. Lien-adjacent tags always layer the mortgage addendum on top,
+    // regardless of whether that tag has a custom framework, so customizing a
+    // tag's text can't accidentally drop the mortgage question.
+    const tagNames: string[] = (lead.lead_tags ?? []).map((lt: any) => lt.tags?.name).filter(Boolean);
+    const tagIds: string[] = (lead.lead_tags ?? []).map((lt: any) => lt.tags?.id).filter(Boolean);
+
+    const { data: configs } = await admin
+      .from('ai_reply_config')
+      .select('tag_id, framework')
+      .eq('user_id', lead.user_id)
+      .or(`tag_id.is.null,tag_id.in.(${tagIds.length ? tagIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
+
+    const tagFramework = (configs ?? []).find((c) => c.tag_id !== null && c.framework?.trim());
+    const defaultFramework = (configs ?? []).find((c) => c.tag_id === null && c.framework?.trim())?.framework;
+    let framework = tagFramework?.framework || defaultFramework || DEFAULT_FRAMEWORK;
+
+    const isLienLead = tagNames.some((n) => LIEN_TAG_NAMES.includes(n.toLowerCase()));
+    if (isLienLead) framework += LIEN_ADDENDUM;
+    const isTaxDelinquentLead = tagNames.some((n) => TAX_TAG_NAMES.includes(n.toLowerCase()));
+    if (isTaxDelinquentLead) framework += TAX_ADDENDUM;
+    // Unconditional — every framework, Default or any tag's own custom text,
+    // gets the callback step appended regardless of what it already says.
+    framework += CALLBACK_ADDENDUM;
+
+    system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName)
+      .replace('{{LEAD_CONTEXT}}', leadContext)
+      .replace('{{TODAY}}', todayLabel)
+      .replace('{{FRAMEWORK}}', framework);
+  }
 
   // Step 6: draft, via forced tool-call output so the three fields are
   // structured rather than parsed out of prose.
@@ -425,70 +489,108 @@ Deno.serve(async (req) => {
         },
       ],
       tools: [
-        {
-          name: 'draft_reply',
-          description: 'The SMS reply to send, and this lead\'s qualification status.',
-          input_schema: {
-            type: 'object',
-            properties: {
-              reply_parts: {
-                type: 'array',
-                items: { type: 'string' },
-                minItems: 1,
-                maxItems: 3,
-                description:
-                  'The reply broken into separate short SMS messages, the way a real person actually texts — one thought per message rather than one long paragraph. A side reaction (a laugh, "no worries", "totally get it") goes in its own message, separate from the substantive point. Usually 1-2 messages, 3 only if genuinely needed.',
+        isPhotoWaitMode
+          ? {
+              name: 'draft_photo_wait_reply',
+              description: "The SMS reply to send while this lead's only outstanding item is interior photos.",
+              input_schema: {
+                type: 'object',
+                properties: {
+                  reply_parts: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    minItems: 1,
+                    maxItems: 3,
+                    description:
+                      'The reply broken into separate short SMS messages, the way a real person actually texts — one thought per message rather than one long paragraph. Usually 1-2 messages, 3 only if genuinely needed.',
+                  },
+                  negative_reply: {
+                    type: 'boolean',
+                    description: 'True if the lead is now declining or asking not to be contacted.',
+                  },
+                  hard_decline: {
+                    type: 'boolean',
+                    description:
+                      'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else. True for every other kind of decline, and true whenever unsure.',
+                  },
+                  scheduled_callback_at: {
+                    type: 'string',
+                    description:
+                      'Only fill in on the message where they actually name a specific day and time to call them back — empty string otherwise. An ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY\'S DATE. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.',
+                  },
+                  scheduled_callback_note: {
+                    type: 'string',
+                    description:
+                      'Only fill in together with scheduled_callback_at, on that same message. The callback time in their own words, e.g. "Tomorrow around 3pm" — for a human to read alongside the parsed time.',
+                  },
+                },
+                required: ['reply_parts', 'negative_reply'],
               },
-              fully_qualified: {
-                type: 'boolean',
-                description: 'True only once every item the framework marks as required has been established.',
-              },
-              negative_reply: {
-                type: 'boolean',
-                description:
-                  'True if the lead is declining or asking not to be contacted, or this is a confirmed wrong-number dead-end being closed out. Not for a bare STOP-style keyword, which never reaches you.',
-              },
-              hard_decline: {
-                type: 'boolean',
-                description:
-                  'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else, not a refusal to sell at all. True for every other kind of decline, including the wrong-number dead-end case, and true whenever unsure.',
-              },
-              summary: {
-                type: 'string',
-                description:
-                  "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (condition, price, timeline, motivation if mentioned, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
-              },
-              confirmed_first_name: {
-                type: 'string',
-                description:
-                  'Only fill in when their first name above was missing and they just stated it in this message for the first time. Empty string otherwise — never repeat a name that was already on file.',
-              },
-              confirmed_address: {
-                type: 'string',
-                description:
-                  'Only fill in when the property address above was missing and they just confirmed or stated it in this message for the first time. Empty string otherwise — never repeat an address that was already on file.',
-              },
-              scheduled_callback_at: {
-                type: 'string',
-                description:
-                  'Only fill in on the message where they actually name a specific day and time to call them back (the CALLBACK step) — empty string otherwise, including every earlier turn where you\'ve only asked but not yet gotten a real answer. An ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY\'S DATE above and what they said, e.g. today being a Wednesday and them saying "tomorrow at 3pm" becomes tomorrow\'s date at 15:00:00. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.',
-              },
-              scheduled_callback_note: {
-                type: 'string',
-                description:
-                  'Only fill in together with scheduled_callback_at, on that same message. The callback time in their own words, e.g. "Tomorrow around 3pm" or "Thursday morning" — for a human to read alongside the parsed time.',
-              },
-              next_action: {
-                type: 'string',
-                description:
-                  'Only meaningful when fully_qualified is true — empty string otherwise. One concrete, specific next step for a human to do, informed by what was actually said in this conversation, not a generic template. E.g. "Run comps and confirm an offer near her $210k ask, roof is 20 years old" or "Text the LOI for a subject-to deal at $180k, he agreed to the number on the call" or "Call to finalize numbers before Friday, she has another offer to compare against". Always name what makes THIS lead specific (a number mentioned, a deadline, a condition issue) rather than restating the framework steps.',
+            }
+          : {
+              name: 'draft_reply',
+              description: 'The SMS reply to send, and this lead\'s qualification status.',
+              input_schema: {
+                type: 'object',
+                properties: {
+                  reply_parts: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    minItems: 1,
+                    maxItems: 3,
+                    description:
+                      'The reply broken into separate short SMS messages, the way a real person actually texts — one thought per message rather than one long paragraph. A side reaction (a laugh, "no worries", "totally get it") goes in its own message, separate from the substantive point. Usually 1-2 messages, 3 only if genuinely needed.',
+                  },
+                  fully_qualified: {
+                    type: 'boolean',
+                    description: 'True only once every item the framework marks as required has been established.',
+                  },
+                  negative_reply: {
+                    type: 'boolean',
+                    description:
+                      'True if the lead is declining or asking not to be contacted, or this is a confirmed wrong-number dead-end being closed out. Not for a bare STOP-style keyword, which never reaches you.',
+                  },
+                  hard_decline: {
+                    type: 'boolean',
+                    description:
+                      'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else, not a refusal to sell at all. True for every other kind of decline, including the wrong-number dead-end case, and true whenever unsure.',
+                  },
+                  summary: {
+                    type: 'string',
+                    description:
+                      "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (motivation, condition, price, timeline, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
+                  },
+                  confirmed_first_name: {
+                    type: 'string',
+                    description:
+                      'Only fill in when their first name above was missing and they just stated it in this message for the first time. Empty string otherwise — never repeat a name that was already on file.',
+                  },
+                  confirmed_address: {
+                    type: 'string',
+                    description:
+                      'Only fill in when the property address above was missing and they just confirmed or stated it in this message for the first time. Empty string otherwise — never repeat an address that was already on file.',
+                  },
+                  scheduled_callback_at: {
+                    type: 'string',
+                    description:
+                      'Only fill in on the message where they actually name a specific day and time to call them back (the CALLBACK step) — empty string otherwise, including every earlier turn where you\'ve only asked but not yet gotten a real answer. An ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY\'S DATE above and what they said, e.g. today being a Wednesday and them saying "tomorrow at 3pm" becomes tomorrow\'s date at 15:00:00. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.',
+                  },
+                  scheduled_callback_note: {
+                    type: 'string',
+                    description:
+                      'Only fill in together with scheduled_callback_at, on that same message. The callback time in their own words, e.g. "Tomorrow around 3pm" or "Thursday morning" — for a human to read alongside the parsed time.',
+                  },
+                  next_action: {
+                    type: 'string',
+                    description:
+                      'Only meaningful when fully_qualified is true — empty string otherwise. One concrete, specific next step for a human to do, informed by what was actually said in this conversation, not a generic template. E.g. "Run comps and confirm an offer near her $210k ask, roof is 20 years old" or "Text the LOI for a subject-to deal at $180k, he agreed to the number on the call" or "Call to finalize numbers before Friday, she has another offer to compare against". Always name what makes THIS lead specific (a number mentioned, a deadline, a condition issue) rather than restating the framework steps.',
+                  },
+                },
+                required: ['reply_parts', 'fully_qualified', 'negative_reply'],
               },
             },
-            required: ['reply_parts', 'fully_qualified', 'negative_reply'],
-          },
-        },
       ],
-      tool_choice: { type: 'tool', name: 'draft_reply' },
+      tool_choice: { type: 'tool', name: isPhotoWaitMode ? 'draft_photo_wait_reply' : 'draft_reply' },
     }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -502,7 +604,9 @@ Deno.serve(async (req) => {
   }
 
   const aiData = await aiRes.json();
-  const toolUse = (aiData.content ?? []).find((c: any) => c.type === 'tool_use' && c.name === 'draft_reply');
+  const toolUse = (aiData.content ?? []).find(
+    (c: any) => c.type === 'tool_use' && c.name === (isPhotoWaitMode ? 'draft_photo_wait_reply' : 'draft_reply'),
+  );
   if (!toolUse) {
     if (triggerMessageId) {
       await admin.from('inbound_messages').update({ send_error: 'No tool_use in Anthropic response' }).eq('id', triggerMessageId);
@@ -523,7 +627,9 @@ Deno.serve(async (req) => {
     next_action: nextAction,
   } = toolUse.input as {
     reply_parts: string[];
-    fully_qualified: boolean;
+    // Absent entirely from the photo-wait tool's schema — undefined there,
+    // which is falsy and correctly skips the fully_qualified branch below.
+    fully_qualified?: boolean;
     negative_reply: boolean;
     hard_decline?: boolean;
     summary?: string;
@@ -669,7 +775,16 @@ Deno.serve(async (req) => {
       });
     }
   } else if (fullyQualified) {
-    const updates: Record<string, unknown> = { stage: hasPhotos ? 'followup' : 'initial_contact', ai_reply_paused: true };
+    const landingOnFollowup = hasPhotos as boolean;
+    const updates: Record<string, unknown> = {
+      stage: landingOnFollowup ? 'followup' : 'initial_contact',
+      ai_reply_paused: true,
+      // Only Partial Qualified (no photos yet) leaves the AI able to keep
+      // texting this lead — photo-wait mode above is gated on this flag
+      // alongside stage. Landing straight on Follow-Up means photos were
+      // already in hand, so there's nothing left for the AI to do.
+      photo_wait_ai_active: !landingOnFollowup,
+    };
 
     // Prepended, never overwritten — whatever a human already wrote in Notes
     // stays intact below this. Photos come from hasPhotos (already verified
@@ -699,6 +814,15 @@ Deno.serve(async (req) => {
       due_date: new Date().toISOString().slice(0, 10),
       auto_created: true,
     });
+  } else if (isPhotoWaitMode && hasPhotos) {
+    // The only thing Partial Qualified was ever waiting on. Promotes exactly
+    // like send-reminders' own sweep does for the same transition — no new
+    // task needed, the one written when this lead first became qualified
+    // already covers what happens now that photos are actually in hand.
+    await admin
+      .from('leads')
+      .update({ stage: 'followup', photo_wait_ai_active: false, next_reminder_at: null })
+      .eq('id', leadId);
   }
 
   // Independent of the branch above — a callback time can land on the same

@@ -124,6 +124,27 @@ Deno.serve(async (req) => {
 
   for (const lead of eligible ?? []) {
     try {
+      // Claim this lead atomically before anything else. Two overlapping
+      // runs — a double-click on the button, or a retried request — would
+      // otherwise both pass the eligibility filter above and each draft
+      // their own separately-worded nudge for the same still-outstanding
+      // item, landing as two near-duplicate texts seconds apart. The WHERE
+      // clause re-checks eligibility at the DB level: only the run whose
+      // UPDATE actually matches a still-eligible row continues: the other
+      // has already moved next_reminder_at forward by the time it lands.
+      const claimTomorrow = new Date();
+      claimTomorrow.setDate(claimTomorrow.getDate() + 1);
+      const { data: claimedRows } = await admin
+        .from('leads')
+        .update({ next_reminder_at: claimTomorrow.toISOString().slice(0, 10) })
+        .eq('id', lead.id)
+        .or(`next_reminder_at.is.null,next_reminder_at.lte.${todayIso}`)
+        .select('id');
+      if (!claimedRows || claimedRows.length === 0) {
+        skipped++;
+        continue;
+      }
+
       const [{ data: inbound }, { data: outbound }] = await Promise.all([
         admin
           .from('inbound_messages')
@@ -176,9 +197,9 @@ Deno.serve(async (req) => {
       const outstandingHint =
         lead.stage === 'initial_contact'
           ? 'Interior photos of the property — everything else has already been established, this is the only thing left.'
-          : `Whichever of these hasn't actually been answered yet, in this order: property condition, ${
-              isLien ? 'mortgage balance/payment, ' : ''
-            }${isTax ? 'back taxes owed, ' : ''}asking price, timeline to close, and (last) interior photos. Ask about the first one not yet answered — don't ask about something already covered.`;
+          : `In this priority order: their motivation for selling, property condition, ${isLien ? 'mortgage balance/payment, ' : ''}${
+              isTax ? 'back taxes owed, ' : ''
+            }asking price, timeline to close, and (last) interior photos. Figure out which of these have NOT actually been answered yet in the conversation below — don't count anything already covered, and there may be more than one still open.`;
 
       const agentNameRes = await admin.from('profiles').select('full_name').eq('id', lead.user_id).single();
       const agentName = agentNameRes.data?.full_name || 'the Bluebird team';
@@ -191,7 +212,10 @@ This lead went quiet mid-conversation. WHAT'S STILL OUTSTANDING: ${outstandingHi
 
 Read the full conversation below. Two possible outcomes:
 1. They've already explicitly promised a specific day they'll respond or send something (e.g. "I'll send it Friday", "I'll get back to you Monday") — extract that as promised_date (an ISO date YYYY-MM-DD, computed from today's date above) and leave reminder_parts empty. Don't draft a message in this case — just reschedule.
-2. Otherwise, draft ONE short, low-pressure, specific check-in text asking about the exact thing above — not a generic "just checking in". Text like a real person: short, no "Dear", no em dashes or semicolons, a casual emoji is fine occasionally. Break into 2 messages in reply_parts only if there's genuinely more than one distinct thought. Never invent facts or repeat something already answered in the conversation below.
+2. Otherwise, draft a short, low-pressure, specific check-in — not a generic "just checking in":
+   - If only ONE item above is still outstanding: ONE text asking about it.
+   - If MORE THAN ONE item is still outstanding: TWO texts, one per item (highest priority first, second-highest next) — never more than 2. The FIRST text is a normal check-in with a brief greeting. The SECOND text is a direct continuation of the same thought as if you're still mid-conversation, not a fresh message — no "hey", no their name, no re-introducing the property, no restating that you're following up. Go straight into the next question the way a real person sends a quick second thought right after the first, e.g. first text "Hey Sarah, just following up, how's the inside of the place looking?" then second text "And what's your timeline looking like to close on this?"
+   Text like a real person: short, no "Dear", no em dashes or semicolons, a casual emoji is fine occasionally. Never invent facts or repeat something already answered in the conversation below.
 
 Conversation so far:
 ${transcript}
@@ -217,7 +241,8 @@ Call draft_reminder with your result.`;
                     type: 'array',
                     items: { type: 'string' },
                     maxItems: 2,
-                    description: 'The reminder broken into 1-2 short SMS messages. Empty array if promised_date is set instead.',
+                    description:
+                      'One message per still-outstanding item, up to 2. A single item gets one message; two outstanding items get two — the second with no greeting, straight into the next question. Empty array if promised_date is set instead.',
                   },
                   promised_date: {
                     type: 'string',
@@ -286,9 +311,7 @@ Call draft_reminder with your result.`;
         if (i < replyParts.length - 1) await new Promise((r) => setTimeout(r, 1200));
       }
 
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      await admin.from('leads').update({ next_reminder_at: tomorrow.toISOString().slice(0, 10) }).eq('id', lead.id);
+      // next_reminder_at is already tomorrow — set by the claim above.
       sent++;
     } catch (e) {
       errors.push({ leadId: lead.id, error: e instanceof Error ? e.message : String(e) });

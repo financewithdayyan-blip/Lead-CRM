@@ -11,6 +11,9 @@ import type { Lead } from '@/types/domain';
 // of ai_reply_paused, since a manual Kanban drag or a deal handled entirely
 // by phone never touches that flag. Mirrored here so the chip doesn't claim
 // "auto-replying" for a lead the AI will actually never text again.
+// Partial Qualified (initial_contact) is the one exception, gated below by
+// photoWaitAiActive rather than being in this set outright — a lead sitting
+// there any other way (a manual drag, say) still reads as paused.
 const AI_ACTIVE_STAGES = new Set(['contacted', 'replied']);
 
 /**
@@ -28,7 +31,10 @@ function AiStatusChip({ lead, globalEnabled }: { lead: Lead; globalEnabled: bool
       </span>
     );
   }
-  if (lead.aiReplyPaused || !AI_ACTIVE_STAGES.has(lead.stage)) {
+  const photoWaitActive = lead.stage === 'initial_contact' && lead.photoWaitAiActive;
+  const stageAllows = AI_ACTIVE_STAGES.has(lead.stage) || photoWaitActive;
+  const effectivelyPaused = lead.aiReplyPaused && !photoWaitActive;
+  if (effectivelyPaused || !stageAllows) {
     return (
       <span className="rounded-full bg-warning-dim px-2 py-0.5 font-semibold text-warning" title="Paused for this lead specifically — fully qualified, past the AI-active stages, or a human already replied by hand.">
         AI paused (this lead)
@@ -36,7 +42,9 @@ function AiStatusChip({ lead, globalEnabled }: { lead: Lead; globalEnabled: bool
     );
   }
   return (
-    <span className="rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success">AI auto-replying</span>
+    <span className="rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success" title={photoWaitActive ? 'Still chasing photos or a callback time for this lead.' : undefined}>
+      AI auto-replying
+    </span>
   );
 }
 
