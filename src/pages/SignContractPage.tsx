@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, Download, FileText, Loader2 } from 'lucide-react';
+import { Clock, Download, FileText, Loader2 } from 'lucide-react';
 import {
   usePublicSigningParty,
   useSigningPdfUrl,
@@ -16,6 +16,31 @@ import { roleLabel } from '@/hooks/useDocTemplates';
 
 const PAGE_WIDTH = 680;
 const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph']);
+
+/** The circle and checkmark trace themselves in on mount (pathLength=1
+ * normalizes the dash math regardless of actual geometry), with a soft ring
+ * pulse behind for a bit of celebration — see the sign-success-* keyframes
+ * in index.css, which also cover prefers-reduced-motion. */
+function SignSuccessCheck() {
+  return (
+    <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+      <span className="sign-success-ring absolute inset-0 rounded-full border-2 border-emerald-400" />
+      <svg viewBox="0 0 52 52" className="sign-success-check relative h-20 w-20">
+        <circle className="sign-success-circle" cx="26" cy="26" r="24" fill="none" stroke="#10b981" strokeWidth="2.5" pathLength={1} />
+        <path
+          className="sign-success-tick"
+          d="M14 27l7 7 16-16"
+          fill="none"
+          stroke="#10b981"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pathLength={1}
+        />
+      </svg>
+    </div>
+  );
+}
 
 function DownloadCertificateButton({ token, docLabel }: { token: string; docLabel: string }) {
   const getFinalUrl = useSignedFinalDocUrl();
@@ -151,7 +176,7 @@ export function SignContractPage() {
     const fullyDone = justCompletedAll || party.contractStatus === 'signed';
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-4 text-center">
-        <CheckCircle2 size={40} className="mx-auto text-emerald-500" />
+        <SignSuccessCheck />
         <p className="mt-3 text-lg font-semibold text-slate-800">
           You've {needsSignature ? 'signed' : 'confirmed'} {party.contractName}
         </p>
