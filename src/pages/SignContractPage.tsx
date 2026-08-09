@@ -15,8 +15,26 @@ import { formatCurrency } from '@/lib/currency';
 import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONT } from '@/lib/typedSignature';
 import { roleLabel } from '@/hooks/useDocTemplates';
 
-const PAGE_WIDTH = 680;
+const MAX_PAGE_WIDTH = 680;
+const PAGE_CONTAINER_MAX = 720;
+const PAGE_CONTAINER_PADDING = 32; // px-4 on each side
 const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph']);
+
+/** The document was always rendered at a fixed 680px, which overflowed the
+ * viewport on a phone and forced sideways scrolling to reach fields. This
+ * shrinks it to fit whatever width is actually available, recomputed on
+ * resize/rotation, while never exceeding the desktop size. */
+function usePageWidth() {
+  const compute = () =>
+    Math.max(240, Math.min(MAX_PAGE_WIDTH, Math.min(window.innerWidth, PAGE_CONTAINER_MAX) - PAGE_CONTAINER_PADDING));
+  const [width, setWidth] = useState(compute);
+  useEffect(() => {
+    const onResize = () => setWidth(compute());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return width;
+}
 
 /** The circle and checkmark trace themselves in on mount (pathLength=1
  * normalizes the dash math regardless of actual geometry), with a soft ring
@@ -104,6 +122,7 @@ export function SignContractPage() {
   const submitSignature = useSubmitSignature();
   const logView = useLogSigningView();
 
+  const pageWidth = usePageWidth();
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [justCompletedAll, setJustCompletedAll] = useState(false);
@@ -243,7 +262,7 @@ export function SignContractPage() {
   const showName = party.name && party.name.toLowerCase() !== roleName.toLowerCase();
 
   return (
-    <div className="min-h-screen bg-bg pb-28">
+    <div className="min-h-screen bg-bg pb-36">
       {/* Sticky header — brand + doc identity stay visible while scrolling a
           long contract, and the field counter gives a sense of progress. */}
       <div className="sticky top-0 z-10 border-b border-border bg-white/90 backdrop-blur">
@@ -278,22 +297,24 @@ export function SignContractPage() {
             <Loader2 size={20} className="animate-spin text-text-3" />
           </div>
         ) : (
-          pageNums.map((n) => (
-            <ContractDocumentPage
-              key={n}
-              pdf={pdf}
-              pageNum={n}
-              pageWidth={PAGE_WIDTH}
-              fields={party.templateFields}
-              fieldValues={party.fieldValues}
-              signatures={party.otherSignatures}
-              activeRole={party.role}
-              docType={party.templateType}
-              partyRoles={party.templatePartyRoles}
-              editableValues={fieldInputs}
-              onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
-            />
-          ))
+          <div className="overflow-x-auto">
+            {pageNums.map((n) => (
+              <ContractDocumentPage
+                key={n}
+                pdf={pdf}
+                pageNum={n}
+                pageWidth={pageWidth}
+                fields={party.templateFields}
+                fieldValues={party.fieldValues}
+                signatures={party.otherSignatures}
+                activeRole={party.role}
+                docType={party.templateType}
+                partyRoles={party.templatePartyRoles}
+                editableValues={fieldInputs}
+                onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
+              />
+            ))}
+          </div>
         )}
 
         {needsSignature ? (
@@ -360,8 +381,13 @@ export function SignContractPage() {
       </div>
 
       {/* Sticky bottom action bar — the submit button stays reachable on a
-          long, multi-page contract instead of requiring a scroll back down. */}
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-white/95 px-4 py-3 backdrop-blur">
+          long, multi-page contract instead of requiring a scroll back down.
+          Bottom padding adds the iPhone home-indicator safe area so the
+          button never sits underneath it. */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-white/95 px-4 pt-3 backdrop-blur"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
         <div className="mx-auto max-w-[720px]">
           {!allFieldsFilled && <p className="mb-1.5 text-[12px] text-warning">Fill in every highlighted field above before continuing.</p>}
           <button
