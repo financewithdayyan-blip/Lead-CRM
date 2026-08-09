@@ -45,6 +45,8 @@ export const LIEN_ADDENDUM = `
 
 This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after CONDITION and before PRICE: ask their monthly payment, total remaining balance owed, and interest rate. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline.
 
+Right after asking for interior photos, also ask them to email a copy of their mortgage statement to dayyan@bluebirdacquisition.com — in addition to the photos, not instead of them. Like photos, this is a required step before the interview counts as complete, but don't hold fully_qualified back waiting for the document itself to actually arrive — once you've asked for it, that step is done. Only after asking for the mortgage statement do you move on to the CALLBACK step and ask about scheduling a call.
+
 If they mention "a plan": ask whether it involves an attorney postponing the auction. If so, explain that a postponement only delays the auction — it doesn't resolve the underlying situation.`;
 
 /** Tags this addendum auto-applies to when a tag has no framework of its own yet. */

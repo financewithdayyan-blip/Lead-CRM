@@ -225,10 +225,14 @@ Deno.serve(async (req) => {
         : needsOfferCallback
           ? 'A specific day and time to call them to go over the offer — they already sent photos, everything else is done, this is the only thing left.'
           : lead.stage === 'initial_contact'
-            ? 'Interior photos of the property — everything else has already been established, this is the only thing left.'
+            ? isLien
+              ? 'Interior photos of the property, and a copy of their mortgage statement emailed to dayyan@bluebirdacquisition.com — everything else has already been established, these are the only things left.'
+              : 'Interior photos of the property — everything else has already been established, this is the only thing left.'
             : `In this priority order: their motivation for selling, property condition, ${isLien ? 'mortgage balance/payment, ' : ''}${
                 isTax ? 'back taxes owed, ' : ''
-              }asking price, timeline to close, and (last) interior photos. Figure out which of these have NOT actually been answered yet in the conversation below — don't count anything already covered, and there may be more than one still open.`;
+              }asking price, timeline to close, interior photos${
+                isLien ? ', and (last) their mortgage statement emailed to dayyan@bluebirdacquisition.com' : ' (last)'
+              }. Figure out which of these have NOT actually been answered yet in the conversation below — don't count anything already covered, and there may be more than one still open.`;
 
       const agentNameRes = await admin.from('profiles').select('full_name').eq('id', lead.user_id).single();
       const agentName = agentNameRes.data?.full_name || 'the Bluebird team';
@@ -245,6 +249,7 @@ Read the full conversation below. Two possible outcomes:
    - If only ONE item above is still outstanding: ONE text asking about it.
    - If MORE THAN ONE item is still outstanding: TWO texts, one per item (highest priority first, second-highest next) — never more than 2. The FIRST text is a normal check-in with a brief greeting. The SECOND text is a direct continuation of the same thought as if you're still mid-conversation, not a fresh message — no "hey", no their name, no re-introducing the property, no restating that you're following up. Go straight into the next question the way a real person sends a quick second thought right after the first, e.g. first text "Hey Sarah, just following up, how's the inside of the place looking?" then second text "And what's your timeline looking like to close on this?"
    Text like a real person: short, no "Dear", no em dashes or semicolons, a casual emoji is fine occasionally. Never invent facts or repeat something already answered in the conversation below.
+   Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price earlier in the conversation. You only nudge for still-outstanding items; a human decides and makes the actual offer, always on a call, never over text.
 
 Conversation so far:
 ${transcript}
