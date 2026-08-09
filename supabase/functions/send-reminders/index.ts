@@ -111,7 +111,9 @@ Deno.serve(async (req) => {
 
   const { data: eligible, error: leadsErr } = await admin
     .from('leads')
-    .select('id, user_id, first_name, address, city, state, phone, stage, next_reminder_at, notes, scheduled_callback_at, lead_tags(tags(name))')
+    .select(
+      'id, user_id, first_name, address, city, state, phone, stage, next_reminder_at, notes, scheduled_callback_at, awaiting_owner_info, lead_tags(tags(name))',
+    )
     .in('stage', ['replied', 'initial_contact'])
     .eq('opted_out', false)
     .or(`next_reminder_at.is.null,next_reminder_at.lte.${todayIso}`)
@@ -122,6 +124,7 @@ Deno.serve(async (req) => {
   let rescheduled = 0;
   let promoted = 0;
   let skipped = 0;
+  let declined = 0;
   const errors: { leadId: string; error: string }[] = [];
 
   for (const lead of eligible ?? []) {
@@ -164,6 +167,25 @@ Deno.serve(async (req) => {
 
       const hasPhotos = (inbound ?? []).some((m) => m.has_attachments);
 
+      // A confirmed non-owner who never answered "do you know the owner" —
+      // if a reminder already went out (this isn't the first time this lead
+      // hit the eligibility filter) and they're still silent, one more nudge
+      // isn't going to change that. Move on instead of reminding forever.
+      // awaiting_owner_info would have been cleared the moment they replied
+      // again, whatever they said, so still being true here means genuinely
+      // no reply at all since that reminder.
+      if (lead.awaiting_owner_info) {
+        const alreadyReminded = (outbound ?? []).some((a) => (a.meta as any)?.reminder === true);
+        if (alreadyReminded) {
+          await admin
+            .from('leads')
+            .update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true, awaiting_owner_info: false, next_reminder_at: null })
+            .eq('id', lead.id);
+          declined++;
+          continue;
+        }
+      }
+
       // Partial-Qualified waits on two things in order — the photo, then a
       // real day/time to call about the offer (mirrors ai-reply's own
       // photo-wait mode). Only promote to fully Qualified once both are in
@@ -198,13 +220,15 @@ Deno.serve(async (req) => {
       const isLien = tagNames.some((n) => LIEN_TAG_NAMES.includes(n.toLowerCase()));
       const isTax = tagNames.some((n) => TAX_TAG_NAMES.includes(n.toLowerCase()));
 
-      const outstandingHint = needsOfferCallback
-        ? 'A specific day and time to call them to go over the offer — they already sent photos, everything else is done, this is the only thing left.'
-        : lead.stage === 'initial_contact'
-          ? 'Interior photos of the property — everything else has already been established, this is the only thing left.'
-          : `In this priority order: their motivation for selling, property condition, ${isLien ? 'mortgage balance/payment, ' : ''}${
-              isTax ? 'back taxes owed, ' : ''
-            }asking price, timeline to close, and (last) interior photos. Figure out which of these have NOT actually been answered yet in the conversation below — don't count anything already covered, and there may be more than one still open.`;
+      const outstandingHint = lead.awaiting_owner_info
+        ? "Whether they know who owns the property now, or a way to reach that person — they already said this isn't/wasn't their place, this is the only thing being waited on."
+        : needsOfferCallback
+          ? 'A specific day and time to call them to go over the offer — they already sent photos, everything else is done, this is the only thing left.'
+          : lead.stage === 'initial_contact'
+            ? 'Interior photos of the property — everything else has already been established, this is the only thing left.'
+            : `In this priority order: their motivation for selling, property condition, ${isLien ? 'mortgage balance/payment, ' : ''}${
+                isTax ? 'back taxes owed, ' : ''
+              }asking price, timeline to close, and (last) interior photos. Figure out which of these have NOT actually been answered yet in the conversation below — don't count anything already covered, and there may be more than one still open.`;
 
       const agentNameRes = await admin.from('profiles').select('full_name').eq('id', lead.user_id).single();
       const agentName = agentNameRes.data?.full_name || 'the Bluebird team';
@@ -323,5 +347,5 @@ Call draft_reminder with your result.`;
     }
   }
 
-  return json({ ok: true, sent, rescheduled, promoted, skipped, errors, totalEligible: (eligible ?? []).length });
+  return json({ ok: true, sent, rescheduled, promoted, declined, skipped, errors, totalEligible: (eligible ?? []).length });
 });

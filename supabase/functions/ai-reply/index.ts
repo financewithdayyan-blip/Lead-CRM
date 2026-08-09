@@ -275,9 +275,10 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 
 - Not the owner, but connected (spouse, sibling, someone living in the property who offers to answer questions): don't keep insisting on contacting the owner directly. Treat them as the point of contact and continue the framework. Only near the end, softly and non-blockingly, ask if they could share the owner's number.
 
-- Wrong number or misdirected, with genuinely zero connection to the property or owner (distinct from the above): ask once if they happen to know the owner or a way to reach them.
-  - If they say no, close it out immediately with a plain apology — "My bad, sorry for the mix-up, I'll take you off the list." — and stop. Do not ask them to pass along your info or contact you if the owner reaches out. Set negative_reply true.
-  - If they say yes, they know who the owner is: ask them to share the owner's number, or offer to pass your number along to the owner and mention you're interested in buying the house. Do not set fully_qualified or negative_reply — this conversation stays open on this same lead, it is not itself a qualified seller and there is nothing further to ask it.
+- Wrong number or misdirected, with genuinely zero connection to the property or owner (distinct from the above): ask once if they happen to know the owner or a way to reach them. Set awaiting_owner_info true on this message — it marks the lead as waiting specifically on that answer, nothing else.
+  - If they say no, close it out immediately with a plain apology — "My bad, sorry for the mix-up, I'll take you off the list." — and stop. Do not ask them to pass along your info or contact you if the owner reaches out. Set negative_reply true and awaiting_owner_info false.
+  - If they say yes, they know who the owner is: ask them to share the owner's number, or offer to pass your number along to the owner and mention you're interested in buying the house. Do not set fully_qualified or negative_reply — this conversation stays open on this same lead, it is not itself a qualified seller and there is nothing further to ask it. Set awaiting_owner_info false — they answered, this is no longer what's being waited on.
+  - Every other message, on this lead or any other: set awaiting_owner_info false. It only ever means "I just asked this exact question and am waiting on the answer."
 
 - Can't send photos: don't give up. Push back specifically for photos of the INSIDE of the property, not outside — interior condition is what the offer depends on.
 
@@ -344,7 +345,7 @@ Deno.serve(async (req) => {
   const { data: lead } = await admin
     .from('leads')
     .select(
-      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, lead_tags(tags(id, name))',
+      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, awaiting_owner_info, lead_tags(tags(id, name))',
     )
     .eq('id', leadId)
     .single();
@@ -624,6 +625,11 @@ Deno.serve(async (req) => {
                     description:
                       'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else, not a refusal to sell at all. True for every other kind of decline, including the wrong-number dead-end case, and true whenever unsure.',
                   },
+                  awaiting_owner_info: {
+                    type: 'boolean',
+                    description:
+                      'True only on the message where you ask a confirmed non-owner contact if they know the property owner or a way to reach them (the wrong-number special case). False on every other message, including this same lead\'s next reply whichever way it goes — this flag only ever means "I just asked this exact question and am waiting on the answer."',
+                  },
                   summary: {
                     type: 'string',
                     description:
@@ -694,6 +700,7 @@ Deno.serve(async (req) => {
     scheduled_callback_at: scheduledCallbackAtRaw,
     scheduled_callback_note: scheduledCallbackNote,
     next_action: nextAction,
+    awaiting_owner_info: awaitingOwnerInfoRaw,
   } = toolUse.input as {
     reply_parts: string[];
     // Absent entirely from the photo-wait tool's schema — undefined there,
@@ -707,13 +714,17 @@ Deno.serve(async (req) => {
     scheduled_callback_at?: string;
     scheduled_callback_note?: string;
     next_action?: string;
+    awaiting_owner_info?: boolean;
   };
 
   // Fills in a name/address the CRM never had, and a callback time once the
   // seller actually gives one — all independent of qualification outcome,
   // since any of these can land on a message that doesn't itself complete
   // the framework.
-  const recoveredFields: Record<string, unknown> = {};
+  // awaiting_owner_info always syncs to this turn's value (true or false) so
+  // it self-corrects the moment the conversation moves past the question it
+  // marks, rather than relying on the model to remember to unset it.
+  const recoveredFields: Record<string, unknown> = { awaiting_owner_info: !!awaitingOwnerInfoRaw };
   if (confirmedFirstName?.trim() && !lead.first_name) recoveredFields.first_name = confirmedFirstName.trim();
   if (confirmedAddress?.trim() && !lead.address) recoveredFields.address = confirmedAddress.trim();
   if (scheduledCallbackAtRaw?.trim()) {

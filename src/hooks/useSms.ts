@@ -311,6 +311,7 @@ export interface SendRemindersResult {
   sent: number;
   rescheduled: number;
   promoted: number;
+  declined: number;
   skipped: number;
   totalEligible: number;
   errors: { leadId: string; error: string }[];

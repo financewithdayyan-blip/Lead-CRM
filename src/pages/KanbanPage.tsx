@@ -713,6 +713,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       const parts = [`${result.sent} sent`];
       if (result.rescheduled > 0) parts.push(`${result.rescheduled} rescheduled`);
       if (result.promoted > 0) parts.push(`${result.promoted} moved to Qualified`);
+      if (result.declined > 0) parts.push(`${result.declined} moved to Dead (no reply on ownership)`);
       if (result.errors.length > 0) parts.push(`${result.errors.length} failed`);
       setReminderSummary(
         result.totalEligible === 0 ? 'Nobody was due for a reminder right now.' : parts.join(' · '),
