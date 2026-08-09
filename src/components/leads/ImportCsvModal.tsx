@@ -37,7 +37,11 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   }
 
   const previewMapped = parsed ? mapRowsToLeads(parsed.rows, mapping) : [];
-  const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, existingLeads);
+  // Dead/Declined leads don't block a re-import — that phone number is done
+  // and gone as far as the pipeline's concerned, so a fresh CSV row with the
+  // same number is treated as a new lead worth another shot, not a dupe.
+  const dedupeAgainst = existingLeads.filter((l) => l.stage !== 'dead_declined');
+  const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, dedupeAgainst);
 
   async function handleImport() {
     setError(null);

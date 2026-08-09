@@ -117,16 +117,19 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
     });
 }
 
+/** Matches on Phone Number 1 only — the one this CRM actually calls/texts.
+ * A secondary number (phone2, or anything beyond it on the CSV side) is
+ * never used for dedup, on either side of the comparison: an existing
+ * lead's old phone2 shouldn't silently swallow a genuinely new lead just
+ * because it happens to share a number nobody reaches out to. */
 export function dedupeAgainstExisting(
   mapped: MappedCsvLead[],
-  existing: Array<{ phone: string; phone2: string | null }>,
+  existing: Array<{ phone: string }>,
 ): { unique: MappedCsvLead[]; duplicateCount: number } {
   const existingNorm = new Set<string>();
   for (const lead of existing) {
-    for (const p of [lead.phone, lead.phone2]) {
-      const digits = normalizePhoneDigits(p);
-      if (digits.length >= 7) existingNorm.add(digits);
-    }
+    const digits = normalizePhoneDigits(lead.phone);
+    if (digits.length >= 7) existingNorm.add(digits);
   }
   const seenNew = new Set<string>();
   let duplicateCount = 0;
