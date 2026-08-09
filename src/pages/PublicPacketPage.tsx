@@ -407,6 +407,13 @@ export function PublicPacketPage() {
         })),
     [packet?.comps],
   );
+  // Free geocoding can't resolve every address — a silent gap between the
+  // comp table and the pin count reads as a bug, so it's called out plainly
+  // instead of just showing fewer pins than comps with no explanation.
+  const unmappedCompCount = useMemo(
+    () => (packet?.comps ?? []).filter((c) => c.address && (c.lat == null || c.lng == null)).length,
+    [packet?.comps],
+  );
 
   // Sold comps only — average price-per-sqft applied to this property's own
   // sqft, more accurate than a flat average whenever comps (or the subject)
@@ -592,6 +599,11 @@ export function PublicPacketPage() {
             <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-surface-3" />}>
               <PacketMap pins={mapPins} />
             </Suspense>
+            {unmappedCompCount > 0 && (
+              <p className="mt-2 text-[12px] text-text-3">
+                {unmappedCompCount} comp{unmappedCompCount !== 1 ? 's' : ''} couldn't be placed on the map — still listed in the tables below.
+              </p>
+            )}
           </Card>
         )}
 

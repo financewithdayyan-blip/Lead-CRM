@@ -61,8 +61,24 @@ export function PacketMap({ pins }: { pins: MapPin[] }) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
+    // A free geocoder occasionally can't resolve an exact house number and
+    // falls back to a street-level match — two different addresses on the
+    // same street then land on the identical point and one pin silently
+    // hides the other. Nudging repeat coordinates apart in a small spiral
+    // keeps every comp visible regardless of how precise the geocode was.
+    const seenCoords = new Map<string, number>();
+    const jittered = pins.map((p) => {
+      const key = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+      const occurrence = seenCoords.get(key) ?? 0;
+      seenCoords.set(key, occurrence + 1);
+      if (occurrence === 0) return p;
+      const angle = occurrence * 2.4;
+      const radius = 0.00012 * occurrence;
+      return { ...p, lat: p.lat + radius * Math.cos(angle), lng: p.lng + radius * Math.sin(angle) };
+    });
+
     const bounds = L.latLngBounds([]);
-    for (const p of pins) {
+    for (const p of jittered) {
       const marker = L.marker([p.lat, p.lng], { icon: pinIcon(p.kind) }).addTo(map);
 
       // Whichever of bed / bath / size this comp actually has.
