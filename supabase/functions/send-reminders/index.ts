@@ -24,6 +24,8 @@ const NUMBERS: Record<string, { phone: string; email: string }> = {
   '2': { phone: Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '' },
   '3': { phone: Deno.env.get('ZOOM_FROM_NUMBER_3') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_3') ?? '' },
   '4': { phone: Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '' },
+  '5': { phone: Deno.env.get('ZOOM_FROM_NUMBER_5') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_5') ?? '' },
+  '6': { phone: Deno.env.get('ZOOM_FROM_NUMBER_6') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_6') ?? '' },
 };
 
 const CORS_HEADERS = {
@@ -109,7 +111,7 @@ Deno.serve(async (req) => {
 
   const { data: eligible, error: leadsErr } = await admin
     .from('leads')
-    .select('id, user_id, first_name, address, city, state, phone, stage, next_reminder_at, notes, lead_tags(tags(name))')
+    .select('id, user_id, first_name, address, city, state, phone, stage, next_reminder_at, notes, scheduled_callback_at, lead_tags(tags(name))')
     .in('stage', ['replied', 'initial_contact'])
     .eq('opted_out', false)
     .or(`next_reminder_at.is.null,next_reminder_at.lte.${todayIso}`)
@@ -162,12 +164,14 @@ Deno.serve(async (req) => {
 
       const hasPhotos = (inbound ?? []).some((m) => m.has_attachments);
 
-      // Partial-Qualified only ever waits on one thing — the photo. If it's
-      // arrived since this lead landed here, promote it straight to fully
-      // Qualified (followup) instead of drafting a reminder that no longer
-      // applies. The qualified-tasks trigger doesn't re-fire here since
-      // initial_contact was already a qualified-plus stage.
-      if (lead.stage === 'initial_contact' && hasPhotos) {
+      // Partial-Qualified waits on two things in order — the photo, then a
+      // real day/time to call about the offer (mirrors ai-reply's own
+      // photo-wait mode). Only promote to fully Qualified once both are in
+      // hand; if photos arrived but the callback never got captured (the
+      // lead went quiet after ai-reply asked), that callback becomes the
+      // outstanding item this nudge asks about instead of photos.
+      const needsOfferCallback = lead.stage === 'initial_contact' && hasPhotos && !lead.scheduled_callback_at;
+      if (lead.stage === 'initial_contact' && hasPhotos && lead.scheduled_callback_at) {
         await admin.from('leads').update({ stage: 'followup', next_reminder_at: null }).eq('id', lead.id);
         promoted++;
         continue;
@@ -194,8 +198,9 @@ Deno.serve(async (req) => {
       const isLien = tagNames.some((n) => LIEN_TAG_NAMES.includes(n.toLowerCase()));
       const isTax = tagNames.some((n) => TAX_TAG_NAMES.includes(n.toLowerCase()));
 
-      const outstandingHint =
-        lead.stage === 'initial_contact'
+      const outstandingHint = needsOfferCallback
+        ? 'A specific day and time to call them to go over the offer — they already sent photos, everything else is done, this is the only thing left.'
+        : lead.stage === 'initial_contact'
           ? 'Interior photos of the property — everything else has already been established, this is the only thing left.'
           : `In this priority order: their motivation for selling, property condition, ${isLien ? 'mortgage balance/payment, ' : ''}${
               isTax ? 'back taxes owed, ' : ''

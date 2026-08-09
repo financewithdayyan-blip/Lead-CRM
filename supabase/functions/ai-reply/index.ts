@@ -35,6 +35,16 @@ const NUMBERS: Record<string, { phone: string; email: string; label: string }> =
     email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '',
     label: Deno.env.get('ZOOM_LABEL_4') ?? 'Number 4',
   },
+  '5': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_5') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_5') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_5') ?? 'Number 5',
+  },
+  '6': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_6') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_6') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_6') ?? 'Number 6',
+  },
 };
 
 // Only sms-webhook should ever call this. There is no end user auth on an
@@ -160,12 +170,12 @@ TODAY'S DATE is {{TODAY}} — the only basis you have for turning something like
 WHAT YOU ACTUALLY KNOW ABOUT THIS LEAD:
 {{LEAD_CONTEXT}}
 
-This lead already answered every qualification question — motivation, condition, price, timeline, and mortgage or back taxes if applicable. The ONLY thing still outstanding is interior photos of the property. Never ask about motivation, condition, price, timeline, mortgage, or taxes again — all of that is already settled, and re-asking will only confuse them.
+This lead already answered every qualification question — motivation, condition, price, timeline, and mortgage or back taxes if applicable. Two things are still outstanding, in order: interior photos of the property, then a specific day and time to call them and go over the offer. Never ask about motivation, condition, price, timeline, mortgage, or taxes again — all of that is already settled, and re-asking will only confuse them.
 
 Read their message and the conversation so far, then reply naturally, the way a real person texts:
-- If this message includes photos: thank them briefly, there is nothing else to ask for.
-- If they say when they'll send photos, ask a question, or are just chatting: reply briefly and naturally.
-- If they ask to be called instead, or name a specific day and time to call them back, fill in scheduled_callback_at and scheduled_callback_note — an ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY'S DATE above. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.
+- If photos haven't come in yet (not in this message, not earlier in the conversation): respond naturally to whatever they actually said — a delay, a question, chit-chat. Don't ask for a callback time yet, that comes after photos.
+- Once photos are in (this message or already in the conversation) and they have NOT yet given a real day/time to call about the offer: if this message is what just delivered the photos, thank them briefly, then ask what's a good time to call them to go over the offer. If photos already came in earlier and you haven't asked yet, ask now. If you already asked and they're just chatting, respond naturally and don't re-ask.
+- Once they actually give a specific day and time to call about the offer: fill in scheduled_callback_at and scheduled_callback_note — an ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY'S DATE above. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank. This is not done just by asking — only fill these in once they've actually given a real answer.
 - If they're declining or asking not to be contacted again, in any phrasing: reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Set hard_decline false only if the decline is clearly and specifically about the price/offer amount and nothing else; true for every other kind of decline, including if unsure.
 
 STYLE:
@@ -516,7 +526,7 @@ Deno.serve(async (req) => {
                   scheduled_callback_at: {
                     type: 'string',
                     description:
-                      'Only fill in on the message where they actually name a specific day and time to call them back — empty string otherwise. An ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY\'S DATE. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.',
+                      'Only fill in on the message where they actually name a specific day and time to call them about the offer — empty string otherwise, including every earlier turn where you\'ve only asked but not yet gotten a real answer. An ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY\'S DATE. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank.',
                   },
                   scheduled_callback_note: {
                     type: 'string',
@@ -814,11 +824,15 @@ Deno.serve(async (req) => {
       due_date: new Date().toISOString().slice(0, 10),
       auto_created: true,
     });
-  } else if (isPhotoWaitMode && hasPhotos) {
-    // The only thing Partial Qualified was ever waiting on. Promotes exactly
-    // like send-reminders' own sweep does for the same transition — no new
-    // task needed, the one written when this lead first became qualified
-    // already covers what happens now that photos are actually in hand.
+  } else if (isPhotoWaitMode && hasPhotos && recoveredFields.scheduled_callback_at) {
+    // Partial Qualified was waiting on two things, in order: photos, then a
+    // real time to call about the offer. Photos alone used to promote
+    // straight to Follow-Up here; now it also needs that callback time
+    // actually captured on this same turn (or a later one — the AI keeps
+    // asking every turn until it gets a real answer, same as the main
+    // framework's own CALLBACK step). No qualification task needed here —
+    // the one written when this lead first became qualified still covers
+    // it; the callback task inserted below is the new, concrete thing.
     await admin
       .from('leads')
       .update({ stage: 'followup', photo_wait_ai_active: false, next_reminder_at: null })
@@ -828,12 +842,19 @@ Deno.serve(async (req) => {
   // Independent of the branch above — a callback time can land on the same
   // turn fully_qualified does (the usual case, per the CALLBACK step), but
   // nothing here depends on that; any turn that actually captures one gets
-  // its own task so it shows up as something concrete to act on.
+  // its own task so it shows up as something concrete to act on. In
+  // photo-wait mode this callback is specifically the post-photos offer
+  // call (see the branch above), so the task says that rather than the
+  // generic "call back" — an admin scanning tasks shouldn't have to guess
+  // which kind of call this is.
   if (recoveredFields.scheduled_callback_at) {
+    const isOfferCallback = isPhotoWaitMode && hasPhotos;
     await admin.from('tasks').insert({
       user_id: lead.user_id,
       lead_id: leadId,
-      title: `Call back ${lead.first_name || 'lead'}${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`,
+      title: isOfferCallback
+        ? `Call ${lead.first_name || 'lead'} to go over the offer${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`
+        : `Call back ${lead.first_name || 'lead'}${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`,
       due_date: String(recoveredFields.scheduled_callback_at).slice(0, 10),
       auto_created: true,
     });

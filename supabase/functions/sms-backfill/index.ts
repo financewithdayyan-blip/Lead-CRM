@@ -37,6 +37,8 @@ const NUMBERS: Record<string, { phone: string; email: string; label: string }> =
   '2': { phone: Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '', label: Deno.env.get('ZOOM_LABEL_2') ?? 'Number 2' },
   '3': { phone: Deno.env.get('ZOOM_FROM_NUMBER_3') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_3') ?? '', label: Deno.env.get('ZOOM_LABEL_3') ?? 'Number 3' },
   '4': { phone: Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '', label: Deno.env.get('ZOOM_LABEL_4') ?? 'Number 4' },
+  '5': { phone: Deno.env.get('ZOOM_FROM_NUMBER_5') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_5') ?? '', label: Deno.env.get('ZOOM_LABEL_5') ?? 'Number 5' },
+  '6': { phone: Deno.env.get('ZOOM_FROM_NUMBER_6') ?? '', email: Deno.env.get('ZOOM_USER_EMAIL_6') ?? '', label: Deno.env.get('ZOOM_LABEL_6') ?? 'Number 6' },
 };
 
 const CORS_HEADERS = {

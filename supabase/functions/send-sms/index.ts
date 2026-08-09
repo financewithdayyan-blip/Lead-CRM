@@ -39,6 +39,16 @@ const NUMBERS: Record<string, { phone: string; email: string; label: string }> =
     email: Deno.env.get('ZOOM_USER_EMAIL_4') ?? '',
     label: Deno.env.get('ZOOM_LABEL_4') ?? 'Number 4',
   },
+  '5': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_5') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_5') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_5') ?? 'Number 5',
+  },
+  '6': {
+    phone: Deno.env.get('ZOOM_FROM_NUMBER_6') ?? '',
+    email: Deno.env.get('ZOOM_USER_EMAIL_6') ?? '',
+    label: Deno.env.get('ZOOM_LABEL_6') ?? 'Number 6',
+  },
 };
 
 /** Numbers actually configured, in key order — a Zoom account with only 2 of

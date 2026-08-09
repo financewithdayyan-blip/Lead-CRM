@@ -10,13 +10,15 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET_TOKEN')!;
 
 // Phone only — mirrors the same slots in send-sms/ai-reply, but this
-// function never sends, only needs to recognize which of the 4 numbers a
+// function never sends, only needs to recognize which of the 6 numbers a
 // recovered send_log row went out from.
 const NUMBER_PHONES: Record<string, string> = {
   '1': Deno.env.get('ZOOM_FROM_NUMBER') ?? '',
   '2': Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '',
   '3': Deno.env.get('ZOOM_FROM_NUMBER_3') ?? '',
   '4': Deno.env.get('ZOOM_FROM_NUMBER_4') ?? '',
+  '5': Deno.env.get('ZOOM_FROM_NUMBER_5') ?? '',
+  '6': Deno.env.get('ZOOM_FROM_NUMBER_6') ?? '',
 };
 
 function keyForSentFrom(sentFrom: string): string | undefined {
