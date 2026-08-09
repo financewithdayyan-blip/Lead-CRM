@@ -17,6 +17,7 @@ import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
 import { callerDisplayName, daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localIsoDate } from '@/lib/utils';
+import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
 import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
 import { SCRIPT_STEPS } from '@/lib/callScript';
@@ -305,16 +306,21 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
               </div>
             )}
-            {lead.scheduledCallbackAt && (
-              <div
-                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-info-dim px-2 py-1 text-[12px] font-medium text-info"
-                title={lead.scheduledCallbackNote ?? undefined}
-              >
-                <PhoneCall size={12} />
-                Callback scheduled: {formatDateTime(lead.scheduledCallbackAt)}
-                {lead.scheduledCallbackNote ? ` — "${lead.scheduledCallbackNote}"` : ''}
-              </div>
-            )}
+            {lead.scheduledCallbackAt && (() => {
+              const sellerTimeZone = resolveUsTimeZone(lead.state, lead.address);
+              const sellerTime = sellerTimeZone ? formatTimeInZone(lead.scheduledCallbackAt, sellerTimeZone) : null;
+              return (
+                <div
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-info-dim px-2 py-1 text-[12px] font-medium text-info"
+                  title={lead.scheduledCallbackNote ?? undefined}
+                >
+                  <PhoneCall size={12} />
+                  Callback scheduled: {formatPakistanTime(lead.scheduledCallbackAt)} PKT
+                  {sellerTime ? ` (seller's time: ${sellerTime})` : ''}
+                  {lead.scheduledCallbackNote ? ` — "${lead.scheduledCallbackNote}"` : ''}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex flex-col items-end gap-2">
             <StarRating value={lead.rating} onChange={(v) => updateLead.mutate({ id: lead.id, rating: v })} />

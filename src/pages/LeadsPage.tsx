@@ -13,11 +13,11 @@ import { AddLeadModal } from '@/components/leads/AddLeadModal';
 import { ImportCsvModal } from '@/components/leads/ImportCsvModal';
 import { DeleteLeadsModal } from '@/components/leads/DeleteLeadsModal';
 import { STAGE_CONFIG, type LeadStage } from '@/types/domain';
-import { formatPhone } from '@/lib/utils';
+import { formatPhone, getErrorMessage } from '@/lib/utils';
 
 export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
-  const { data: leads = [], isLoading } = useLeads(targetUserId);
+  const { data: leads = [], isLoading, isError, error, refetch, isRefetching } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const { data: receivedShares = {} } = useReceivedLeadShares();
   const transferLead = useTransferLeadToAdmin();
@@ -78,7 +78,8 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         <div>
           <h1 className="text-2xl font-semibold text-text">Leads</h1>
           <p className="text-sm text-text-3">
-            {leads.length} total{viewOnly && " · this is their lead list - changes apply to their account"}
+            {isError ? 'Failed to load' : `${leads.length} total`}
+            {viewOnly && " · this is their lead list - changes apply to their account"}
           </p>
         </div>
         <div className="flex gap-2">
@@ -90,6 +91,18 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
           </button>
         </div>
       </div>
+
+      {isError && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-danger/40 bg-danger-dim px-3 py-2.5 text-[13px] text-danger">
+          <span>
+            Couldn't load your leads: {getErrorMessage(error, 'unknown error')}. Your data is safe — this is a
+            connection problem, not data loss.
+          </span>
+          <button className="btn shrink-0" onClick={() => refetch()} disabled={isRefetching}>
+            {isRefetching ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <input className="input max-w-xs" placeholder="Search name, phone, address…" value={search} onChange={(e) => setSearch(e.target.value)} />

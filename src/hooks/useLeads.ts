@@ -12,6 +12,30 @@ const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 const PAGE = 1000;
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Firing 10+ large range requests at once over a real network (as opposed to
+// this same call from a Node script hitting the API directly) means any one
+// of them dropping — a flaky connection, a proxy hiccup — used to take the
+// entire list down with it via Promise.all's all-or-nothing behavior, which
+// looked exactly like "all my leads vanished" even though nothing was lost
+// server-side. Retrying the one page that failed, instead of the whole
+// fetch, fixes that without adding retries every request doesn't need.
+async function fetchLeadPage(userId: string, i: number, attempt = 0): Promise<Lead[]> {
+  const { data, error } = await supabase
+    .from('leads')
+    .select(LEAD_LIST_SELECT)
+    .eq('user_id', userId)
+    .order('lead_num', { ascending: true })
+    .range(i * PAGE, i * PAGE + PAGE - 1);
+  if (error) {
+    if (attempt >= 2) throw error;
+    await sleep(400 * (attempt + 1));
+    return fetchLeadPage(userId, i, attempt + 1);
+  }
+  return data.map(dbToLead);
+}
+
 /**
  * Fetches every lead for a user. A `head: true` count gives us the page count up
  * front so all pages fire in parallel — the previous serial loop paid one full
@@ -30,19 +54,10 @@ async function fetchLeadsPaged(userId: string): Promise<Lead[]> {
   if (!count) return [];
 
   const pages = await Promise.all(
-    Array.from({ length: Math.ceil(count / PAGE) }, async (_, i) => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select(LEAD_LIST_SELECT)
-        .eq('user_id', userId)
-        .order('lead_num', { ascending: true })
-        .range(i * PAGE, i * PAGE + PAGE - 1);
-      if (error) throw error;
-      return data;
-    }),
+    Array.from({ length: Math.ceil(count / PAGE) }, (_, i) => fetchLeadPage(userId, i)),
   );
 
-  return pages.flat().map(dbToLead);
+  return pages.flat();
 }
 
 export function useLeads(targetUserId?: string) {

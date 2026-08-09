@@ -69,6 +69,65 @@ function humanizePunctuation(text: string): string {
   return text.replace(/\s*[—–]\s*/g, ', ').replace(/\s*;\s*/g, ', ');
 }
 
+// ── Callback-time zone resolution ───────────────────────────────────────────
+// The model writes scheduled_callback_at as a floating wall-clock string (no
+// offset) representing whatever the seller actually said ("tomorrow at
+// 11am"), in the seller's own local time — it has no notion of what zone
+// that is. Naively new Date()-parsing that string treats the digits as UTC,
+// which silently corrupts the stored instant by however many hours separate
+// the seller's real zone from UTC. This resolves the seller's zone from the
+// property address so the raw digits can be converted correctly.
+const STATE_TIMEZONE: Record<string, string> = {
+  AL: 'America/Chicago', AK: 'America/Anchorage', AZ: 'America/Phoenix', AR: 'America/Chicago',
+  CA: 'America/Los_Angeles', CO: 'America/Denver', CT: 'America/New_York', DE: 'America/New_York',
+  DC: 'America/New_York', FL: 'America/New_York', GA: 'America/New_York', HI: 'Pacific/Honolulu',
+  ID: 'America/Denver', IL: 'America/Chicago', IN: 'America/Indiana/Indianapolis', IA: 'America/Chicago',
+  KS: 'America/Chicago', KY: 'America/New_York', LA: 'America/Chicago', ME: 'America/New_York',
+  MD: 'America/New_York', MA: 'America/New_York', MI: 'America/Detroit', MN: 'America/Chicago',
+  MS: 'America/Chicago', MO: 'America/Chicago', MT: 'America/Denver', NE: 'America/Chicago',
+  NV: 'America/Los_Angeles', NH: 'America/New_York', NJ: 'America/New_York', NM: 'America/Denver',
+  NY: 'America/New_York', NC: 'America/New_York', ND: 'America/Chicago', OH: 'America/New_York',
+  OK: 'America/Chicago', OR: 'America/Los_Angeles', PA: 'America/New_York', RI: 'America/New_York',
+  SC: 'America/New_York', SD: 'America/Chicago', TN: 'America/Chicago', TX: 'America/Chicago',
+  UT: 'America/Denver', VT: 'America/New_York', VA: 'America/New_York', WA: 'America/Los_Angeles',
+  WV: 'America/New_York', WI: 'America/Chicago', WY: 'America/Denver', PR: 'America/Puerto_Rico',
+};
+
+// Falls back to Eastern — the same reference zone todayLabel below already
+// anchors "tomorrow"/"Thursday" against — when the state is missing or not a
+// real US state code, rather than leaving the callback unconverted.
+function resolveLeadTimeZone(state: string | null | undefined, address: string | null | undefined): string {
+  const normalized = (state ?? '').trim().toUpperCase();
+  if (normalized && STATE_TIMEZONE[normalized]) return STATE_TIMEZONE[normalized];
+  const fromAddress = (address ?? '').match(/\b([A-Z]{2})\b\s*\d{5}?(-\d{4})?\s*$/i)?.[1]?.toUpperCase();
+  if (fromAddress && STATE_TIMEZONE[fromAddress]) return STATE_TIMEZONE[fromAddress];
+  return 'America/New_York';
+}
+
+function tzOffsetMs(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(date);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return asUtc - date.getTime();
+}
+
+// Converts a floating wall-clock string ("2026-08-10T09:00:00", no offset)
+// that represents a moment in `timeZone` into the true UTC instant.
+function zonedWallTimeToUtc(wallTime: string, timeZone: string): Date {
+  const naiveUtc = new Date(wallTime.endsWith('Z') ? wallTime : `${wallTime}Z`);
+  if (isNaN(naiveUtc.getTime())) return naiveUtc;
+  return new Date(naiveUtc.getTime() - tzOffsetMs(naiveUtc, timeZone));
+}
+
 // ── Zoom send (mirrors send-sms's own copy — see the note there on why each
 // function keeps its own rather than sharing a module) ─────────────────────
 
@@ -658,7 +717,8 @@ Deno.serve(async (req) => {
   if (confirmedFirstName?.trim() && !lead.first_name) recoveredFields.first_name = confirmedFirstName.trim();
   if (confirmedAddress?.trim() && !lead.address) recoveredFields.address = confirmedAddress.trim();
   if (scheduledCallbackAtRaw?.trim()) {
-    const parsed = new Date(scheduledCallbackAtRaw.trim());
+    const leadTimeZone = resolveLeadTimeZone(lead.state, lead.address);
+    const parsed = zonedWallTimeToUtc(scheduledCallbackAtRaw.trim(), leadTimeZone);
     if (!isNaN(parsed.getTime())) {
       recoveredFields.scheduled_callback_at = parsed.toISOString();
       recoveredFields.scheduled_callback_note = scheduledCallbackNote?.trim() || null;

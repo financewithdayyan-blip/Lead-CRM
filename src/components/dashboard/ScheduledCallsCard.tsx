@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PhoneCall } from 'lucide-react';
-import { formatDateTime } from '@/lib/utils';
+import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import type { Lead } from '@/types/domain';
 
 /** How urgent this callback reads at a glance — same overdue/today/upcoming
@@ -51,6 +51,9 @@ export function ScheduledCallsCard({ leads }: { leads: Lead[] }) {
           {scheduled.map((lead) => {
             const u = urgency(lead.scheduledCallbackAt);
             const style = URGENCY_STYLE[u];
+            const sellerTimeZone = resolveUsTimeZone(lead.state, lead.address);
+            const pakistanTime = formatPakistanTime(lead.scheduledCallbackAt);
+            const sellerTime = sellerTimeZone ? formatTimeInZone(lead.scheduledCallbackAt, sellerTimeZone) : null;
             return (
               <Link
                 key={lead.id}
@@ -69,7 +72,8 @@ export function ScheduledCallsCard({ leads }: { leads: Lead[] }) {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-0.5">
                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${style.pill}`}>{style.label}</span>
-                  <span className="text-[11px] text-text-3">{formatDateTime(lead.scheduledCallbackAt)}</span>
+                  <span className="text-[11px] font-medium text-text-2">{pakistanTime} PKT</span>
+                  {sellerTime && <span className="text-[10px] text-text-3">Seller's time: {sellerTime}</span>}
                 </div>
               </Link>
             );
