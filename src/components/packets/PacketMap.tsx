@@ -116,7 +116,7 @@ export function PacketMap({
     }
 
     if (center) {
-      const circle = L.circle([center.lat, center.lng], {
+      L.circle([center.lat, center.lng], {
         radius: radiusMiles * MILES_TO_METERS,
         color: '#64748b',
         weight: 1.5,
@@ -124,7 +124,16 @@ export function PacketMap({
         fillColor: '#64748b',
         fillOpacity: 0.05,
       }).addTo(map);
-      bounds.extend(circle.getBounds());
+
+      // Leaflet's own Circle.getBounds() needs the map's pixel origin, which
+      // isn't set until after the first fitBounds/setView call — calling it
+      // here (before that first view exists) throws deep inside Leaflet
+      // ("Cannot read properties of undefined (reading 'layerPointToLatLng')").
+      // Plain geographic math sidesteps that entirely.
+      const latDelta = (radiusMiles * MILES_TO_METERS) / 111320;
+      const lngDelta = latDelta / Math.cos((center.lat * Math.PI) / 180);
+      bounds.extend([center.lat - latDelta, center.lng - lngDelta]);
+      bounds.extend([center.lat + latDelta, center.lng + lngDelta]);
     }
 
     map.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
