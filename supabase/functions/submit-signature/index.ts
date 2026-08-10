@@ -332,6 +332,18 @@ Deno.serve(async (req) => {
       .eq('id', instance.id);
     if (finalizeErr) throw finalizeErr;
 
+    // The generic "Get the contract from X — send and follow up until
+    // signed" task (created when the lead first qualified) is exactly what
+    // just happened — clear it instead of leaving it to pile up.
+    if (instance.lead_id) {
+      await admin
+        .from('tasks')
+        .update({ completed: true })
+        .eq('lead_id', instance.lead_id)
+        .eq('completed', false)
+        .ilike('title', 'Get the contract from%');
+    }
+
     return json({ ok: true, allSigned: true });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : 'unexpected error' }, 500);

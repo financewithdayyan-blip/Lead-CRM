@@ -962,6 +962,11 @@ Deno.serve(async (req) => {
         });
       }
     }
+  } else if (hasPhotos) {
+    // The photos this task was chasing actually arrived on this turn (or an
+    // earlier one) — nothing left for a human to chase, so it shouldn't
+    // still be sitting open.
+    await admin.from('tasks').update({ completed: true }).eq('lead_id', leadId).eq('completed', false).ilike('title', '%photo%');
   }
 
   return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined });
