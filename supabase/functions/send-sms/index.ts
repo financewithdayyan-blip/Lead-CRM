@@ -109,6 +109,21 @@ let cachedToken: { token: string; expiresAt: number } | null = null;
 // first Zoom call. A timeout turns that hang into a real, caught error.
 const FETCH_TIMEOUT_MS = 15_000;
 
+// PostgREST calls get a timeout via .abortSignal(AbortSignal.timeout(...)),
+// but auth-js methods (like the getUser() call below) don't support that
+// same chaining — this wraps any promise with the same cap, turning a hang
+// into a real, caught "timed out" error instead of leaving the whole
+// invocation stuck with nothing to ever mark the job failed. This exact
+// class of bug (an unprotected call hanging forever) is what caused a real
+// stuck-send incident on 2026-08-10 — every admin.from()/rpc() call in this
+// file now has an explicit timeout for that reason, not just the Zoom ones.
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timed out waiting on ${label}`)), FETCH_TIMEOUT_MS)),
+  ]);
+}
+
 async function zoomToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.token;
 
@@ -196,7 +211,11 @@ Deno.serve(async (req) => {
    * still works unchanged for a same-turn failure (e.g. outside window). */
   async function bail(message: string, status: number) {
     if (jobId) {
-      await admin.from('bulk_sms_jobs').update({ status: 'failed', error: message, updated_at: nowIso() }).eq('id', jobId);
+      await withTimeout(
+        admin.from('bulk_sms_jobs').update({ status: 'failed', error: message, updated_at: nowIso() }).eq('id', jobId)
+          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+        'bail() job update',
+      ).catch(() => {});
     }
     return json({ error: message }, status);
   }
@@ -209,16 +228,14 @@ Deno.serve(async (req) => {
     // than decoding an arbitrary bearer through the admin client's own
     // getUser(jwt) path.
     const callerClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const { data: userData } = await callerClient.auth.getUser();
+    const { data: userData } = await withTimeout(callerClient.auth.getUser(), 'auth.getUser()');
     const userId = userData?.user?.id;
     if (!userId) return json({ error: 'Not signed in.' }, 401);
 
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single()
-      .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
+    const { data: profile } = await withTimeout(
+      admin.from('profiles').select('role').eq('id', userId).single().abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+      'profile lookup',
+    );
     if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
 
     const body = await req.json();
@@ -251,7 +268,11 @@ Deno.serve(async (req) => {
     // no-op for a fresh job, which useCreateBulkSmsJob already inserts as
     // 'running'.
     if (jobId) {
-      await admin.from('bulk_sms_jobs').update({ status: 'running', error: null, updated_at: nowIso() }).eq('id', jobId);
+      await withTimeout(
+        admin.from('bulk_sms_jobs').update({ status: 'running', error: null, updated_at: nowIso() }).eq('id', jobId)
+          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+        'mark job running',
+      );
     }
 
     // Tag names, and any number a lead is already pinned to from a prior
@@ -268,13 +289,16 @@ Deno.serve(async (req) => {
     const leadsById = new Map<string, any>();
     for (let i = 0; i < leadIds.length; i += LEADS_CHUNK_SIZE) {
       const chunk = leadIds.slice(i, i + LEADS_CHUNK_SIZE);
-      const { data: chunkLeads, error: leadErr } = await admin
-        .from('leads')
-        .select(
-          'id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, assigned_sms_number, lead_tags(tag_id, tags(name))',
-        )
-        .in('id', chunk)
-        .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
+      const { data: chunkLeads, error: leadErr } = await withTimeout(
+        admin
+          .from('leads')
+          .select(
+            'id, first_name, last_name, phone, phone_norm, address, city, state, zip, opted_out, stage, assigned_sms_number, lead_tags(tag_id, tags(name))',
+          )
+          .in('id', chunk)
+          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+        'fetching leads',
+      );
       if (leadErr) throw leadErr;
       for (const l of chunkLeads ?? []) leadsById.set(l.id, l);
     }
@@ -328,7 +352,7 @@ Deno.serve(async (req) => {
     // run — and a number with no limit set (or 0) never even gets checked,
     // same as the old "dailyLimit <= 0" unlimited case, just per-number now.
     const dailyRemaining = new Map<string, number>();
-    await Promise.all(
+    await withTimeout(Promise.all(
       senders.map(async ([key, n]) => {
         const limit = dailyLimits[key] ?? 0;
         if (limit <= 0) return;
@@ -337,15 +361,15 @@ Deno.serve(async (req) => {
           .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
         dailyRemaining.set(key, Math.max(0, limit - Number(used ?? 0)));
       }),
-    );
+    ), 'daily limit check');
     if (senders.every(([key]) => (dailyLimits[key] ?? 0) > 0 && (dailyRemaining.get(key) ?? 0) <= 0)) {
       return bail('Every configured number has already reached its own rolling 24h limit.', 422);
     }
 
-    const token = await zoomToken();
+    const token = await withTimeout(zoomToken(), 'Zoom auth');
     // Resolved even though the send endpoint takes the number, because Zoom
     // rejects sends from a number the authed user doesn't own.
-    await Promise.all(senders.map(([, n]) => zoomUserId(n.email, token)));
+    await withTimeout(Promise.all(senders.map(([, n]) => zoomUserId(n.email, token))), 'Zoom user lookup');
 
     const sent: string[] = [];
     const skipped: { leadId: string; reason: string }[] = [];
@@ -405,7 +429,8 @@ Deno.serve(async (req) => {
       if (jobId) {
         skipItemUpdates.push(
           admin.from('bulk_sms_job_items').update({ status: 'skipped', detail: reason, updated_at: nowIso() })
-            .eq('job_id', jobId).eq('lead_id', leadId),
+            .eq('job_id', jobId).eq('lead_id', leadId)
+            .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
         );
       }
     }
@@ -471,7 +496,7 @@ Deno.serve(async (req) => {
       planned.push({ lead, key, from, message, to, isPinned });
     }
 
-    if (skipItemUpdates.length) await Promise.all(skipItemUpdates);
+    if (skipItemUpdates.length) await withTimeout(Promise.all(skipItemUpdates), 'recording skipped leads').catch(() => {});
 
     // ── Phase 2: execute — one queue per number, run concurrently. Numbers
     // are genuinely independent Zoom senders, so there's no shared rate limit
@@ -491,12 +516,16 @@ Deno.serve(async (req) => {
         const { lead, message, to } = item;
 
         if (jobId) {
-          await admin.from('bulk_sms_job_items').update({ status: 'sending', updated_at: nowIso() })
-            .eq('job_id', jobId).eq('lead_id', lead.id);
+          await withTimeout(
+            admin.from('bulk_sms_job_items').update({ status: 'sending', updated_at: nowIso() })
+              .eq('job_id', jobId).eq('lead_id', lead.id)
+              .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+            'mark item sending',
+          ).catch(() => {});
         }
 
         try {
-          await sendZoomSms(from.phone, to, message, token);
+          await withTimeout(sendZoomSms(from.phone, to, message, token), 'Zoom send');
 
           // Cold leads advance to Contacted. Anything further along keeps its
           // stage — a lead already in Negotiation shouldn't regress. The
@@ -510,7 +539,7 @@ Deno.serve(async (req) => {
           // together rather than one-after-another — the send_log row is
           // still guaranteed to exist before the function can return success,
           // just no longer at the cost of three serial round trips.
-          await Promise.all([
+          await withTimeout(Promise.all([
             admin.from('send_log').insert({
               user_id: userId,
               lead_id: lead.id,
@@ -518,9 +547,9 @@ Deno.serve(async (req) => {
               phone_norm: lead.phone_norm,
               sent_from: from.phone,
               body: message,
-            }),
+            }).abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
             Object.keys(leadUpdates).length > 0
-              ? admin.from('leads').update(leadUpdates).eq('id', lead.id)
+              ? admin.from('leads').update(leadUpdates).eq('id', lead.id).abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS))
               : Promise.resolve(null),
             admin.from('lead_activities').insert({
               lead_id: lead.id,
@@ -528,22 +557,30 @@ Deno.serve(async (req) => {
               type: 'sms',
               body: message,
               meta: { direction: 'outbound', from: from.phone, to, label: from.label },
-            }),
-          ]);
+            }).abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+          ]), 'recording the send').catch(() => {});
 
           sent.push(lead.id);
           sentByNumber.set(key, (sentByNumber.get(key) ?? 0) + 1);
 
           if (jobId) {
-            await admin.from('bulk_sms_job_items').update({ status: 'sent', sent_from: from.phone, updated_at: nowIso() })
-              .eq('job_id', jobId).eq('lead_id', lead.id);
+            await withTimeout(
+              admin.from('bulk_sms_job_items').update({ status: 'sent', sent_from: from.phone, updated_at: nowIso() })
+                .eq('job_id', jobId).eq('lead_id', lead.id)
+                .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+              'mark item sent',
+            ).catch(() => {});
           }
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           failed.push({ leadId: lead.id, error: errMsg });
           if (jobId) {
-            await admin.from('bulk_sms_job_items').update({ status: 'failed', detail: errMsg.slice(0, 500), updated_at: nowIso() })
-              .eq('job_id', jobId).eq('lead_id', lead.id);
+            await withTimeout(
+              admin.from('bulk_sms_job_items').update({ status: 'failed', detail: errMsg.slice(0, 500), updated_at: nowIso() })
+                .eq('job_id', jobId).eq('lead_id', lead.id)
+                .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+              'mark item failed',
+            ).catch(() => {});
           }
         }
 
@@ -564,13 +601,21 @@ Deno.serve(async (req) => {
     // nothing is left queued or sending for it — otherwise the first chunk to
     // finish would prematurely mark a 1000+ lead job done.
     if (jobId) {
-      const { count: remaining } = await admin
-        .from('bulk_sms_job_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('job_id', jobId)
-        .in('status', ['queued', 'sending']);
+      const { count: remaining } = await withTimeout(
+        admin
+          .from('bulk_sms_job_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('job_id', jobId)
+          .in('status', ['queued', 'sending'])
+          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+        'checking remaining items',
+      );
       if (!remaining) {
-        await admin.from('bulk_sms_jobs').update({ status: 'completed', completed_at: nowIso(), updated_at: nowIso() }).eq('id', jobId);
+        await withTimeout(
+          admin.from('bulk_sms_jobs').update({ status: 'completed', completed_at: nowIso(), updated_at: nowIso() }).eq('id', jobId)
+            .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+          'mark job completed',
+        );
       }
     }
 
@@ -583,7 +628,11 @@ Deno.serve(async (req) => {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (jobId) {
-      await admin.from('bulk_sms_jobs').update({ status: 'failed', error: message, updated_at: nowIso() }).eq('id', jobId).catch(() => {});
+      await withTimeout(
+        admin.from('bulk_sms_jobs').update({ status: 'failed', error: message, updated_at: nowIso() }).eq('id', jobId)
+          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+        'recording final failure',
+      ).catch(() => {});
     }
     return json({ error: message }, 500);
   }

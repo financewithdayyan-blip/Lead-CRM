@@ -60,12 +60,21 @@ async function sendBulkSmsChunked(input: BulkSmsInput): Promise<BulkSmsResult> {
   const merged: BulkSmsResult = { sent: 0, skipped: [], failed: [], perNumber: [] };
   const perNumberByKey = new Map<string, { key: string; label: string; sent: number }>();
 
-  for (const chunk of chunks) {
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    const chunk = chunks[chunkIndex];
     // Checked between chunks, not mid-chunk — a chunk already in flight
     // finishes (up to 100 leads), but no further one gets dispatched once
     // an admin hits Stop. Cheap enough to check every time since each chunk
     // itself takes tens of seconds.
-    if (rest.jobId) {
+    //
+    // Skipped for the very first chunk: a Resume call's job is *currently*
+    // sitting at 'paused' by definition (that's the only way the Resume
+    // button shows up at all) — checking before chunk 0 too meant this loop
+    // saw its own starting state, bailed out immediately, and silently did
+    // nothing at all. send-sms itself flips the row to 'running' as its
+    // first real step, so from chunk 1 onward this correctly reflects a
+    // Stop click made *during* the run instead of the job's state before it.
+    if (rest.jobId && chunkIndex > 0) {
       const { data: jobRow } = await supabase.from('bulk_sms_jobs').select('status').eq('id', rest.jobId).single();
       if (jobRow?.status === 'paused') break;
     }
