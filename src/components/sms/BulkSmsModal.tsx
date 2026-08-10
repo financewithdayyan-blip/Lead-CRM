@@ -110,20 +110,14 @@ export function BulkSmsModal({ leads, onClose }: { leads: Lead[]; onClose: () =>
         config: { templatesByTag, defaultTemplate, fromKey, dailyLimits: normalizedLimits, perMessageDelayMs },
       });
 
-      // Not awaited: send-sms keeps running server-side and writes its own
-      // progress into bulk_sms_job_items as it goes (including marking the
-      // job itself 'failed' with a reason for a same-turn problem like being
-      // outside the sending window) — the Bulk SMS page picks all of that up
-      // by polling, so this modal doesn't need to stay open to see it.
-      sendBulk.mutate({
-        leadIds: leads.map((l) => l.id),
-        templatesByTag,
-        defaultTemplate,
-        fromKey,
-        dailyLimits: normalizedLimits,
-        perMessageDelayMs,
-        jobId: job.id,
-      });
+      // Not awaited: send-sms reads its config straight off the job row just
+      // saved above, works the leads already queued in bulk_sms_job_items,
+      // and keeps self-continuing in the background from there (including
+      // marking the job itself 'failed' with a reason for a same-turn
+      // problem like being outside the sending window) — the Bulk SMS page
+      // picks all of that up by polling, and the send itself no longer
+      // depends on this tab staying open at all, closed or not.
+      sendBulk.mutate({ jobId: job.id });
 
       navigate(`/bulk-sms/${job.id}`);
       onClose();

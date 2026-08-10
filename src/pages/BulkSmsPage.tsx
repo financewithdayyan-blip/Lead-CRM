@@ -10,7 +10,7 @@ import {
   useResumeBulkSmsJob,
 } from '@/hooks/useSms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatDuration, formatTime } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
 const STATUS_CONFIG: Record<BulkSmsItemStatus, { label: string; color: string; icon: typeof Clock }> = {
@@ -85,6 +85,7 @@ function BulkSmsHistory() {
                   <th className="px-3 py-2.5">Started</th>
                   <th className="px-3 py-2.5">Status</th>
                   <th className="px-3 py-2.5">Leads</th>
+                  <th className="px-3 py-2.5">Duration</th>
                   <th className="px-3 py-2.5" />
                 </tr>
               </thead>
@@ -108,6 +109,13 @@ function BulkSmsHistory() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-text-2">{job.total}</td>
+                      <td className="px-3 py-2.5 text-text-2">
+                        {job.completedAt
+                          ? formatDuration((new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) / 1000)
+                          : job.status === 'running'
+                            ? formatDuration((Date.now() - new Date(job.createdAt).getTime()) / 1000)
+                            : '—'}
+                      </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-end gap-3">
                           <Link to={`/bulk-sms/${job.id}`} className="inline-flex items-center gap-0.5 text-text-3 hover:text-primary">
@@ -191,6 +199,15 @@ function BulkSmsJobDetail({ jobId }: { jobId: string }) {
                     : 'This send failed to start.'
                   : `Finished — ${total} lead${total !== 1 ? 's' : ''}.`}
           </p>
+          {job?.createdAt && (
+            <p className="mt-0.5 text-[12px] text-text-3">
+              Started {formatDateTime(job.createdAt)}
+              {job.completedAt && (
+                <> · finished {formatTime(job.completedAt)} · took {formatDuration((new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) / 1000)}</>
+              )}
+              {running && <> · running for {formatDuration((Date.now() - new Date(job.createdAt).getTime()) / 1000)}</>}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           {canPause && (

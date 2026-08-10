@@ -196,6 +196,7 @@ export interface BulkSmsJob {
   error: string | null;
   total: number;
   createdAt: string;
+  completedAt: string | null;
   /** Whether the original send's message/settings were saved, i.e. whether
    * Resume can reconstruct the call without the admin retyping anything. Jobs
    * created before that feature shipped won't have one. */

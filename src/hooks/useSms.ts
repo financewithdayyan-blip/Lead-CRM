@@ -14,82 +14,51 @@ export interface BulkSmsResult {
 }
 
 export interface BulkSmsInput {
-  leadIds: string[];
-  templatesByTag: Record<string, string>;
-  defaultTemplate: string;
+  /** Required for a one-off, non-job call (a single manual send). A
+   * job-tracked call omits this entirely — send-sms works whatever's
+   * 'queued' for the job directly, so the caller never needs to know or
+   * track which leads those are. */
+  leadIds?: string[];
+  templatesByTag?: Record<string, string>;
+  defaultTemplate?: string;
   /** Only used when leadIds has exactly one entry — a bulk send ignores this
    * and auto-splits across every configured number instead. */
-  fromKey: SmsNumberKey;
+  fromKey?: SmsNumberKey;
   perMessageDelayMs?: number;
   /** Per-number rolling 24h cap, keyed '1'-'4'. Missing or 0 for a key means
    * unlimited for that number. */
   dailyLimits?: Record<string, number>;
   /** When set, send-sms writes live per-lead progress to bulk_sms_job_items
-   * as it works, instead of only returning a final summary at the end. */
+   * as it works, and self-continues in the background until the whole job
+   * is done — the caller only ever needs to fire this once. */
   jobId?: string;
 }
 
-// A single invocation processing a big batch can run long enough to hit the
-// edge function platform's execution-time limit and get killed mid-batch,
-// leaving the job stuck 'running' forever with no error — this happened
-// repeatedly on 1000+ lead sends (one measured run got cut off at ~152s after
-// only 238 of 1441 leads). Splitting into smaller sequential invocations
-// keeps each one comfortably short; send-sms itself only marks the job
-// 'completed' once nothing is left queued across every chunk, so this is
-// invisible to the caller beyond taking a few extra round trips.
-const BULK_CHUNK_SIZE = 100;
-
 /**
- * Calls the send-sms edge function, one chunk of leads at a time. The window
- * check, opt-out check and rolling-limit check all happen server-side — this
- * is just the chunking wrapper, not where any of those rules live. Shared by
- * useSendBulkSms (a fresh send) and useResumeBulkSmsJob (only the leads a
- * stalled job never got to).
+ * Kicks off a bulk send. A job-tracked call (the normal Bulk SMS page path)
+ * only ever needs to fire the first chunk — send-sms hands itself the rest
+ * in the background once this call returns (see its own note on
+ * EdgeRuntime.waitUntil), so this resolves after the first ~100 leads, not
+ * the whole job, and keeps running server-side regardless of whether this
+ * tab stays open. A non-job call (a single manual send) still goes through
+ * in one shot, same as always.
  */
-async function sendBulkSmsChunked(input: BulkSmsInput): Promise<BulkSmsResult> {
-  const { leadIds, ...rest } = input;
-  const chunks: string[][] = [];
-  for (let i = 0; i < leadIds.length; i += BULK_CHUNK_SIZE) chunks.push(leadIds.slice(i, i + BULK_CHUNK_SIZE));
-  if (!chunks.length) chunks.push([]);
-
-  const merged: BulkSmsResult = { sent: 0, skipped: [], failed: [], perNumber: [] };
-  const perNumberByKey = new Map<string, { key: string; label: string; sent: number }>();
-
-  for (const chunk of chunks) {
-    // Checked between chunks, not mid-chunk — a chunk already in flight
-    // finishes (up to 100 leads), but no further one gets dispatched once
-    // an admin hits Stop. Cheap enough to check every time since each chunk
-    // itself takes tens of seconds.
-    if (rest.jobId) {
-      const { data: jobRow } = await supabase.from('bulk_sms_jobs').select('status').eq('id', rest.jobId).single();
-      if (jobRow?.status === 'paused') break;
-    }
-    const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
-      body: { ...rest, leadIds: chunk },
-    });
-    if (error) {
-      const body = await error.context?.json?.().catch(() => null);
-      throw new Error(body?.error || error.message);
-    }
-    if ((data as any)?.error) throw new Error((data as any).error);
-    const result = data as BulkSmsResult;
-    merged.sent += result.sent;
-    merged.skipped.push(...result.skipped);
-    merged.failed.push(...result.failed);
-    for (const pn of result.perNumber) {
-      const existing = perNumberByKey.get(pn.key);
-      if (existing) existing.sent += pn.sent;
-      else perNumberByKey.set(pn.key, { ...pn });
-    }
+async function invokeSendSms(input: BulkSmsInput): Promise<BulkSmsResult> {
+  const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
+    body: input.jobId ? { jobId: input.jobId } : input,
+  });
+  if (error) {
+    const body = await error.context?.json?.().catch(() => null);
+    throw new Error(body?.error || error.message);
   }
-  merged.perNumber = Array.from(perNumberByKey.values());
-  return merged;
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return data as BulkSmsResult;
 }
 
 export function useSendBulkSms() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: sendBulkSmsChunked,
+    mutationFn: invokeSendSms,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['activities'] });
@@ -106,6 +75,7 @@ function dbToBulkSmsJob(row: any): BulkSmsJob {
     error: row.error,
     total: row.total,
     createdAt: row.created_at,
+    completedAt: row.completed_at ?? null,
     hasConfig: !!row.config,
   };
 }
@@ -262,41 +232,25 @@ export function usePauseBulkSmsJob() {
 }
 
 /**
- * Picks a stalled, failed, or paused job back up — only the leads still
- * sitting at 'queued' for it, using the same message/settings it was
- * started with, so retrying never re-texts someone who already got a
- * message. Requires the job to have a saved config (see
- * useCreateBulkSmsJob); older jobs from before that existed can't be
- * auto-resumed.
+ * Picks a stalled, failed, or paused job back up. send-sms reads the job's
+ * saved config and works whatever's still 'queued' for it directly — this
+ * just kicks that off and lets its own self-chaining take it the rest of
+ * the way, so retrying never re-texts someone who already got a message.
+ * Requires the job to have a saved config (see useCreateBulkSmsJob); older
+ * jobs from before that existed can't be auto-resumed.
  */
 export function useResumeBulkSmsJob() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (jobId: string) => {
-      const { data: job, error: jobErr } = await supabase.from('bulk_sms_jobs').select('*').eq('id', jobId).single();
+      const { data: job, error: jobErr } = await supabase.from('bulk_sms_jobs').select('config').eq('id', jobId).single();
       if (jobErr) throw jobErr;
       if (!job.config) {
         throw new Error(
           "This send started before Resume existed, so its message and settings weren't saved. Start a fresh send instead — leads already messaged from it have moved past the New stage, so they're safe to leave in your selection.",
         );
       }
-
-      const leadIds: string[] = [];
-      for (let from = 0; ; from += ITEMS_PAGE_SIZE) {
-        const { data, error } = await supabase
-          .from('bulk_sms_job_items')
-          .select('lead_id')
-          .eq('job_id', jobId)
-          .eq('status', 'queued')
-          .order('id', { ascending: true })
-          .range(from, from + ITEMS_PAGE_SIZE - 1);
-        if (error) throw error;
-        leadIds.push(...(data ?? []).map((r) => r.lead_id).filter((id): id is string => !!id));
-        if (!data || data.length < ITEMS_PAGE_SIZE) break;
-      }
-      if (!leadIds.length) throw new Error('Nothing left to resume — every lead in this job already has an outcome.');
-
-      return sendBulkSmsChunked({ ...(job.config as BulkSmsConfig), leadIds, jobId });
+      return invokeSendSms({ jobId });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
