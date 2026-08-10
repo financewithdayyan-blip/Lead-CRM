@@ -6,10 +6,16 @@
 // rather than in the client, because the client can be bypassed and none of
 // these are cosmetic — sending outside the window or to an opted-out number is
 // a compliance problem, not a UX one.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+//
+// Pinned rather than the floating @2 tag, which silently resolves to
+// whatever's newest on esm.sh — ruled out as the cause of a real stuck-send
+// incident (2026-08-10) but left pinned regardless, since an unpinned major
+// import re-resolving on every redeploy is a real, avoidable source of risk.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.101.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 
 const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
@@ -177,12 +183,6 @@ function toE164(raw: string): string | null {
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-// A job-tracked send processes leads in batches this size per invocation,
-// self-chaining to the next batch (see continueChunk below) rather than
-// requiring the browser tab to stay open and drive each one — see the note
-// on EdgeRuntime.waitUntil further down for why this survives a closed tab.
-const BULK_CHUNK_SIZE = 100;
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -203,105 +203,56 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization') ?? '';
-    const bearer = authHeader.replace('Bearer ', '');
+
+    // A client scoped to the caller's own token, not the admin/service-role
+    // client — the standard, documented way to verify who's calling, rather
+    // than decoding an arbitrary bearer through the admin client's own
+    // getUser(jwt) path.
+    const callerClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+    const { data: userData } = await callerClient.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) return json({ error: 'Not signed in.' }, 401);
+
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+      .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
+    if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
 
     const body = await req.json();
-    const rawJobId = (body as { jobId?: string }).jobId;
-
-    // Two ways in: an admin's own session (the first chunk of a fresh send
-    // or an explicit Resume click), or this function calling itself with the
-    // service role key to continue a job in the background — see
-    // continueChunk below. The latter never has a real user session to
-    // check, so it's trusted directly instead, same pattern send-reminders
-    // already uses for its own cron/internal calls.
-    const isInternalContinuation = !!rawJobId && bearer === SERVICE_ROLE_KEY;
-    let userId: string | undefined;
-    if (!isInternalContinuation) {
-      const { data: userData } = await admin.auth.getUser(bearer);
-      userId = userData?.user?.id;
-      if (!userId) return json({ error: 'Not signed in.' }, 401);
-
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single()
-        .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
-      if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
-    }
-
-    jobId = rawJobId;
-
-    // A job-tracked send is the single source of truth for its own config
-    // and lead batch from here on — the client only ever needs to pass
-    // jobId, whether starting, resuming, or being self-continued, which is
-    // what makes the self-chaining below possible without re-shipping the
-    // whole config on every hop.
-    let jobRow: { user_id: string; status: string; config: Record<string, unknown> | null } | null = null;
-    if (jobId) {
-      const { data } = await admin.from('bulk_sms_jobs').select('user_id, status, config').eq('id', jobId).single();
-      jobRow = data;
-      if (!jobRow) return json({ error: 'Job not found.' }, 404);
-      // A pause can land in the gap between one chunk finishing and its
-      // self-triggered next one starting — checked again here, not just
-      // before scheduling the hop, so the hop itself is a clean no-op
-      // instead of quietly overriding the pause back to running.
-      if (jobRow.status === 'paused') return json({ sent: 0, skipped: [], failed: [], perNumber: [] });
-      userId = jobRow.user_id;
-      if (jobRow.status === 'failed') {
-        await admin.from('bulk_sms_jobs').update({ status: 'running', error: null, updated_at: nowIso() }).eq('id', jobId);
-      }
-    }
-
-    const jobConfig = (jobRow?.config ?? {}) as Partial<{
+    const {
+      leadIds = [],
+      templatesByTag = {},
+      defaultTemplate = '',
+      fromKey = '1',
+      perMessageDelayMs = 400,
+      dailyLimits = {},
+      jobId: jobIdIn,
+    } = body as {
+      leadIds: string[];
       templatesByTag: Record<string, string>;
       defaultTemplate: string;
       fromKey: string;
-      perMessageDelayMs: number;
-      dailyLimits: Record<string, number>;
-    }>;
-    const {
-      templatesByTag = jobConfig.templatesByTag ?? {},
-      defaultTemplate = jobConfig.defaultTemplate ?? '',
-      fromKey = jobConfig.fromKey ?? '1',
-      perMessageDelayMs = jobConfig.perMessageDelayMs ?? 400,
-      dailyLimits = jobConfig.dailyLimits ?? {},
-    } = body as {
-      templatesByTag?: Record<string, string>;
-      defaultTemplate?: string;
-      fromKey?: string;
       perMessageDelayMs?: number;
       /** Per-number rolling 24h cap, keyed '1'-'4' matching NUMBERS above.
        * Missing or <= 0 for a key means unlimited for that number. */
       dailyLimits?: Record<string, number>;
+      jobId?: string;
     };
-
-    // A job-tracked send always works the next batch of whatever's still
-    // queued for it — the caller (browser or this function's own
-    // continuation hop) never needs to know or track which leads those are.
-    // A non-job call (a single manual reply, or a one-off send) still passes
-    // its own leadIds directly, same as always.
-    let leadIds: string[] = (body as { leadIds?: string[] }).leadIds ?? [];
-    if (jobId) {
-      const { data: queuedItems } = await admin
-        .from('bulk_sms_job_items')
-        .select('lead_id')
-        .eq('job_id', jobId)
-        .eq('status', 'queued')
-        .order('id', { ascending: true })
-        .limit(BULK_CHUNK_SIZE)
-        .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
-      leadIds = (queuedItems ?? []).map((r) => r.lead_id).filter((id): id is string => !!id);
-      if (!leadIds.length) {
-        // Nothing left queued — the job is already done (or was resumed
-        // with nothing to actually resume). Finalize rather than erroring.
-        await admin.from('bulk_sms_jobs').update({ status: 'completed', completed_at: nowIso(), updated_at: nowIso() }).eq('id', jobId);
-        return json({ sent: 0, skipped: [], failed: [], perNumber: [] });
-      }
-    }
+    jobId = jobIdIn;
 
     if (!leadIds.length) return bail('No leads selected.', 400);
-    if (!userId) return bail('Could not resolve who this send belongs to.', 500);
+
+    // A resumed job was sitting at 'failed' with its old error message —
+    // clear both back to 'running' the moment real work starts again on it,
+    // so the page's status badge reflects what's actually happening. Harmless
+    // no-op for a fresh job, which useCreateBulkSmsJob already inserts as
+    // 'running'.
+    if (jobId) {
+      await admin.from('bulk_sms_jobs').update({ status: 'running', error: null, updated_at: nowIso() }).eq('id', jobId);
+    }
 
     // Tag names, and any number a lead is already pinned to from a prior
     // send, come along so both the per-lead template and the sender choice
@@ -606,38 +557,20 @@ Deno.serve(async (req) => {
 
     await Promise.all(Array.from(groups.entries()).map(([key, items]) => processGroup(key, items)));
 
-    // This invocation only ever works one chunk (BULK_CHUNK_SIZE leads) of
-    // what can be a several-thousand-lead job. Rather than the browser tab
-    // driving each chunk in turn — which dies the moment that tab closes,
-    // reloads, or gets backgrounded long enough for the browser to throttle
-    // it, which is exactly how large sends were getting stuck at 'running'
-    // with zero progress — this function hands itself the next chunk
-    // directly, using the service role key so the hop needs no user session.
-    // EdgeRuntime.waitUntil keeps the function alive long enough to actually
-    // dispatch that hop after this chunk's own response has already gone
-    // out, so the chain keeps running entirely server-side regardless of
-    // what the client does next.
+    // A caller may only be sending one chunk of a much larger job (see
+    // useSendBulkSms, which splits anything past a few hundred leads across
+    // several invocations so no single one runs long enough to hit the
+    // platform's execution-time limit). Only flip the job to 'completed' once
+    // nothing is left queued or sending for it — otherwise the first chunk to
+    // finish would prematurely mark a 1000+ lead job done.
     if (jobId) {
       const { count: remaining } = await admin
         .from('bulk_sms_job_items')
         .select('id', { count: 'exact', head: true })
         .eq('job_id', jobId)
         .in('status', ['queued', 'sending']);
-
       if (!remaining) {
         await admin.from('bulk_sms_jobs').update({ status: 'completed', completed_at: nowIso(), updated_at: nowIso() }).eq('id', jobId);
-      } else {
-        const { data: freshJob } = await admin.from('bulk_sms_jobs').select('status').eq('id', jobId).single();
-        if (freshJob?.status !== 'paused') {
-          const continueChunk = fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId }),
-          }).catch(() => {});
-          // @ts-ignore — EdgeRuntime is a Supabase/Deno Deploy global, not in the standard lib types.
-          if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(continueChunk);
-          else await continueChunk;
-        }
       }
     }
 
