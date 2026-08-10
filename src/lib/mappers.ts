@@ -163,6 +163,8 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['lastAlertDate', 'last_alert_date'],
   ['optedOut', 'opted_out'],
   ['aiReplyPaused', 'ai_reply_paused'],
+  ['scheduledCallbackAt', 'scheduled_callback_at'],
+  ['scheduledCallbackNote', 'scheduled_callback_note'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {
