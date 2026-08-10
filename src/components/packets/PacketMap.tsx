@@ -133,7 +133,13 @@ export function PacketMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [pins, center, radiusMiles]);
+    // Depends on primitive values rather than `pins`/`center` themselves —
+    // a caller that recomputes those as new array/object references on every
+    // render (easy to do by accident) would otherwise tear down and rebuild
+    // the Leaflet map on every render too, which throws "Map container is
+    // already initialized" once two rebuilds overlap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(pins.map((p) => [p.id, p.lat, p.lng])), center?.lat, center?.lng, radiusMiles]);
 
   if (!pins.length && !center) return null;
 
