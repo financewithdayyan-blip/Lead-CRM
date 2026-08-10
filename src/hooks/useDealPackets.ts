@@ -35,6 +35,8 @@ function dbToPacket(row: any): DealPacket {
     city: row.city,
     state: row.state,
     zip: row.zip,
+    subjectLat: row.subject_lat != null ? Number(row.subject_lat) : null,
+    subjectLng: row.subject_lng != null ? Number(row.subject_lng) : null,
     purchasePrice: row.purchase_price,
     closingCost: row.closing_cost,
     arv: row.arv,
@@ -501,7 +503,8 @@ type PacketFields = Partial<
   Pick<
     DealPacket,
     | 'status' | 'ownerName' | 'propType' | 'beds' | 'baths' | 'sqft' | 'yearBuilt'
-    | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'purchasePrice' | 'closingCost' | 'arv'
+    | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'subjectLat' | 'subjectLng'
+    | 'purchasePrice' | 'closingCost' | 'arv'
     | 'arvIsManual' | 'assignmentFee' | 'showAssignmentFee' | 'dealTypes'
     | 'narrative' | 'requireLeadCapture'
   >
@@ -533,7 +536,8 @@ export function useSavePacket() {
         status: 'status', ownerName: 'owner_name', propType: 'prop_type', beds: 'beds',
         baths: 'baths', sqft: 'sqft', yearBuilt: 'year_built', market: 'market',
         leadStatus: 'lead_status', city: 'city', state: 'state',
-        zip: 'zip', purchasePrice: 'purchase_price', closingCost: 'closing_cost', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
+        zip: 'zip', subjectLat: 'subject_lat', subjectLng: 'subject_lng',
+        purchasePrice: 'purchase_price', closingCost: 'closing_cost', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
         showAssignmentFee: 'show_assignment_fee', dealTypes: 'deal_types',
         narrative: 'narrative', requireLeadCapture: 'require_lead_capture',
       };

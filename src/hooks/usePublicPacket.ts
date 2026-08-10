@@ -43,6 +43,10 @@ export interface PublicPacket {
   narrative: string | null;
   requireLeadCapture: boolean;
   createdAt: string;
+  // Coordinates only, never the street address — draws a proximity circle
+  // around the subject without ever pinning or exposing its exact location.
+  subjectLat: number | null;
+  subjectLng: number | null;
   comps: PublicPacketComp[];
   repairs: { id: string; item: string; cost: number }[];
   images: { id: string; storagePath: string; caption: string | null }[];

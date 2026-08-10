@@ -39,19 +39,32 @@ function pinIcon(kind: MapPin['kind']) {
   });
 }
 
+const MILES_TO_METERS = 1609.34;
+
 /**
  * OpenStreetMap tiles — free and keyless, and their licence requires the
  * attribution control that Leaflet renders by default. Do not remove it.
  *
  * The subject property is deliberately never plotted: packets disclose an area,
- * not an exact location, and a single pin would give the address away.
+ * not an exact location, and a single pin would give the address away. When
+ * its coordinates are known, a dashed circle shows the search radius instead
+ * of a pin — proof the comps are genuinely nearby without exposing which
+ * exact point inside the circle is the real property.
  */
-export function PacketMap({ pins }: { pins: MapPin[] }) {
+export function PacketMap({
+  pins,
+  center,
+  radiusMiles = 1,
+}: {
+  pins: MapPin[];
+  center?: { lat: number; lng: number } | null;
+  radiusMiles?: number;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || !pins.length) return;
+    if (!containerRef.current || (!pins.length && !center)) return;
 
     const map = L.map(containerRef.current, { scrollWheelZoom: false });
     mapRef.current = map;
@@ -102,15 +115,27 @@ export function PacketMap({ pins }: { pins: MapPin[] }) {
       bounds.extend([p.lat, p.lng]);
     }
 
+    if (center) {
+      const circle = L.circle([center.lat, center.lng], {
+        radius: radiusMiles * MILES_TO_METERS,
+        color: '#64748b',
+        weight: 1.5,
+        dashArray: '6 5',
+        fillColor: '#64748b',
+        fillOpacity: 0.05,
+      }).addTo(map);
+      bounds.extend(circle.getBounds());
+    }
+
     map.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
 
     return () => {
       map.remove();
       mapRef.current = null;
     };
-  }, [pins]);
+  }, [pins, center, radiusMiles]);
 
-  if (!pins.length) return null;
+  if (!pins.length && !center) return null;
 
   return (
     <div>
@@ -124,6 +149,12 @@ export function PacketMap({ pins }: { pins: MapPin[] }) {
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.sold }} />
           Recently sold
         </span>
+        {center && (
+          <span className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-slate-400" />
+            {radiusMiles} mi radius from subject
+          </span>
+        )}
         <span className="text-text-3">Subject property not shown</span>
       </div>
     </div>

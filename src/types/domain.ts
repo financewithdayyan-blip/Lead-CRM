@@ -369,6 +369,13 @@ export interface DealPacket {
   state: string | null;
   zip: string | null;
 
+  // Coordinates only, geocoded admin-side from the lead's real address —
+  // never the address itself. Lets the map draw a proximity circle around
+  // the subject without ever plotting a pin on it or exposing which exact
+  // point within the circle is the real property.
+  subjectLat: number | null;
+  subjectLng: number | null;
+
   purchasePrice: number | null;
   /** Entered, not derived. Covered by Bluebird and shown to investors. */
   closingCost: number | null;

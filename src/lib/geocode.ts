@@ -1,10 +1,18 @@
 /**
- * Address → coordinates via OpenStreetMap's Nominatim.
+ * Address → coordinates. Two providers, tried in order:
  *
- * Free and keyless, but it is a volunteer-run service with a usage policy: at
- * most one request per second and no bulk work. So this is only ever called
- * admin-side when a packet is saved, results are stored on the row, and the
- * public packet page never geocodes anything no matter how many people open it.
+ * 1. The US Census Bureau's geocoder — free, keyless, no rate limit, and
+ *    built specifically on US TIGER/Line address ranges, so it resolves a
+ *    real house number correctly far more often than a general-purpose
+ *    geocoder does (which tends to fall back to a same-named street
+ *    elsewhere in the metro, landing miles from the real spot).
+ * 2. OpenStreetMap's Nominatim, only as a fallback for whatever the Census
+ *    geocoder can't find (new construction not yet in TIGER, non-standard
+ *    addresses) — a volunteer-run service with a real usage policy: at most
+ *    one request per second, no bulk work.
+ *
+ * Only ever called admin-side when a packet is saved; results are stored on
+ * the row, and the public packet page never geocodes anything itself.
  */
 
 export interface GeoPoint {
@@ -12,19 +20,16 @@ export interface GeoPoint {
   lng: number;
 }
 
-const ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const CENSUS_ENDPOINT = 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress';
+const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 
 /** Session-lifetime cache so re-saving a packet doesn't re-request known addresses. */
 const cache = new Map<string, GeoPoint | null>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Splits "4202 Woodlynne Lane, Orlando, FL 32812" into its structured parts.
- * Nominatim resolves a specific house number far more reliably against
- * structured street/city/state/postalcode params than against one freeform
- * string — a plain `q=` search commonly falls back to a road-level match
- * (or nothing at all), which is how two different house numbers on the same
- * street were landing on the exact same point on the map. */
+/** Splits "4202 Woodlynne Lane, Orlando, FL 32812" into its structured parts
+ * for Nominatim's fallback attempt. */
 function parseAddressParts(address: string, cityStateHint?: string) {
   const parts = address.split(',').map((s) => s.trim()).filter(Boolean);
   const street = parts[0] ?? address.trim();
@@ -60,60 +65,90 @@ function parseAddressParts(address: string, cityStateHint?: string) {
   return { street, city, state, postalcode };
 }
 
+async function censusGeocode(fullAddress: string): Promise<GeoPoint | null> {
+  const url = `${CENSUS_ENDPOINT}?${new URLSearchParams({
+    address: fullAddress,
+    benchmark: 'Public_AR_Current',
+    format: 'json',
+  })}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Census geocoder returned ${res.status}`);
+  const data = await res.json();
+  const match = data?.result?.addressMatches?.[0];
+  if (!match?.coordinates) return null;
+  return { lat: Number(match.coordinates.y), lng: Number(match.coordinates.x) };
+}
+
 async function nominatimSearch(params: Record<string, string>): Promise<GeoPoint | null> {
-  const url = `${ENDPOINT}?${new URLSearchParams({ format: 'json', limit: '1', countrycodes: 'us', ...params })}`;
+  const url = `${NOMINATIM_ENDPOINT}?${new URLSearchParams({ format: 'json', limit: '1', countrycodes: 'us', ...params })}`;
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`Geocoder returned ${res.status}`);
   const rows = (await res.json()) as { lat: string; lon: string }[];
   return rows[0] ? { lat: parseFloat(rows[0].lat), lng: parseFloat(rows[0].lon) } : null;
 }
 
-async function geocodeOne(address: string, cityStateHint?: string): Promise<GeoPoint | null> {
+async function nominatimFallback(address: string, cityStateHint?: string): Promise<GeoPoint | null> {
+  const { street, city, state, postalcode } = parseAddressParts(address, cityStateHint);
+
+  let hit = await nominatimSearch({
+    street,
+    ...(city ? { city } : {}),
+    ...(state ? { state } : {}),
+    ...(postalcode ? { postalcode } : {}),
+  });
+
+  // The exact house number often has no interpolation data for that street —
+  // drop it and keep just the street name, landing on the right block
+  // instead of producing no pin at all.
+  if (!hit) {
+    const streetNameOnly = street.replace(/^\s*\d+[a-zA-Z]?\s+/, '').trim();
+    if (streetNameOnly && streetNameOnly !== street) {
+      await sleep(1100);
+      hit = await nominatimSearch({
+        street: streetNameOnly,
+        ...(city ? { city } : {}),
+        ...(state ? { state } : {}),
+        ...(postalcode ? { postalcode } : {}),
+      });
+    }
+  }
+
+  return hit;
+}
+
+/** Geocodes one address, trying the Census geocoder first and Nominatim only
+ * if that comes back empty. Exported directly (not just via geocodeAddresses)
+ * for one-off lookups like the subject property's own coordinates. */
+export async function geocodeAddress(address: string, cityStateHint?: string): Promise<GeoPoint | null> {
   const key = `${address.trim().toLowerCase()}|${cityStateHint ?? ''}`;
   if (!key) return null;
   if (cache.has(key)) return cache.get(key)!;
 
-  const { street, city, state, postalcode } = parseAddressParts(address, cityStateHint);
+  const query = cityStateHint && !address.includes(',') ? `${address}, ${cityStateHint}` : address;
 
+  let hit: GeoPoint | null = null;
   try {
-    // First attempt: full structured address, including house number.
-    let hit = await nominatimSearch({
-      street,
-      ...(city ? { city } : {}),
-      ...(state ? { state } : {}),
-      ...(postalcode ? { postalcode } : {}),
-    });
-
-    // Fallback: the exact house number has no interpolation data in OSM for
-    // that street often enough to matter — drop it and keep just the street
-    // name, which still lands on the right block instead of producing no
-    // pin at all.
-    if (!hit) {
-      const streetNameOnly = street.replace(/^\s*\d+[a-zA-Z]?\s+/, '').trim();
-      if (streetNameOnly && streetNameOnly !== street) {
-        await sleep(1100);
-        hit = await nominatimSearch({
-          street: streetNameOnly,
-          ...(city ? { city } : {}),
-          ...(state ? { state } : {}),
-          ...(postalcode ? { postalcode } : {}),
-        });
-      }
-    }
-
-    cache.set(key, hit);
-    return hit;
+    hit = await censusGeocode(query);
   } catch {
-    // A failed lookup is not worth failing a save over — the row simply has no
-    // pin and the map skips it.
-    cache.set(key, null);
-    return null;
+    hit = null;
   }
+
+  if (!hit) {
+    try {
+      hit = await nominatimFallback(address, cityStateHint);
+    } catch {
+      hit = null;
+    }
+  }
+
+  cache.set(key, hit);
+  return hit;
 }
 
 /**
- * Geocodes a list of addresses one per second, in order. Entries already
- * carrying coordinates are passed straight through untouched.
+ * Geocodes a list of addresses in order, spaced out for Nominatim's rate
+ * limit on whichever ones fall through to it. Entries already carrying
+ * coordinates are passed straight through untouched.
  */
 export async function geocodeAddresses<T extends { address: string | null; lat?: number | null; lng?: number | null }>(
   rows: T[],
@@ -129,7 +164,7 @@ export async function geocodeAddresses<T extends { address: string | null; lat?:
     }
 
     if (requested > 0) await sleep(1100);
-    const point = await geocodeOne(row.address, cityStateHint);
+    const point = await geocodeAddress(row.address, cityStateHint);
     requested++;
 
     out.push(point ? { ...row, lat: point.lat, lng: point.lng } : row);

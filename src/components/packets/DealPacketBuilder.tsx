@@ -14,7 +14,7 @@ import {
   usePacket,
 } from '@/hooks/useDealPackets';
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
-import { geocodeAddresses } from '@/lib/geocode';
+import { geocodeAddress, geocodeAddresses } from '@/lib/geocode';
 import { isImageFile } from '@/lib/utils';
 import { DEAL_TYPE_CONFIG, type DealType, type Lead, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus } from '@/types/domain';
 
@@ -231,11 +231,21 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
       // Located here rather than on the public page, so a packet with a dozen
       // viewers doesn't put a dozen requests through a free community geocoder.
       const needsGeo = comps.some((c) => c.address && (c.lat == null || c.lng == null));
+      // Geocoded once from the lead's real address and never re-requested —
+      // only the resulting point is ever persisted, never the address itself.
+      const needsSubjectGeo = lead.address && (packet?.subjectLat == null || packet?.subjectLng == null);
       let geocoded = comps;
-      if (needsGeo) {
+      let subjectPoint: { lat: number; lng: number } | null = null;
+      if (needsGeo || needsSubjectGeo) {
         setGeocoding(true);
-        geocoded = await geocodeAddresses(comps, [city, state].filter(Boolean).join(', '));
-        setComps(geocoded);
+        const cityStateHint = [city, state].filter(Boolean).join(', ');
+        if (needsGeo) {
+          geocoded = await geocodeAddresses(comps, cityStateHint);
+          setComps(geocoded);
+        }
+        if (needsSubjectGeo) {
+          subjectPoint = await geocodeAddress(lead.address!, cityStateHint);
+        }
         setGeocoding(false);
       }
 
@@ -256,6 +266,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           city: city || null,
           state: state || null,
           zip: zip || null,
+          ...(subjectPoint ? { subjectLat: subjectPoint.lat, subjectLng: subjectPoint.lng } : {}),
           // Persist whichever number the packet will actually display.
           arv: effectiveArv,
           arvIsManual,

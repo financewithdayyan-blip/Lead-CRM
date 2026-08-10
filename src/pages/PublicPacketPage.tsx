@@ -597,7 +597,10 @@ export function PublicPacketPage() {
         {mapPins.length > 0 && (
           <Card title="The area">
             <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-surface-3" />}>
-              <PacketMap pins={mapPins} />
+              <PacketMap
+                pins={mapPins}
+                center={packet?.subjectLat != null && packet?.subjectLng != null ? { lat: packet.subjectLat, lng: packet.subjectLng } : null}
+              />
             </Suspense>
             {unmappedCompCount > 0 && (
               <p className="mt-2 text-[12px] text-text-3">
