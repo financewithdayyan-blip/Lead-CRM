@@ -124,13 +124,35 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
+// Zoom's per-second rate limit bites hardest on exactly the calls this file
+// makes in bursts: a bulk job runs as ~2603/100 = 27 separate chunk
+// invocations, and every one of them re-resolves the Zoom auth token and
+// every sending number's user id from scratch (in-memory caches above don't
+// survive across invocations). Retrying a 429 with backoff, instead of
+// throwing immediately, is what keeps one rate-limited call from taking down
+// an entire 100-lead chunk that had nothing else wrong with it — found for
+// real on 2026-08-10 when a bulk send that was finally reaching Zoom (after
+// the Resume bug fix) started failing chunks on "Zoom user lookup failed
+// ... 429".
+async function zoomFetch(url: string, options: RequestInit, maxRetries = 4): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), ...options });
+    if (res.status !== 429 || attempt >= maxRetries) return res;
+    const retryAfterSec = Number(res.headers.get('Retry-After'));
+    const backoffMs = (Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 500 * 2 ** attempt)
+      + Math.random() * 250;
+    await res.body?.cancel().catch(() => {});
+    await sleep(backoffMs);
+  }
+}
+
 async function zoomToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.token;
 
   const basic = btoa(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`);
-  const res = await fetch(
+  const res = await zoomFetch(
     `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(ZOOM_ACCOUNT_ID)}`,
-    { method: 'POST', headers: { Authorization: `Basic ${basic}` }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+    { method: 'POST', headers: { Authorization: `Basic ${basic}` } },
   );
 
   if (!res.ok) throw new Error(`Zoom auth failed (${res.status}): ${await res.text()}`);
@@ -151,9 +173,8 @@ async function zoomUserId(email: string, token: string): Promise<string> {
   const hit = userIdCache.get(email);
   if (hit) return hit;
 
-  const res = await fetch(`https://api.zoom.us/v2/users/${encodeURIComponent(email)}`, {
+  const res = await zoomFetch(`https://api.zoom.us/v2/users/${encodeURIComponent(email)}`, {
     headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Zoom user lookup failed for ${email} (${res.status}): ${await res.text()}`);
 
@@ -163,7 +184,7 @@ async function zoomUserId(email: string, token: string): Promise<string> {
 }
 
 async function sendZoomSms(fromPhone: string, toPhone: string, message: string, token: string) {
-  const res = await fetch('https://api.zoom.us/v2/phone/sms/messages', {
+  const res = await zoomFetch('https://api.zoom.us/v2/phone/sms/messages', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -171,7 +192,6 @@ async function sendZoomSms(fromPhone: string, toPhone: string, message: string, 
       to_members: [{ phone_number: toPhone }],
       message,
     }),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) throw new Error(`Zoom send failed (${res.status}): ${await res.text()}`);
@@ -368,8 +388,15 @@ Deno.serve(async (req) => {
 
     const token = await withTimeout(zoomToken(), 'Zoom auth');
     // Resolved even though the send endpoint takes the number, because Zoom
-    // rejects sends from a number the authed user doesn't own.
-    await withTimeout(Promise.all(senders.map(([, n]) => zoomUserId(n.email, token))), 'Zoom user lookup');
+    // rejects sends from a number the authed user doesn't own. Sequential,
+    // not Promise.all — firing every sender's lookup at Zoom in the same
+    // instant is exactly what was tripping its per-second rate limit on this
+    // endpoint on 2026-08-10 (a bulk job invokes this fresh on every ~100-lead
+    // chunk, so it happens dozens of times over one job). zoomFetch's own
+    // 429 retry is the real safety net; this just avoids provoking it.
+    for (const [, n] of senders) {
+      await withTimeout(zoomUserId(n.email, token), 'Zoom user lookup');
+    }
 
     const sent: string[] = [];
     const skipped: { leadId: string; reason: string }[] = [];
