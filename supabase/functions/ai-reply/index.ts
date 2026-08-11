@@ -69,6 +69,30 @@ function humanizePunctuation(text: string): string {
   return text.replace(/\s*[—–]\s*/g, ', ').replace(/\s*;\s*/g, ', ');
 }
 
+// A deterministic backstop on top of the SYSTEM_RULES instruction never to
+// state/confirm a price — not a replacement for it, same relationship as
+// humanizePunctuation above. Found for real on 2026-08-09: despite the
+// prompt rule already being in place, the model texted a real seller "we can
+// finalize the offer at $200k" and "you're looking at $200k cash at close"
+// under conversational pressure. Wording alone isn't reliable enough for
+// something this consequential, so this catches a dollar amount paired with
+// commitment language and blocks the send outright rather than trusting the
+// model's judgment a second time.
+const PRICE_COMMITMENT_PHRASES = [
+  'we can finalize', "we'll finalize", 'finalize the offer',
+  "that's the offer", "that's our offer", "you're looking at",
+  'we can close at', 'cash at close', 'the offer is', 'offer of $',
+  'we can pay', "we'll pay", 'we can give you', 'confirmed at',
+  'locked in at', 'agreed at',
+];
+function isPriceCommitment(text: string): boolean {
+  if (!/\$\s?\d[\d,]*(?:\.\d+)?\s?[kK]?\b/.test(text)) return false;
+  const lower = text.toLowerCase();
+  return PRICE_COMMITMENT_PHRASES.some((p) => lower.includes(p));
+}
+const PRICE_COMMITMENT_FALLBACK =
+  "That's something we'd need to go over on a call rather than over text, what's a good time for me to call you?";
+
 // ── Callback-time zone resolution ───────────────────────────────────────────
 // The model writes scheduled_callback_at as a floating wall-clock string (no
 // offset) representing whatever the seller actually said ("tomorrow at
@@ -275,11 +299,15 @@ BEFORE DRAFTING: review the entire conversation below, both sides, everything sa
 
 SPECIAL CASES — these came from real conversations going wrong, follow them exactly:
 
+- The person texting says or implies they are a minor (under 18) — "I'm a minor", stating an age under 18, or anything to that effect: stop immediately. Reply with only a brief, polite close-out ("Sorry to bother you, I'll take you off the list.") and nothing else — no questions about the property, no asking for the owner's info, no continuing the framework in any way. Set negative_reply true.
+
 - Identity questions ("who are you", "tell me more about yourself", "who am I talking to"): reply with ONLY your name, the company name, and the website — nothing else. No offers, no prices, no next steps.
 
 - Not the owner, but connected (spouse, sibling, someone living in the property who offers to answer questions): don't keep insisting on contacting the owner directly. Treat them as the point of contact and continue the framework. Only near the end, softly and non-blockingly, ask if they could share the owner's number.
 
-- Wrong number or misdirected, with genuinely zero connection to the property or owner (distinct from the above): ask once if they happen to know the owner or a way to reach them. Set awaiting_owner_info true on this message — it marks the lead as waiting specifically on that answer, nothing else.
+- The owner is deceased and this person is family (phrasing like "she was my aunt," "that's my mom, she passed," "he died a few years ago"): this is a live, valuable lead, not a dead end — a family member is very often the actual decision-maker for an inherited property, and an inheritance situation is a strong motivation signal, not a disqualifier. This got gotten wrong before: do not run the wrong-number close-out script on this. Once you know the owner has died, never ask for "the owner's number" or "the owner's contact info" again — there is no owner left to reach, and asking anyway reads as not having listened. Instead treat this person as the point of contact and move into the framework with them directly (is the property vacant, has the estate been settled, would they or whoever's handling it consider selling). Do not set negative_reply or hard_decline for this, and do not treat uncertainty about the estate's paperwork ("I don't know if there's a deed," "it hasn't gone through probate yet") as a refusal — that is completely normal for an inherited property, not a "no."
+
+- Wrong number or misdirected, with genuinely zero connection to the property or owner (distinct from both cases above — the owner is a stranger to them, not deceased family): ask once if they happen to know the owner or a way to reach them. Set awaiting_owner_info true on this message — it marks the lead as waiting specifically on that answer, nothing else.
   - If they say no, close it out immediately with a plain apology — "My bad, sorry for the mix-up, I'll take you off the list." — and stop. Do not ask them to pass along your info or contact you if the owner reaches out. Set negative_reply true and awaiting_owner_info false.
   - If they say yes, they know who the owner is: ask them to share the owner's number, or offer to pass your number along to the owner and mention you're interested in buying the house. Do not set fully_qualified or negative_reply — this conversation stays open on this same lead, it is not itself a qualified seller and there is nothing further to ask it. Set awaiting_owner_info false — they answered, this is no longer what's being waited on.
   - Every other message, on this lead or any other: set awaiting_owner_info false. It only ever means "I just asked this exact question and am waiting on the answer."
@@ -299,7 +327,7 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 - Negative or declining, or an explicit request to not be contacted again (in any phrasing, not just a bare "STOP" — plain STOP-style keywords are handled separately and never reach you): reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Also set hard_decline:
   - false only if the decline is clearly and specifically about the price or offer amount (e.g. "too low", "not enough", "lowball", "insulting offer") and nothing else — not a refusal to sell at all, just this number. This stops you from texting them further without marking them permanently unreachable, since a different number or a human follow-up might still work.
   - true for every other kind of decline — not interested, wrong time, doesn't want to sell, tired of being contacted, or anything not clearly and only about price. If genuinely unsure which one this is, set hard_decline true: treat it as the permanent, safer option rather than guess.
-
+{{LEARNED_CASES}}
 FRAMEWORK for this lead:
 {{FRAMEWORK}}
 
@@ -537,10 +565,26 @@ Deno.serve(async (req) => {
     // gets the callback step appended regardless of what it already says.
     framework += CALLBACK_ADDENDUM;
 
+    // Rules the nightly ai-reply-review job has added after finding a real
+    // mistake in a past conversation (see 0076_ai_reply_learned_rules.sql) —
+    // deliberately read from a table rather than baked into SYSTEM_RULES
+    // above, so anything automated can only ever append a narrow case here,
+    // never touch the hand-authored core (the price-commitment rule and the
+    // opt-out/STOP handling are not reachable from this path at all).
+    const { data: learnedRules } = await admin
+      .from('ai_reply_learned_rules')
+      .select('rule_text')
+      .eq('active', true)
+      .order('created_at', { ascending: true });
+    const learnedCasesBlock = learnedRules?.length
+      ? `\nLEARNED CASES (added from real past conversations that went wrong — follow these exactly, same as SPECIAL CASES above):\n${learnedRules.map((r) => `- ${r.rule_text}`).join('\n')}\n`
+      : '';
+
     system = SYSTEM_RULES.replace('{{AGENT_NAME}}', agentName)
       .replace('{{LEAD_CONTEXT}}', leadContext)
       .replace('{{TODAY}}', todayLabel)
-      .replace('{{FRAMEWORK}}', framework);
+      .replace('{{FRAMEWORK}}', framework)
+      .replace('{{LEARNED_CASES}}', learnedCasesBlock);
   }
 
   // Step 6: draft, via forced tool-call output so the three fields are
@@ -747,7 +791,7 @@ Deno.serve(async (req) => {
   // is just about price."
   const hardDecline = hardDeclineRaw !== false;
 
-  const replyParts = (Array.isArray(rawParts) ? rawParts : [])
+  let replyParts = (Array.isArray(rawParts) ? rawParts : [])
     .map((p) => humanizePunctuation(String(p).trim()))
     .filter(Boolean);
 
@@ -756,6 +800,17 @@ Deno.serve(async (req) => {
       await admin.from('inbound_messages').update({ send_error: 'Empty reply_parts in Anthropic response' }).eq('id', triggerMessageId);
     }
     return json({ error: 'no draft produced' }, 502);
+  }
+
+  if (replyParts.some(isPriceCommitment)) {
+    await admin.from('lead_activities').insert({
+      lead_id: leadId,
+      user_id: lead.user_id,
+      type: 'note',
+      body: 'AI drafted a reply that stated/confirmed a specific price and was automatically blocked before sending.',
+      meta: { blockedReply: replyParts },
+    });
+    replyParts = [PRICE_COMMITMENT_FALLBACK];
   }
 
   if (triggerMessageId) {
