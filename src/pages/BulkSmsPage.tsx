@@ -85,6 +85,9 @@ function BulkSmsHistory() {
                   <th className="px-3 py-2.5">Started</th>
                   <th className="px-3 py-2.5">Status</th>
                   <th className="px-3 py-2.5">Leads</th>
+                  <th className="px-3 py-2.5">Sent</th>
+                  <th className="px-3 py-2.5">Skipped</th>
+                  <th className="px-3 py-2.5">Failed</th>
                   <th className="px-3 py-2.5">Duration</th>
                   <th className="px-3 py-2.5" />
                 </tr>
@@ -109,6 +112,9 @@ function BulkSmsHistory() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-text-2">{job.total}</td>
+                      <td className="px-3 py-2.5" style={{ color: STATUS_CONFIG.sent.color }}>{job.sentCount ?? 0}</td>
+                      <td className="px-3 py-2.5" style={{ color: STATUS_CONFIG.skipped.color }}>{job.skippedCount ?? 0}</td>
+                      <td className="px-3 py-2.5" style={{ color: STATUS_CONFIG.failed.color }}>{job.failedCount ?? 0}</td>
                       <td className="px-3 py-2.5 text-text-2">
                         {job.completedAt
                           ? formatDuration((new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) / 1000)

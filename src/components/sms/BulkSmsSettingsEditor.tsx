@@ -12,6 +12,7 @@ export function BulkSmsSettingsEditor() {
   const save = useSaveSmsSendSettings();
   const [limits, setLimits] = useState<Record<string, string>>({});
   const [delaySeconds, setDelaySeconds] = useState('0.4');
+  const [totalLimit, setTotalLimit] = useState('0');
   const [saved, setSaved] = useState(false);
   const seededRef = useRef(false);
 
@@ -20,18 +21,22 @@ export function BulkSmsSettingsEditor() {
     seededRef.current = true;
     setLimits(Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, String(settings.dailyLimits[k] ?? 0)])));
     setDelaySeconds(String(settings.perMessageDelayMs / 1000));
+    setTotalLimit(String(settings.dailyTotalLimit));
   }, [settings]);
 
   const normalizedLimits = Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, Math.max(0, Number(limits[k]) || 0)]));
+  const normalizedTotalLimit = Math.max(0, Math.round(Number(totalLimit) || 0));
   const dirty =
     !!settings &&
     (SMS_NUMBER_KEYS.some((k) => normalizedLimits[k] !== (settings.dailyLimits[k] ?? 0)) ||
-      Math.round((Number(delaySeconds) || 0) * 1000) !== settings.perMessageDelayMs);
+      Math.round((Number(delaySeconds) || 0) * 1000) !== settings.perMessageDelayMs ||
+      normalizedTotalLimit !== settings.dailyTotalLimit);
 
   async function handleSave() {
     await save.mutateAsync({
       dailyLimits: normalizedLimits,
       perMessageDelayMs: Math.max(0, Math.round((Number(delaySeconds) || 0) * 1000)),
+      dailyTotalLimit: normalizedTotalLimit,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -73,6 +78,23 @@ export function BulkSmsSettingsEditor() {
             </label>
           ))}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <label className="block max-w-[240px]">
+          <span className="label">Daily total SMS limit</span>
+          <input
+            className="input"
+            inputMode="numeric"
+            value={totalLimit}
+            onChange={(e) => setTotalLimit(e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-text-3">
+            The most leads a single bulk send will ever queue, across every number combined, no matter how many are
+            selected in the Pipeline — selecting all 7,000 in a column with this set to 1,800 only queues the first
+            1,800. Leave at 0 for no cap.
+          </p>
+        </label>
       </div>
 
       <div className="mt-4">

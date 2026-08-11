@@ -122,6 +122,10 @@ function dbToBulkSmsJob(row: any): BulkSmsJob {
     createdAt: row.created_at,
     completedAt: row.completed_at ?? null,
     hasConfig: !!row.config,
+    // Only present on rows from bulk_sms_jobs_with_counts (useBulkSmsJobs).
+    sentCount: row.sent_count != null ? Number(row.sent_count) : undefined,
+    skippedCount: row.skipped_count != null ? Number(row.skipped_count) : undefined,
+    failedCount: row.failed_count != null ? Number(row.failed_count) : undefined,
   };
 }
 
@@ -196,8 +200,11 @@ export function useBulkSmsJobs() {
   return useQuery({
     queryKey: ['bulk_sms_jobs'],
     queryFn: async () => {
+      // The view (not the bare table) so each row comes back with its own
+      // sent/skipped/failed counts already aggregated, instead of an N+1
+      // count query per row in the history table.
       const { data, error } = await supabase
-        .from('bulk_sms_jobs')
+        .from('bulk_sms_jobs_with_counts')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(50);

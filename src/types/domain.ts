@@ -201,6 +201,13 @@ export interface BulkSmsJob {
    * Resume can reconstruct the call without the admin retyping anything. Jobs
    * created before that feature shipped won't have one. */
   hasConfig: boolean;
+  /** Only present when fetched via useBulkSmsJobs (the history list, backed
+   * by the bulk_sms_jobs_with_counts view) — undefined from useBulkSmsJob's
+   * single-row fetch, which gets live per-item counts from
+   * useBulkSmsJobItems instead. */
+  sentCount?: number;
+  skippedCount?: number;
+  failedCount?: number;
 }
 
 export interface BulkSmsJobItem {
