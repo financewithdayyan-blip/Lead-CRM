@@ -76,6 +76,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+  const [geoWarning, setGeoWarning] = useState<string | null>(null);
 
   // Hydrate local state once the packet arrives. Keyed on id so reopening a
   // different packet refills rather than keeping the previous one's values.
@@ -227,6 +228,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
 
   async function handleSave(nextStatus?: PacketStatus) {
     setError(null);
+    setGeoWarning(null);
     try {
       // Located here rather than on the public page, so a packet with a dozen
       // viewers doesn't put a dozen requests through a free community geocoder.
@@ -248,6 +250,25 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
         }
         setGeocoding(false);
       }
+
+      // A free geocoder not finding a match is silent by nature — nothing
+      // throws, the row just keeps a null lat/lng — so without this, a
+      // packet can go out to a buyer with a missing or partial map and the
+      // admin has no way to know short of opening the public link
+      // themselves. Found for real on 2026-08-11 (this exact gap, on a real
+      // packet the admin only noticed once a buyer would have too).
+      const stillMissingComps = geocoded.filter((c) => c.address && (c.lat == null || c.lng == null)).length;
+      const stillMissingSubject = !!needsSubjectGeo && !subjectPoint;
+      const warningMsg =
+        stillMissingComps > 0 || stillMissingSubject
+          ? `Saved, but the map may be incomplete: ${[
+              stillMissingComps > 0 ? `${stillMissingComps} comp address${stillMissingComps === 1 ? '' : 'es'} couldn't be located` : null,
+              stillMissingSubject ? "the subject property's area radius couldn't be located" : null,
+            ]
+              .filter(Boolean)
+              .join(' and ')}. This can happen for very new addresses the free geocoder doesn't have yet — try Save again later, or check the public link before sharing it.`
+          : null;
+      setGeoWarning(warningMsg);
 
       await savePacket.mutateAsync({
         id: packetId,
@@ -281,7 +302,10 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
         images,
       });
       if (nextStatus) setStatus(nextStatus);
-      onClose();
+      // Stays open when the map came out incomplete, so the warning above
+      // is actually seen rather than flashing and vanishing as the panel
+      // closes — a normal save with nothing missing closes as before.
+      if (!warningMsg) onClose();
     } catch (e) {
       setGeocoding(false);
       setError(e instanceof Error ? e.message : 'Could not save the packet.');
@@ -703,6 +727,12 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
 
           {error && (
             <div className="rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>
+          )}
+
+          {geoWarning && (
+            <div className="rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[13px] text-warning">
+              {geoWarning}
+            </div>
           )}
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
