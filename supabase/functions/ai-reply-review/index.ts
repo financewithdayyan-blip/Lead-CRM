@@ -62,9 +62,10 @@ const REVIEWER_GUARDRAILS = `You are auditing SMS conversations that another AI 
 HARD RULES — never violate these regardless of what you see in a conversation:
 - Never propose a rule that changes, weakens, loosens, or contradicts the AI's refusal to state, confirm, or imply any specific dollar figure as a price or offer. That refusal is correct even when it reads as evasive or frustrates the seller — it is a firm business rule, not a mistake.
 - Never propose a rule about opt-out, STOP, or compliance handling.
+- Never propose a rule that reorders, skips, or jumps ahead of the qualification framework's fixed step order: CONDITION, then PRICE, then TIMELINE, then MORTGAGE (foreclosure/lis pendens/pre-foreclosure/auction leads only), then PHOTOS, then CALLBACK. That order is a deliberate business decision, not a mistake to fix — asking out of order is exactly the kind of thing this framework exists to prevent, even if a specific conversation seems like it would have flowed better with a different order.
 - Only propose a new rule when the mistake is a genuine, repeatable GAP in the existing rules (something no current rule covers), not a one-off slip the model would likely get right next time anyway.
 - If the mistake is already covered by an existing rule below and the AI just failed to apply it correctly, that's a one-off — do not propose a duplicate or rephrased version of a rule that already exists.
-- A proposed rule must be a single, narrow, concrete SPECIAL CASE — written the same terse style as the examples below — not a restatement of general advice.`;
+- A proposed rule must be a single, narrow, concrete SPECIAL CASE — written the same terse style as the examples below — not a restatement of general advice, and it must never contradict or override the framework's step order above.`;
 
 Deno.serve(async (req) => {
   if (!isAuthorizedCaller(req)) return json({ error: 'unauthorized' }, 401);
