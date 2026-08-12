@@ -144,7 +144,20 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
       navigate(`/bulk-sms/${job.id}`);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start the send.');
+      // Logged in full, not just .message — a PostgrestError's most useful
+      // field is often .hint or .details, which a plain "Could not start the
+      // send." with nothing else made impossible to diagnose from a report
+      // alone. Falls back to reading .message off a plain object even when
+      // it isn't recognized as `instanceof Error`, rather than only ever
+      // showing the generic string.
+      console.error('Bulk SMS create-job failed:', e);
+      const message =
+        e instanceof Error
+          ? e.message
+          : e && typeof e === 'object' && 'message' in e
+            ? String((e as { message: unknown }).message)
+            : 'Could not start the send.';
+      setError(message);
       setStarting(false);
     }
   }

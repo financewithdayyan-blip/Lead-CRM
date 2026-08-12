@@ -44,6 +44,67 @@ export interface BulkSmsInput {
 // keep the tab open, or click Resume, for a large send.)
 const BULK_CHUNK_SIZE = 100;
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// A chunk invocation occasionally hangs badly enough on Zoom's side that no
+// timeout inside send-sms catches it — that only covers work happening once
+// the function is actually running, not a connection that never gets a
+// response at all. Observed for real on 2026-08-12: 9+ minutes of total
+// silence, zero leads even reaching "sending," until the admin noticed and
+// manually clicked Stop then Resume. CLIENT_TIMEOUT_MS turns that into a
+// fast, visible failure instead of an unbounded hang; the retry below goes
+// one step further and recovers from it automatically — the whole point
+// being to actually finish the send, not require a human watching for it.
+//
+// Retrying is only safe against leads still genuinely 'queued': send-sms
+// keeps running server-side even after the client gives up waiting on it
+// (confirmed for real — job items kept advancing after this exact kind of
+// timeout), so blindly resending the same chunk risks a second text to
+// anyone the orphaned invocation is still mid-send to. Waiting SETTLE_MS
+// after a timeout before re-checking gives that orphaned run a real chance
+// to either finish or get killed by the platform's own execution ceiling;
+// only leads still 'queued' after that — never touched, or the platform did
+// kill it before reaching them — get resent.
+const CLIENT_TIMEOUT_MS = 150_000;
+const SETTLE_MS = 60_000;
+const MAX_CHUNK_RETRIES = 2;
+
+async function sendChunkWithRetry(leadIds: string[], rest: Omit<BulkSmsInput, 'leadIds'>): Promise<BulkSmsResult> {
+  let remaining = leadIds;
+  for (let attempt = 0; ; attempt++) {
+    const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
+      body: { ...rest, leadIds: remaining },
+      timeout: CLIENT_TIMEOUT_MS,
+    });
+    if (!error) {
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as BulkSmsResult;
+    }
+    // FunctionsFetchError means the request itself never got a response —
+    // our own timeout above, or a real network drop — as opposed to
+    // FunctionsHttpError (send-sms actually ran and returned a real error,
+    // already recorded on the job, nothing ambiguous to wait out) or
+    // FunctionsRelayError. Only the "might still be running" case gets the
+    // settle-and-retry treatment.
+    const isHang = error.name === 'FunctionsFetchError';
+    if (!isHang || attempt >= MAX_CHUNK_RETRIES || !rest.jobId) {
+      const body = await error.context?.json?.().catch(() => null);
+      throw new Error(body?.error || error.message);
+    }
+    await sleep(SETTLE_MS);
+    const { data: stillQueued } = await supabase
+      .from('bulk_sms_job_items')
+      .select('lead_id')
+      .eq('job_id', rest.jobId)
+      .eq('status', 'queued')
+      .in('lead_id', remaining);
+    remaining = (stillQueued ?? []).map((r) => r.lead_id as string);
+    // Nothing left queued — the orphaned run actually finished this batch
+    // on its own while we were waiting it out.
+    if (!remaining.length) return { sent: 0, skipped: [], failed: [], perNumber: [] };
+  }
+}
+
 /**
  * Calls the send-sms edge function, one chunk of leads at a time. The window
  * check, opt-out check and rolling-limit check all happen server-side — this
@@ -78,15 +139,7 @@ async function sendBulkSmsChunked(input: BulkSmsInput): Promise<BulkSmsResult> {
       const { data: jobRow } = await supabase.from('bulk_sms_jobs').select('status').eq('id', rest.jobId).single();
       if (jobRow?.status === 'paused') break;
     }
-    const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
-      body: { ...rest, leadIds: chunk },
-    });
-    if (error) {
-      const body = await error.context?.json?.().catch(() => null);
-      throw new Error(body?.error || error.message);
-    }
-    if ((data as any)?.error) throw new Error((data as any).error);
-    const result = data as BulkSmsResult;
+    const result = await sendChunkWithRetry(chunk, rest);
     merged.sent += result.sent;
     merged.skipped.push(...result.skipped);
     merged.failed.push(...result.failed);
