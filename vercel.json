@@ -10,6 +10,12 @@
     { "src": "/terms-of-service", "dest": "/terms-of-service.html" },
     { "src": "/communications-consent", "dest": "/communications-consent.html" },
     { "src": "/do-not-sell", "dest": "/do-not-sell.html" },
+    { "src": "/about-us.html", "dest": "/about-us", "status": 301 },
+    { "src": "/contact-us.html", "dest": "/contact-us", "status": 301 },
+    { "src": "/privacy-policy.html", "dest": "/privacy-policy", "status": 301 },
+    { "src": "/terms-of-service.html", "dest": "/terms-of-service", "status": 301 },
+    { "src": "/communications-consent.html", "dest": "/communications-consent", "status": 301 },
+    { "src": "/do-not-sell.html", "dest": "/do-not-sell", "status": 301 },
     { "handle": "filesystem" },
     { "src": "/crm(/.*)?", "dest": "/crm/index.html" }
   ]

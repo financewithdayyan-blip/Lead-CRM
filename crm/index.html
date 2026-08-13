@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/logo-mark.svg" />
     <title>BlueBird CRM</title>
+    <!-- Defense-in-depth alongside robots.txt's Disallow: /crm — that stops
+         crawling, this stops indexing even if a /crm URL is ever discovered
+         some other way (e.g. a stray backlink). The app is behind auth
+         either way, so there's nothing to actually show if indexed, but
+         this keeps a /crm URL from ever occupying a search result. -->
+    <meta name="robots" content="noindex, nofollow" />
     <link rel="preconnect" href="https://ggfpvrdxqopippzqkojr.supabase.co" />
     <link rel="preconnect" href="https://ggfpvrdxqopippzqkojr.supabase.co" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

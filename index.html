@@ -13,6 +13,108 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Bluebird Acquisition — Sell Your Distressed Property As-Is</title>
 <meta name="description" content="We buy distressed homes as-is in FL, NC, SC, IL, OH, GA, VA, TX, TN &amp; IN. Cash, managed listing or subject-to offers. Close in 30 days, costs covered.">
+<link rel="canonical" href="https://www.bluebirdacquisition.com/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bluebird Acquisition">
+<meta property="og:title" content="Bluebird Acquisition — Sell Your Distressed Property As-Is">
+<meta property="og:description" content="We buy distressed homes as-is in FL, NC, SC, IL, OH, GA, VA, TX, TN & IN. Cash, managed listing or subject-to offers. Close in 30 days, costs covered.">
+<meta property="og:url" content="https://www.bluebirdacquisition.com/">
+<meta property="og:image" content="https://www.bluebirdacquisition.com/logo-mark.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bluebird Acquisition — Sell Your Distressed Property As-Is">
+<meta name="twitter:description" content="We buy distressed homes as-is in FL, NC, SC, IL, OH, GA, VA, TX, TN & IN. Cash, managed listing or subject-to offers. Close in 30 days, costs covered.">
+<meta name="twitter:image" content="https://www.bluebirdacquisition.com/logo-mark.svg">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "Bluebird Acquisition",
+  "url": "https://www.bluebirdacquisition.com/",
+  "logo": "https://www.bluebirdacquisition.com/logo-mark.svg",
+  "image": "https://www.bluebirdacquisition.com/logo-mark.svg",
+  "telephone": "+1-217-408-2781",
+  "email": "contactus@bluebirdacquisition.com",
+  "description": "We buy distressed properties as-is for cash, managed listing, or subject-to offers, with no fees, no repairs, and no waiting.",
+  "areaServed": [
+    { "@type": "State", "name": "Florida" },
+    { "@type": "State", "name": "North Carolina" },
+    { "@type": "State", "name": "South Carolina" },
+    { "@type": "State", "name": "Illinois" },
+    { "@type": "State", "name": "Ohio" },
+    { "@type": "State", "name": "Georgia" },
+    { "@type": "State", "name": "Virginia" },
+    { "@type": "State", "name": "Texas" },
+    { "@type": "State", "name": "Tennessee" },
+    { "@type": "State", "name": "Indiana" }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How quickly can you close?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We can typically close in as little as 30 days, or on whatever timeline works best for you. Because we pay cash, there are no bank approvals, appraisals, or inspection contingencies slowing things down. Urgent auction date coming up? We can move even faster."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to make repairs before selling?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. We buy homes exactly as they are — fire damage, foundation issues, code violations, full of belongings, you name it. You don't lift a finger. We handle repairs after closing."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Are there any fees or commissions?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "None. We cover all closing costs, title fees, and recording fees. There are no agent commissions and no hidden charges. The offer we make is what you receive at closing."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can you help if I'm already in foreclosure?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Foreclosure, tax liens, code violations, probate properties — these are exactly the situations we specialize in. We work with your lender and any lien holders directly. Time matters in foreclosure; contact us as soon as possible so we have room to act."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What states do you buy in?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We currently operate in Florida, North Carolina, South Carolina, Illinois, Ohio, Georgia, Virginia, Texas, Tennessee, and Indiana. Not sure if your area qualifies? Submit your info and we'll let you know."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is the offer price determined?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We look at recent comparable sales in your area, the current condition of the property, and the estimated cost of repairs. We're transparent about how we arrive at our number, and there's never any pressure to accept."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens after I submit the form?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A member of our acquisitions team will reach out within one business day — usually the same day. We'll ask a few follow-up questions about the property, then present a no-obligation cash offer. If you accept, we handle everything from there."
+      }
+    }
+  ]
+}
+</script>
 
 <link rel="icon" type="image/svg+xml" href="/logo-mark.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/logo-mark.svg">
@@ -1364,7 +1466,12 @@ footer{
   text-transform: uppercase;
   color: var(--sky-deep);
 }
-.legal-doc h1{
+/* h2 here, not h1 — each overlay document sits inside the homepage, which
+   already has its own single h1 (the hero). These are subsections of that
+   one page, not page titles of their own; their own internal numbered
+   headings below drop to h3 to match. Selectors renamed to match, same
+   exact visual treatment as before. */
+.legal-doc h2{
   font-family: var(--serif);
   font-size: clamp(28px, 4vw, 38px);
   font-weight: 600;
@@ -1378,7 +1485,7 @@ footer{
   color: var(--slate-dim);
   margin-bottom: 36px;
 }
-.legal-doc h2{
+.legal-doc h3{
   font-family: var(--serif);
   font-size: 20px;
   font-weight: 600;
@@ -2011,7 +2118,7 @@ footer{
     <div class="footer-grid">
       <div>
         <div class="footer-brand">
-          <img src="/logo-mark.svg" alt="Bluebird Acquisition — as-is distressed property buyers" class="footer-logo">
+          <img src="/logo-mark.svg" alt="Bluebird Acquisition — as-is distressed property buyers" class="footer-logo" loading="lazy">
           <span>Bluebird Acquisition</span>
         </div>
         <p class="footer-tag">We help distressed property owners across the Southeast and Midwest sell as-is, close fast, and move forward — without the burden.</p>
@@ -2068,7 +2175,7 @@ footer{
   <div class="legal-panel">
     <div class="legal-panel-header">
       <a href="#top" class="legal-brand">
-        <img src="/logo-mark.svg" alt="Bluebird Acquisition logo on legal documents" class="legal-logo">
+        <img src="/logo-mark.svg" alt="Bluebird Acquisition logo on legal documents" class="legal-logo" loading="lazy">
         Bluebird<span class="b-acq">&nbsp;Acquisition</span>
       </a>
       <button type="button" class="legal-close" id="legalClose" aria-label="Close">
@@ -2087,42 +2194,42 @@ footer{
       <!-- PRIVACY POLICY -->
       <article class="legal-doc" id="doc-privacy-policy">
         <span class="legal-eyebrow">Legal</span>
-        <h1 id="legalOverlayTitle">Privacy Policy</h1>
+        <h2 id="legalOverlayTitle">Privacy Policy</h2>
         <p class="legal-updated">Last updated: June 22, 2026</p>
 
         <p>Bluebird Acquisition ("Bluebird," "we," "us," or "our") respects your privacy. This Privacy Policy explains what information we collect, how we use it, and the choices you have, when you visit our website, call or text us, or submit a property inquiry.</p>
 
-        <h2>1. Information We Collect</h2>
+        <h3>1. Information We Collect</h3>
         <p>We collect information you provide directly, such as your name, phone number, email address, property address, and details about your situation when you fill out our contact form, call our office, or correspond with us by text or email. We also automatically collect limited technical information when you visit our site, such as your IP address, browser type, device type, and pages viewed, through standard web server logs and analytics.</p>
 
-        <h2>2. How We Use Your Information</h2>
+        <h3>2. How We Use Your Information</h3>
         <p>We use the information we collect to: evaluate and respond to your property inquiry; prepare and communicate purchase offers; verify property and ownership details through public county records; contact you by phone, text, mail, or email about your inquiry; and improve our website and services. We do not use your information to make automated decisions that produce legal effects without human review.</p>
 
-        <h2>3. How We Share Your Information</h2>
+        <h3>3. How We Share Your Information</h3>
         <p>We do not sell your personal information to third parties for their own marketing purposes. We may share information with: title companies, escrow agents, and closing attorneys involved in a transaction you initiate with us; service providers who help us operate our business (such as CRM, phone, and SMS platforms), bound by confidentiality obligations; affiliated entities or assignees in connection with a purchase agreement; and government agencies or other parties when required by law, subpoena, or court order.</p>
 
-        <h2>4. Text Messages and Phone Calls</h2>
+        <h3>4. Text Messages and Phone Calls</h3>
         <p>If you provide your phone number, you may receive calls or text messages from Bluebird Acquisition regarding your property inquiry. See our <a href="#communications-consent" class="legal-link" data-page="communications-consent">full messaging consent terms</a> for details on consent, message frequency, and opt-out instructions. Message and data rates may apply.</p>
 
-        <h2>5. Data Retention</h2>
+        <h3>5. Data Retention</h3>
         <p>We retain personal information for as long as reasonably necessary to fulfill the purposes described in this policy, including to maintain business records, comply with legal obligations, resolve disputes, and enforce our agreements. If we make you an offer that does not result in a closed transaction, we may retain your information to follow up on future opportunities unless you ask us to delete it.</p>
 
-        <h2>6. Your Choices</h2>
+        <h3>6. Your Choices</h3>
         <p>You can ask us to access, correct, or delete the personal information we hold about you, opt out of marketing calls and texts at any time (see Communications Consent), and unsubscribe from email communications using the link in any email we send. To exercise these rights, contact us using the details below.</p>
 
-        <h2>7. State Privacy Rights</h2>
+        <h3>7. State Privacy Rights</h3>
         <p>Depending on where you live, you may have additional rights under state privacy laws, including the right to know what personal information we collect, request deletion, and opt out of the "sale" or "sharing" of personal information as those terms are defined under applicable law. Use our <a href="#do-not-sell" class="legal-link" data-page="do-not-sell">Do Not Sell or Share request form</a> to submit such a request.</p>
 
-        <h2>8. Children's Privacy</h2>
+        <h3>8. Children's Privacy</h3>
         <p>Our services are intended for adults. We do not knowingly collect personal information from anyone under 18 years of age.</p>
 
-        <h2>9. Security</h2>
+        <h3>9. Security</h3>
         <p>We use reasonable administrative, technical, and physical safeguards designed to protect your information. No method of transmission or storage is completely secure, and we cannot guarantee absolute security.</p>
 
-        <h2>10. Changes to This Policy</h2>
+        <h3>10. Changes to This Policy</h3>
         <p>We may update this Privacy Policy from time to time. The "Last updated" date above reflects the most recent revision. Continued use of our website or services after changes take effect constitutes acceptance of the revised policy.</p>
 
-        <h2>11. Privacy Questions &amp; Contact</h2>
+        <h3>11. Privacy Questions &amp; Contact</h3>
         <p>Questions about this Privacy Policy or your personal information can be directed to:<br>
         Bluebird Acquisition<br>
         Phone: <a href="tel:+12174082781">(217) 408-2781</a><br>
@@ -2132,42 +2239,42 @@ footer{
       <!-- TERMS OF SERVICE -->
       <article class="legal-doc" id="doc-terms-of-service">
         <span class="legal-eyebrow">Legal</span>
-        <h1>Terms of Service</h1>
+        <h2>Terms of Service</h2>
         <p class="legal-updated">Last updated: June 22, 2026</p>
 
         <p>These Terms of Service ("Terms") govern your use of the Bluebird Acquisition website and your interactions with Bluebird Acquisition ("Bluebird," "we," "us," or "our") regarding any property inquiry, offer, or transaction. By using our website or submitting your information to us, you agree to these Terms.</p>
 
-        <h2>1. Our Service</h2>
+        <h3>1. Our Service</h3>
         <p>Bluebird Acquisition is a real estate acquisitions company. We evaluate properties submitted to us and may present purchase offers structured as a cash offer, novation, subject-to, or another structure we determine is appropriate. Submitting your property information does not obligate you to accept any offer, and does not obligate us to make one.</p>
 
-        <h2>2. No Real Estate Brokerage or Legal Advice</h2>
+        <h3>2. No Real Estate Brokerage or Legal Advice</h3>
         <p>Bluebird Acquisition acts as a principal buyer (or, in a novation arrangement, as your representative for purposes of marketing the property), not as your real estate agent, broker, or attorney, unless a separate written agreement says otherwise. Nothing on this website or in our communications constitutes legal, tax, or financial advice. We encourage you to consult an attorney or financial advisor before signing any agreement.</p>
 
-        <h2>3. Offers and Earnest Money</h2>
+        <h3>3. Offers and Earnest Money</h3>
         <p>Any offer we extend is subject to our review of the property, title, and applicable public records, and is not binding until both parties sign a written purchase agreement. Where an earnest money deposit (EMD) is specified in a signed agreement, that EMD is non-refundable once submitted, except as otherwise expressly stated in the agreement or required by applicable law.</p>
 
-        <h2>4. As-Is Purchases</h2>
+        <h3>4. As-Is Purchases</h3>
         <p>Properties are purchased in their current, as-is condition. We do not require repairs, inspections to be cured, or improvements prior to closing, except where a signed agreement states otherwise.</p>
 
-        <h2>5. Accuracy of Information</h2>
+        <h3>5. Accuracy of Information</h3>
         <p>You agree to provide accurate and complete information about yourself and the property when contacting us. We rely on this information, along with independent verification through public records, to prepare any offer.</p>
 
-        <h2>6. Website Use</h2>
+        <h3>6. Website Use</h3>
         <p>You agree not to use this website for any unlawful purpose, to misrepresent your identity or authority to act regarding a property, or to interfere with the website's normal operation. All content on this site, including text, graphics, and the Bluebird Acquisition name and logo, is owned by or licensed to us and may not be used without our permission.</p>
 
-        <h2>7. No Warranty</h2>
+        <h3>7. No Warranty</h3>
         <p>This website and its content are provided "as is" without warranties of any kind, express or implied, including accuracy, completeness, or fitness for a particular purpose.</p>
 
-        <h2>8. Limitation of Liability</h2>
+        <h3>8. Limitation of Liability</h3>
         <p>To the fullest extent permitted by law, Bluebird Acquisition is not liable for any indirect, incidental, or consequential damages arising from your use of this website or your dealings with us, except as provided in a separately executed written agreement governing an actual transaction.</p>
 
-        <h2>9. Governing Law</h2>
+        <h3>9. Governing Law</h3>
         <p>These Terms are governed by the laws of the state in which the relevant property is located, without regard to conflict-of-law principles, unless a signed transaction agreement specifies otherwise.</p>
 
-        <h2>10. Changes to These Terms</h2>
+        <h3>10. Changes to These Terms</h3>
         <p>We may revise these Terms from time to time. The "Last updated" date reflects the most recent revision. Continued use of our website after changes take effect constitutes acceptance of the revised Terms.</p>
 
-        <h2>11. Contact Us About These Terms</h2>
+        <h3>11. Contact Us About These Terms</h3>
         <p>Bluebird Acquisition<br>
         Phone: <a href="tel:+12174082781">(217) 408-2781</a><br>
         Email: <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a></p>
@@ -2176,60 +2283,60 @@ footer{
       <!-- COMMUNICATIONS CONSENT -->
       <article class="legal-doc" id="doc-communications-consent">
         <span class="legal-eyebrow">Legal</span>
-        <h1>Communications Consent</h1>
+        <h2>Communications Consent</h2>
         <p class="legal-updated">Last updated: June 22, 2026</p>
 
         <p>This page explains how Bluebird Acquisition contacts you by phone and text message, and how you can opt out at any time. It applies whenever you submit your phone number to us, whether through our website form, by calling our office, or by texting us directly.</p>
 
-        <h2>1. Consent to Be Contacted</h2>
+        <h3>1. Consent to Be Contacted</h3>
         <p>By submitting your phone number through our website, or by calling or texting us, you consent to receive calls and text messages from Bluebird Acquisition and its representatives at that number regarding your property inquiry, including offers, follow-up questions, and transaction updates. These communications may be sent using an automatic telephone dialing system or prerecorded voice.</p>
 
-        <h2>2. Consent Is Not a Condition of Purchase</h2>
+        <h3>2. Consent Is Not a Condition of Purchase</h3>
         <p>You are not required to consent to receive autodialed or marketing calls or texts as a condition of receiving an offer or doing business with us. If you prefer not to receive such communications, you can still reach us by phone or email using the contact details on this site.</p>
 
-        <h2>3. Message Frequency and Charges</h2>
+        <h3>3. Message Frequency and Charges</h3>
         <p>Message frequency varies based on your inquiry and any ongoing transaction. Standard message and data rates from your wireless carrier may apply. Bluebird Acquisition does not charge you for text messages.</p>
 
-        <h2>4. How to Opt Out</h2>
+        <h3>4. How to Opt Out</h3>
         <p>You can stop text messages at any time by replying <strong>STOP</strong> to any message we send you. You will receive a one-time confirmation that you have been unsubscribed, and no further messages will be sent unless you re-initiate contact. To stop phone calls, tell our representative directly during a call, or contact us using the information below and ask to be placed on our internal do-not-call list. We will honor opt-out requests within a reasonable time, consistent with applicable law.</p>
 
-        <h2>5. Help</h2>
+        <h3>5. Help</h3>
         <p>Reply <strong>HELP</strong> to any text message for assistance, or contact us directly at <a href="tel:+12174082781">(217) 408-2781</a> or <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a>.</p>
 
-        <h2>6. Carrier Disclaimer</h2>
+        <h3>6. Carrier Disclaimer</h3>
         <p>Carriers are not liable for delayed or undelivered messages. Supported carriers are not guaranteed to include every wireless provider.</p>
 
-        <h2>7. Calling Hours</h2>
+        <h3>7. Calling Hours</h3>
         <p>We make reasonable efforts to contact you only during permissible hours under applicable federal and state law.</p>
 
-        <h2>8. Relationship to Our Privacy Policy</h2>
+        <h3>8. Relationship to Our Privacy Policy</h3>
         <p>This Communications Consent supplements, and should be read together with, our <a href="#privacy-policy" class="legal-link" data-page="privacy-policy">full Privacy Policy</a>.</p>
       </article>
 
       <!-- DO NOT SELL MY INFO -->
       <article class="legal-doc" id="doc-do-not-sell">
         <span class="legal-eyebrow">Legal</span>
-        <h1>Do Not Sell or Share My Information</h1>
+        <h2>Do Not Sell or Share My Information</h2>
         <p class="legal-updated">Last updated: June 22, 2026</p>
 
         <p>Bluebird Acquisition does not sell your personal information to third parties for monetary payment in the ordinary course of business. Some state privacy laws define "sale" and "sharing" broadly enough to cover certain everyday business activities, such as using analytics or advertising tools. This page lets you submit a request to opt out of any such activity, and to ask us not to share your information for cross-context behavioral advertising, to the extent applicable under your state's law.</p>
 
-        <h2>1. What This Covers</h2>
+        <h3>1. What This Covers</h3>
         <p>This request applies to personal information collected through our website and intake forms, such as your name, contact details, and property address. It does not affect information you've shared as part of an active or closed transaction, which we retain as needed to fulfill that transaction and meet legal and recordkeeping obligations.</p>
 
-        <h2>2. How to Submit a Request</h2>
+        <h3>2. How to Submit a Request</h3>
         <p>To submit a Do Not Sell / Do Not Share request, email <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a> with the subject line "Do Not Sell My Info," or call <a href="tel:+12174082781">(217) 408-2781</a>. Please include your name and the phone number or email address you've used to contact us, so we can locate your record.</p>
 
-        <h2>3. Verification</h2>
+        <h3>3. Verification</h3>
         <p>To protect your information from fraudulent requests, we may ask you to verify your identity before processing a request, using information you have already provided to us.</p>
 
-        <h2>4. Authorized Agents</h2>
+        <h3>4. Authorized Agents</h3>
         <p>You may designate an authorized agent to submit a request on your behalf where permitted by law. We may require proof of the agent's authorization and may still need to verify your identity directly.</p>
 
-        <h2>5. Non-Discrimination</h2>
+        <h3>5. Non-Discrimination</h3>
         <p>We will not deny you services, charge you a different rate, or provide a lower quality of service because you exercised a privacy right described here or in our <a href="#privacy-policy" class="legal-link" data-page="privacy-policy">privacy notice</a>.</p>
 
-        <h2>6. Response Time</h2>
+        <h3>6. Response Time</h3>
         <p>We aim to respond to and process verified requests within the timeframe required by applicable state law, generally within 45 days.</p>
       </article>
     </div>
@@ -2956,7 +3063,7 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
   <div id="bbPanel" role="dialog" aria-modal="true" aria-label="Bluebird Acquisition chat assistant">
     <div class="bbh">
       <div class="bbh-av" aria-hidden="true">
-        <img src="/logo-bird-white.svg" width="22" height="22" alt="Bluebird Acquisition chat assistant" style="display:block;object-fit:contain;">
+        <img src="/logo-bird-white.svg" width="22" height="22" alt="Bluebird Acquisition chat assistant" style="display:block;object-fit:contain;" loading="lazy">
       </div>
       <div class="bbh-info">
         <div class="bbh-name">Bluebird Assistant</div>
