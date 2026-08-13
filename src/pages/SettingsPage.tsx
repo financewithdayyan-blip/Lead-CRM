@@ -7,6 +7,7 @@ import { TagPill } from '@/components/ui/TagPill';
 import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
 import { SmsTemplateEditor } from '@/components/sms/SmsTemplateEditor';
 import { BulkSmsSettingsEditor } from '@/components/sms/BulkSmsSettingsEditor';
+import { AiReviewSettingsEditor } from '@/components/sms/AiReviewSettingsEditor';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const PRESETS = [
@@ -117,6 +118,7 @@ export function SettingsPage() {
 
       <div className="space-y-4">
         {isAdmin && <AiFrameworkEditor />}
+        {isAdmin && <AiReviewSettingsEditor />}
         {isAdmin && <BulkSmsSettingsEditor />}
         {isAdmin && <SmsTemplateEditor />}
 

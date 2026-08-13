@@ -77,6 +77,19 @@ Deno.serve(async (req) => {
   let rulesAdded = 0;
 
   try {
+    // Checked first, before anything else — including the "last run"
+    // lookup below — so turning this off in Settings genuinely stops every
+    // bit of Opus 5 spend rather than just hiding a report. Any row with
+    // enabled=false skips the run entirely; no row at all defaults to
+    // enabled, matching the toggle's own default in useAiReviewSettings.
+    const { data: settingsRows } = await withTimeout(
+      admin.from('ai_reply_review_settings').select('enabled').abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+      'review settings lookup',
+    );
+    if (settingsRows?.some((r) => r.enabled === false)) {
+      return json({ ok: true, skipped: true, reason: 'disabled in settings' });
+    }
+
     const { data: lastRun } = await withTimeout(
       admin.from('ai_reply_review_log').select('run_at').order('run_at', { ascending: false }).limit(1)
         .maybeSingle().abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
