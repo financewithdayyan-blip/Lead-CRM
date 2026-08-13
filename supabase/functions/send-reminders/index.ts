@@ -345,16 +345,6 @@ Call draft_reminder with your result.`;
         if (i < replyParts.length - 1) await new Promise((r) => setTimeout(r, 1200));
       }
 
-      // Partial Qualified's only outstanding item is photos (plus a mortgage
-      // statement for lien leads) — this reminder is guaranteed to have
-      // asked about them, which makes the "Get photos" task ai-reply created
-      // earlier redundant. The 'replied' stage's reminder can ask about
-      // several different things depending on what's still open, so it
-      // isn't safe to assume photos were the one actually covered there.
-      if (lead.stage === 'initial_contact') {
-        await admin.from('tasks').update({ completed: true }).eq('lead_id', lead.id).eq('completed', false).ilike('title', '%photo%');
-      }
-
       // next_reminder_at is already tomorrow — set by the claim above.
       sent++;
     } catch (e) {

@@ -306,6 +306,10 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 
 - Identity questions ("who are you", "tell me more about yourself", "who am I talking to"): reply with ONLY your name, the company name, and bluebirdacquisition.com — nothing else. This is the one and only real website; never invent, guess, or vary a different domain. No offers, no prices, no next steps.
 
+- Asked where you're located, or what area/state you're based in: say you're located in Georgia, but you buy properties all across the United States. This is the one and only real answer; never invent a different city or state.
+
+- Asked for a phone number to call or text back, or to compare against another offer: tell them they can just call or text back on this same number, the one this conversation is already happening on. Never state, invent, or guess an actual digit string — you don't reliably know it, and reciting a wrong or made-up number is worse than not giving one at all.
+
 - Not the owner, but connected (spouse, sibling, someone living in the property who offers to answer questions): don't keep insisting on contacting the owner directly. Treat them as the point of contact and continue the framework. Only near the end, softly and non-blockingly, ask if they could share the owner's number.
 
 - The owner is deceased and this person is family (phrasing like "she was my aunt," "that's my mom, she passed," "he died a few years ago"): this is a live, valuable lead, not a dead end — a family member is very often the actual decision-maker for an inherited property, and an inheritance situation is a strong motivation signal, not a disqualifier. This got gotten wrong before: do not run the wrong-number close-out script on this. Once you know the owner has died, never ask for "the owner's number" or "the owner's contact info" again — there is no owner left to reach, and asking anyway reads as not having listened. Instead treat this person as the point of contact and move into the framework with them directly (is the property vacant, has the estate been settled, would they or whoever's handling it consider selling). Do not set negative_reply or hard_decline for this, and do not treat uncertainty about the estate's paperwork ("I don't know if there's a deed," "it hasn't gone through probate yet") as a refusal — that is completely normal for an inherited property, not a "no."
@@ -904,18 +908,12 @@ Deno.serve(async (req) => {
     if (hardDecline) {
       await admin.from('leads').update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true }).eq('id', leadId);
     } else {
+      // Only the price-specific decline goes On Hold rather than Dead — a
+      // human can revisit later with a different number or offer. That's
+      // exactly what the dashboard's "Do followups" aggregate now surfaces
+      // (any onhold lead with no recent activity), so no per-lead task is
+      // written here — see get_followup_leads in 0080_daily_task_summary.sql.
       await admin.from('leads').update({ stage: 'onhold', ai_reply_paused: true }).eq('id', leadId);
-      // Only the price-specific decline — a human revisiting later with a
-      // different number or offer is the whole reason this goes On Hold
-      // instead of Dead, so that revisit needs its own task or it's easy to
-      // forget this lead is still workable.
-      await admin.from('tasks').insert({
-        user_id: lead.user_id,
-        lead_id: leadId,
-        title: `Message ${lead.first_name || 'lead'} with a revised offer — declined on price, may still be workable`,
-        due_date: new Date().toISOString().slice(0, 10),
-        auto_created: true,
-      });
     }
   } else if (fullyQualified) {
     const landingOnFollowup = hasPhotos as boolean;
@@ -932,31 +930,22 @@ Deno.serve(async (req) => {
     // Prepended, never overwritten — whatever a human already wrote in Notes
     // stays intact below this. Photos come from hasPhotos (already verified
     // against real inbound attachments) rather than asking the model to
-    // report on something it isn't the source of truth for.
-    if (summary && summary.trim()) {
+    // report on something it isn't the source of truth for. nextAction (the
+    // model's own specific next step, e.g. "confirm the $210k ask, roof is
+    // 20 years old") is folded in here rather than written as its own task
+    // row — this lead now surfaces through the dashboard's aggregate "Do
+    // followups" count (get_followup_leads in 0080_daily_task_summary.sql)
+    // the moment it goes quiet, and the specific guidance is still right
+    // there in Notes once an admin opens it.
+    if ((summary && summary.trim()) || nextAction?.trim()) {
       const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const photosLine = `Photos: ${hasPhotos ? 'Received' : 'Not yet received'}`;
-      const block = `AI Qualification Summary — ${dateLabel}\n${summary.trim()}\n${photosLine}\n\n---\n\n`;
+      const nextActionLine = nextAction?.trim() ? `\nNext step: ${nextAction.trim()}` : '';
+      const block = `AI Qualification Summary — ${dateLabel}\n${summary?.trim() ?? ''}\n${photosLine}${nextActionLine}\n\n---\n\n`;
       updates.notes = block + (lead.notes ?? '');
     }
 
     await admin.from('leads').update(updates).eq('id', leadId);
-
-    // One task, written from what was actually said in this conversation —
-    // not the generic "run the numbers" pair the DB trigger creates for
-    // every OTHER path a lead can reach a qualified-plus stage through
-    // (Kanban drag, the profile's stage dropdown, a call outcome). The
-    // trigger (handle_lead_qualified_tasks) detects this exact branch — the
-    // same update that also flips ai_reply_paused true — and skips its own
-    // generic pair specifically so a lead qualified over text doesn't end up
-    // with three tasks instead of one.
-    await admin.from('tasks').insert({
-      user_id: lead.user_id,
-      lead_id: leadId,
-      title: nextAction?.trim() || `Follow up with ${lead.first_name || 'lead'} — confirm numbers and next steps`,
-      due_date: new Date().toISOString().slice(0, 10),
-      auto_created: true,
-    });
   } else if (isPhotoWaitMode && hasPhotos && recoveredFields.scheduled_callback_at) {
     // Partial Qualified was waiting on two things, in order: photos, then a
     // real time to call about the offer. Photos alone used to promote
@@ -972,60 +961,17 @@ Deno.serve(async (req) => {
       .eq('id', leadId);
   }
 
-  // Independent of the branch above — a callback time can land on the same
-  // turn fully_qualified does (the usual case, per the CALLBACK step), but
-  // nothing here depends on that; any turn that actually captures one gets
-  // its own task so it shows up as something concrete to act on. In
-  // photo-wait mode this callback is specifically the post-photos offer
-  // call (see the branch above), so the task says that rather than the
-  // generic "call back" — an admin scanning tasks shouldn't have to guess
-  // which kind of call this is.
-  if (recoveredFields.scheduled_callback_at) {
-    const isOfferCallback = isPhotoWaitMode && hasPhotos;
-    await admin.from('tasks').insert({
-      user_id: lead.user_id,
-      lead_id: leadId,
-      title: isOfferCallback
-        ? `Call ${lead.first_name || 'lead'} to go over the offer${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`
-        : `Call back ${lead.first_name || 'lead'}${scheduledCallbackNote?.trim() ? ` — ${scheduledCallbackNote.trim()}` : ''}`,
-      due_date: String(recoveredFields.scheduled_callback_at).slice(0, 10),
-      auto_created: true,
-    });
-  }
-
-  // Asked for photos, still don't have them — only Replied (mid-interview)
-  // and Qualified (fully_qualified without hasPhotos lands here, see the
-  // stage above) ever actually need this nudge; Follow-Up+ already has
-  // photos by definition. Deterministic rather than left to next_action's
-  // own judgment, since this is exactly the concrete gap that's easy for a
-  // model to gloss over, and de-duped against any already-open one so it
-  // doesn't re-insert on every single follow-up message in the thread.
-  const stageNow = fullyQualified ? (hasPhotos as boolean ? 'followup' : 'initial_contact') : lead.stage;
-  if (!hasPhotos && (stageNow === 'replied' || stageNow === 'initial_contact')) {
-    const askedForPhotos = turns.some((t) => t.who === 'YOU' && /photo|pictur/i.test(t.body));
-    if (askedForPhotos) {
-      const { count: alreadyHasOne } = await admin
-        .from('tasks')
-        .select('id', { count: 'exact', head: true })
-        .eq('lead_id', leadId)
-        .eq('completed', false)
-        .ilike('title', '%photo%');
-      if (!alreadyHasOne) {
-        await admin.from('tasks').insert({
-          user_id: lead.user_id,
-          lead_id: leadId,
-          title: `Get photos from ${lead.first_name || 'lead'} — asked but not received yet`,
-          due_date: new Date().toISOString().slice(0, 10),
-          auto_created: true,
-        });
-      }
-    }
-  } else if (hasPhotos) {
-    // The photos this task was chasing actually arrived on this turn (or an
-    // earlier one) — nothing left for a human to chase, so it shouldn't
-    // still be sitting open.
-    await admin.from('tasks').update({ completed: true }).eq('lead_id', leadId).eq('completed', false).ilike('title', '%photo%');
-  }
+  // A captured callback time (recoveredFields.scheduled_callback_at, set
+  // above) is enough on its own — it's what the dashboard's Scheduled Calls
+  // card already reads directly off the lead, so no separate task is needed
+  // here anymore; that used to duplicate the same callback into the flat
+  // task list a second time.
+  //
+  // A lead still waiting on photos it was asked for, in Replied or Qualified
+  // (no dedicated task needed either) — once it goes quiet for a couple of
+  // days it surfaces on its own through the dashboard's "Do followups"
+  // aggregate (get_followup_leads in 0080_daily_task_summary.sql), the same
+  // as any other stalled conversation.
 
   return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined });
 });

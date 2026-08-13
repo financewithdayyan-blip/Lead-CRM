@@ -61,19 +61,23 @@ const QUALIFIED_PLUS_STAGES: LeadStage[] = ['initial_contact', 'followup', 'nego
 // (mostly never-contacted) lead universe dwarfs every real funnel stage down
 // to the same minimum-width floor. Total/cold counts are shown as separate
 // context above the funnel instead of distorting its scale.
-const FUNNEL_ORDER = ['contacted', 'replied', 'qualified', 'negotiation', 'contract'] as const;
+const FUNNEL_ORDER = ['contacted', 'replied', 'partial_qualified', 'qualified', 'negotiation', 'contract'] as const;
 type FunnelKey = (typeof FUNNEL_ORDER)[number];
 const FUNNEL_LABELS: Record<FunnelKey, string> = {
   contacted: 'Contacted',
   replied: 'Replied',
+  partial_qualified: 'Partial Qualified',
   qualified: 'Qualified',
   negotiation: 'Negotiation',
   contract: 'Contract',
 };
+// Matches STAGE_CONFIG's own colors for initial_contact/followup exactly,
+// rather than reusing one color for both now that they're separate bars.
 const FUNNEL_COLORS: Record<FunnelKey, string> = {
   contacted: '#38bdf8',
   replied: '#22d3ee',
-  qualified: '#a78bfa',
+  partial_qualified: '#a78bfa',
+  qualified: '#c084fc',
   negotiation: '#fb923c',
   contract: '#10b981',
 };
@@ -81,7 +85,8 @@ const FUNNEL_COLORS: Record<FunnelKey, string> = {
 function funnelBucket(stage: LeadStage): FunnelKey | null {
   if (stage === 'contacted') return 'contacted';
   if (stage === 'replied') return 'replied';
-  if (stage === 'initial_contact' || stage === 'followup') return 'qualified';
+  if (stage === 'initial_contact') return 'partial_qualified';
+  if (stage === 'followup') return 'qualified';
   if (stage === 'negotiation') return 'negotiation';
   if (stage === 'contract') return 'contract';
   return null;
@@ -642,7 +647,7 @@ export function DashboardView({
           {showSmsStats && (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               <ScheduledCallsCard leads={leads} />
-              <TasksCard userId={userId} />
+              <TasksCard userId={userId} leads={leads} />
             </div>
           )}
 
