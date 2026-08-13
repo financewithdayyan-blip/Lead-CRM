@@ -11,19 +11,19 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Bluebird Acquisition — Sell Your Distressed Property As-Is</title>
-<meta name="description" content="We buy distressed homes as-is in FL, NC, SC, IL, OH, GA, VA, TX, TN &amp; IN. Cash, managed listing or subject-to offers. Close in 30 days, costs covered.">
+<title>Cash Property Buyers | Sell Your House Fast — Bluebird Acquisition</title>
+<meta name="description" content="Sell your house fast for cash. Bluebird Acquisition is a trusted cash property buyer in FL, NC, SC, IL, OH, GA, VA, TX, TN &amp; IN. Close in 30 days, costs covered.">
 <link rel="canonical" href="https://www.bluebirdacquisition.com/">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Bluebird Acquisition">
-<meta property="og:title" content="Bluebird Acquisition — Sell Your Distressed Property As-Is">
-<meta property="og:description" content="We buy distressed homes as-is in FL, NC, SC, IL, OH, GA, VA, TX, TN & IN. Cash, managed listing or subject-to offers. Close in 30 days, costs covered.">
+<meta property="og:title" content="Cash Property Buyers | Sell Your House Fast — Bluebird Acquisition">
+<meta property="og:description" content="Sell your house fast for cash. Bluebird Acquisition is a trusted cash property buyer in FL, NC, SC, IL, OH, GA, VA, TX, TN & IN. Close in 30 days, costs covered.">
 <meta property="og:url" content="https://www.bluebirdacquisition.com/">
 <meta property="og:image" content="https://www.bluebirdacquisition.com/logo-mark.svg">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Bluebird Acquisition — Sell Your Distressed Property As-Is">
-<meta name="twitter:description" content="We buy distressed homes as-is in FL, NC, SC, IL, OH, GA, VA, TX, TN & IN. Cash, managed listing or subject-to offers. Close in 30 days, costs covered.">
+<meta name="twitter:title" content="Cash Property Buyers | Sell Your House Fast — Bluebird Acquisition">
+<meta name="twitter:description" content="Sell your house fast for cash. Bluebird Acquisition is a trusted cash property buyer in FL, NC, SC, IL, OH, GA, VA, TX, TN & IN. Close in 30 days, costs covered.">
 <meta name="twitter:image" content="https://www.bluebirdacquisition.com/logo-mark.svg">
 
 <script type="application/ld+json">
@@ -36,7 +36,7 @@
   "image": "https://www.bluebirdacquisition.com/logo-mark.svg",
   "telephone": "+1-217-408-2781",
   "email": "contactus@bluebirdacquisition.com",
-  "description": "We buy distressed properties as-is for cash, managed listing, or subject-to offers, with no fees, no repairs, and no waiting.",
+  "description": "Cash property buyers helping homeowners sell their house fast as-is, with no fees, no repairs, and no waiting.",
   "areaServed": [
     { "@type": "State", "name": "Florida" },
     { "@type": "State", "name": "North Carolina" },
@@ -1535,7 +1535,40 @@ footer{
   .header-phone span{ display:none; }
 }
 
+/* ============================================
+   TESTIMONIALS
+   ============================================ */
+.testimonials-strip{ background: var(--paper-dim); }
+.testimonial-grid{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:40px;
+}
+.testimonial-card{
+  background:var(--white); border:1.5px solid var(--paper-line); border-radius:var(--radius-md);
+  padding:28px 26px; box-shadow:var(--shadow-card);
+}
+/* Deliberately explicit, not decorative — this section ships with open
+   slots until real client quotes are collected, and nothing here should
+   ever be mistakable for a genuine testimonial. See /testimonials for the
+   full set. */
+.testimonial-badge{
+  display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600;
+  letter-spacing:0.08em; text-transform:uppercase; color:var(--brass);
+  background:rgba(201,162,75,0.14); padding:4px 9px; border-radius:100px; margin-bottom:14px;
+}
+.testimonial-card p{
+  font-family:var(--serif); font-style:italic; font-size:15.5px; line-height:1.6;
+  color:var(--slate-dim); margin-bottom:14px;
+}
+.testimonial-attr{ font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--slate-dim); }
+.testimonials-more{ text-align:center; margin-top:36px; }
+.testimonials-more a{
+  font-family:var(--sans); font-size:14px; font-weight:700; color:var(--sky-deep);
+  display:inline-flex; align-items:center; gap:6px;
+}
+.testimonials-more a:hover{ color:var(--sky); }
+
 @media (max-width: 980px){
+  .testimonial-grid{ grid-template-columns:1fr; }
   .hero-inner{ grid-template-columns:1fr; }
   .hero-scene{ height:420px; order:-1; margin-top:20px; }
   .burden-grid, .market-grid, .contact-grid{ grid-template-columns:1fr; }
@@ -1603,7 +1636,7 @@ footer{
       <span>(217) 408-2781</span>
     </a>
     <a href="/crm" class="header-login">Login</a>
-    <a href="#contact" class="header-cta">
+    <a href="/contact-us" class="header-cta">
       <span>Get Your Cash Offer</span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
@@ -1618,11 +1651,11 @@ footer{
   <div class="hero-grain"></div>
   <div class="hero-inner">
     <div class="hero-copy">
-      <div class="hero-eyebrow eyebrow"><span class="dot"></span> Distressed Property Relief</div>
+      <div class="hero-eyebrow eyebrow"><span class="dot"></span> Cash Home Buyers · Distressed Property Relief</div>
       <h1>We buy the property.<br>You <em>lose</em> the burden.</h1>
-      <p class="hero-sub">Facing foreclosure, a tax lien, or a code violation notice? Bluebird Acquisition buys homes as-is, in as little as 30 days — no repairs, no agents, no waiting on the bank.</p>
+      <p class="hero-sub">Facing foreclosure, a tax lien, or a code violation notice? Sell your house fast for cash with Bluebird Acquisition — as-is, in as little as 30 days, no repairs, no agents, no waiting on the bank.</p>
       <div class="hero-actions">
-        <a href="#contact" class="btn-primary">
+        <a href="/contact-us" class="btn-primary">
           Get My Cash Offer
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </a>
@@ -1871,7 +1904,7 @@ footer{
   <div class="container cta-inner reveal">
     <h2>Ready to put the deadline behind you?</h2>
     <p>Tell us about your property. We'll review your situation and get back to you with a real offer — usually within 24 hours.</p>
-    <a href="#contact" class="btn-primary">
+    <a href="/contact-us" class="btn-primary">
       Start My Free Offer
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
@@ -1879,150 +1912,42 @@ footer{
 </section>
 
 <!-- ============================================
-     CONTACT
+     TESTIMONIALS
      ============================================ -->
-<section class="contact" id="contact">
-  <div class="container contact-grid">
-    <div class="contact-info reveal">
-      <span class="eyebrow" style="color:var(--sky-deep); display:block; margin-bottom:14px;">Get Your Offer</span>
-      <h2>Tell us about the property.</h2>
-      <p>No obligation, no pressure. Share a few details and a member of our acquisitions team will follow up with next steps — usually within one business day.</p>
+<section class="testimonials-strip" id="testimonials">
+  <div class="container">
+    <div class="section-head center reveal" style="max-width:600px;margin-left:auto;margin-right:auto;">
+      <span class="eyebrow" style="color:var(--sky-deep);">What Sellers Say</span>
+      <h2>Real feedback from people we've helped.</h2>
+      <p>We're collecting quotes from past clients — check back soon, or see the full list on the Testimonials page.</p>
+    </div>
 
-      <div class="contact-points">
-        <div class="contact-point">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
-          <div><div class="cp-title">Call or Text</div><div class="cp-sub">(217) 408-2781 — 7 days a week</div></div>
-        </div>
-        <div class="contact-point">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z" stroke="none"/><path d="M22 6l-10 7L2 6"/><path d="M2 6h20v12H2z"/></svg></div>
-          <div><div class="cp-title">Email</div><div class="cp-sub">contactus@bluebirdacquisition.com</div></div>
-        </div>
-        <div class="contact-point">
-          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-          <div><div class="cp-title">Service Area</div><div class="cp-sub">FL · NC · SC · IL · OH · GA · VA · TX · TN · IN</div></div>
-        </div>
+    <div class="testimonial-grid">
+      <div class="testimonial-card reveal">
+        <span class="testimonial-badge">Placeholder — awaiting real quote</span>
+        <p>"Add a real client quote here about how quickly their closing went."</p>
+        <div class="testimonial-attr">— Client name, City, ST</div>
+      </div>
+      <div class="testimonial-card reveal">
+        <span class="testimonial-badge">Placeholder — awaiting real quote</span>
+        <p>"Add a real client quote here about the cash offer being fair, with no pressure to accept."</p>
+        <div class="testimonial-attr">— Client name, City, ST</div>
+      </div>
+      <div class="testimonial-card reveal">
+        <span class="testimonial-badge">Placeholder — awaiting real quote</span>
+        <p>"Add a real client quote here about the property being bought as-is, with no repairs required."</p>
+        <div class="testimonial-attr">— Client name, City, ST</div>
       </div>
     </div>
 
-    <form class="form-card reveal" id="leadForm">
-      <div class="form-row">
-        <div class="field">
-          <label for="fname">First Name</label>
-          <input type="text" id="fname" name="fname" placeholder="Jordan" required>
-        </div>
-        <div class="field">
-          <label for="lname">Last Name</label>
-          <input type="text" id="lname" name="lname" placeholder="Carter" required>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="field">
-          <label for="phone">Phone</label>
-          <input type="tel" id="phone" name="phone" placeholder="(217) 408-2781" required>
-        </div>
-        <div class="field">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" placeholder="you@email.com">
-        </div>
-      </div>
-      <div class="field">
-        <label for="address">Property Address</label>
-        <input type="text" id="address" name="address" placeholder="123 Main St, City, State" required>
-      </div>
-      <div class="form-row">
-        <div class="field">
-          <label for="situation">Situation</label>
-          <select id="situation" name="situation">
-            <option>Pre-Foreclosure</option>
-            <option>Tax Lien / Delinquency</option>
-            <option>Code Violation</option>
-            <option>Inherited Property</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="timeline">Timeline</label>
-          <select id="timeline" name="timeline">
-            <option>As soon as possible</option>
-            <option>Within 30 days</option>
-            <option>Within 90 days</option>
-            <option>Just exploring options</option>
-          </select>
-        </div>
-      </div>
-      <div class="field">
-        <label for="notes">Anything else we should know? (optional)</label>
-        <textarea id="notes" name="notes" placeholder="Auction date, lien amount, repairs needed..."></textarea>
-      </div>
-      <button type="submit" class="form-submit">
-        Get My Free Cash Offer
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-      </button>
-      <div class="form-note">No obligation. We respond within 1 business day.</div>
-    </form>
+    <div class="testimonials-more">
+      <a href="/testimonials">
+        Read all testimonials
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
   </div>
 </section>
-
-<script>
-(function () {
-  var form = document.getElementById('leadForm');
-  if (!form) return;
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var btn  = form.querySelector('.form-submit');
-    var note = form.querySelector('.form-note');
-    var orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = 'Sending&hellip;';
-    var phone = form.phone.value.trim();
-    var payload = {
-      first_name:       form.fname.value.trim(),
-      last_name:        form.lname.value.trim(),
-      phone:            phone,
-      email:            form.email.value.trim() || null,
-      property_address: form.address.value.trim(),
-      situation:        form.situation.value,
-      timeline:         form.timeline.value,
-      notes:            form.notes.value.trim() || null
-    };
-    fetch('https://jkbyqzbcquffmjrzkowq.supabase.co/rest/v1/web_leads', {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'apikey':        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprYnlxemJjcXVmZm1qcnprb3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMzQwODYsImV4cCI6MjA5NzcxMDA4Nn0.i1e7EaN28MTh04sQ_jAon8yAQqyZ2Jn1hWB_Fj4JVog',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprYnlxemJjcXVmZm1qcnprb3dxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMzQwODYsImV4cCI6MjA5NzcxMDA4Nn0.i1e7EaN28MTh04sQ_jAon8yAQqyZ2Jn1hWB_Fj4JVog',
-        'Prefer':        'return=minimal'
-      },
-      body: JSON.stringify(payload)
-    }).then(function (res) {
-      if (!res.ok) throw new Error('failed');
-      form.innerHTML = [
-        '<div style="text-align:center;padding:36px 16px;">',
-          '<svg width="54" height="54" viewBox="0 0 54 54" fill="none" style="display:block;margin:0 auto 18px">',
-            '<circle cx="27" cy="27" r="27" fill="rgba(30,143,213,.1)"/>',
-            '<path d="M16 27l8 8 15-17" stroke="var(--sky,#1e8fd5)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
-          '</svg>',
-          '<p style="font-family:var(--serif);font-size:1.25rem;font-weight:700;color:var(--ink);margin:0 0 10px">We received your inquiry!</p>',
-          '<p style="font-size:.88rem;color:var(--slate);line-height:1.65;max-width:290px;margin:0 auto 22px">',
-            'Our team will reach out within 1 business day. Urgent? Call us now:',
-          '</p>',
-          '<a href="tel:+12174082781" style="display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;padding:11px 24px;border-radius:100px;font-size:.875rem;font-weight:600;text-decoration:none;">',
-            '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.8a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.6a16 16 0 0 0 6.06 6.06l.95-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.72 18z"/></svg>',
-            '(217) 408-2781',
-          '</a>',
-        '</div>'
-      ].join('');
-    }).catch(function () {
-      btn.disabled = false;
-      btn.innerHTML = orig;
-      if (note) {
-        note.textContent = 'Something went wrong — please call us at (217) 408-2781.';
-        note.style.color = '#ef4444';
-      }
-    });
-  });
-})();
-</script>
 
 <!-- ============================================
      FAQ
@@ -2132,6 +2057,7 @@ footer{
         <ul>
           <li><a href="/about-us">About Us</a></li>
           <li><a href="/solutions">Solutions</a></li>
+          <li><a href="/testimonials">Testimonials</a></li>
           <li><a href="#what-we-do">Situations We Buy In</a></li>
           <li><a href="#offers">Our Offers</a></li>
           <li><a href="#promise">What You Get Every Time</a></li>
@@ -2142,9 +2068,9 @@ footer{
         <p class="footer-col-title">Get In Touch</p>
         <ul>
           <li><a href="/contact-us">Contact Us</a></li>
-          <li><a href="#contact">Request an Offer</a></li>
+          <li><a href="/contact-us">Request an Offer</a></li>
           <li><a href="tel:+12174082781">(217) 408-2781</a></li>
-          <li><a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a></li>
+          <li><a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;">&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;</a></li>
         </ul>
       </div>
       <div class="footer-col">
@@ -2238,7 +2164,7 @@ footer{
         <p>Questions about this Privacy Policy or your personal information can be directed to:<br>
         Bluebird Acquisition<br>
         Phone: <a href="tel:+12174082781">(217) 408-2781</a><br>
-        Email: <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a></p>
+        Email: <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;">&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;</a></p>
       </article>
 
       <!-- TERMS OF SERVICE -->
@@ -2282,7 +2208,7 @@ footer{
         <h3>11. Contact Us About These Terms</h3>
         <p>Bluebird Acquisition<br>
         Phone: <a href="tel:+12174082781">(217) 408-2781</a><br>
-        Email: <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a></p>
+        Email: <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;">&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;</a></p>
       </article>
 
       <!-- COMMUNICATIONS CONSENT -->
@@ -2306,7 +2232,7 @@ footer{
         <p>You can stop text messages at any time by replying <strong>STOP</strong> to any message we send you. You will receive a one-time confirmation that you have been unsubscribed, and no further messages will be sent unless you re-initiate contact. To stop phone calls, tell our representative directly during a call, or contact us using the information below and ask to be placed on our internal do-not-call list. We will honor opt-out requests within a reasonable time, consistent with applicable law.</p>
 
         <h3>5. Help</h3>
-        <p>Reply <strong>HELP</strong> to any text message for assistance, or contact us directly at <a href="tel:+12174082781">(217) 408-2781</a> or <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a>.</p>
+        <p>Reply <strong>HELP</strong> to any text message for assistance, or contact us directly at <a href="tel:+12174082781">(217) 408-2781</a> or <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;">&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;</a>.</p>
 
         <h3>6. Carrier Disclaimer</h3>
         <p>Carriers are not liable for delayed or undelivered messages. Supported carriers are not guaranteed to include every wireless provider.</p>
@@ -2330,7 +2256,7 @@ footer{
         <p>This request applies to personal information collected through our website and intake forms, such as your name, contact details, and property address. It does not affect information you've shared as part of an active or closed transaction, which we retain as needed to fulfill that transaction and meet legal and recordkeeping obligations.</p>
 
         <h3>2. How to Submit a Request</h3>
-        <p>To submit a Do Not Sell / Do Not Share request, email <a href="mailto:contactus@bluebirdacquisition.com">contactus@bluebirdacquisition.com</a> with the subject line "Do Not Sell My Info," or call <a href="tel:+12174082781">(217) 408-2781</a>. Please include your name and the phone number or email address you've used to contact us, so we can locate your record.</p>
+        <p>To submit a Do Not Sell / Do Not Share request, email <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;">&#99;&#111;&#110;&#116;&#97;&#99;&#116;&#117;&#115;&#64;&#98;&#108;&#117;&#101;&#98;&#105;&#114;&#100;&#97;&#99;&#113;&#117;&#105;&#115;&#105;&#116;&#105;&#111;&#110;&#46;&#99;&#111;&#109;</a> with the subject line "Do Not Sell My Info," or call <a href="tel:+12174082781">(217) 408-2781</a>. Please include your name and the phone number or email address you've used to contact us, so we can locate your record.</p>
 
         <h3>3. Verification</h3>
         <p>To protect your information from fraudulent requests, we may ask you to verify your identity before processing a request, using information you have already provided to us.</p>
@@ -2576,74 +2502,6 @@ window.addEventListener('popstate', () => {
   const hash = window.location.hash.slice(1);
   if (validLegalPages.includes(hash)) openLegalOverlay(hash);
 })();
-
-// ===== Contact form: submits to Google Sheets via Apps Script web app =====
-// 1. Follow the setup steps in google-sheets-integration/Code.gs to deploy
-//    your own Apps Script web app and get a URL like:
-//    https://script.google.com/macros/s/AKfycb.../exec
-// 2. Paste that URL below, replacing the placeholder.
-const GOOGLE_SHEET_WEB_APP_URL = 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE';
-
-const form = document.getElementById('leadForm');
-const formNote = form.querySelector('.form-note');
-const formNoteDefault = formNote ? formNote.textContent : '';
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = form.querySelector('.form-submit');
-  const originalBtnHTML = btn.innerHTML;
-
-  if (!GOOGLE_SHEET_WEB_APP_URL || GOOGLE_SHEET_WEB_APP_URL.indexOf('PASTE_YOUR') === 0) {
-    if (formNote) {
-      formNote.textContent = 'Form is not yet connected — see Code.gs setup steps.';
-      formNote.style.color = '#B5482F';
-    }
-    return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = 'Sending…';
-  btn.style.opacity = '0.7';
-
-  const payload = {
-    fname: form.fname.value,
-    lname: form.lname.value,
-    phone: form.phone.value,
-    email: form.email.value,
-    address: form.address.value,
-    situation: form.situation.value,
-    timeline: form.timeline.value,
-    notes: form.notes.value,
-    source: window.location.href
-  };
-
-  try {
-    await fetch(GOOGLE_SHEET_WEB_APP_URL, {
-      method: 'POST',
-      mode: 'no-cors', // Apps Script web apps don't return CORS headers;
-                        // the request still succeeds and writes the row,
-                        // we just can't read the response back.
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-
-    btn.innerHTML = "✓ Request Received — We'll Be In Touch";
-    btn.style.background = '#1568A8';
-    if (formNote) {
-      formNote.textContent = 'No obligation. We respond within 1 business day.';
-      formNote.style.color = '';
-    }
-    form.reset();
-  } catch (err) {
-    btn.disabled = false;
-    btn.innerHTML = originalBtnHTML;
-    btn.style.opacity = '';
-    if (formNote) {
-      formNote.textContent = "Something went wrong — please call or text us at (217) 408-2781 instead.";
-      formNote.style.color = '#B5482F';
-    }
-  }
-});
 
 // ===== HERO HEADLINE STAGGER ENTRANCE =====
 const heroH1 = document.querySelector('.hero h1');
@@ -3109,6 +2967,7 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
 
 <script>
 (function () {
+  var CONTACT_EMAIL = ['contactus', 'bluebirdacquisition.com'].join('@');
   var KB = [
     { k: ['hello','hi ','hey ','howdy','good morning','good afternoon','good evening','sup ','greetings'],
       r: "Hi! I'm the Bluebird Acquisition assistant — happy to help.\n\nWe buy houses in any condition, pay all closing costs and commissions, and close in as little as 30 days. What would you like to know?",
@@ -3179,7 +3038,7 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
       q: ['Get My Cash Offer','Talk to Someone','How fast can you close?'] },
 
     { k: ['contact','call','phone','text','email','speak to','talk to','reach','real person','someone','team','representative','get in touch','human','person'],
-      r: "Our acquisitions team is available <strong>7 days a week</strong>:\n\n📞 <strong>(217) 408-2781</strong> — call or text\n✉️ <strong>contactus@bluebirdacquisition.com</strong>\n\nOr fill out the form on this page — we respond within 1 business day.",
+      r: "Our acquisitions team is available <strong>7 days a week</strong>:\n\n📞 <strong>(217) 408-2781</strong> — call or text\n✉️ <strong>" + CONTACT_EMAIL + "</strong>\n\nOr fill out the form on this page — we respond within 1 business day.",
       q: ['Go to the form','Call Now: (217) 408-2781','Get My Cash Offer'] },
 
     { k: ['hours','when are you','business hours','7 days','available','open','after hours','weekend'],
@@ -3190,8 +3049,8 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
       r: "We buy in <strong>10 states</strong>:\n\n🏠 FL · NC · SC · IL · OH · GA · VA · TX · TN · IN\n\nNot sure if your specific area qualifies? Drop your address in the form and we'll confirm right away.",
       q: ['Get My Cash Offer','Contact the team','How It Works'] },
 
-    { k: ['managed listing','list it for you','novation','subject to','subject-to','creative financing','types of offer','purchase method','offer type','how do you buy','different options'],
-      r: "Depending on your situation, we can structure the purchase three ways:\n\n<strong>① Cash Purchase</strong> — closes in 30 days or less, clean and straightforward\n<strong>② Subject-To</strong> — we take over your existing mortgage payments\n<strong>③ Managed Listing</strong> — we renovate and sell on your behalf; you receive a higher net at closing\n\nWe'll recommend the right fit after reviewing your situation.",
+    { k: ['managed listing','list it for you','novation','subject to','subject-to','creative financing','types of offer','purchase method','offer type','how do you buy','different options','listing services','flat fee','flat 3%'],
+      r: "Depending on your situation, we can structure the sale four ways:\n\n<strong>① Cash Purchase</strong> — closes in 30 days or less, clean and straightforward\n<strong>② Novation</strong> — we renovate and resell on your behalf; you get a higher net without lifting a finger\n<strong>③ Subject-To</strong> — we take over your existing mortgage payments\n<strong>④ Listing Services</strong> — we list your property on the open market for a flat 3% or $10K, whichever is higher\n\nWe'll recommend the right fit after reviewing your situation.",
       q: ['Get My Cash Offer','Talk to Someone','How fast can you close?'] },
 
     { k: ['thank','thanks','appreciate','great','helpful','perfect','awesome','fantastic','that helps','got it'],
@@ -3200,14 +3059,13 @@ initCardTilt(document.querySelectorAll('.burden-item'), 5, 4);
   ];
 
   var FALLBACK = {
-    r: "Great question — and one best answered by our team directly, since every property situation is unique.\n\n📞 <strong>(217) 408-2781</strong> — call or text, 7 days a week\n✉️ <strong>contactus@bluebirdacquisition.com</strong>\n\nOr fill out the form and we'll reach out within 1 business day.",
+    r: "Great question — and one best answered by our team directly, since every property situation is unique.\n\n📞 <strong>(217) 408-2781</strong> — call or text, 7 days a week\n✉️ <strong>" + CONTACT_EMAIL + "</strong>\n\nOr fill out the form and we'll reach out within 1 business day.",
     q: ['Contact a Specialist','Get My Cash Offer','How It Works']
   };
 
   function scrollToForm() {
     closeChat();
-    var el = document.getElementById('contact') || document.getElementById('leadForm');
-    if (el) setTimeout(function () { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300);
+    window.location.href = '/contact-us';
   }
 
   var CHIPS = {
