@@ -1,5 +1,5 @@
 /**
- * Address → coordinates. Two providers, tried in order:
+ * Address → coordinates. Three providers, tried in order:
  *
  * 1. The US Census Bureau's geocoder — free, keyless, no rate limit, and
  *    built specifically on US TIGER/Line address ranges, so it resolves a
@@ -10,6 +10,12 @@
  *    geocoder can't find (new construction not yet in TIGER, non-standard
  *    addresses) — a volunteer-run service with a real usage policy: at most
  *    one request per second, no bulk work.
+ * 3. Photon (Komoot), only as a fallback for whatever Nominatim can't find —
+ *    free, keyless, and built on the same OSM data but a different, fuzzier
+ *    matching engine, so it occasionally resolves an address Nominatim's
+ *    stricter structured search misses. Not a fix for addresses no OSM
+ *    contributor has mapped yet, but a genuinely independent second attempt
+ *    against the same dataset.
  *
  * Only ever called admin-side when a packet is saved; results are stored on
  * the row, and the public packet page never geocodes anything itself.
@@ -22,6 +28,7 @@ export interface GeoPoint {
 
 const CENSUS_ENDPOINT = 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress';
 const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const PHOTON_ENDPOINT = 'https://photon.komoot.io/api/';
 
 /** Session-lifetime cache so re-saving a packet doesn't re-request known addresses. */
 const cache = new Map<string, GeoPoint | null>();
@@ -116,9 +123,23 @@ async function nominatimFallback(address: string, cityStateHint?: string): Promi
   return hit;
 }
 
-/** Geocodes one address, trying the Census geocoder first and Nominatim only
- * if that comes back empty. Exported directly (not just via geocodeAddresses)
- * for one-off lookups like the subject property's own coordinates. */
+/** Photon only returns coordinates for a real address match if it can also
+ * tell it's in the US — otherwise a loose fuzzy match can land overseas. */
+async function photonFallback(query: string): Promise<GeoPoint | null> {
+  const url = `${PHOTON_ENDPOINT}?${new URLSearchParams({ q: query, limit: '1', lang: 'en' })}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Photon geocoder returned ${res.status}`);
+  const data = await res.json();
+  const feature = data?.features?.[0];
+  const coords = feature?.geometry?.coordinates;
+  if (!coords || feature?.properties?.countrycode !== 'US') return null;
+  return { lat: Number(coords[1]), lng: Number(coords[0]) };
+}
+
+/** Geocodes one address, trying the Census geocoder first, then Nominatim,
+ * then Photon, each only if the previous one comes back empty. Exported
+ * directly (not just via geocodeAddresses) for one-off lookups like the
+ * subject property's own coordinates. */
 export async function geocodeAddress(address: string, cityStateHint?: string): Promise<GeoPoint | null> {
   const key = `${address.trim().toLowerCase()}|${cityStateHint ?? ''}`;
   if (!key) return null;
@@ -136,6 +157,15 @@ export async function geocodeAddress(address: string, cityStateHint?: string): P
   if (!hit) {
     try {
       hit = await nominatimFallback(address, cityStateHint);
+    } catch {
+      hit = null;
+    }
+  }
+
+  if (!hit) {
+    try {
+      await sleep(1100);
+      hit = await photonFallback(query);
     } catch {
       hit = null;
     }

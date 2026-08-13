@@ -266,7 +266,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
               stillMissingSubject ? "the subject property's area radius couldn't be located" : null,
             ]
               .filter(Boolean)
-              .join(' and ')}. This can happen for very new addresses the free geocoder doesn't have yet — try Save again later, or check the public link before sharing it.`
+              .join(' and ')}. This can happen for very new addresses none of the free geocoders have indexed yet — try Save again later, or check the public link before sharing it.`
           : null;
       setGeoWarning(warningMsg);
 
