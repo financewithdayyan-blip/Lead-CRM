@@ -8,6 +8,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET_TOKEN')!;
+const BLUEDOCS_PHONE_NORM = (Deno.env.get('ZOOM_FROM_NUMBER_BLUEDOCS') ?? '').replace(/[^0-9]/g, '').slice(-10);
 
 // Phone only — mirrors the same slots in send-sms/ai-reply, but this
 // function never sends, only needs to recognize which of the 6 numbers a
@@ -374,6 +375,42 @@ Deno.serve(async (req) => {
     // Reactions stop here entirely — no lead match needed, no stage change,
     // and (once Phase 4 exists) no AI call.
     if (reaction) return json({ ok: true, reaction: true });
+
+    // A reply to the dedicated Blue Docs signing number is never a sales
+    // lead — checked before resolveLead/createLeadFromUnmatched, which
+    // would otherwise happily create one (createLeadFromUnmatched has no
+    // concept of "this number belongs to something else"). Only checks
+    // contract_signing_parties at all when the destination number actually
+    // is the Blue Docs number, so this costs nothing on every other inbound
+    // text — required the moment Blue Docs starts texting real signers, not
+    // an afterthought: a signer's own reply ("did I sign this right?")
+    // would otherwise silently become a fake lead and possibly reach the AI
+    // cold-outreach pipeline.
+    const toNorm = normalizePhone(toRaw);
+    if (BLUEDOCS_PHONE_NORM && toNorm === BLUEDOCS_PHONE_NORM) {
+      const { data: signingParty } = await admin
+        .from('contract_signing_parties')
+        .select('id, name, contract_instance_id, contract_instances(name)')
+        .eq('phone_norm', fromNorm)
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (signingParty) {
+        const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+        if (admins?.length) {
+          const docName = (signingParty as any).contract_instances?.name ?? 'a document';
+          await admin.from('lc_notifications').insert(
+            admins.map((a) => ({
+              user_id: a.id,
+              type: 'contract_sms_reply',
+              title: `${signingParty.name} replied about ${docName}`,
+              body: body || '(no message text)',
+            })),
+          );
+        }
+        return json({ ok: true, signingReply: true });
+      }
+    }
 
     // Never attempt a match on a blank or malformed number. An empty fromNorm
     // in an .or() filter is a real value to compare against, not "match

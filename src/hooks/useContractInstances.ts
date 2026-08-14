@@ -6,7 +6,10 @@ import type { ContractField, PartyRole, PartyRoleDef } from './useDocTemplates';
 export interface ContractParty {
   role: PartyRole;
   name: string;
-  email: string;
+  /** Required — Blue Docs delivers exclusively over SMS (see
+   * create-contract-instance), and contract_signing_parties.email has never
+   * once been populated in production. */
+  phone: string;
   signOrder: number;
 }
 
@@ -22,19 +25,22 @@ export interface ContractInstance {
   leadName: string | null;
   name: string;
   fieldValues: Record<string, string>;
-  status: 'partial' | 'signed';
+  status: 'draft' | 'sent' | 'partial' | 'signed' | 'voided' | 'declined' | 'expired';
   finalStoragePath: string | null;
   createdAt: string;
   completedAt: string | null;
+  voidedAt: string | null;
+  voidedReason: string | null;
   parties: Array<{
     id: string;
     role: PartyRole;
     name: string;
-    status: 'pending' | 'signed';
+    status: 'pending' | 'signed' | 'declined';
     accessToken: string;
     signOrder: number;
     signatureDataUrl: string | null;
     signedAt: string | null;
+    declinedReason: string | null;
   }>;
 }
 
@@ -59,6 +65,8 @@ function fromRow(r: any): ContractInstance {
     finalStoragePath: r.final_storage_path,
     createdAt: r.created_at,
     completedAt: r.completed_at,
+    voidedAt: r.voided_at,
+    voidedReason: r.voided_reason,
     parties: (r.contract_signing_parties ?? []).map((p: any) => ({
       id: p.id,
       role: p.role,
@@ -68,12 +76,15 @@ function fromRow(r: any): ContractInstance {
       signOrder: p.sign_order,
       signatureDataUrl: p.signature_data_url,
       signedAt: p.signed_at,
+      declinedReason: p.declined_reason,
     })),
   };
 }
 
-const INSTANCE_SELECT =
-  '*, doc_templates(name, storage_path, fields, type, party_roles), leads(first_name, last_name), contract_signing_parties(*)';
+// Only name/type come from the live doc_templates join now — everything
+// else about the template (fields, party_roles, storage path) is read from
+// this contract's own snapshot columns instead. See migration 0090.
+const INSTANCE_SELECT = '*, doc_templates(name, type), leads(first_name, last_name), contract_signing_parties(*)';
 
 export function useContractInstances() {
   return useQuery({
@@ -89,8 +100,12 @@ export function useContractInstances() {
   });
 }
 
+/** Creates the contract + its parties and sends the first signer's SMS
+ * invite, all in one server-side request — see create-contract-instance.
+ * Moved off the client (which used to do two separate table inserts here)
+ * so there's no window where the DB rows exist but the invite was never
+ * attempted because the admin's tab closed in between. */
 export function useGenerateContract() {
-  const { session } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -100,52 +115,23 @@ export function useGenerateContract() {
       fieldValues: Record<string, string>;
       parties: ContractParty[];
     }) => {
-      // Snapshot the template's current field layout onto the contract
-      // itself, not just a reference to the (mutable) template row — see
-      // migration 0090's own comment for why. Temporary: this insert moves
-      // into a server-side edge function (create-contract-instance) as part
-      // of the SMS-delivery rebuild, at which point this fetch goes with it.
-      const { data: template, error: templateErr } = await supabase
-        .from('doc_templates')
-        .select('fields, party_roles, storage_path, docx_storage_path')
-        .eq('id', input.templateId)
-        .single();
-      if (templateErr) throw templateErr;
-
-      const { data: instance, error } = await supabase
-        .from('contract_instances')
-        .insert({
-          template_id: input.templateId,
-          lead_id: input.leadId ?? null,
+      const { data, error } = await supabase.functions.invoke('create-contract-instance', {
+        body: {
+          templateId: input.templateId,
+          leadId: input.leadId,
           name: input.name,
-          field_values: input.fieldValues,
-          created_by: session!.user.id,
-          template_fields_snapshot: template.fields,
-          template_party_roles_snapshot: template.party_roles,
-          template_storage_path_snapshot: template.storage_path,
-          template_docx_storage_path_snapshot: template.docx_storage_path,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-
-      const { data: parties, error: partiesErr } = await supabase
-        .from('contract_signing_parties')
-        .insert(
-          input.parties.map((p) => ({
-            contract_instance_id: instance.id,
-            role: p.role,
-            name: p.name,
-            email: p.email || null,
-            sign_order: p.signOrder,
-          })),
-        )
-        .select('role, name, access_token, sign_order');
-      if (partiesErr) throw partiesErr;
-
-      return {
-        instanceId: instance.id as string,
-        parties: parties as Array<{ role: PartyRole; name: string; access_token: string; sign_order: number }>,
+          fieldValues: input.fieldValues,
+          parties: input.parties.map((p) => ({ role: p.role, name: p.name, phone: p.phone, signOrder: p.signOrder })),
+        },
+      });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as {
+        instanceId: string;
+        parties: Array<{ role: PartyRole; name: string; access_token: string; sign_order: number }>;
       };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
@@ -157,6 +143,28 @@ export function useDeleteContractInstance() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('contract_instances').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
+  });
+}
+
+/** Cancels an in-progress envelope without deleting its history — unlike
+ * delete, the contract instance and its parties/audit trail stay on record,
+ * just no longer signable. Admins already have full RLS on
+ * contract_instances (contract_instances_all), so this is a plain update,
+ * no RPC/edge function needed; what actually makes voiding effective is the
+ * status guard in get_signing_party/submit-signature/signing-pdf-url
+ * (0089/0090), which reject a voided instance's tokens. */
+export function useVoidContractInstance() {
+  const { profile } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await supabase
+        .from('contract_instances')
+        .update({ status: 'voided', voided_at: new Date().toISOString(), voided_by: profile?.id ?? null, voided_reason: reason ?? null })
+        .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
@@ -176,6 +184,10 @@ export interface SigningPartyInfo {
    * the sender or declined by an earlier party. The signer's page shows a
    * dedicated message instead of the normal signing flow when this is set. */
   blocked: 'voided' | 'declined' | null;
+  /** Whether this party has already agreed to sign electronically —
+   * SignContractPage shows the consent screen instead of the normal signing
+   * UI until this is true. */
+  hasConsented: boolean;
   contractName: string;
   fieldValues: Record<string, string>;
   contractStatus: 'partial' | 'signed';
@@ -202,6 +214,7 @@ export function usePublicSigningParty(token: string | undefined) {
         isTurn: d.isTurn,
         waitingOn: d.waitingOn,
         blocked: d.blocked ?? null,
+        hasConsented: !!d.hasConsented,
         contractName: d.contractName,
         fieldValues: d.fieldValues ?? {},
         contractStatus: d.contractStatus,
@@ -217,6 +230,20 @@ export function usePublicSigningParty(token: string | undefined) {
     // Polled while waiting for the other party, so "their turn" flips
     // without the signer having to refresh manually.
     refetchInterval: (query) => (query.state.data && !query.state.data.isTurn ? 8000 : false),
+  });
+}
+
+export function useDeclineSignature() {
+  return useMutation({
+    mutationFn: async ({ token, reason }: { token: string; reason?: string }) => {
+      const { data, error } = await supabase.functions.invoke('decline-signature', { body: { token, reason } });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as { ok: true };
+    },
   });
 }
 
@@ -281,6 +308,22 @@ export function useLogSigningView() {
   return useMutation({
     mutationFn: async (token: string) => {
       await supabase.functions.invoke('log-signing-view', { body: { token } }).catch(() => {});
+    },
+  });
+}
+
+/** Unlike view-logging, a failed consent record has to block moving into
+ * the signing UI — submit-signature independently refuses to accept a
+ * signature with no matching event on record. */
+export function useRecordConsent() {
+  return useMutation({
+    mutationFn: async (token: string) => {
+      const { data, error } = await supabase.functions.invoke('record-consent', { body: { token } });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
     },
   });
 }

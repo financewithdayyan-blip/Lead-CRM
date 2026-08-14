@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, CheckCircle2, Copy, Download, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
+import { Ban, Check, CheckCircle2, Copy, Download, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
 import { roleLabel } from '@/hooks/useDocTemplates';
 import { formatDate, formatDateTime } from '@/lib/utils';
@@ -23,12 +23,16 @@ export function ContractInstanceRow({
   onPreview,
   onDownload,
   onDelete,
+  onVoid,
 }: {
   instance: ContractInstance;
   showTemplateName?: boolean;
   onPreview: () => void;
   onDownload: (path: string, name: string) => void;
   onDelete: () => void;
+  /** Omitted entirely for a template's own Sign Inbox list, where voiding
+   * isn't offered — only the global Envelopes dashboard passes this. */
+  onVoid?: () => void;
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
   const { data: events = [] } = useContractAuditEvents(c.id);
@@ -53,17 +57,22 @@ export function ContractInstanceRow({
   }
 
   const signed = c.status === 'signed';
+  const voidedOrDeclined = c.status === 'voided' || c.status === 'declined';
+  const canVoid = onVoid && !signed && !voidedOrDeclined && c.status !== 'expired';
 
   return (
     <div
       className={`flex items-center justify-between rounded-md border px-3 py-2.5 ${
-        signed ? 'border-success/30 bg-success-dim' : 'border-border-2 bg-surface-3'
+        signed ? 'border-success/30 bg-success-dim' : voidedOrDeclined ? 'border-danger/30 bg-danger-dim' : 'border-border-2 bg-surface-3'
       }`}
     >
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 truncate text-[13px] font-medium text-text">
           {signed && <CheckCircle2 size={14} className="shrink-0 text-success" />}
+          {voidedOrDeclined && <Ban size={14} className="shrink-0 text-danger" />}
           {c.name}
+          {c.status === 'voided' && <span className="text-[11px] font-normal text-danger">Voided</span>}
+          {c.status === 'declined' && <span className="text-[11px] font-normal text-danger">Declined</span>}
         </div>
         <div className="truncate text-[11px] text-text-3">
           {showTemplateName && c.templateName ? `${c.templateName} · ` : ''}
@@ -111,6 +120,11 @@ export function ContractInstanceRow({
         {c.status === 'signed' && c.finalStoragePath && (
           <button className="btn !px-2 !py-1 text-[11px]" onClick={() => onDownload(c.finalStoragePath!, c.name)}>
             <Download size={12} /> Download signed PDF
+          </button>
+        )}
+        {canVoid && (
+          <button className="btn !px-2 !py-1 text-[11px]" title="Void — cancels the send, keeps the history" onClick={onVoid}>
+            <Ban size={12} /> Void
           </button>
         )}
         <button className="btn !px-2 !py-1 text-[11px] text-danger" onClick={onDelete}>

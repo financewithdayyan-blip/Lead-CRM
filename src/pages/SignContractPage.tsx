@@ -5,7 +5,9 @@ import {
   usePublicSigningParty,
   useSigningPdfUrl,
   useSubmitSignature,
+  useDeclineSignature,
   useLogSigningView,
+  useRecordConsent,
   useSignedFinalDocUrl,
 } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
@@ -120,7 +122,14 @@ export function SignContractPage() {
   const { data: party, isLoading, isError } = usePublicSigningParty(token);
   const getPdfUrl = useSigningPdfUrl();
   const submitSignature = useSubmitSignature();
+  const declineSignature = useDeclineSignature();
   const logView = useLogSigningView();
+  const recordConsent = useRecordConsent();
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declined, setDeclined] = useState(false);
+  const [justConsented, setJustConsented] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const pageWidth = usePageWidth();
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
@@ -228,6 +237,16 @@ export function SignContractPage() {
     );
   }
 
+  if (declined) {
+    return (
+      <StatusScreen
+        icon={<FileText size={24} />}
+        title="You've declined to sign"
+        body="Whoever sent this has been notified. No further action is needed from you."
+      />
+    );
+  }
+
   if (party.blocked) {
     return (
       <StatusScreen
@@ -269,6 +288,54 @@ export function SignContractPage() {
         title={`Waiting on ${party.waitingOn}`}
         body={`${party.waitingOn} needs to sign ${party.contractName} before it's your turn. This page updates automatically — no need to refresh.`}
       />
+    );
+  }
+
+  if (!party.hasConsented && !justConsented) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+        <div className="w-full max-w-md rounded-md border border-border bg-white p-5 shadow-card">
+          <p className="text-[15px] font-semibold text-text">Before you continue</p>
+          <div className="mt-2.5 max-h-52 overflow-y-auto rounded-md border border-border-2 bg-surface-3 p-3 text-[12px] leading-relaxed text-text-2">
+            <p className="mb-2">
+              {party.contractName} is being signed electronically. By checking the box below and continuing, you agree
+              that your electronic signature is legally binding, just like a signature on paper, under the U.S. ESIGN
+              Act and applicable state law.
+            </p>
+            <p className="mb-2">
+              You have the right to receive this document on paper instead — contact whoever sent it to you to request
+              that. You can also withdraw this consent at any time before you finish signing, simply by closing this
+              page without submitting.
+            </p>
+            <p>
+              You'll need a device with a modern web browser and an internet connection to view and sign this
+              document — nothing else is required.
+            </p>
+          </div>
+          <label className="mt-3 flex items-start gap-2 text-[12.5px] text-text-2">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={consentChecked}
+              onChange={(e) => setConsentChecked(e.target.checked)}
+            />
+            I have read the above and agree to sign this document electronically.
+          </label>
+          <button
+            className="btn btn-primary mt-3 w-full !py-2.5 text-[14px]"
+            disabled={!consentChecked || !token || recordConsent.isPending}
+            onClick={() =>
+              token && recordConsent.mutate(token, { onSuccess: () => setJustConsented(true) })
+            }
+          >
+            {recordConsent.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
+            {recordConsent.isPending ? 'Continuing…' : 'Agree & Continue'}
+          </button>
+          {recordConsent.isError && (
+            <p className="mt-2 text-[12px] text-danger">{(recordConsent.error as Error).message}</p>
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -392,6 +459,44 @@ export function SignContractPage() {
             <p className="text-[13px] text-text-2">Nothing here needs your signature — just confirm below once you've reviewed everything above.</p>
           </div>
         )}
+
+        <div className="mt-4 text-center">
+          {!declineOpen ? (
+            <button className="text-[12px] font-medium text-text-3 hover:text-text-2" onClick={() => setDeclineOpen(true)}>
+              I can't sign this
+            </button>
+          ) : (
+            <div className="rounded-md border border-dashed border-border-2 bg-surface-3 p-3 text-left">
+              <p className="mb-2 text-[12.5px] text-text-2">
+                Let us know why — this stops the document for everyone, so whoever sent it can follow up.
+              </p>
+              <textarea
+                className="input min-h-16 text-[13px]"
+                placeholder="Optional — what's the issue?"
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+              />
+              <div className="mt-2 flex justify-end gap-2">
+                <button className="text-[12px] font-medium text-text-3 hover:text-text-2" onClick={() => setDeclineOpen(false)}>
+                  Never mind
+                </button>
+                <button
+                  className="btn !bg-danger !text-white !py-1.5 !px-3 text-[12.5px] disabled:opacity-50"
+                  disabled={declineSignature.isPending}
+                  onClick={() =>
+                    token &&
+                    declineSignature.mutate(
+                      { token, reason: declineReason.trim() || undefined },
+                      { onSuccess: () => setDeclined(true) },
+                    )
+                  }
+                >
+                  {declineSignature.isPending ? 'Submitting…' : 'Confirm decline'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Sticky bottom action bar — the submit button stays reachable on a

@@ -18,6 +18,14 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'htt
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
+const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
+const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!;
+const BLUEDOCS_NUMBER = {
+  phone: Deno.env.get('ZOOM_FROM_NUMBER_BLUEDOCS') ?? '',
+  email: Deno.env.get('ZOOM_USER_EMAIL_BLUEDOCS') ?? '',
+};
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -26,6 +34,77 @@ const CORS_HEADERS = {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
 }
+
+const FETCH_TIMEOUT_MS = 15_000;
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timed out waiting on ${label}`)), FETCH_TIMEOUT_MS)),
+  ]);
+}
+
+// ── Zoom sending (duplicated from send-sms/create-contract-instance, not
+// shared — this codebase's own established convention). A failure anywhere
+// in here must never fail the signer's own successful signature — every
+// call site below wraps this in try/catch and only logs. ──────────────────
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let cachedZoomToken: { token: string; expiresAt: number } | null = null;
+
+async function zoomFetch(url: string, options: RequestInit, maxRetries = 4): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), ...options });
+    if (res.status !== 429 || attempt >= maxRetries) return res;
+    const retryAfterSec = Number(res.headers.get('Retry-After'));
+    const backoffMs = (Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 500 * 2 ** attempt) + Math.random() * 250;
+    await res.body?.cancel().catch(() => {});
+    await sleep(backoffMs);
+  }
+}
+
+async function zoomToken(): Promise<string> {
+  if (cachedZoomToken && Date.now() < cachedZoomToken.expiresAt) return cachedZoomToken.token;
+  const basic = btoa(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`);
+  const res = await zoomFetch(
+    `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(ZOOM_ACCOUNT_ID)}`,
+    { method: 'POST', headers: { Authorization: `Basic ${basic}` } },
+  );
+  if (!res.ok) throw new Error(`Zoom auth failed (${res.status}): ${await res.text()}`);
+  const data = await res.json();
+  cachedZoomToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000 - 60_000 };
+  return cachedZoomToken.token;
+}
+
+async function zoomUserId(email: string, token: string): Promise<string> {
+  const res = await zoomFetch(`https://api.zoom.us/v2/users/${encodeURIComponent(email)}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Zoom user lookup failed for ${email} (${res.status}): ${await res.text()}`);
+  const data = await res.json();
+  return data.id as string;
+}
+
+async function sendZoomSms(fromPhone: string, toPhone: string, message: string, token: string) {
+  const res = await zoomFetch('https://api.zoom.us/v2/phone/sms/messages', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sender: { phone_number: fromPhone }, to_members: [{ phone_number: toPhone }], message }),
+  });
+  if (!res.ok) throw new Error(`Zoom send failed (${res.status}): ${await res.text()}`);
+  return res.json().catch(() => ({}));
+}
+
+/** Fetches a fresh token + resolves the Blue Docs sender's Zoom user id, then
+ * sends. One helper since every call site here needs the same two steps
+ * first — a signature submission only ever sends at most one SMS itself. */
+async function sendBlueDocsSms(toPhone: string, message: string) {
+  const token = await withTimeout(zoomToken(), 'Zoom auth');
+  await withTimeout(zoomUserId(BLUEDOCS_NUMBER.email, token), 'Zoom user lookup');
+  await withTimeout(sendZoomSms(BLUEDOCS_NUMBER.phone, toPhone, message, token), 'Zoom send');
+}
+
+// DRAFT COPY — flagged for sign-off before this ships live, same as
+// create-contract-instance's INVITE_MESSAGE.
+const NEXT_SIGNER_MESSAGE = (name: string, docName: string, link: string) =>
+  `Hi ${name}, it's your turn to sign ${docName} from Bluebird Acquisition. Sign here: ${link}`;
+const COMPLETED_MESSAGE = (docName: string) => `${docName} has been signed by everyone. Thank you!`;
 
 interface ContractField {
   id: string;
@@ -181,6 +260,17 @@ Deno.serve(async (req) => {
     const blockedBy = (allParties ?? []).find((p) => p.sign_order < party.sign_order && p.status !== 'signed');
     if (blockedBy) return json({ error: `Waiting on ${blockedBy.name} to sign first` }, 409);
 
+    // The consent screen in SignContractPage already gates this client-side,
+    // but the server shouldn't trust that it was actually shown — same
+    // reasoning this table's own RLS comment gives for never taking a
+    // client-reported audit event at face value.
+    const { count: consentCount } = await admin
+      .from('contract_audit_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('party_id', party.id)
+      .eq('event_type', 'consented');
+    if (!consentCount) return json({ error: 'You need to consent to sign electronically first.' }, 409);
+
     const signedAt = new Date().toISOString();
     const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
     const userAgent = req.headers.get('user-agent');
@@ -217,7 +307,27 @@ Deno.serve(async (req) => {
     );
     const allSigned = updatedParties.every((p) => p.status === 'signed');
 
-    if (!allSigned) return json({ ok: true, allSigned: false });
+    if (!allSigned) {
+      // Whoever's now lowest sign_order among the still-pending parties just
+      // got unlocked by this signature — notify them. Wrapped so a Zoom
+      // hiccup here never fails the signer's own already-recorded signature.
+      const nextParty = updatedParties.filter((p) => p.status !== 'signed').sort((a, b) => a.sign_order - b.sign_order)[0];
+      if (nextParty?.phone) {
+        try {
+          const { data: nameRow } = await admin.from('contract_instances').select('name').eq('id', party.contract_instance_id).single();
+          const link = `https://www.bluebirdacquisition.com/crm/sign/${nextParty.access_token}`;
+          await sendBlueDocsSms(nextParty.phone, NEXT_SIGNER_MESSAGE(nextParty.name, nameRow?.name ?? 'a document', link));
+          await admin.from('contract_audit_events').insert({
+            contract_instance_id: party.contract_instance_id,
+            party_id: nextParty.id,
+            event_type: 'sent',
+          });
+        } catch (smsErr) {
+          console.error('Blue Docs next-signer SMS failed:', smsErr);
+        }
+      }
+      return json({ ok: true, allSigned: false });
+    }
 
     // ── Every party has signed — flatten the final PDF. ──────────────────────
     // Reads the field layout/file path off the contract instance's own
@@ -311,18 +421,28 @@ Deno.serve(async (req) => {
     cert.heading('Signing Certificate');
     cert.line(`Document: ${instance.name} (${docKind})`);
     cert.line(`Completed: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
+    // Only the starting template's hash can be printed here without being
+    // circular — the final document's own hash necessarily depends on bytes
+    // that include this very page, so it's computed after save() below and
+    // stored on the contract instance instead (viewable in the admin
+    // preview), not printed on the page it would be hashing.
+    if (instance.template_pdf_sha256) cert.line(`Starting document hash (SHA-256): ${instance.template_pdf_sha256}`, { size: 8.5 });
     cert.gap(14);
 
-    cert.subheading('Parties');
+    cert.subheading('Timeline');
     for (const p of updatedParties) {
       const roleWord = roleWordFor(p.role, template.type, partyRoles);
-      cert.line(`${roleWord}: ${p.name}${p.email ? ` <${p.email}>` : ''}`, { size: 10.5, color: [0.05, 0.05, 0.05] });
-      const event = (auditEvents ?? []).find((e) => e.party_id === p.id && e.event_type === 'signed');
-      if (p.signed_at) {
-        cert.line(`  Completed: ${new Date(p.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
+      cert.line(`${roleWord}: ${p.name}`, { size: 10.5, color: [0.05, 0.05, 0.05] });
+      const partyEvents = (auditEvents ?? []).filter((e) => e.party_id === p.id);
+      for (const evt of partyEvents) {
+        const label = { sent: 'Invited', viewed: 'Viewed', consented: 'Consented to sign electronically', signed: 'Signed' }[evt.event_type as string] ?? evt.event_type;
+        const when = new Date(evt.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+        cert.line(`  ${label}: ${when}`);
+        if (evt.event_type === 'signed') {
+          if (evt.ip_address) cert.line(`    IP address: ${evt.ip_address}`);
+          if (evt.user_agent) cert.line(`    Device: ${evt.user_agent}`);
+        }
       }
-      if (event?.ip_address) cert.line(`  IP address: ${event.ip_address}`);
-      if (event?.user_agent) cert.line(`  Device: ${event.user_agent}`);
       cert.line(`  Signature: ${p.signature_data_url ? 'Signed' : 'No signature required for this role'}`);
       cert.gap(8);
     }
@@ -341,11 +461,24 @@ Deno.serve(async (req) => {
     const { error: uploadErr } = await admin.storage.from('blue-docs').upload(finalPath, finalBytes, { contentType: 'application/pdf' });
     if (uploadErr) throw uploadErr;
 
+    const finalHashBuffer = await crypto.subtle.digest('SHA-256', finalBytes);
+    const finalSha256 = Array.from(new Uint8Array(finalHashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+
     const { error: finalizeErr } = await admin
       .from('contract_instances')
-      .update({ status: 'signed', final_storage_path: finalPath, completed_at: new Date().toISOString() })
+      .update({ status: 'signed', final_storage_path: finalPath, completed_at: new Date().toISOString(), final_pdf_sha256: finalSha256 })
       .eq('id', instance.id);
     if (finalizeErr) throw finalizeErr;
+
+    // Notify everyone it's done — wrapped so a Zoom hiccup here never turns
+    // an already-successful, already-stored signature into a failed request.
+    try {
+      for (const p of updatedParties) {
+        if (p.phone) await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(instance.name));
+      }
+    } catch (smsErr) {
+      console.error('Blue Docs completion SMS failed:', smsErr);
+    }
 
     return json({ ok: true, allSigned: true });
   } catch (e) {

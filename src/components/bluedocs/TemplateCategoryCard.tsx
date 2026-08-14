@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Download, FilePlus2, FileText, Inbox, Loader2, Map, Send, Trash2, Upload } from 'lucide-react';
+import { ChevronDown, Download, FilePlus2, FileText, Loader2, Map, Send, Trash2, Upload } from 'lucide-react';
 import {
   useUploadDocTemplate,
   useDeleteDocTemplate,
@@ -7,7 +7,6 @@ import {
   type ContractType,
   type DocTemplate,
 } from '@/hooks/useDocTemplates';
-import { useContractInstances } from '@/hooks/useContractInstances';
 import { formatDate } from '@/lib/utils';
 
 /** Small overflow menu — Download/Delete tucked away, matching the
@@ -70,7 +69,6 @@ export function TemplateCategoryCard({
   multi,
   onOpenMapper,
   onSend,
-  onOpenInbox,
   onDeleteTarget,
 }: {
   label: string;
@@ -85,10 +83,8 @@ export function TemplateCategoryCard({
   multi?: boolean;
   onOpenMapper: (t: DocTemplate) => void;
   onSend: (t: DocTemplate) => void;
-  onOpenInbox: (t: DocTemplate) => void;
   onDeleteTarget: (t: { id: string; storagePath: string | null; docxStoragePath: string | null }) => void;
 }) {
-  const { data: instances = [] } = useContractInstances();
   const upload = useUploadDocTemplate();
   const deleteTemplate = useDeleteDocTemplate();
   const getSignedUrl = useSignedTemplateUrl();
@@ -178,7 +174,6 @@ export function TemplateCategoryCard({
       ) : (
         <div className="mt-3 space-y-1.5">
           {items.map((t) => {
-            const inboxCount = instances.filter((i) => i.templateId === t.id).length;
             return (
               <div
                 key={t.id}
@@ -204,10 +199,6 @@ export function TemplateCategoryCard({
                       </button>
                       <button className="btn btn-primary !px-2.5 !py-1.5 text-[11px]" onClick={() => onSend(t)}>
                         <Send size={12} /> Invite to Sign
-                      </button>
-                      <button className="btn !px-2.5 !py-1.5 text-[11px]" onClick={() => onOpenInbox(t)}>
-                        <Inbox size={12} /> Sign Inbox
-                        <span className="ml-0.5 rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">{inboxCount}</span>
                       </button>
                     </>
                   ) : (

@@ -4,7 +4,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
-import { SignInboxModal } from '@/components/bluedocs/SignInboxModal';
 import { TemplateCategoryCard } from '@/components/bluedocs/TemplateCategoryCard';
 import { useDocTemplates, useDeleteDocTemplate, useSignedTemplateUrl, type ContractType, type DocTemplate } from '@/hooks/useDocTemplates';
 
@@ -45,7 +44,6 @@ function useDocFlow() {
   const deleteTemplate = useDeleteDocTemplate();
   const [mappingTarget, setMappingTarget] = useState<{ template: DocTemplate; pdfUrl: string } | null>(null);
   const [sendTarget, setSendTarget] = useState<DocTemplate | null>(null);
-  const [inboxTarget, setInboxTarget] = useState<DocTemplate | null>(null);
   const [firstSignerLink, setFirstSignerLink] = useState<{ label: string; url: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; storagePath: string | null; docxStoragePath: string | null } | null>(null);
 
@@ -59,8 +57,6 @@ function useDocFlow() {
     mappingTarget,
     sendTarget,
     setSendTarget,
-    inboxTarget,
-    setInboxTarget,
     firstSignerLink,
     setFirstSignerLink,
     deleteTarget,
@@ -94,13 +90,12 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
         />
       )}
 
-      {flow.inboxTarget && <SignInboxModal template={flow.inboxTarget} onClose={() => flow.setInboxTarget(null)} />}
-
       {flow.firstSignerLink && (
         <Modal open onClose={() => flow.setFirstSignerLink(null)} title="Invitation sent" width="md">
           <p className="text-[13px] text-text-2">
-            Send this link to fill in and sign first. Each next party's link unlocks automatically once the one
-            before them is done, and you can find it in this template's Sign Inbox from that point on.
+            {flow.firstSignerLink.label.split(' — ')[0]} was just texted their signing link automatically. Each next
+            party gets texted the same way as soon as it's their turn — track progress any time from Envelopes. Here's
+            the link too, in case you want to share it another way.
           </p>
           <div className="mt-3">
             <SigningLinkRow label={flow.firstSignerLink.label} url={flow.firstSignerLink.url} />
@@ -142,7 +137,6 @@ function LoiGeneratorTab() {
         items={templates}
         onOpenMapper={flow.openMapper}
         onSend={flow.setSendTarget}
-        onOpenInbox={flow.setInboxTarget}
         onDeleteTarget={flow.setDeleteTarget}
       />
       <DocFlowModals flow={flow} />
@@ -166,7 +160,6 @@ function ContractTemplatesTab() {
           items={templates.filter((t) => t.contractType === ct.key)}
           onOpenMapper={flow.openMapper}
           onSend={flow.setSendTarget}
-          onOpenInbox={flow.setInboxTarget}
           onDeleteTarget={flow.setDeleteTarget}
         />
       ))}
@@ -177,7 +170,6 @@ function ContractTemplatesTab() {
         multi
         onOpenMapper={flow.openMapper}
         onSend={flow.setSendTarget}
-        onOpenInbox={flow.setInboxTarget}
         onDeleteTarget={flow.setDeleteTarget}
       />
       <DocFlowModals flow={flow} />

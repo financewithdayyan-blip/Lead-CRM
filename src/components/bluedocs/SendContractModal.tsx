@@ -8,7 +8,15 @@ interface PartyDraft {
   key: string;
   role: PartyRole;
   name: string;
-  email: string;
+  phone: string;
+}
+
+/** Same 10/11-digit check create-contract-instance applies server-side —
+ * this is just a client-side head start so a bad number doesn't need a
+ * round trip to be caught. */
+function isValidPhone(raw: string): boolean {
+  const digits = raw.replace(/[^0-9]/g, '');
+  return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
 }
 
 /**
@@ -35,20 +43,20 @@ export function SendContractModal({
 
   const [name, setName] = useState(template.name);
   const [parties, setParties] = useState<PartyDraft[]>([
-    { key: 'buyer', role: 'buyer', name: '', email: '' },
-    { key: 'seller', role: 'seller', name: '', email: '' },
-    ...template.partyRoles.map((r) => ({ key: r.id, role: r.id, name: '', email: '' })),
+    { key: 'buyer', role: 'buyer', name: '', phone: '' },
+    { key: 'seller', role: 'seller', name: '', phone: '' },
+    ...template.partyRoles.map((r) => ({ key: r.id, role: r.id, name: '', phone: '' })),
   ]);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = name.trim() && parties.every((p) => p.name.trim());
+  const canSubmit = name.trim() && parties.every((p) => p.name.trim() && isValidPhone(p.phone));
 
   function updateParty(key: string, patch: Partial<PartyDraft>) {
     setParties((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
   }
 
   function addParty() {
-    setParties((prev) => [...prev, { key: crypto.randomUUID(), role: 'other', name: '', email: '' }]);
+    setParties((prev) => [...prev, { key: crypto.randomUUID(), role: 'other', name: '', phone: '' }]);
   }
 
   function removeParty(key: string) {
@@ -73,7 +81,7 @@ export function SendContractModal({
         templateId: template.id,
         name: name.trim(),
         fieldValues: {},
-        parties: parties.map((p, i) => ({ role: p.role, name: p.name.trim(), email: p.email.trim(), signOrder: i + 1 })),
+        parties: parties.map((p, i) => ({ role: p.role, name: p.name.trim(), phone: p.phone.trim(), signOrder: i + 1 })),
       });
       const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
       onSent({
@@ -142,9 +150,10 @@ export function SendContractModal({
                   />
                   <input
                     className="input"
-                    placeholder="Email (optional)"
-                    value={p.email}
-                    onChange={(e) => updateParty(p.key, { email: e.target.value })}
+                    placeholder="Phone number"
+                    inputMode="tel"
+                    value={p.phone}
+                    onChange={(e) => updateParty(p.key, { phone: e.target.value })}
                   />
                 </div>
               );
@@ -153,9 +162,9 @@ export function SendContractModal({
         </div>
 
         <p className="text-[12px] text-text-3">
-          Parties sign in the order above — each one's link only unlocks once everyone before them is done. You'll get{' '}
-          {firstRoleLabel === 'Us' ? 'our' : "the first signer's"} link right away; the rest become copyable from this
-          template's Sign Inbox as they unlock.
+          Parties sign in the order above — each one's link only unlocks once everyone before them is done.{' '}
+          {firstRoleLabel === 'Us' ? 'Our' : "The first signer's"} phone gets a text with their link the moment you send this; everyone
+          after them is texted automatically as their turn comes up.
         </p>
 
         <div className="flex justify-end gap-2">
