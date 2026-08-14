@@ -29,6 +29,7 @@ const HEADER_HTML = `<header class="site-header">
     <nav class="nav-links">
       <a href="/about-us">About Us</a>
       <a href="/solutions">Solutions</a>
+      <a href="/blog">Blog</a>
       <a href="/contact-us">Contact Us</a>
     </nav>
     <a href="tel:+12174082781" class="header-phone" aria-label="Call Bluebird Acquisition at (217) 408-2781">

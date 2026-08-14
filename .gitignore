@@ -12,3 +12,9 @@ dist-ssr
 supabase/.temp
 .vercel
 .env*
+
+# Generated fresh from the database by scripts/generate-blog.mjs on every
+# build (see package.json's build script) — not source, same reasoning as
+# dist/ not being tracked.
+public/blog/
+public/sitemap.xml
