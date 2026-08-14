@@ -44,9 +44,13 @@ function fromRow(r: any): ContractInstance {
     templateId: r.template_id,
     templateName: r.doc_templates?.name ?? null,
     templateType: r.doc_templates?.type ?? null,
-    templateStoragePath: r.doc_templates?.storage_path ?? null,
-    templateFields: r.doc_templates?.fields ?? [],
-    templatePartyRoles: r.doc_templates?.party_roles ?? [],
+    // Read from this contract's own snapshot, taken when it was sent — not
+    // the live doc_templates row, which may have been edited since. See
+    // migration 0090 for why: editing a template in place used to silently
+    // change what an in-flight or already-signed contract showed/stamped.
+    templateStoragePath: r.template_storage_path_snapshot ?? null,
+    templateFields: r.template_fields_snapshot ?? [],
+    templatePartyRoles: r.template_party_roles_snapshot ?? [],
     leadId: r.lead_id,
     leadName: r.leads ? `${r.leads.first_name ?? ''} ${r.leads.last_name ?? ''}`.trim() : null,
     name: r.name,
@@ -96,6 +100,18 @@ export function useGenerateContract() {
       fieldValues: Record<string, string>;
       parties: ContractParty[];
     }) => {
+      // Snapshot the template's current field layout onto the contract
+      // itself, not just a reference to the (mutable) template row — see
+      // migration 0090's own comment for why. Temporary: this insert moves
+      // into a server-side edge function (create-contract-instance) as part
+      // of the SMS-delivery rebuild, at which point this fetch goes with it.
+      const { data: template, error: templateErr } = await supabase
+        .from('doc_templates')
+        .select('fields, party_roles, storage_path, docx_storage_path')
+        .eq('id', input.templateId)
+        .single();
+      if (templateErr) throw templateErr;
+
       const { data: instance, error } = await supabase
         .from('contract_instances')
         .insert({
@@ -104,6 +120,10 @@ export function useGenerateContract() {
           name: input.name,
           field_values: input.fieldValues,
           created_by: session!.user.id,
+          template_fields_snapshot: template.fields,
+          template_party_roles_snapshot: template.party_roles,
+          template_storage_path_snapshot: template.storage_path,
+          template_docx_storage_path_snapshot: template.docx_storage_path,
         })
         .select('id')
         .single();

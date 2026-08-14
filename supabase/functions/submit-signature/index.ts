@@ -220,19 +220,24 @@ Deno.serve(async (req) => {
     if (!allSigned) return json({ ok: true, allSigned: false });
 
     // ── Every party has signed — flatten the final PDF. ──────────────────────
+    // Reads the field layout/file path off the contract instance's own
+    // snapshot columns (taken when it was sent), not a live join to
+    // doc_templates — a template edited after this contract was sent must
+    // never change what gets stamped onto an already-in-flight document.
+    // doc_templates is still joined for type/name, which aren't versioned.
     const { data: instance, error: instErr } = await admin
       .from('contract_instances')
-      .select('*, doc_templates(storage_path, fields, type, name, party_roles)')
+      .select('*, doc_templates(type, name)')
       .eq('id', party.contract_instance_id)
       .single();
     if (instErr) throw instErr;
 
-    const template = (instance as any).doc_templates as {
-      storage_path: string;
-      fields: ContractField[];
-      type: string;
-      name: string;
-      party_roles: PartyRoleDef[];
+    const template = {
+      storage_path: instance.template_storage_path_snapshot as string,
+      fields: (instance.template_fields_snapshot ?? []) as ContractField[],
+      type: (instance as any).doc_templates?.type as string,
+      name: (instance as any).doc_templates?.name as string,
+      party_roles: (instance.template_party_roles_snapshot ?? []) as PartyRoleDef[],
     };
     const partyRoles = template.party_roles ?? [];
     const fieldValues = (instance.field_values ?? {}) as Record<string, string>;
