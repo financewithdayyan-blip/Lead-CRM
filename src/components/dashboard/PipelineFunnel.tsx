@@ -14,10 +14,18 @@ export interface OffFunnelBucket {
 
 /**
  * The single visual that ties SMS outreach and calling into one pipeline:
- * bars taper as leads drop off, and the conversion callout between bars is
- * exactly the rate at which one stage feeds the next — Negotiation sits
- * downstream of Qualified because that's the actual rule now (calls happen
- * to qualified leads, not cold ones).
+ * bars taper as leads drop off, and the callout between bars is the actual
+ * drop-off rate from one stage to the next — Negotiation sits downstream of
+ * Qualified because that's the actual rule now (calls happen to qualified
+ * leads, not cold ones).
+ *
+ * Each bar is cumulative — "Replied" counts every lead that reached Replied
+ * *or moved further* (Qualified, Negotiation, Contract, etc. all count
+ * toward it too), the standard funnel-chart convention so the bars taper
+ * monotonically. That's why these numbers run higher than the Kanban
+ * board's per-column counts, which show only leads sitting in that exact
+ * stage right now — the two are answering different questions, not
+ * disagreeing on the underlying leads.
  *
  * `stages` should start at the first real funnel step (Contacted), not the
  * whole lead universe — a "Cold" bar scaled against thousands of never-
@@ -41,7 +49,7 @@ export function PipelineFunnel({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between text-[12px] text-text-2">
+      <div className="mb-1 flex items-center justify-between text-[12px] text-text-2">
         <span>
           <span className="font-semibold text-text">{totalLeads.toLocaleString()}</span> total leads
         </span>
@@ -49,17 +57,21 @@ export function PipelineFunnel({
           <span className="font-semibold text-text">{coldCount.toLocaleString()}</span> still cold, not yet contacted
         </span>
       </div>
+      <p className="mb-4 text-[11px] text-text-3">
+        Each bar counts leads that reached that stage or further — not a live headcount. For who's sitting where
+        right now, see the Kanban board.
+      </p>
 
       <div className="space-y-1">
         {stages.map((s, i) => {
           const pct = (s.count / max) * 100;
           const prev = stages[i - 1];
-          const convPct = prev && prev.count > 0 ? Math.round((s.count / prev.count) * 100) : null;
+          const dropOffPct = prev && prev.count > 0 ? Math.round((1 - s.count / prev.count) * 100) : null;
           return (
             <div key={s.key}>
               {i > 0 && (
                 <div className="py-0.5 text-center text-[11px] font-medium text-text-3">
-                  {convPct !== null ? `↓ ${convPct}%` : null}
+                  {dropOffPct !== null ? `↓ ${dropOffPct}% drop-off` : null}
                 </div>
               )}
               <div className="group flex items-center gap-3">
