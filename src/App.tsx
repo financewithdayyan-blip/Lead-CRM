@@ -30,7 +30,6 @@ const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) =>
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
 const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
-const BlogPage = lazy(() => import('@/pages/BlogPage').then((m) => ({ default: m.BlogPage })));
 const PublicLoiPage = lazy(() => import('@/pages/PublicLoiPage').then((m) => ({ default: m.PublicLoiPage })));
 const SignContractPage = lazy(() => import('@/pages/SignContractPage').then((m) => ({ default: m.SignContractPage })));
 
@@ -82,7 +81,6 @@ export default function App() {
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />
                         <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                         <Route path="/blue-docs" element={<BlueDocsPage />} />
-                        <Route path="/blog" element={<BlogPage />} />
                         <Route path="/team" element={<TeamPage />} />
                         <Route path="/team/:memberId" element={<MemberDashboardPage />} />
                         <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />

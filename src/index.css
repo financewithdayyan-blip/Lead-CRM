@@ -45,59 +45,6 @@ body {
   display: none;
 }
 
-/* Live-formatted typography for the blog admin's Tiptap editor (see
-   RichTextEditor.tsx) — kept here instead of pulling in
-   @tailwindcss/typography for one editor box. No preview pane needed since
-   formatting renders in place; deliberately not shared with the generated
-   public post pages, which have their own full stylesheet in
-   scripts/blog-template.mjs. */
-.tiptap-editor .ProseMirror {
-  outline: none;
-  font-size: 14.5px;
-  line-height: 1.65;
-  color: #16314f;
-}
-.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  color: #8693a1;
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-.tiptap-editor h2,
-.tiptap-editor h3,
-.tiptap-editor h4 {
-  font-weight: 700;
-  line-height: 1.3;
-  margin: 1em 0 0.4em;
-  color: #0b1e33;
-}
-.tiptap-editor h2 {
-  font-size: 1.25rem;
-}
-.tiptap-editor h3 {
-  font-size: 1.1rem;
-}
-.tiptap-editor h4 {
-  font-size: 1rem;
-}
-.tiptap-editor p {
-  margin-bottom: 0.85em;
-}
-.tiptap-editor ul,
-.tiptap-editor ol {
-  margin: 0 0 0.85em 1.4em;
-}
-.tiptap-editor li {
-  margin-bottom: 0.3em;
-}
-.tiptap-editor li p {
-  margin-bottom: 0;
-}
-.tiptap-editor u {
-  text-decoration: underline;
-}
-
 /* Promotes a heavy SVG chart to its own compositing layer, so scrolling past
    it translates a cached bitmap instead of repainting the chart's paths on
    every frame — the actual fix belongs in not rendering something expensive
