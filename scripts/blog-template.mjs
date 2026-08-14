@@ -141,13 +141,13 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 
 /* BLOG — single post */
 .post-hero{ background:var(--ink); color:var(--white); padding:64px 32px 56px; }
-.post-hero-inner{ max-width:760px; margin:0 auto; }
+.post-hero-inner{ max-width:820px; margin:0 auto; }
 .post-hero .blog-card-tags{ margin-bottom:18px; }
 .post-hero h1{ font-family:var(--serif); font-size:clamp(1.9rem,4.5vw,2.7rem); font-weight:700; line-height:1.15; margin-bottom:16px; }
 .post-hero-meta{ font-family:var(--mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(246,243,236,0.6); }
-.post-cover{ max-width:760px; margin:-40px auto 0; padding:0 32px; }
-.post-cover img{ width:100%; border-radius:var(--radius-md); box-shadow:var(--shadow-card); }
-.post-article{ max-width:700px; margin:0 auto; padding:56px 32px 24px; font-size:17px; line-height:1.8; color:var(--ink-soft); }
+.post-cover{ max-width:920px; margin:-40px auto 0; padding:0 32px; }
+.post-cover img{ width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center 38%; border-radius:var(--radius-md); box-shadow:var(--shadow-card); }
+.post-article{ max-width:740px; margin:0 auto; padding:56px 32px 24px; font-size:17px; line-height:1.8; color:var(--ink-soft); }
 .post-article h2{ font-family:var(--serif); font-size:1.6rem; font-weight:700; color:var(--ink); margin:40px 0 16px; line-height:1.25; }
 .post-article h3{ font-family:var(--serif); font-size:1.3rem; font-weight:700; color:var(--ink); margin:32px 0 14px; line-height:1.3; }
 .post-article p{ margin-bottom:20px; }
@@ -162,7 +162,7 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 .post-article pre code{ background:none; padding:0; color:inherit; }
 .post-article img{ border-radius:var(--radius-md); margin:24px 0; }
 .post-article hr{ border:none; border-top:1px solid var(--paper-line); margin:32px 0; }
-.post-footer{ max-width:700px; margin:0 auto; padding:8px 32px 64px; }
+.post-footer{ max-width:740px; margin:0 auto; padding:8px 32px 64px; }
 .post-back-link{ display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:700; color:var(--sky-deep); }
 .post-back-link:hover{ color:var(--sky); }
 
