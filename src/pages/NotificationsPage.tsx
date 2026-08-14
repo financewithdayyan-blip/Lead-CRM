@@ -309,7 +309,14 @@ export function NotificationsPage() {
 
   for (const n of recentDbAlerts) {
     activity.push({
-      id: `dbalert:${n.id}`, category: 'auction', at: n.createdAt, unread: !n.isRead,
+      id: `dbalert:${n.id}`,
+      // lc_notifications carries several unrelated alert types (auction
+      // tier changes, and now bulk-SMS stall alerts) — route anything that
+      // isn't actually auction-related to 'team' instead of hardcoding
+      // every row to 'auction', or it'd land in a filter tab nobody would
+      // think to check. Allow-list so future new types default safely.
+      category: n.type === 'auction_passed' || n.type === 'auction_tier_change' || n.type === 'auction_cadence' ? 'auction' : 'team',
+      at: n.createdAt, unread: !n.isRead,
       icon: Bell, accent: n.type === 'auction_passed' ? '#6b7280' : ACCENT.auction,
       title: n.title,
       detail: n.body ?? undefined,
