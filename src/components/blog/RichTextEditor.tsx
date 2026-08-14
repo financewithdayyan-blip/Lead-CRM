@@ -49,6 +49,17 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: {
       attributes: { class: 'ProseMirror-editor' },
+      // Content copied from ChatGPT, Google Docs, and similar sources often
+      // separates lines with <br> instead of real paragraph tags, which
+      // would otherwise land as one giant block — every heading/paragraph
+      // toggle is block-level, so applying "Heading" anywhere inside that
+      // block converts the whole thing at once. Splitting <br> runs into
+      // real paragraphs on paste is what makes "select one line, make it a
+      // heading" affect only that line.
+      transformPastedHTML: (html) => {
+        if (!/<br\s*\/?>/i.test(html)) return html; // already uses real block tags — leave it alone
+        return `<p>${html.replace(/(<br\s*\/?>\s*)+/gi, '</p><p>')}</p>`;
+      },
     },
   });
 
