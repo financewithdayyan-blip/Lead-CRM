@@ -4,15 +4,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { BulkSmsItemStatus, BulkSmsJob, BulkSmsJobItem, Lead } from '@/types/domain';
 import type { SmsNumberKey } from '@/lib/smsNumbers';
 
-export interface BulkSmsResult {
-  sent: number;
-  skipped: { leadId: string; reason: string }[];
-  failed: { leadId: string; error: string }[];
-  /** How the send split across numbers. More than one lead auto-splits
-   * across every configured number; a single lead uses just the one picked. */
-  perNumber: { key: string; label: string; sent: number }[];
-}
-
+/** The shape a bulk send is configured with — saved verbatim as
+ * bulk_sms_jobs.config (see useCreateBulkSmsJob/BulkSmsConfig below) and
+ * read back from there by bulk-sms-dispatcher on every tick. There's no
+ * client-side "fire this chunk" call anymore — see that function's own
+ * comments for why sending moved server-side, and supabase/functions/send-sms
+ * for the one thing that still calls this shape directly (a manual reply
+ * from the thread view, which never sets jobId). */
 export interface BulkSmsInput {
   leadIds: string[];
   templatesByTag: Record<string, string>;
@@ -27,141 +25,6 @@ export interface BulkSmsInput {
   /** When set, send-sms writes live per-lead progress to bulk_sms_job_items
    * as it works, instead of only returning a final summary at the end. */
   jobId?: string;
-}
-
-// A single invocation processing a big batch can run long enough to hit the
-// edge function platform's execution-time limit and get killed mid-batch,
-// leaving the job stuck 'running' forever with no error — this happened
-// repeatedly on 1000+ lead sends (one measured run got cut off at ~152s after
-// only 238 of 1441 leads). Splitting into smaller sequential invocations
-// keeps each one comfortably short; send-sms itself only marks the job
-// 'completed' once nothing is left queued across every chunk, so this is
-// invisible to the caller beyond taking a few extra round trips.
-//
-// (A server-side self-chaining version of this was tried on 2026-08-10 to
-// survive a closed tab entirely, but caused a real stuck-send incident —
-// reverted back to this proven client-driven loop. The admin just needs to
-// keep the tab open, or click Resume, for a large send.)
-const BULK_CHUNK_SIZE = 100;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// A chunk invocation occasionally hangs badly enough on Zoom's side that no
-// timeout inside send-sms catches it — that only covers work happening once
-// the function is actually running, not a connection that never gets a
-// response at all. Observed for real on 2026-08-12: 9+ minutes of total
-// silence, zero leads even reaching "sending," until the admin noticed and
-// manually clicked Stop then Resume. CLIENT_TIMEOUT_MS turns that into a
-// fast, visible failure instead of an unbounded hang; the retry below goes
-// one step further and recovers from it automatically — the whole point
-// being to actually finish the send, not require a human watching for it.
-//
-// Retrying is only safe against leads still genuinely 'queued': send-sms
-// keeps running server-side even after the client gives up waiting on it
-// (confirmed for real — job items kept advancing after this exact kind of
-// timeout), so blindly resending the same chunk risks a second text to
-// anyone the orphaned invocation is still mid-send to. Waiting SETTLE_MS
-// after a timeout before re-checking gives that orphaned run a real chance
-// to either finish or get killed by the platform's own execution ceiling;
-// only leads still 'queued' after that — never touched, or the platform did
-// kill it before reaching them — get resent.
-const CLIENT_TIMEOUT_MS = 150_000;
-const SETTLE_MS = 60_000;
-const MAX_CHUNK_RETRIES = 2;
-
-async function sendChunkWithRetry(leadIds: string[], rest: Omit<BulkSmsInput, 'leadIds'>): Promise<BulkSmsResult> {
-  let remaining = leadIds;
-  for (let attempt = 0; ; attempt++) {
-    const { data, error } = await supabase.functions.invoke<BulkSmsResult>('send-sms', {
-      body: { ...rest, leadIds: remaining },
-      timeout: CLIENT_TIMEOUT_MS,
-    });
-    if (!error) {
-      if ((data as any)?.error) throw new Error((data as any).error);
-      return data as BulkSmsResult;
-    }
-    // FunctionsFetchError means the request itself never got a response —
-    // our own timeout above, or a real network drop — as opposed to
-    // FunctionsHttpError (send-sms actually ran and returned a real error,
-    // already recorded on the job, nothing ambiguous to wait out) or
-    // FunctionsRelayError. Only the "might still be running" case gets the
-    // settle-and-retry treatment.
-    const isHang = error.name === 'FunctionsFetchError';
-    if (!isHang || attempt >= MAX_CHUNK_RETRIES || !rest.jobId) {
-      const body = await error.context?.json?.().catch(() => null);
-      throw new Error(body?.error || error.message);
-    }
-    await sleep(SETTLE_MS);
-    const { data: stillQueued } = await supabase
-      .from('bulk_sms_job_items')
-      .select('lead_id')
-      .eq('job_id', rest.jobId)
-      .eq('status', 'queued')
-      .in('lead_id', remaining);
-    remaining = (stillQueued ?? []).map((r) => r.lead_id as string);
-    // Nothing left queued — the orphaned run actually finished this batch
-    // on its own while we were waiting it out.
-    if (!remaining.length) return { sent: 0, skipped: [], failed: [], perNumber: [] };
-  }
-}
-
-/**
- * Calls the send-sms edge function, one chunk of leads at a time. The window
- * check, opt-out check and rolling-limit check all happen server-side — this
- * is just the chunking wrapper, not where any of those rules live. Shared by
- * useSendBulkSms (a fresh send) and useResumeBulkSmsJob (only the leads a
- * stalled job never got to).
- */
-async function sendBulkSmsChunked(input: BulkSmsInput): Promise<BulkSmsResult> {
-  const { leadIds, ...rest } = input;
-  const chunks: string[][] = [];
-  for (let i = 0; i < leadIds.length; i += BULK_CHUNK_SIZE) chunks.push(leadIds.slice(i, i + BULK_CHUNK_SIZE));
-  if (!chunks.length) chunks.push([]);
-
-  const merged: BulkSmsResult = { sent: 0, skipped: [], failed: [], perNumber: [] };
-  const perNumberByKey = new Map<string, { key: string; label: string; sent: number }>();
-
-  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-    const chunk = chunks[chunkIndex];
-    // Checked between chunks, not mid-chunk — a chunk already in flight
-    // finishes (up to 100 leads), but no further one gets dispatched once
-    // an admin hits Stop. Cheap enough to check every time since each chunk
-    // itself takes tens of seconds.
-    //
-    // Skipped for the very first chunk: a Resume call's job is *currently*
-    // sitting at 'paused' by definition (that's the only way the Resume
-    // button shows up at all) — checking before chunk 0 too meant this loop
-    // saw its own starting state, bailed out immediately, and silently did
-    // nothing at all. send-sms itself flips the row to 'running' as its
-    // first real step, so from chunk 1 onward this correctly reflects a
-    // Stop click made *during* the run instead of the job's state before it.
-    if (rest.jobId && chunkIndex > 0) {
-      const { data: jobRow } = await supabase.from('bulk_sms_jobs').select('status').eq('id', rest.jobId).single();
-      if (jobRow?.status === 'paused') break;
-    }
-    const result = await sendChunkWithRetry(chunk, rest);
-    merged.sent += result.sent;
-    merged.skipped.push(...result.skipped);
-    merged.failed.push(...result.failed);
-    for (const pn of result.perNumber) {
-      const existing = perNumberByKey.get(pn.key);
-      if (existing) existing.sent += pn.sent;
-      else perNumberByKey.set(pn.key, { ...pn });
-    }
-  }
-  merged.perNumber = Array.from(perNumberByKey.values());
-  return merged;
-}
-
-export function useSendBulkSms() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: sendBulkSmsChunked,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['activities'] });
-    },
-  });
 }
 
 // ── Bulk SMS jobs — the live queue behind the Bulk SMS page ────────────────
@@ -315,12 +178,13 @@ export function useBulkSmsJobItems(jobId: string | undefined, jobStatus: string 
 }
 
 /**
- * Stops a running send between chunks — the client-side loop in
- * sendBulkSmsChunked checks for this and stops dispatching further batches,
- * so a chunk already in flight (up to 100 leads) still finishes rather than
- * being cut off mid-batch. Routed through a narrow RPC rather than a direct
- * update, since bulk_sms_jobs has no client-side UPDATE policy at all — this
- * is the one specific exception, and it can only ever move running->paused.
+ * Stops a running send — bulk-sms-dispatcher only ever selects jobs with
+ * status='running' (see supabase/functions/bulk-sms-dispatcher), so once
+ * this lands, its next tick simply stops finding this job; a batch already
+ * mid-send that tick still finishes rather than being cut off. Routed
+ * through a narrow RPC rather than a direct update, since bulk_sms_jobs has
+ * no client-side UPDATE policy at all — this is the one specific exception,
+ * and it can only ever move running->paused.
  */
 export function usePauseBulkSmsJob() {
   const qc = useQueryClient();
@@ -337,47 +201,24 @@ export function usePauseBulkSmsJob() {
 }
 
 /**
- * Picks a stalled, failed, or paused job back up — only the leads still
- * sitting at 'queued' for it, using the same message/settings it was
- * started with, so retrying never re-texts someone who already got a
- * message. Requires the job to have a saved config (see
- * useCreateBulkSmsJob); older jobs from before that existed can't be
- * auto-resumed.
+ * Picks a stalled, failed, or paused job back up. bulk-sms-dispatcher (the
+ * pg_cron-driven worker, see supabase/functions/bulk-sms-dispatcher) is the
+ * only thing that ever actually selects a batch and sends it — this just
+ * flips the job back to 'running' via a narrow RPC (bulk_sms_jobs has no
+ * client-side UPDATE policy, same reasoning as usePauseBulkSmsJob above) so
+ * the dispatcher's next tick (within about a minute) picks it back up on
+ * its own, using the same message/settings it was started with.
  */
 export function useResumeBulkSmsJob() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (jobId: string) => {
-      const { data: job, error: jobErr } = await supabase.from('bulk_sms_jobs').select('*').eq('id', jobId).single();
-      if (jobErr) throw jobErr;
-      if (!job.config) {
-        throw new Error(
-          "This send started before Resume existed, so its message and settings weren't saved. Start a fresh send instead — leads already messaged from it have moved past the New stage, so they're safe to leave in your selection.",
-        );
-      }
-
-      const leadIds: string[] = [];
-      for (let from = 0; ; from += ITEMS_PAGE_SIZE) {
-        const { data, error } = await supabase
-          .from('bulk_sms_job_items')
-          .select('lead_id')
-          .eq('job_id', jobId)
-          .eq('status', 'queued')
-          .order('id', { ascending: true })
-          .range(from, from + ITEMS_PAGE_SIZE - 1);
-        if (error) throw error;
-        leadIds.push(...(data ?? []).map((r) => r.lead_id).filter((id): id is string => !!id));
-        if (!data || data.length < ITEMS_PAGE_SIZE) break;
-      }
-      if (!leadIds.length) throw new Error('Nothing left to resume — every lead in this job already has an outcome.');
-
-      return sendBulkSmsChunked({ ...(job.config as BulkSmsConfig), leadIds, jobId });
+      const { error } = await supabase.rpc('resume_bulk_sms_job', { p_job_id: jobId });
+      if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['activities'] });
       qc.invalidateQueries({ queryKey: ['bulk_sms_job'] });
-      qc.invalidateQueries({ queryKey: ['bulk_sms_job_items'] });
+      qc.invalidateQueries({ queryKey: ['bulk_sms_jobs'] });
     },
   });
 }

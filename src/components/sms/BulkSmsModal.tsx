@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Loader2, Send } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { useCreateBulkSmsJob, useSendBulkSms } from '@/hooks/useSms';
+import { useCreateBulkSmsJob } from '@/hooks/useSms';
 import { useTags } from '@/hooks/useTags';
 import { useSmsTemplates } from '@/hooks/useSmsTemplates';
 import { useSmsSendSettings, DEFAULT_SMS_SEND_SETTINGS } from '@/hooks/useSmsSendSettings';
@@ -34,7 +34,6 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
   const { data: tags = [] } = useTags();
   const { data: savedTemplates = [], isSuccess: templatesLoaded } = useSmsTemplates();
   const { data: sendSettings } = useSmsSendSettings();
-  const sendBulk = useSendBulkSms();
   const createJob = useCreateBulkSmsJob();
 
   // Caps how many of the selected leads this send will ever actually queue,
@@ -123,24 +122,12 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
         config: { templatesByTag, defaultTemplate, fromKey, dailyLimits: normalizedLimits, perMessageDelayMs },
       });
 
-      // Not awaited: send-sms keeps running server-side and writes its own
-      // progress into bulk_sms_job_items as it goes (including marking the
-      // job itself 'failed' with a reason for a same-turn problem like being
-      // outside the sending window) — the Bulk SMS page picks all of that up
-      // by polling, so this modal doesn't need to stay open to see it. This
-      // tab does need to stay open (or the admin needs to hit Resume later)
-      // until the whole send finishes — see BULK_CHUNK_SIZE's note in
-      // useSms.ts for why a fully server-side version of this was reverted.
-      sendBulk.mutate({
-        leadIds: leads.map((l) => l.id),
-        templatesByTag,
-        defaultTemplate,
-        fromKey,
-        dailyLimits: normalizedLimits,
-        perMessageDelayMs,
-        jobId: job.id,
-      });
-
+      // That's the whole client-side job — bulk-sms-dispatcher (a pg_cron
+      // job ticking every minute, see supabase/functions/bulk-sms-dispatcher)
+      // picks up any 'running' job on its own and drives it to completion,
+      // batch by batch, entirely server-side. This tab can close immediately;
+      // the Bulk SMS page just polls bulk_sms_jobs/bulk_sms_job_items to show
+      // progress, it doesn't drive it.
       navigate(`/bulk-sms/${job.id}`);
       onClose();
     } catch (e) {

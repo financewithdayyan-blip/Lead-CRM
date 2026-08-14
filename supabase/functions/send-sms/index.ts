@@ -542,13 +542,38 @@ Deno.serve(async (req) => {
         const item = items[i];
         const { lead, message, to } = item;
 
+        // Atomic claim, not just a status write: this is what makes it safe
+        // for bulk-sms-dispatcher (the pg_cron-driven worker) and this
+        // function to both be reachable for the same job without ever
+        // double-texting a lead. The .eq('status','queued') + .select('id')
+        // combination means the UPDATE only actually matches — and only
+        // this invocation only proceeds to Zoom — if the row was still
+        // 'queued' at the moment this exact statement ran; a concurrent
+        // caller racing the same lead sees zero rows back and skips it
+        // instead of sending. See supabase/functions/send-reminders for the
+        // same claim-before-work shape already proven in this codebase.
         if (jobId) {
-          await withTimeout(
-            admin.from('bulk_sms_job_items').update({ status: 'sending', updated_at: nowIso() })
-              .eq('job_id', jobId).eq('lead_id', lead.id)
-              .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
-            'mark item sending',
-          ).catch(() => {});
+          let claimed = false;
+          try {
+            const { data: claimRows } = await withTimeout(
+              admin.from('bulk_sms_job_items').update({ status: 'sending', updated_at: nowIso() })
+                .eq('job_id', jobId).eq('lead_id', lead.id).eq('status', 'queued')
+                .select('id')
+                .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+              'claim item before sending',
+            );
+            claimed = !!claimRows?.length;
+          } catch {
+            claimed = false;
+          }
+
+          if (!claimed) {
+            // Someone else already claimed this lead — do NOT call Zoom,
+            // and write nothing (leave the item exactly as whoever won
+            // already set it, rather than stomping a legitimate 'sent').
+            skipped.push({ leadId: lead.id, reason: 'already claimed by another process — no duplicate text sent' });
+            continue;
+          }
         }
 
         try {
