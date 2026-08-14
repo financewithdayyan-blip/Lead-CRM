@@ -9,7 +9,7 @@ export interface BlogPost {
   slug: string;
   title: string;
   excerpt: string | null;
-  bodyMarkdown: string;
+  bodyHtml: string;
   coverImagePath: string | null;
   tags: string[];
   status: BlogPostStatus;
@@ -26,7 +26,7 @@ function fromRow(r: any): BlogPost {
     slug: r.slug,
     title: r.title,
     excerpt: r.excerpt,
-    bodyMarkdown: r.body_markdown ?? '',
+    bodyHtml: r.body_html ?? '',
     coverImagePath: r.cover_image_path,
     tags: r.tags ?? [],
     status: r.status,
@@ -67,7 +67,7 @@ export interface BlogPostInput {
   slug: string;
   title: string;
   excerpt: string;
-  bodyMarkdown: string;
+  bodyHtml: string;
   coverImagePath: string | null;
   tags: string[];
   status: BlogPostStatus;
@@ -86,7 +86,7 @@ export function useCreateBlogPost() {
           slug: input.slug,
           title: input.title,
           excerpt: input.excerpt || null,
-          body_markdown: input.bodyMarkdown,
+          body_html: input.bodyHtml,
           cover_image_path: input.coverImagePath,
           tags: input.tags,
           status: input.status,
@@ -114,7 +114,7 @@ export function useUpdateBlogPost() {
           slug: input.slug,
           title: input.title,
           excerpt: input.excerpt || null,
-          body_markdown: input.bodyMarkdown,
+          body_html: input.bodyHtml,
           cover_image_path: input.coverImagePath,
           tags: input.tags,
           status: input.status,

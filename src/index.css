@@ -45,72 +45,57 @@ body {
   display: none;
 }
 
-/* Minimal prose styling for the blog admin's Markdown preview pane — kept
-   here instead of pulling in @tailwindcss/typography for a single preview
-   box. Deliberately not shared with the generated public post pages, which
-   have their own full stylesheet in scripts/blog-template.mjs. */
-.post-preview h1,
-.post-preview h2,
-.post-preview h3 {
+/* Live-formatted typography for the blog admin's Tiptap editor (see
+   RichTextEditor.tsx) — kept here instead of pulling in
+   @tailwindcss/typography for one editor box. No preview pane needed since
+   formatting renders in place; deliberately not shared with the generated
+   public post pages, which have their own full stylesheet in
+   scripts/blog-template.mjs. */
+.tiptap-editor .ProseMirror {
+  outline: none;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #16314f;
+}
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #8693a1;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.tiptap-editor h2,
+.tiptap-editor h3,
+.tiptap-editor h4 {
   font-weight: 700;
   line-height: 1.3;
   margin: 1em 0 0.4em;
+  color: #0b1e33;
 }
-.post-preview h1 {
-  font-size: 1.4rem;
+.tiptap-editor h2 {
+  font-size: 1.25rem;
 }
-.post-preview h2 {
-  font-size: 1.2rem;
+.tiptap-editor h3 {
+  font-size: 1.1rem;
 }
-.post-preview h3 {
-  font-size: 1.05rem;
+.tiptap-editor h4 {
+  font-size: 1rem;
 }
-.post-preview p {
+.tiptap-editor p {
   margin-bottom: 0.85em;
-  line-height: 1.65;
 }
-.post-preview ul,
-.post-preview ol {
+.tiptap-editor ul,
+.tiptap-editor ol {
   margin: 0 0 0.85em 1.4em;
 }
-.post-preview li {
+.tiptap-editor li {
   margin-bottom: 0.3em;
 }
-.post-preview a {
-  color: #1568a8;
+.tiptap-editor li p {
+  margin-bottom: 0;
+}
+.tiptap-editor u {
   text-decoration: underline;
-}
-.post-preview blockquote {
-  border-left: 3px solid #c9a24b;
-  padding-left: 0.9em;
-  margin: 0.85em 0;
-  color: #57667a;
-  font-style: italic;
-}
-.post-preview code {
-  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-  font-size: 0.85em;
-  background: #f1f5f9;
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
-}
-.post-preview pre {
-  background: #0b1e33;
-  color: #f6f3ec;
-  padding: 0.9em 1em;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 0.85em 0;
-}
-.post-preview pre code {
-  background: none;
-  padding: 0;
-  color: inherit;
-}
-.post-preview img {
-  max-width: 100%;
-  border-radius: 8px;
-  margin: 0.85em 0;
 }
 
 /* Promotes a heavy SVG chart to its own compositing layer, so scrolling past

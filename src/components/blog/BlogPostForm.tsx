@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { MarkdownEditor } from '@/components/blog/MarkdownEditor';
+import { RichTextEditor } from '@/components/blog/RichTextEditor';
 import { TagInput } from '@/components/blog/TagInput';
 import { CoverImageUpload } from '@/components/blog/CoverImageUpload';
 import { SeoFieldsCard } from '@/components/blog/SeoFieldsCard';
@@ -14,7 +14,7 @@ export function BlogPostForm({ post, onClose }: { post: BlogPost | null; onClose
   const [slug, setSlug] = useState(post?.slug ?? '');
   const [slugTouched, setSlugTouched] = useState(!!post);
   const [excerpt, setExcerpt] = useState(post?.excerpt ?? '');
-  const [bodyMarkdown, setBodyMarkdown] = useState(post?.bodyMarkdown ?? '');
+  const [bodyHtml, setBodyHtml] = useState(post?.bodyHtml ?? '');
   const [coverImagePath, setCoverImagePath] = useState<string | null>(post?.coverImagePath ?? null);
   const [tags, setTags] = useState<string[]>(post?.tags ?? []);
   const [seoTitle, setSeoTitle] = useState(post?.seoTitle ?? '');
@@ -27,7 +27,9 @@ export function BlogPostForm({ post, onClose }: { post: BlogPost | null; onClose
     if (!slugTouched) setSlug(slugify(value));
   }
 
-  const canSubmit = title.trim() && slug.trim() && bodyMarkdown.trim();
+  // Tiptap's "empty" content is still "<p></p>", not "" — strip tags before checking.
+  const bodyIsEmpty = !bodyHtml.replace(/<[^>]*>/g, '').trim();
+  const canSubmit = title.trim() && slug.trim() && !bodyIsEmpty;
 
   async function handleSubmit(status: 'draft' | 'published') {
     if (!canSubmit) return;
@@ -37,7 +39,7 @@ export function BlogPostForm({ post, onClose }: { post: BlogPost | null; onClose
       slug: slug.trim(),
       title: title.trim(),
       excerpt: excerpt.trim(),
-      bodyMarkdown,
+      bodyHtml,
       coverImagePath,
       tags,
       status,
@@ -101,7 +103,7 @@ export function BlogPostForm({ post, onClose }: { post: BlogPost | null; onClose
           </div>
         </div>
 
-        <MarkdownEditor value={bodyMarkdown} onChange={setBodyMarkdown} />
+        <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
 
         <SeoFieldsCard
           seoTitle={seoTitle}

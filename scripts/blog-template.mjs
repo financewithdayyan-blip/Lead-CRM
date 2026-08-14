@@ -153,6 +153,7 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 .post-article p{ margin-bottom:20px; }
 .post-article ul, .post-article ol{ margin:0 0 20px 22px; }
 .post-article li{ margin-bottom:8px; }
+.post-article li p{ margin-bottom:0; }
 .post-article a{ color:var(--sky-deep); text-decoration:underline; text-underline-offset:2px; }
 .post-article a:hover{ color:var(--sky); }
 .post-article blockquote{ border-left:3px solid var(--brass); padding:4px 0 4px 20px; margin:24px 0; color:var(--slate); font-style:italic; }

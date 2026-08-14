@@ -11,7 +11,6 @@
 // would be for a public RPC — except this way nothing new is ever exposed
 // to `anon`/`authenticated`.
 import { createClient } from '@supabase/supabase-js';
-import { marked } from 'marked';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,11 +38,9 @@ const STATIC_PAGES = [
   { loc: '/do-not-sell', priority: '0.5' },
 ];
 
-function stripMarkdown(md, maxLen = 155) {
-  const plain = String(md ?? '')
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/[#>*_`~-]/g, ' ')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+function stripHtml(html, maxLen = 155) {
+  const plain = String(html ?? '')
+    .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return plain.length > maxLen ? plain.slice(0, maxLen - 1).trimEnd() + '…' : plain;
@@ -89,7 +86,7 @@ async function main() {
 
   // ── Per-post pages ─────────────────────────────────────────────────────
   for (const post of posts) {
-    const description = post.seo_description || post.excerpt || stripMarkdown(post.body_markdown);
+    const description = post.seo_description || post.excerpt || stripHtml(post.body_html);
     const image = coverUrl(post.cover_image_path) || DEFAULT_OG_IMAGE;
     const canonical = `${SITE_URL}/blog/${post.slug}`;
 
@@ -106,7 +103,7 @@ ${
     ? `<div class="post-cover"><img src="${image}" alt="${escapeHtml(post.title)}"></div>`
     : ''
 }
-<article class="post-article">${marked.parse(post.body_markdown || '')}</article>
+<article class="post-article">${post.body_html || ''}</article>
 <div class="post-footer">
   <a class="post-back-link" href="/blog">&larr; Back to all posts</a>
 </div>
@@ -202,7 +199,7 @@ ${
 
 function blogCard(post, coverUrl) {
   const image = coverUrl(post.cover_image_path);
-  const description = post.excerpt || stripMarkdown(post.body_markdown, 140);
+  const description = post.excerpt || stripHtml(post.body_html, 140);
   return `<a class="blog-card" href="/blog/${post.slug}">
   ${image ? `<img class="blog-card-thumb" src="${image}" alt="">` : ''}
   <div class="blog-card-body">
