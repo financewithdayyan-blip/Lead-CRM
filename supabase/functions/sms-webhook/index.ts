@@ -8,7 +8,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('ZOOM_WEBHOOK_SECRET_TOKEN')!;
-const BLUEDOCS_PHONE_NORM = (Deno.env.get('ZOOM_FROM_NUMBER_BLUEDOCS') ?? '').replace(/[^0-9]/g, '').slice(-10);
+// 217-408-2781 — NUMBERS['2'] in the outreach pool (send-sms), reused by
+// Blue Docs rather than a separate dedicated line. See
+// create-contract-instance's own comment on this.
+const BLUEDOCS_PHONE_NORM = (Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '').replace(/[^0-9]/g, '').slice(-10);
 
 // Phone only — mirrors the same slots in send-sms/ai-reply, but this
 // function never sends, only needs to recognize which of the 6 numbers a
@@ -376,18 +379,20 @@ Deno.serve(async (req) => {
     // and (once Phase 4 exists) no AI call.
     if (reaction) return json({ ok: true, reaction: true });
 
-    // A reply to the dedicated Blue Docs signing number is never a sales
-    // lead — checked before resolveLead/createLeadFromUnmatched, which
-    // would otherwise happily create one (createLeadFromUnmatched has no
-    // concept of "this number belongs to something else"). Only checks
-    // contract_signing_parties at all when the destination number actually
-    // is the Blue Docs number, so this costs nothing on every other inbound
-    // text — required the moment Blue Docs starts texting real signers, not
-    // an afterthought: a signer's own reply ("did I sign this right?")
-    // would otherwise silently become a fake lead and possibly reach the AI
-    // cold-outreach pipeline.
-    const toNorm = normalizePhone(toRaw);
-    if (BLUEDOCS_PHONE_NORM && toNorm === BLUEDOCS_PHONE_NORM) {
+    // Blue Docs shares this number with lead outreach (one number, not a
+    // dedicated one) — so a reply from someone who's already a recognized
+    // lead must keep flowing through the normal resolveLead/AI-reply path
+    // below exactly as before. This only ever matters for the narrower case
+    // resolveLead can't already handle: someone with no lead record at all
+    // (a witness, a co-buyer, an attorney) replying about a document —
+    // without this, createLeadFromUnmatched would otherwise happily turn
+    // that reply into a fake sales lead. Checked as part of the "unmatched"
+    // fallback below, not unconditionally, so a real lead's own ongoing
+    // conversation is never hijacked just because they once signed something
+    // on this number.
+    async function blueDocsSigningReplyOrUndefined(): Promise<boolean> {
+      const toNorm = normalizePhone(toRaw);
+      if (!BLUEDOCS_PHONE_NORM || toNorm !== BLUEDOCS_PHONE_NORM) return false;
       const { data: signingParty } = await admin
         .from('contract_signing_parties')
         .select('id, name, contract_instance_id, contract_instances(name)')
@@ -395,21 +400,21 @@ Deno.serve(async (req) => {
         .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (signingParty) {
-        const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
-        if (admins?.length) {
-          const docName = (signingParty as any).contract_instances?.name ?? 'a document';
-          await admin.from('lc_notifications').insert(
-            admins.map((a) => ({
-              user_id: a.id,
-              type: 'contract_sms_reply',
-              title: `${signingParty.name} replied about ${docName}`,
-              body: body || '(no message text)',
-            })),
-          );
-        }
-        return json({ ok: true, signingReply: true });
+      if (!signingParty) return false;
+
+      const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+      if (admins?.length) {
+        const docName = (signingParty as any).contract_instances?.name ?? 'a document';
+        await admin.from('lc_notifications').insert(
+          admins.map((a) => ({
+            user_id: a.id,
+            type: 'contract_sms_reply',
+            title: `${signingParty.name} replied about ${docName}`,
+            body: body || '(no message text)',
+          })),
+        );
       }
+      return true;
     }
 
     // Never attempt a match on a blank or malformed number. An empty fromNorm
@@ -418,7 +423,13 @@ Deno.serve(async (req) => {
     // unrelated lead whose own number was blank. A short-circuit here is the
     // difference between "no match" and "wrong match". See resolveLead for
     // how a phone number matching more than one lead gets disambiguated.
-    const lead = (await resolveLead(admin, fromNorm)) ?? (fromNorm.length === 10 ? await createLeadFromUnmatched(admin, fromRaw, fromNorm) : undefined);
+    let lead = await resolveLead(admin, fromNorm);
+    if (!lead && fromNorm.length === 10) {
+      // No recognized lead — before minting a fake one, check whether this
+      // is actually a Blue Docs signer with no lead record at all.
+      if (await blueDocsSigningReplyOrUndefined()) return json({ ok: true, signingReply: true });
+      lead = await createLeadFromUnmatched(admin, fromRaw, fromNorm);
+    }
     if (lead) {
       await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);
 

@@ -18,9 +18,12 @@ const INTERNAL_SECRET = Deno.env.get('CONTRACT_REMINDER_SECRET')!;
 const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
 const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!;
+// Same shared-number reasoning as create-contract-instance/submit-signature
+// — 217-408-2781 is NUMBERS['2'] in the outreach pool, reused here rather
+// than duplicated into a separate secret pair.
 const BLUEDOCS_NUMBER = {
-  phone: Deno.env.get('ZOOM_FROM_NUMBER_BLUEDOCS') ?? '',
-  email: Deno.env.get('ZOOM_USER_EMAIL_BLUEDOCS') ?? '',
+  phone: Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '',
+  email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '',
 };
 
 function json(body: unknown, status = 200) {

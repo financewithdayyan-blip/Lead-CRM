@@ -20,15 +20,19 @@ const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
 const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!;
 
-// Blue Docs sends from one dedicated number, never the round-robin pool
-// send-sms/bulk-sms-dispatcher use for cold outreach — every signer's
-// replies land in one predictable thread, and sms-webhook only needs to
-// guard this one number against createLeadFromUnmatched (see that
-// function's own updated comment).
+// Blue Docs always sends from exactly one number — never round-robins
+// across the outreach pool the way send-sms/bulk-sms-dispatcher do — but
+// that one number is 217-408-2781, which is also already in that pool
+// (NUMBERS['2'] there), not a separate dedicated line. Reuses the exact
+// same secrets rather than duplicating the phone/email into a new pair, so
+// there's one source of truth if that number ever changes. sms-webhook's
+// guard against createLeadFromUnmatched accounts for the sharing — see
+// that function's own comment — a reply from someone already recognized
+// as a lead still flows through the normal AI-reply path untouched.
 const BLUEDOCS_NUMBER = {
-  phone: Deno.env.get('ZOOM_FROM_NUMBER_BLUEDOCS') ?? '',
-  email: Deno.env.get('ZOOM_USER_EMAIL_BLUEDOCS') ?? '',
-  label: Deno.env.get('ZOOM_LABEL_BLUEDOCS') ?? 'Blue Docs',
+  phone: Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '',
+  email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '',
+  label: Deno.env.get('ZOOM_LABEL_2') ?? 'Blue Docs',
 };
 
 const CORS_HEADERS = {

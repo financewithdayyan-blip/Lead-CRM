@@ -21,9 +21,14 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
 const ZOOM_CLIENT_SECRET = Deno.env.get('ZOOM_CLIENT_SECRET')!;
+// Blue Docs always sends from 217-408-2781, which is also NUMBERS['2'] in
+// the outreach pool (send-sms/bulk-sms-dispatcher), not a separate
+// dedicated line — reuses those same secrets rather than duplicating them.
+// See create-contract-instance's own comment on this and sms-webhook's
+// updated guard, which accounts for the number being shared.
 const BLUEDOCS_NUMBER = {
-  phone: Deno.env.get('ZOOM_FROM_NUMBER_BLUEDOCS') ?? '',
-  email: Deno.env.get('ZOOM_USER_EMAIL_BLUEDOCS') ?? '',
+  phone: Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '',
+  email: Deno.env.get('ZOOM_USER_EMAIL_2') ?? '',
 };
 
 const CORS_HEADERS = {
