@@ -161,6 +161,16 @@ Deno.serve(async (req) => {
     if (!party) return json({ error: 'Signing link not found' }, 404);
     if (party.status === 'signed') return json({ error: 'This has already been signed' }, 409);
 
+    const { data: instanceStatus, error: instanceStatusErr } = await admin
+      .from('contract_instances')
+      .select('status')
+      .eq('id', party.contract_instance_id)
+      .single();
+    if (instanceStatusErr) throw instanceStatusErr;
+    if (['voided', 'declined'].includes(instanceStatus.status)) {
+      return json({ error: 'This document is no longer available for signing' }, 409);
+    }
+
     const { data: allParties, error: partiesErr } = await admin
       .from('contract_signing_parties')
       .select('*')

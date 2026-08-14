@@ -43,6 +43,10 @@ Deno.serve(async (req) => {
       .single();
     if (instErr) throw instErr;
 
+    if (['voided', 'declined'].includes(instance.status)) {
+      return json({ error: 'This document is no longer available' }, 409);
+    }
+
     let storagePath: string | undefined;
     if (final) {
       if (instance.status !== 'signed' || !instance.final_storage_path) {

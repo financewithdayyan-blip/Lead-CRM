@@ -152,6 +152,10 @@ export interface SigningPartyInfo {
   signOrder: number;
   isTurn: boolean;
   waitingOn: string | null;
+  /** Set only once the whole contract is no longer actionable — voided by
+   * the sender or declined by an earlier party. The signer's page shows a
+   * dedicated message instead of the normal signing flow when this is set. */
+  blocked: 'voided' | 'declined' | null;
   contractName: string;
   fieldValues: Record<string, string>;
   contractStatus: 'partial' | 'signed';
@@ -177,6 +181,7 @@ export function usePublicSigningParty(token: string | undefined) {
         signOrder: d.signOrder,
         isTurn: d.isTurn,
         waitingOn: d.waitingOn,
+        blocked: d.blocked ?? null,
         contractName: d.contractName,
         fieldValues: d.fieldValues ?? {},
         contractStatus: d.contractStatus,

@@ -228,6 +228,20 @@ export function SignContractPage() {
     );
   }
 
+  if (party.blocked) {
+    return (
+      <StatusScreen
+        icon={<FileText size={24} />}
+        title={party.blocked === 'voided' ? 'This document was voided' : 'This document was declined'}
+        body={
+          party.blocked === 'voided'
+            ? 'Whoever sent this has canceled it — no further action is needed from you.'
+            : 'One of the parties declined to sign, so this document is no longer moving forward.'
+        }
+      />
+    );
+  }
+
   if (submitted || party.status === 'signed') {
     const docLabel = party.templateType === 'loi' ? 'LOI' : 'Contract';
     const fullyDone = justCompletedAll || party.contractStatus === 'signed';
