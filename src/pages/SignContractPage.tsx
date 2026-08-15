@@ -134,7 +134,6 @@ export function SignContractPage() {
   const pageWidth = usePageWidth();
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [justCompletedAll, setJustCompletedAll] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState('');
   const [signatureMode, setSignatureMode] = useState<'draw' | 'type'>('draw');
@@ -218,8 +217,7 @@ export function SignContractPage() {
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
     }
-    const result = await submitSignature.mutateAsync({ token, signatureDataUrl: dataUrl, fieldValues: formatted });
-    setJustCompletedAll(result.allSigned);
+    await submitSignature.mutateAsync({ token, signatureDataUrl: dataUrl, fieldValues: formatted });
     setSubmitted(true);
   }
 
@@ -263,7 +261,14 @@ export function SignContractPage() {
 
   if (submitted || party.status === 'signed') {
     const docLabel = party.templateType === 'loi' ? 'LOI' : 'Contract';
-    const fullyDone = justCompletedAll || party.contractStatus === 'signed';
+    // Never show the download button on the screen right after THIS
+    // submission, even if it happened to be the last signature and/or the
+    // background poll flips contractStatus to 'signed' a few seconds later
+    // — everyone gets a text with their link once the contract is fully
+    // signed, and downloading happens from there instead. `submitted` only
+    // reflects this page load, so a fresh visit via that texted link (a new
+    // mount, submitted starts false again) still shows the button normally.
+    const fullyDone = !submitted && party.contractStatus === 'signed';
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-4 text-center">
         <SignSuccessCheck />
@@ -273,7 +278,7 @@ export function SignContractPage() {
         <p className="mt-1 text-[13.5px] text-text-3">
           {fullyDone
             ? 'Every party has completed this document — you can download the final copy below.'
-            : "Thank you — you'll be notified once every party has completed signing."}
+            : "Thank you — once every party has completed signing, we'll text you a link to download the final copy."}
         </p>
         {fullyDone && token && <DownloadCertificateButton token={token} docLabel={docLabel} />}
       </div>

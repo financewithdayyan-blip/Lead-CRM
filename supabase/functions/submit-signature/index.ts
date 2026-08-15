@@ -107,7 +107,8 @@ async function sendBlueDocsSms(toPhone: string, message: string) {
 
 const NEXT_SIGNER_MESSAGE = (docName: string, address: string, link: string) =>
   `Hey, it's your turn to sign the ${docName} contract for your property\n${address}\n${link}\nSign it and let's start moving with it\nThanks,\nDayyan`;
-const COMPLETED_MESSAGE = (docName: string) => `${docName} has been signed by everyone. Thank you!`;
+const COMPLETED_MESSAGE = (docName: string, link: string) =>
+  `Hey, everyone has signed the ${docName} contract. Here's your copy to download:\n${link}\nThanks,\nDayyan`;
 
 interface ContractField {
   id: string;
@@ -480,14 +481,20 @@ Deno.serve(async (req) => {
       .eq('id', instance.id);
     if (finalizeErr) throw finalizeErr;
 
-    // Notify everyone it's done — wrapped so a Zoom hiccup here never turns
-    // an already-successful, already-stored signature into a failed request.
-    try {
-      for (const p of updatedParties) {
-        if (p.phone) await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(instance.name));
+    // Notify everyone it's done, each with their own link back to their
+    // signing page — that page shows the download button once it sees the
+    // contract's now-'signed' status (see SignContractPage's fullyDone).
+    // Downloading only ever happens from there, not automatically in-browser
+    // right when someone finishes signing. Each send is wrapped individually
+    // so one party's Zoom hiccup doesn't cost every other party their text.
+    for (const p of updatedParties) {
+      if (!p.phone) continue;
+      try {
+        const partyLink = `https://www.bluebirdacquisition.com/crm/sign/${p.access_token}`;
+        await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(instance.name, partyLink));
+      } catch (smsErr) {
+        console.error(`Blue Docs completion SMS failed for party ${p.id}:`, smsErr);
       }
-    } catch (smsErr) {
-      console.error('Blue Docs completion SMS failed:', smsErr);
     }
 
     return json({ ok: true, allSigned: true });
