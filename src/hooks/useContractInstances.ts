@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import type { ContractField, PartyRole, PartyRoleDef } from './useDocTemplates';
+import type { ContractField, ContractType, PartyRole, PartyRoleDef } from './useDocTemplates';
 
 export interface ContractParty {
   role: PartyRole;
@@ -18,6 +18,7 @@ export interface ContractInstance {
   templateId: string | null;
   templateName: string | null;
   templateType: 'loi' | 'contract' | null;
+  templateContractType: ContractType | null;
   templateStoragePath: string | null;
   templateFields: ContractField[];
   templatePartyRoles: PartyRoleDef[];
@@ -50,6 +51,7 @@ function fromRow(r: any): ContractInstance {
     templateId: r.template_id,
     templateName: r.doc_templates?.name ?? null,
     templateType: r.doc_templates?.type ?? null,
+    templateContractType: r.doc_templates?.contract_type ?? null,
     // Read from this contract's own snapshot, taken when it was sent — not
     // the live doc_templates row, which may have been edited since. See
     // migration 0090 for why: editing a template in place used to silently
@@ -84,7 +86,7 @@ function fromRow(r: any): ContractInstance {
 // Only name/type come from the live doc_templates join now — everything
 // else about the template (fields, party_roles, storage path) is read from
 // this contract's own snapshot columns instead. See migration 0090.
-const INSTANCE_SELECT = '*, doc_templates(name, type), leads(first_name, last_name), contract_signing_parties(*)';
+const INSTANCE_SELECT = '*, doc_templates(name, type, contract_type), leads(first_name, last_name), contract_signing_parties(*)';
 
 export function useContractInstances() {
   return useQuery({

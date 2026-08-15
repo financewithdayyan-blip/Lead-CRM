@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SpeedInsights } from "@vercel/speed-insights/react"
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
 import { AttendanceProvider } from '@/contexts/AttendanceContext';
@@ -30,7 +30,6 @@ const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) =>
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
 const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
-const EnvelopesPage = lazy(() => import('@/pages/EnvelopesPage').then((m) => ({ default: m.EnvelopesPage })));
 const SignContractPage = lazy(() => import('@/pages/SignContractPage').then((m) => ({ default: m.SignContractPage })));
 
 const queryClient = new QueryClient({
@@ -80,7 +79,10 @@ export default function App() {
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />
                         <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                         <Route path="/blue-docs" element={<BlueDocsPage />} />
-                        <Route path="/envelopes" element={<EnvelopesPage />} />
+                        {/* Envelopes moved to a tab inside Blue Docs — this
+                            only exists so an old bookmark/link still lands
+                            somewhere real instead of a dead route. */}
+                        <Route path="/envelopes" element={<Navigate to="/blue-docs" replace />} />
                         <Route path="/team" element={<TeamPage />} />
                         <Route path="/team/:memberId" element={<MemberDashboardPage />} />
                         <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />

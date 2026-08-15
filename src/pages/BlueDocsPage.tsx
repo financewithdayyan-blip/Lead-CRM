@@ -1,18 +1,18 @@
 import { useState } from 'react';
-import { Check, Copy, FileSignature, ScrollText, Send } from 'lucide-react';
+import { Check, Copy, FileSignature, Inbox, ScrollText } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
 import { TemplateCategoryCard } from '@/components/bluedocs/TemplateCategoryCard';
-import { useDocTemplates, useDeleteDocTemplate, useSignedTemplateUrl, type ContractType, type DocTemplate } from '@/hooks/useDocTemplates';
-
-const CONTRACT_TYPES: Array<{ key: ContractType; label: string }> = [
-  { key: 'cash', label: 'Cash Deal' },
-  { key: 'novation', label: 'Novation' },
-  { key: 'subject_to', label: 'Subject-To' },
-  { key: 'seller_finance', label: 'Seller Finance' },
-];
+import { EnvelopesTab } from '@/components/bluedocs/EnvelopesTab';
+import {
+  useDocTemplates,
+  useDeleteDocTemplate,
+  useSignedTemplateUrl,
+  PURCHASE_CONTRACT_TYPES,
+  type DocTemplate,
+} from '@/hooks/useDocTemplates';
 
 function SigningLinkRow({ label, url }: { label: string; url: string }) {
   const [copied, setCopied] = useState(false);
@@ -124,47 +124,28 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
   );
 }
 
-// ─── LOI tab ────────────────────────────────────────────────────────────────
-function LoiGeneratorTab() {
-  const { data: templates = [] } = useDocTemplates('loi');
-  const flow = useDocFlow();
-
-  return (
-    <div className="space-y-5">
-      <TemplateCategoryCard
-        label="Letter of Intent"
-        docType="loi"
-        items={templates}
-        onOpenMapper={flow.openMapper}
-        onSend={flow.setSendTarget}
-        onDeleteTarget={flow.setDeleteTarget}
-      />
-      <DocFlowModals flow={flow} />
-    </div>
-  );
-}
-
 // ─── Contract Templates tab ─────────────────────────────────────────────────
+// Every purchase-contract deal type (Cash, Novation, Subject-To, Seller
+// Finance) lives together under one card — the admin picks the type at
+// upload time instead of each type getting its own slot. Anything else
+// (a JV agreement, a listing/marketing agreement, etc.) collects in Others.
 function ContractTemplatesTab() {
   const { data: templates = [] } = useDocTemplates('contract');
   const flow = useDocFlow();
 
   return (
     <div className="space-y-5">
-      {CONTRACT_TYPES.map((ct) => (
-        <TemplateCategoryCard
-          key={ct.key}
-          label={ct.label}
-          docType="contract"
-          contractType={ct.key}
-          items={templates.filter((t) => t.contractType === ct.key)}
-          onOpenMapper={flow.openMapper}
-          onSend={flow.setSendTarget}
-          onDeleteTarget={flow.setDeleteTarget}
-        />
-      ))}
       <TemplateCategoryCard
-        label="Other Contracts"
+        label="Purchase Contracts"
+        docType="contract"
+        typeOptions={PURCHASE_CONTRACT_TYPES}
+        items={templates.filter((t) => t.contractType !== null)}
+        onOpenMapper={flow.openMapper}
+        onSend={flow.setSendTarget}
+        onDeleteTarget={flow.setDeleteTarget}
+      />
+      <TemplateCategoryCard
+        label="Others"
         docType="contract"
         items={templates.filter((t) => t.contractType === null)}
         multi
@@ -178,7 +159,7 @@ function ContractTemplatesTab() {
 }
 
 export function BlueDocsPage() {
-  const [tab, setTab] = useState<'loi' | 'templates'>('loi');
+  const [tab, setTab] = useState<'templates' | 'envelopes'>('templates');
 
   return (
     <div>
@@ -188,15 +169,15 @@ export function BlueDocsPage() {
         </span>
         <div>
           <h1 className="text-2xl font-semibold text-text">Blue Docs</h1>
-          <p className="text-sm text-text-3">Contract templates, e-signing, and the LOI generator</p>
+          <p className="text-sm text-text-3">Contract templates and e-signing</p>
         </div>
       </div>
 
       <div className="mb-5 flex gap-1 border-b border-border">
         {(
           [
-            ['loi', 'LOI Generator', Send],
             ['templates', 'Contracts', ScrollText],
+            ['envelopes', 'Envelopes', Inbox],
           ] as const
         ).map(([key, label, Icon]) => (
           <button
@@ -212,7 +193,7 @@ export function BlueDocsPage() {
         ))}
       </div>
 
-      {tab === 'loi' ? <LoiGeneratorTab /> : <ContractTemplatesTab />}
+      {tab === 'templates' ? <ContractTemplatesTab /> : <EnvelopesTab />}
     </div>
   );
 }

@@ -1,8 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Ban, Check, CheckCircle2, Copy, Download, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
+import { Ban, Check, CheckCircle2, Clock, Copy, Download, Eye, EyeOff, MapPin, Send, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
-import { roleLabel } from '@/hooks/useDocTemplates';
+import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
 import { formatDate, formatDateTime } from '@/lib/utils';
+
+const STATUS_BADGE: Record<ContractInstance['status'], { label: string; className: string; icon: typeof Send } | null> = {
+  draft: null,
+  sent: { label: 'Sent', className: 'bg-info-dim text-info', icon: Send },
+  partial: { label: 'Partially signed', className: 'bg-warning-dim text-warning', icon: Clock },
+  signed: { label: 'Completed', className: 'bg-success-dim text-success', icon: CheckCircle2 },
+  declined: { label: 'Declined', className: 'bg-danger-dim text-danger', icon: Ban },
+  voided: { label: 'Voided', className: 'bg-danger-dim text-danger', icon: Ban },
+  expired: { label: 'Expired', className: 'bg-surface-2 text-text-3', icon: Clock },
+};
 
 /** Every generated instance is named after its template ("Letter Of Intent to
  * Purchase Real Estate"), which is identical across every deal — with no lead
@@ -59,22 +69,29 @@ export function ContractInstanceRow({
   const signed = c.status === 'signed';
   const voidedOrDeclined = c.status === 'voided' || c.status === 'declined';
   const canVoid = onVoid && !signed && !voidedOrDeclined && c.status !== 'expired';
+  const badge = STATUS_BADGE[c.status];
+  const BadgeIcon = badge?.icon;
+  const typeLabel = PURCHASE_CONTRACT_TYPES.find((o) => o.key === c.templateContractType)?.label;
 
   return (
     <div
-      className={`flex items-center justify-between rounded-md border px-3 py-2.5 ${
+      className={`flex items-center justify-between rounded-lg border px-3.5 py-3 ${
         signed ? 'border-success/30 bg-success-dim' : voidedOrDeclined ? 'border-danger/30 bg-danger-dim' : 'border-border-2 bg-surface-3'
       }`}
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 truncate text-[13px] font-medium text-text">
-          {signed && <CheckCircle2 size={14} className="shrink-0 text-success" />}
-          {voidedOrDeclined && <Ban size={14} className="shrink-0 text-danger" />}
-          {c.name}
-          {c.status === 'voided' && <span className="text-[11px] font-normal text-danger">Voided</span>}
-          {c.status === 'declined' && <span className="text-[11px] font-normal text-danger">Declined</span>}
+        <div className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-text">
+          <span className="truncate">{c.name}</span>
+          {typeLabel && (
+            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{typeLabel}</span>
+          )}
+          {badge && BadgeIcon && (
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${badge.className}`}>
+              <BadgeIcon size={10} /> {badge.label}
+            </span>
+          )}
         </div>
-        <div className="truncate text-[11px] text-text-3">
+        <div className="mt-0.5 truncate text-[11px] text-text-3">
           {showTemplateName && c.templateName ? `${c.templateName} · ` : ''}
           {formatDate(c.createdAt)}
         </div>

@@ -56,15 +56,14 @@ function MoreMenu({ onDownload, onDelete }: { onDownload: () => void; onDelete: 
 }
 
 /**
- * One category of templates — a contract deal type (Cash, Novation, ...) or
- * the single flat LOI category — sharing the exact same upload → map →
- * invite-to-sign → sign-inbox mechanism either way, just with or without a
- * contractType underneath.
+ * One category of templates — sharing the exact same upload → map →
+ * invite-to-sign → sign-inbox mechanism regardless of what's underneath.
  */
 export function TemplateCategoryCard({
   label,
   docType,
   contractType,
+  typeOptions,
   items,
   multi,
   onOpenMapper,
@@ -74,12 +73,16 @@ export function TemplateCategoryCard({
   label: string;
   docType: 'loi' | 'contract';
   contractType?: ContractType;
+  /** When set, this card spans several deal types at once (e.g. "Purchase
+   * Contracts" holding Cash/Novation/Subject-To/Seller Finance together) —
+   * uploads stay open like `multi`, but the admin picks which of these
+   * types a new template is for, and each row shows that type as a badge. */
+  typeOptions?: Array<{ key: ContractType; label: string }>;
   items: DocTemplate[];
-  /** Cards for the four fixed deal types hold one template each — the
-   * upload button hides once that slot is filled. This card is an
-   * open-ended bucket (e.g. "Other Contracts"), so the button stays
-   * visible to add more, and its label reads as adding a new contract
-   * rather than filling the category's one slot. */
+  /** A fixed-slot category holds one template — the upload button hides
+   * once that slot is filled. This card is an open-ended bucket instead
+   * (e.g. "Others"), so the button stays visible to add more, and its
+   * label reads as adding a new contract rather than filling one slot. */
   multi?: boolean;
   onOpenMapper: (t: DocTemplate) => void;
   onSend: (t: DocTemplate) => void;
@@ -89,14 +92,21 @@ export function TemplateCategoryCard({
   const deleteTemplate = useDeleteDocTemplate();
   const getSignedUrl = useSignedTemplateUrl();
   const [uploading, setUploading] = useState(false);
+  const [pickedType, setPickedType] = useState<ContractType | undefined>(typeOptions?.[0]?.key);
   const pdfInput = useRef<HTMLInputElement>(null);
   const docxInput = useRef<HTMLInputElement>(null);
   const pendingDocx = useRef<File | undefined>(undefined);
+  const alwaysOpen = multi || !!typeOptions;
 
   async function handlePdfFile(file: File) {
     setUploading(true);
     try {
-      const template = await upload.mutateAsync({ docType, contractType, pdfFile: file, docxFile: pendingDocx.current });
+      const template = await upload.mutateAsync({
+        docType,
+        contractType: typeOptions ? pickedType : contractType,
+        pdfFile: file,
+        docxFile: pendingDocx.current,
+      });
       pendingDocx.current = undefined;
       onOpenMapper(template);
     } finally {
@@ -124,8 +134,22 @@ export function TemplateCategoryCard({
             <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-text-3">{items.length}</span>
           )}
         </div>
-        {(items.length === 0 || multi) && (
+        {(items.length === 0 || alwaysOpen) && (
           <div className="flex items-center gap-1.5">
+            {typeOptions && (
+              <select
+                className="input !h-auto !w-auto !py-1.5 !text-[11px]"
+                value={pickedType}
+                onChange={(e) => setPickedType(e.target.value as ContractType)}
+                title="Which deal type is this template for?"
+              >
+                {typeOptions.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <button
               className="btn !px-2.5 !py-1.5 text-[11px]"
               onClick={() => docxInput.current?.click()}
@@ -135,7 +159,7 @@ export function TemplateCategoryCard({
             </button>
             <button className="btn btn-primary !px-3 !py-1.5 text-[12px]" disabled={uploading} onClick={() => pdfInput.current?.click()}>
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-              {multi ? 'Add Contract' : 'Upload template'}
+              {alwaysOpen ? 'Add Contract' : 'Upload template'}
             </button>
           </div>
         )}
@@ -169,11 +193,12 @@ export function TemplateCategoryCard({
       {items.length === 0 ? (
         <div className="mt-3 flex items-center gap-2.5 rounded-md border border-dashed border-border-2 px-3 py-3 text-text-3">
           <FilePlus2 size={16} className="shrink-0" />
-          <p className="text-[12px]">{multi ? 'No contracts added here yet.' : `No ${label.toLowerCase()} template uploaded yet.`}</p>
+          <p className="text-[12px]">{alwaysOpen ? 'No contracts added here yet.' : `No ${label.toLowerCase()} template uploaded yet.`}</p>
         </div>
       ) : (
         <div className="mt-3 space-y-1.5">
           {items.map((t) => {
+            const typeLabel = typeOptions?.find((o) => o.key === t.contractType)?.label;
             return (
               <div
                 key={t.id}
@@ -187,6 +212,9 @@ export function TemplateCategoryCard({
                     <div className="truncate text-[13px] font-semibold text-text">{t.name}</div>
                     <div className="text-[11px] text-text-3">Created {formatDate(t.createdAt)}</div>
                   </div>
+                  {typeLabel && (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">{typeLabel}</span>
+                  )}
                   {!t.mapped && (
                     <span className="shrink-0 rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning">Not mapped</span>
                   )}

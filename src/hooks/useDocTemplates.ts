@@ -3,6 +3,16 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export type ContractType = 'cash' | 'novation' | 'subject_to' | 'seller_finance';
+
+/** Shared between the "Purchase Contracts" template card (the upload
+ * type-picker) and envelope rows (the type badge), so the label for a given
+ * deal type never drifts between the two. */
+export const PURCHASE_CONTRACT_TYPES: Array<{ key: ContractType; label: string }> = [
+  { key: 'cash', label: 'Cash Deal' },
+  { key: 'novation', label: 'Novation' },
+  { key: 'subject_to', label: 'Subject-To' },
+  { key: 'seller_finance', label: 'Seller Finance' },
+];
 export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
 // 'buyer' and 'seller' are the two built-in roles every template starts
 // with. A template can define any number of extra roles at mapping time

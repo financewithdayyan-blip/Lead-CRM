@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Inbox, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ContractInstanceRow } from '@/components/bluedocs/ContractInstanceRow';
 import { ContractPreviewModal } from '@/components/bluedocs/ContractPreviewModal';
@@ -23,7 +23,7 @@ const STATUS_TABS: Array<{ key: StatusFilter; label: string }> = [
 ];
 
 /**
- * Every generated contract/LOI across every template in one place — replaces
+ * Every generated contract across every template in one place — replaces
  * digging into each template's own Sign Inbox one at a time. The 20s poll
  * matches this app's existing "cheap and proven" pattern for admin-facing
  * live-ish data (see usePublicSigningParty's 8s poll on the signer side);
@@ -31,7 +31,7 @@ const STATUS_TABS: Array<{ key: StatusFilter; label: string }> = [
  * the regular Notifications page via lc_notifications, inserted by the same
  * edge functions that write the audit trail.
  */
-export function EnvelopesPage() {
+export function EnvelopesTab() {
   const { data: instances = [], isLoading } = useContractInstances();
   const deleteInstance = useDeleteContractInstance();
   const voidInstance = useVoidContractInstance();
@@ -42,6 +42,12 @@ export function EnvelopesPage() {
   const [previewTarget, setPreviewTarget] = useState<ContractInstance | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<string | null>(null);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: instances.length };
+    for (const i of instances) c[i.status] = (c[i.status] ?? 0) + 1;
+    return c;
+  }, [instances]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -62,18 +68,8 @@ export function EnvelopesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Inbox size={20} />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold text-text">Envelopes</h1>
-          <p className="text-sm text-text-3">Every contract and LOI sent for signature, across every template</p>
-        </div>
-      </div>
-
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex flex-wrap gap-1">
           {STATUS_TABS.map((t) => (
             <button
               key={t.key}
@@ -83,6 +79,9 @@ export function EnvelopesPage() {
               onClick={() => setStatusFilter(t.key)}
             >
               {t.label}
+              {counts[t.key] ? (
+                <span className={`ml-1.5 ${statusFilter === t.key ? 'text-white/70' : 'text-text-3'}`}>{counts[t.key]}</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -101,10 +100,10 @@ export function EnvelopesPage() {
         <p className="text-sm text-text-3">Loading…</p>
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border-2 py-16 text-center text-sm text-text-3">
-          {instances.length === 0 ? 'Nothing sent yet — invite a signer from Blue Docs to get started.' : 'Nothing matches this filter.'}
+          {instances.length === 0 ? 'Nothing sent yet — invite a signer from the Contracts tab to get started.' : 'Nothing matches this filter.'}
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {filtered.map((c) => (
             <ContractInstanceRow
               key={c.id}
