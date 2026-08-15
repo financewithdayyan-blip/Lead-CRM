@@ -7,6 +7,15 @@
 export const SITE_URL = 'https://www.bluebirdacquisition.com';
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/logo-mark.svg`;
 
+// Public anon key — safe to embed in static HTML by design (same values as
+// VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY, already shipped in the built CRM
+// bundle). Used by the view/like widget below, which talks to Supabase
+// directly from a plain <script> tag since these pages have no build-time
+// knowledge of runtime engagement counts.
+export const SUPABASE_URL = 'https://ggfpvrdxqopippzqkojr.supabase.co';
+export const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZnB2cmR4cW9waXBwenFrb2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMjUzNTgsImV4cCI6MjA5OTgwMTM1OH0.5sxa2PkS5Ed3M-lOmY1hwutmPMHXViEBRLLqZxj_Atg';
+
 export function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
@@ -175,7 +184,16 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 .post-hero-inner{ max-width:820px; margin:0 auto; }
 .post-hero .blog-card-tags{ margin-bottom:18px; }
 .post-hero h1{ font-family:var(--serif); font-size:clamp(1.9rem,4.5vw,2.7rem); font-weight:700; line-height:1.15; margin-bottom:16px; }
-.post-hero-meta{ font-family:var(--mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(246,243,236,0.6); }
+.post-hero-meta{ display:flex; align-items:center; flex-wrap:wrap; gap:10px; font-family:var(--mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(246,243,236,0.6); }
+.post-meta-dot{ opacity:0.5; }
+.post-views{ display:inline-flex; align-items:center; gap:5px; }
+.post-views svg{ opacity:0.7; }
+.post-like-btn{ display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; letter-spacing:0.06em; color:rgba(246,243,236,0.85); background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16); padding:5px 12px; border-radius:100px; transition:background 0.2s,border-color 0.2s,transform 0.15s; }
+.post-like-btn:hover{ background:rgba(255,255,255,0.14); }
+.post-like-btn:active{ transform:scale(0.96); }
+.post-like-btn svg{ transition:fill 0.2s,stroke 0.2s; }
+.post-like-btn.liked{ background:rgba(230,90,90,0.16); border-color:rgba(230,90,90,0.4); color:#F0A8A8; }
+.post-like-btn.liked svg{ fill:#E65A5A; stroke:#E65A5A; }
 .post-cover{ max-width:920px; margin:-40px auto 0; padding:0 32px; }
 .post-cover img{ width:100%; aspect-ratio:16/9; object-fit:cover; object-position:center 38%; border-radius:var(--radius-md); box-shadow:var(--shadow-card); }
 
@@ -345,6 +363,85 @@ export function injectHeadingIds(html, postTitle) {
     return `<${tag} id="${id}">${inner}</${tag}>`;
   });
   return { html: withIds, headings };
+}
+
+/** View count + like button for a post page — hydrated client-side against
+ * the get_blog_engagement/record_blog_view/toggle_blog_like RPCs (see
+ * 0096_blog_engagement.sql), since the static HTML has no build-time
+ * knowledge of runtime counts. Placed inline right after the elements it
+ * targets, so no DOMContentLoaded wrapper is needed. */
+export function engagementWidget(slug) {
+  return `<span class="post-meta-dot">&middot;</span>
+    <span id="pv-views" class="post-views">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span data-role="count">&ndash;</span> views
+    </span>
+    <button id="pv-like" class="post-like-btn" type="button" aria-pressed="false">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+      <span data-role="count">&ndash;</span>
+    </button>
+    <script>
+    (function(){
+      var SLUG = ${JSON.stringify(slug)};
+      var URL_BASE = ${JSON.stringify(SUPABASE_URL)};
+      var ANON_KEY = ${JSON.stringify(SUPABASE_ANON_KEY)};
+      function rpc(name, body) {
+        return fetch(URL_BASE + '/rest/v1/rpc/' + name, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY },
+          body: JSON.stringify(body),
+        }).then(function (r) { return r.json(); });
+      }
+      function visitorId() {
+        try {
+          var id = localStorage.getItem('bb_visitor_id');
+          if (!id) {
+            id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+            localStorage.setItem('bb_visitor_id', id);
+          }
+          return id;
+        } catch (e) { return null; }
+      }
+      function fmt(n) { return (n || 0).toLocaleString(); }
+
+      var vid = visitorId();
+      var viewsCount = document.querySelector('#pv-views [data-role="count"]');
+      var likeBtn = document.getElementById('pv-like');
+      var likeCount = likeBtn ? likeBtn.querySelector('[data-role="count"]') : null;
+
+      rpc('get_blog_engagement', { p_slug: SLUG, p_visitor_id: vid }).then(function (data) {
+        if (viewsCount) viewsCount.textContent = fmt(data.views);
+        if (likeCount) likeCount.textContent = fmt(data.likes);
+        if (likeBtn && data.liked) {
+          likeBtn.classList.add('liked');
+          likeBtn.setAttribute('aria-pressed', 'true');
+        }
+      }).catch(function () {});
+
+      try {
+        var viewKey = 'bb_viewed_' + SLUG;
+        if (!sessionStorage.getItem(viewKey)) {
+          sessionStorage.setItem(viewKey, '1');
+          rpc('record_blog_view', { p_slug: SLUG }).then(function () {
+            if (viewsCount) viewsCount.textContent = fmt((parseInt((viewsCount.textContent || '0').replace(/,/g, ''), 10) || 0) + 1);
+          }).catch(function () {});
+        }
+      } catch (e) {}
+
+      if (likeBtn && vid) {
+        likeBtn.addEventListener('click', function () {
+          likeBtn.disabled = true;
+          rpc('toggle_blog_like', { p_slug: SLUG, p_visitor_id: vid }).then(function (data) {
+            if (data && typeof data.liked === 'boolean') {
+              likeBtn.classList.toggle('liked', data.liked);
+              likeBtn.setAttribute('aria-pressed', data.liked ? 'true' : 'false');
+              if (likeCount) likeCount.textContent = fmt(data.likes);
+            }
+          }).catch(function () {}).finally(function () { likeBtn.disabled = false; });
+        });
+      }
+    })();
+    </script>`;
 }
 
 export function formatDate(iso) {

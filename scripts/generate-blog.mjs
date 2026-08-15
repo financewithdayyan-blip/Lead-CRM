@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderLayout, renderTagChips, formatDate, slugify, escapeHtml, injectHeadingIds, SITE_URL, DEFAULT_OG_IMAGE } from './blog-template.mjs';
+import { renderLayout, renderTagChips, formatDate, slugify, escapeHtml, injectHeadingIds, engagementWidget, SITE_URL, DEFAULT_OG_IMAGE } from './blog-template.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -64,6 +64,34 @@ function extractFaqSchema(bodyHtml) {
       acceptedAnswer: { '@type': 'Answer', text: qa.answer },
     })),
   };
+}
+
+/** Sunday-anchored week number, stable across builds within the same week
+ * (UTC-based, so the rotation flips at Sunday 00:00 UTC — close enough to
+ * "every Sunday" for a marketing blog, no timezone config needed). */
+function weekSeed(date = new Date()) {
+  const EPOCH_SUNDAY = Date.UTC(2020, 0, 5); // a known Sunday
+  const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return Math.floor((today - EPOCH_SUNDAY) / 86_400_000 / 7);
+}
+
+/** Deterministic PRNG (mulberry32) so the same seed always produces the same
+ * shuffle — needed so every visitor (and every rebuild) sees the same
+ * lineup within a given week, not a different one per page load. */
+function seededShuffle(arr, seed) {
+  let s = seed | 0;
+  const rand = () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function stripHtml(html, maxLen = 155) {
@@ -126,12 +154,15 @@ async function main() {
   <div class="post-hero-inner">
     ${post.tags?.length ? `<div class="blog-card-tags">${renderTagChips(post.tags)}</div>` : ''}
     <h1>${escapeHtml(post.title)}</h1>
-    <div class="post-hero-meta">${formatDate(post.published_at)}</div>
+    <div class="post-hero-meta">
+      <span>${formatDate(post.published_at)}</span>
+      ${engagementWidget(post.slug)}
+    </div>
   </div>
 </div>
 ${
   post.cover_image_path
-    ? `<div class="post-cover"><img src="${image}" alt="${escapeHtml(post.title)}"></div>`
+    ? `<div class="post-cover"><img src="${image}" alt="${escapeHtml(post.title)}" fetchpriority="high"></div>`
     : ''
 }
 <div class="post-layout">
@@ -190,13 +221,20 @@ ${relatedSection(related, coverUrl)}
   }
 
   // ── Listing page ────────────────────────────────────────────────────────
-  // Most recent post leads as a large featured card, the next two sit beside
-  // it as compact rows, and everything older fills a "More Articles" grid —
-  // rather than every post (including the brand-new one) looking identical
-  // in one undifferentiated grid.
-  const [featured, ...restAfterFeatured] = posts;
-  const secondary = restAfterFeatured.slice(0, 2);
-  const rest = restAfterFeatured.slice(2);
+  // One post leads as a large featured card, the next four sit beside it as
+  // compact rows, and everything else fills a "More Articles" grid below —
+  // rather than every post looking identical in one undifferentiated grid.
+  // Which posts land in the featured/secondary slots rotates every Sunday
+  // (a deterministic shuffle seeded by the ISO-ish week number, same for
+  // every visitor that week) rather than always being "most recent first" —
+  // so a repeat visitor sees a different lineup even between deploys, not
+  // just when something new gets published. "More Articles" stays in normal
+  // recency order so the archive is still browsable.
+  const shuffled = seededShuffle(posts, weekSeed());
+  const [featured, ...restAfterFeatured] = shuffled;
+  const secondary = restAfterFeatured.slice(0, 4);
+  const featuredIds = new Set([featured, ...secondary].filter(Boolean).map((p) => p.id));
+  const rest = posts.filter((p) => !featuredIds.has(p.id));
 
   await writeFile(path.join(BLOG_DIR, 'index.html'), renderLayout({
     title: 'Blog | Bluebird Acquisition',
@@ -349,7 +387,7 @@ function featuredCard(post, coverUrl) {
   const description = post.excerpt || stripHtml(post.body_html, 200);
   const category = post.tags?.[0];
   return `<a class="featured-main" href="/blog/${post.slug}">
-  ${image ? `<img class="featured-main-thumb" src="${image}" alt="">` : ''}
+  ${image ? `<img class="featured-main-thumb" src="${image}" alt="" fetchpriority="high">` : ''}
   <div class="featured-main-body">
     <div class="featured-meta">
       ${category ? `<span class="tag-chip">${escapeHtml(category)}</span>` : ''}
@@ -384,7 +422,7 @@ function blogCard(post, coverUrl) {
   const image = coverUrl(post.cover_image_path);
   const description = post.excerpt || stripHtml(post.body_html, 140);
   return `<a class="blog-card" href="/blog/${post.slug}">
-  ${image ? `<img class="blog-card-thumb" src="${image}" alt="">` : ''}
+  ${image ? `<img class="blog-card-thumb" src="${image}" alt="" loading="lazy">` : ''}
   <div class="blog-card-body">
     <div class="blog-card-date">${formatDate(post.published_at)}</div>
     <h2>${escapeHtml(post.title)}</h2>
