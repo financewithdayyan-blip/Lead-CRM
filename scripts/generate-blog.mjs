@@ -38,6 +38,34 @@ const STATIC_PAGES = [
   { loc: '/do-not-sell', priority: '0.5' },
 ];
 
+/** Every post's "Frequently Asked Questions" section (when it has one) is
+ * already a real h3 heading followed by h4/p question-answer pairs — this
+ * just reads that same structure back out as FAQPage structured data, so
+ * Google can show the questions directly in search results (a real ranking
+ * and click-through advantage) without any per-post manual work. Returns
+ * null for a post with no FAQ section rather than emitting empty/invalid
+ * schema. */
+function extractFaqSchema(bodyHtml) {
+  const section = String(bodyHtml ?? '').match(/<h3>\s*Frequently Asked Questions\s*<\/h3>([\s\S]*?)(?=<h3>|$)/i);
+  if (!section) return null;
+  const pairs = [...section[1].matchAll(/<h4>([\s\S]*?)<\/h4>\s*<p>([\s\S]*?)<\/p>/g)]
+    .map(([, q, a]) => ({
+      question: q.replace(/<[^>]*>/g, '').trim(),
+      answer: a.replace(/<[^>]*>/g, '').trim(),
+    }))
+    .filter((qa) => qa.question && qa.answer);
+  if (!pairs.length) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: pairs.map((qa) => ({
+      '@type': 'Question',
+      name: qa.question,
+      acceptedAnswer: { '@type': 'Answer', text: qa.answer },
+    })),
+  };
+}
+
 function stripHtml(html, maxLen = 155) {
   const plain = String(html ?? '')
     .replace(/<[^>]*>/g, ' ')
@@ -118,22 +146,35 @@ ${
 ${relatedSection(related, coverUrl)}
 `;
 
-    const jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: post.title,
-      description,
-      image,
-      datePublished: post.published_at,
-      dateModified: post.updated_at,
-      author: { '@type': 'Organization', name: 'Bluebird Acquisition' },
-      publisher: {
-        '@type': 'Organization',
-        name: 'Bluebird Acquisition',
-        logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo-mark.svg` },
+    const jsonLd = [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description,
+        image,
+        datePublished: post.published_at,
+        dateModified: post.updated_at,
+        author: { '@type': 'Organization', name: 'Bluebird Acquisition' },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Bluebird Acquisition',
+          logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo-mark.svg` },
+        },
+        mainEntityOfPage: canonical,
       },
-      mainEntityOfPage: canonical,
-    };
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+          { '@type': 'ListItem', position: 3, name: post.title, item: canonical },
+        ],
+      },
+    ];
+    const faqSchema = extractFaqSchema(post.body_html);
+    if (faqSchema) jsonLd.push(faqSchema);
 
     const html = renderLayout({
       title: post.seo_title || post.title,

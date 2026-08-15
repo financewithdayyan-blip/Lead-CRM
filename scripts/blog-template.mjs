@@ -219,6 +219,11 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 
 export function renderLayout({ title, description, canonical, ogImage, ogType = 'website', jsonLd, bodyHtml }) {
   const image = ogImage || DEFAULT_OG_IMAGE;
+  // A single post or the listing page can carry more than one structured-data
+  // block (BlogPosting + FAQPage + BreadcrumbList) — accepts either one
+  // object or an array so every existing caller passing a bare object still
+  // works unchanged.
+  const jsonLdBlocks = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -235,6 +240,10 @@ export function renderLayout({ title, description, canonical, ogImage, ogType = 
 <title>${escapeHtml(title)}</title>
 <link rel="icon" type="image/svg+xml" href="/logo-mark.svg">
 <meta name="description" content="${escapeHtml(description)}">
+<!-- Explicit, not just relying on the default-indexable absence of this
+     tag — makes "is this page allowed to rank" unambiguous to any crawler
+     inspecting the raw HTML, independent of robots.txt. -->
+<meta name="robots" content="index, follow">
 <link rel="canonical" href="${canonical}">
 <meta property="og:type" content="${ogType}">
 <meta property="og:site_name" content="Bluebird Acquisition">
@@ -246,7 +255,7 @@ export function renderLayout({ title, description, canonical, ogImage, ogType = 
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="${image}">
-${jsonLd ? `<script type="application/ld+json">\n${JSON.stringify(jsonLd, null, 2)}\n</script>\n` : ''}<link rel="preconnect" href="https://fonts.googleapis.com">
+${jsonLdBlocks.map((block) => `<script type="application/ld+json">\n${JSON.stringify(block, null, 2)}\n</script>\n`).join('')}<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>${BASE_STYLES}</style>
