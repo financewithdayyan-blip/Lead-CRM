@@ -107,8 +107,8 @@ async function sendBlueDocsSms(toPhone: string, message: string) {
 
 const NEXT_SIGNER_MESSAGE = (docName: string, address: string, link: string) =>
   `Hey, it's your turn to sign the ${docName} contract for your property\n${address}\n${link}\nSign it and let's start moving with it\nThanks,\nDayyan`;
-const COMPLETED_MESSAGE = (docName: string, link: string) =>
-  `Hey, everyone has signed the ${docName} contract. Here's your copy to download:\n${link}\nThanks,\nDayyan`;
+const COMPLETED_MESSAGE = (address: string, link: string) =>
+  `Hey Congrats!\nOn signing the contract on your property at ${address}\nyou can download the signed contract. Just click the link below\n${link}\nThanks for signing,\nDayyan`;
 
 interface ContractField {
   id: string;
@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
       if (!p.phone) continue;
       try {
         const partyLink = `https://www.bluebirdacquisition.com/crm/sign/${p.access_token}`;
-        await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(instance.name, partyLink));
+        await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(instance.property_address ?? 'the property', partyLink));
       } catch (smsErr) {
         console.error(`Blue Docs completion SMS failed for party ${p.id}:`, smsErr);
       }
