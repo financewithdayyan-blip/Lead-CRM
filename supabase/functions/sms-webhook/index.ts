@@ -186,7 +186,7 @@ async function resolveLead(admin: ReturnType<typeof createClient>, fromNorm: str
 
   const { data: candidates } = await admin
     .from('leads')
-    .select('id, stage, user_id, address, created_at')
+    .select('id, stage, user_id, address, created_at, assigned_sms_number')
     .or(`phone_norm.eq.${fromNorm},phone2_norm.eq.${fromNorm}`)
     .order('created_at', { ascending: true });
 
@@ -432,6 +432,16 @@ Deno.serve(async (req) => {
     }
     if (lead) {
       await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);
+
+      // Pin the number this thread actually lives on the moment we see real
+      // inbound traffic, not just on the first outbound send — otherwise a
+      // lead that's still ai_reply_paused (or waiting on the 16s debounce)
+      // when this text arrives shows the 6-button picker instead of a real
+      // number until something happens to trigger a send.
+      const inboundKey = keyForSentFrom(toRaw);
+      if (inboundKey && (lead as { assigned_sms_number?: string | null }).assigned_sms_number !== inboundKey) {
+        await admin.from('leads').update({ assigned_sms_number: inboundKey }).eq('id', lead.id);
+      }
 
       // Deterministic paths — checked before anything else touches this lead.
       // Each ends the conversation without ever reaching the AI: no draft, no

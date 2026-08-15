@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
   const { data: lead } = await admin
     .from('leads')
     .select(
-      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, awaiting_owner_info, script_answers, lead_tags(tags(id, name))',
+      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, awaiting_owner_info, script_answers, assigned_sms_number, lead_tags(tags(id, name))',
     )
     .eq('id', leadId)
     .single();
@@ -888,9 +888,18 @@ Deno.serve(async (req) => {
     .limit(1)
     .single();
   const toPhoneDigits = (latestInbound?.to_phone ?? '').replace(/[^0-9]/g, '').slice(-10);
-  const [, from] =
+  const [fromKey, from] =
     Object.entries(NUMBERS).find(([, n]) => n.phone.replace(/[^0-9]/g, '').slice(-10) === toPhoneDigits) ??
     Object.entries(NUMBERS)[0];
+
+  // The conversation's number was already resolved above — pin it the same
+  // way send-sms/bulk-sms-dispatcher do, so the SMS tab shows a real number
+  // instead of the 6-button picker for every AI-driven thread. This was
+  // previously never written here at all, which is why any lead whose
+  // conversation only ever went through ai-reply stayed unpinned forever.
+  if ((lead as { assigned_sms_number?: string | null }).assigned_sms_number !== fromKey) {
+    await admin.from('leads').update({ assigned_sms_number: fromKey }).eq('id', leadId);
+  }
 
   const leadPhoneRow = await admin.from('leads').select('phone').eq('id', leadId).single();
   const toE164Phone = toE164(leadPhoneRow.data?.phone ?? '');
