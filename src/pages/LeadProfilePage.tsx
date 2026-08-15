@@ -1025,7 +1025,10 @@ function FrameworkTab({ lead }: { lead: Lead }) {
       {SCRIPT_STEPS.map((step) => {
         const complete = stepComplete(step);
         return (
-          <div key={step.title} className="card">
+          <div
+            key={step.title}
+            className={`card ${complete ? 'border-success/40 bg-success/5' : ''}`}
+          >
             <div className="mb-3 flex items-center gap-2">
               {complete ? (
                 <CheckCircle2 size={18} className="shrink-0 text-success" />
@@ -1033,6 +1036,11 @@ function FrameworkTab({ lead }: { lead: Lead }) {
                 <Circle size={18} className="shrink-0 text-text-3" />
               )}
               <h3 className="text-sm font-semibold text-text">{step.title}</h3>
+              {complete && (
+                <span className="ml-auto rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
+                  Qualified
+                </span>
+              )}
             </div>
             <div className="space-y-3">
               {step.questions.map((q) => (

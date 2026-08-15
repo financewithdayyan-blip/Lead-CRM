@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
   const { data: lead } = await admin
     .from('leads')
     .select(
-      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, awaiting_owner_info, lead_tags(tags(id, name))',
+      'id, user_id, first_name, last_name, address, city, state, zip, stage, notes, opted_out, ai_reply_paused, photo_wait_ai_active, awaiting_owner_info, script_answers, lead_tags(tags(id, name))',
     )
     .eq('id', leadId)
     .single();
@@ -650,6 +650,15 @@ Deno.serve(async (req) => {
                     description:
                       'Only fill in together with scheduled_callback_at, on that same message. The callback time in their own words, e.g. "Tomorrow around 3pm" — for a human to read alongside the parsed time.',
                   },
+                  script_answers: {
+                    type: 'object',
+                    description:
+                      'Fill in ONLY when newly established on THIS message — omit otherwise. Writes directly into the CRM\'s call-script record.',
+                    properties: {
+                      photo_request: { type: 'string', description: 'Short note on photo status, e.g. "Sent 4 interior photos" — only once photos actually arrive this message.' },
+                      callback: { type: 'string', description: 'The callback day/time in their own words — same value as scheduled_callback_note above, filled in together with it.' },
+                    },
+                  },
                 },
                 required: ['reply_parts', 'negative_reply'],
               },
@@ -717,6 +726,28 @@ Deno.serve(async (req) => {
                     description:
                       'Only meaningful when fully_qualified is true — empty string otherwise. One concrete, specific next step for a human to do, informed by what was actually said in this conversation, not a generic template. E.g. "Run comps and confirm an offer near her $210k ask, roof is 20 years old" or "Text the LOI for a subject-to deal at $180k, he agreed to the number on the call" or "Call to finalize numbers before Friday, she has another offer to compare against". Always name what makes THIS lead specific (a number mentioned, a deadline, a condition issue) rather than restating the framework steps.',
                   },
+                  script_answers: {
+                    type: 'object',
+                    description:
+                      "Fill in ONLY the fields the seller just established for the first time on THIS message — omit every field not newly answered right now (don't repeat something already captured on an earlier turn, and don't include a field as an empty string). This writes directly into the CRM's call-script record, so use their actual wording, not a paraphrase that loses detail.",
+                    properties: {
+                      motivation_owned: { type: 'string', description: 'How long they said they have owned the property.' },
+                      motivation_reason: { type: 'string', description: "Their stated motivation for selling." },
+                      motivation_now: { type: 'string', description: 'Why they are looking to sell now specifically, if said separately from the general motivation.' },
+                      condition_general: { type: 'string', description: 'General condition of the property as they described it.' },
+                      condition_rating: { type: 'string', description: 'Their self-rating out of 10.' },
+                      condition_issues: { type: 'string', description: 'Catch-all for issues that are NOT HVAC, plumbing, or roof — electrical, foundation, windows/doors, mold, pests, etc. belong here, never in condition_hvac.' },
+                      condition_hvac: { type: 'string', description: 'What they said about HVAC/heating/AC specifically — never electrical or plumbing.' },
+                      condition_plumbing: { type: 'string', description: 'What they said about plumbing specifically (PVC vs iron cast, etc).' },
+                      condition_roof: { type: 'string', description: 'How old they said the roof is.' },
+                      timeline: { type: 'string', description: 'When they said they want to close.' },
+                      price_asking: { type: 'string', description: 'The number they said they are hoping to get.' },
+                      price_reasoning: { type: 'string', description: 'How they said they arrived at that number.' },
+                      decision: { type: 'string', description: 'Who else they said is involved in the decision.' },
+                      photo_request: { type: 'string', description: 'Short note on photo status, e.g. "Sent 4 interior photos" — only once photos actually arrive.' },
+                      callback: { type: 'string', description: 'The callback day/time in their own words — same value as scheduled_callback_note above, filled in together with it.' },
+                    },
+                  },
                 },
                 required: ['reply_parts', 'fully_qualified', 'negative_reply'],
               },
@@ -758,6 +789,7 @@ Deno.serve(async (req) => {
     scheduled_callback_note: scheduledCallbackNote,
     next_action: nextAction,
     awaiting_owner_info: awaitingOwnerInfoRaw,
+    script_answers: scriptAnswersRaw,
   } = toolUse.input as {
     reply_parts: string[];
     // Absent entirely from the photo-wait tool's schema — undefined there,
@@ -772,6 +804,7 @@ Deno.serve(async (req) => {
     scheduled_callback_note?: string;
     next_action?: string;
     awaiting_owner_info?: boolean;
+    script_answers?: Record<string, unknown>;
   };
 
   // Fills in a name/address the CRM never had, and a callback time once the
@@ -790,6 +823,25 @@ Deno.serve(async (req) => {
     if (!isNaN(parsed.getTime())) {
       recoveredFields.scheduled_callback_at = parsed.toISOString();
       recoveredFields.scheduled_callback_note = scheduledCallbackNote?.trim() || null;
+    }
+  }
+  if (scriptAnswersRaw && typeof scriptAnswersRaw === 'object') {
+    const newAnswers = Object.fromEntries(
+      Object.entries(scriptAnswersRaw).filter(([, v]) => typeof v === 'string' && v.trim().length > 0),
+    ) as Record<string, string>;
+    // The model can misfile electrical (and other non-HVAC issues) into
+    // condition_hvac despite the schema description — a condition_hvac value
+    // that doesn't actually mention anything HVAC-related is almost
+    // certainly one of those misfiles, so drop it rather than show a wrong
+    // system label next to a real answer.
+    if (newAnswers.condition_hvac && !/hvac|heat|furnace|a\/c|\bac\b|air condition|cooling/i.test(newAnswers.condition_hvac)) {
+      delete newAnswers.condition_hvac;
+    }
+    if (newAnswers.condition_plumbing && !/plumb|pipe|pvc|iron cast|sewer|drain|water heater/i.test(newAnswers.condition_plumbing)) {
+      delete newAnswers.condition_plumbing;
+    }
+    if (Object.keys(newAnswers).length > 0) {
+      recoveredFields.script_answers = { ...((lead as { script_answers?: Record<string, unknown> }).script_answers ?? {}), ...newAnswers };
     }
   }
   if (Object.keys(recoveredFields).length > 0) {
