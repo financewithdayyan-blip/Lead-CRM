@@ -1591,8 +1591,27 @@ footer{
   .header-cta span{ display:none; }
   /* Keep the tap-to-call target, drop the digits so the bar doesn't wrap. */
   .header-phone span{ display:none; }
+  /* Brand text + phone icon + Login + CTA icon genuinely don't fit in a
+     375-414px viewport (measured ~418px minimum with Login in the mix) —
+     .brand is flex-shrink:0 by design (never truncate the wordmark), so
+     without this the row overflowed the fixed header past the right edge
+     instead of wrapping, since position:fixed isn't clipped by body's own
+     overflow-x:hidden. Login is a staff/CRM link, not something a
+     homeowner visitor needs front and center, so it's the one to drop —
+     the phone call and cash-offer CTA are what actually matter here. */
+  .header-login{ display:none; }
+  /* Belt-and-suspenders: if a still-narrower device (<360px) doesn't fit
+     even without Login, wrap instead of silently overflowing the fixed
+     header off-canvas again. */
+  .header-inner{ flex-wrap:wrap; row-gap:8px; }
   .doc{ width:220px; }
-  .bird-wrap{ width:260px; }
+  /* Was 260px — wider than the 220px document cards it's meant to accent,
+     which is why it was swallowing them whole instead of flying among
+     them. The desktop 300px works because the scene sits in a half-width
+     grid column there; on mobile hero-inner stacks to 1fr (see the 980px
+     rule above) so the same scene is nearly full viewport width, and the
+     bird needs to shrink much further than the cards to stay an accent. */
+  .bird-wrap{ width:130px; }
   .relief-row{ flex-wrap:wrap; gap:4px; padding:12px 0; }
   .relief-row .value{ font-size:12px; }
   .relief-float-tag{ left:16px; transform:translateZ(40px) rotate(-3deg); padding:14px 18px; }
