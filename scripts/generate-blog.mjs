@@ -190,6 +190,14 @@ ${relatedSection(related, coverUrl)}
   }
 
   // ── Listing page ────────────────────────────────────────────────────────
+  // Most recent post leads as a large featured card, the next two sit beside
+  // it as compact rows, and everything older fills a "More Articles" grid —
+  // rather than every post (including the brand-new one) looking identical
+  // in one undifferentiated grid.
+  const [featured, ...restAfterFeatured] = posts;
+  const secondary = restAfterFeatured.slice(0, 2);
+  const rest = restAfterFeatured.slice(2);
+
   await writeFile(path.join(BLOG_DIR, 'index.html'), renderLayout({
     title: 'Blog | Bluebird Acquisition',
     description: 'Guidance on selling a distressed property fast, for cash, without repairs or agent fees.',
@@ -205,8 +213,26 @@ ${relatedSection(related, coverUrl)}
 <div class="section">
   <div class="section-inner">
     ${
-      posts.length
-        ? `<div class="blog-grid">${posts.map((p) => blogCard(p, coverUrl)).join('')}</div>`
+      featured
+        ? `<div class="blog-featured${secondary.length ? '' : ' single'}">
+      ${featuredCard(featured, coverUrl)}
+      ${secondary.length ? `<div class="blog-featured-side">${secondary.map((p) => secondaryCard(p, coverUrl)).join('')}</div>` : ''}
+    </div>
+    <div class="blog-cta-band">
+      <div class="blog-cta-band-text">
+        <h3>Thinking about selling?</h3>
+        <p>Get a no-obligation cash offer — no repairs, no agent fees, close on your timeline.</p>
+      </div>
+      <a class="btn-cta" href="/contact-us">
+        Get My Cash Offer
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+    ${
+      rest.length
+        ? `<h2 class="blog-section-heading">More Articles</h2><div class="blog-grid">${rest.map((p) => blogCard(p, coverUrl)).join('')}</div>`
+        : ''
+    }`
         : `<div class="blog-empty">New posts are on the way — check back soon.</div>`
     }
   </div>
@@ -313,6 +339,45 @@ function relatedSection(related, coverUrl) {
   next.addEventListener('click', function () { move(1); });
 })();
 </script>`;
+}
+
+/** The listing page's lead story — larger image, longer excerpt, an explicit
+ * "Read article" link. Category is just the post's first tag, since these
+ * posts don't have a separate category field. */
+function featuredCard(post, coverUrl) {
+  const image = coverUrl(post.cover_image_path);
+  const description = post.excerpt || stripHtml(post.body_html, 200);
+  const category = post.tags?.[0];
+  return `<a class="featured-main" href="/blog/${post.slug}">
+  ${image ? `<img class="featured-main-thumb" src="${image}" alt="">` : ''}
+  <div class="featured-main-body">
+    <div class="featured-meta">
+      ${category ? `<span class="tag-chip">${escapeHtml(category)}</span>` : ''}
+      <span class="blog-card-date">${formatDate(post.published_at)}</span>
+    </div>
+    <h2>${escapeHtml(post.title)}</h2>
+    <p>${escapeHtml(description)}</p>
+    <span class="featured-read-link">Read article
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </span>
+  </div>
+</a>`;
+}
+
+/** A compact row next to the featured story — thumbnail + category/date + title only, no excerpt. */
+function secondaryCard(post, coverUrl) {
+  const image = coverUrl(post.cover_image_path);
+  const category = post.tags?.[0];
+  return `<a class="featured-side-card" href="/blog/${post.slug}">
+  ${image ? `<img class="featured-side-thumb" src="${image}" alt="">` : ''}
+  <div class="featured-side-body">
+    <div class="featured-meta">
+      ${category ? `<span class="tag-chip">${escapeHtml(category)}</span>` : ''}
+      <span class="blog-card-date">${formatDate(post.published_at)}</span>
+    </div>
+    <h3>${escapeHtml(post.title)}</h3>
+  </div>
+</a>`;
 }
 
 function blogCard(post, coverUrl) {
