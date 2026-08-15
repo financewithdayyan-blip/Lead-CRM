@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderLayout, renderTagChips, formatDate, slugify, escapeHtml, SITE_URL, DEFAULT_OG_IMAGE } from './blog-template.mjs';
+import { renderLayout, renderTagChips, formatDate, slugify, escapeHtml, injectHeadingIds, SITE_URL, DEFAULT_OG_IMAGE } from './blog-template.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -90,6 +90,9 @@ async function main() {
     const image = coverUrl(post.cover_image_path) || DEFAULT_OG_IMAGE;
     const canonical = `${SITE_URL}/blog/${post.slug}`;
 
+    const { html: articleHtml, headings } = injectHeadingIds(post.body_html, post.title);
+    const related = relatedPosts(post, posts);
+
     const bodyHtml = `
 <div class="post-hero">
   <div class="post-hero-inner">
@@ -103,10 +106,16 @@ ${
     ? `<div class="post-cover"><img src="${image}" alt="${escapeHtml(post.title)}"></div>`
     : ''
 }
-<article class="post-article">${post.body_html || ''}</article>
-<div class="post-footer">
-  <a class="post-back-link" href="/blog">&larr; Back to all posts</a>
+<div class="post-layout">
+  <div class="post-main">
+    <article class="post-article">${articleHtml || ''}</article>
+    <div class="post-footer">
+      <a class="post-back-link" href="/blog">&larr; Back to all posts</a>
+    </div>
+  </div>
+  ${sidebar(headings)}
 </div>
+${relatedSection(related, coverUrl)}
 `;
 
     const jsonLd = {
@@ -195,6 +204,74 @@ ${
   await writeSitemap(posts, [...tagMap.keys()]);
 
   console.log(`[generate-blog] Generated ${posts.length} post page(s) and ${tagMap.size} tag page(s).`);
+}
+
+/** "In This Article" jump links + the cash-offer CTA — every post gets
+ * this sidebar, TOC only populated when the post actually has h2/h3
+ * sections (an LOI or very short post might not). */
+function sidebar(headings) {
+  const toc = headings.length
+    ? `<div class="sidebar-card toc-card">
+  <div class="sidebar-card-title">In This Article</div>
+  <nav class="toc-list">
+    ${headings.map((h) => `<a class="toc-link toc-level-${h.level}" href="#${h.id}">${escapeHtml(h.text)}</a>`).join('\n    ')}
+  </nav>
+</div>`
+    : '';
+  return `<aside class="post-sidebar">
+  ${toc}
+  <div class="sidebar-card cta-card">
+    <div class="cta-card-title">Need to sell fast?</div>
+    <p>Get a no-obligation cash offer from Bluebird Acquisition — no repairs, no agent fees, close on your timeline.</p>
+    <a class="btn-cta" href="/contact-us">
+      Get My Cash Offer
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </a>
+  </div>
+</aside>`;
+}
+
+/** Prefers other posts sharing a tag (closest in subject matter), falls
+ * back to whatever's most recent so a post with a one-off tag still gets a
+ * full row instead of an empty/half-empty carousel. */
+function relatedPosts(post, allPosts, count = 4) {
+  const tagSet = new Set(post.tags ?? []);
+  return allPosts
+    .filter((p) => p.id !== post.id)
+    .map((p) => ({ p, score: (p.tags ?? []).filter((t) => tagSet.has(t)).length }))
+    .sort((a, b) => b.score - a.score || new Date(b.p.published_at) - new Date(a.p.published_at))
+    .slice(0, count)
+    .map((s) => s.p);
+}
+
+function relatedSection(related, coverUrl) {
+  if (!related.length) return '';
+  return `
+<div class="related-section">
+  <div class="related-header">
+    <h2 class="related-heading">Related Articles</h2>
+    <div class="related-nav">
+      <button type="button" data-dir="prev" aria-label="Scroll left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button type="button" data-dir="next" aria-label="Scroll right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+    </div>
+  </div>
+  <div class="related-track">${related.map((p) => blogCard(p, coverUrl)).join('')}</div>
+</div>
+<script>
+(function(){
+  var track = document.querySelector('.related-track');
+  var prev = document.querySelector('.related-nav [data-dir="prev"]');
+  var next = document.querySelector('.related-nav [data-dir="next"]');
+  if (!track || !prev || !next) return;
+  function move(dir) {
+    var card = track.querySelector('.blog-card');
+    var amount = card ? card.getBoundingClientRect().width + 20 : 280;
+    track.scrollBy({ left: dir * amount * 2, behavior: 'smooth' });
+  }
+  prev.addEventListener('click', function () { move(-1); });
+  next.addEventListener('click', function () { move(1); });
+})();
+</script>`;
 }
 
 function blogCard(post, coverUrl) {
