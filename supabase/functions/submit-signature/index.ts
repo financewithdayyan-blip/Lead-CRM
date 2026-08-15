@@ -105,10 +105,8 @@ async function sendBlueDocsSms(toPhone: string, message: string) {
   await withTimeout(sendZoomSms(BLUEDOCS_NUMBER.phone, toPhone, message, token), 'Zoom send');
 }
 
-// DRAFT COPY — flagged for sign-off before this ships live, same as
-// create-contract-instance's INVITE_MESSAGE.
-const NEXT_SIGNER_MESSAGE = (name: string, docName: string, link: string) =>
-  `Hi ${name}, it's your turn to sign ${docName} from Bluebird Acquisition. Sign here: ${link}`;
+const NEXT_SIGNER_MESSAGE = (docName: string, address: string, link: string) =>
+  `Hey, it's your turn to sign the ${docName} contract for your property\n${address}\n${link}\nSign it and let's start moving with it\nThanks,\nDayyan`;
 const COMPLETED_MESSAGE = (docName: string) => `${docName} has been signed by everyone. Thank you!`;
 
 interface ContractField {
@@ -319,9 +317,16 @@ Deno.serve(async (req) => {
       const nextParty = updatedParties.filter((p) => p.status !== 'signed').sort((a, b) => a.sign_order - b.sign_order)[0];
       if (nextParty?.phone) {
         try {
-          const { data: nameRow } = await admin.from('contract_instances').select('name').eq('id', party.contract_instance_id).single();
+          const { data: nameRow } = await admin
+            .from('contract_instances')
+            .select('name, property_address')
+            .eq('id', party.contract_instance_id)
+            .single();
           const link = `https://www.bluebirdacquisition.com/crm/sign/${nextParty.access_token}`;
-          await sendBlueDocsSms(nextParty.phone, NEXT_SIGNER_MESSAGE(nextParty.name, nameRow?.name ?? 'a document', link));
+          await sendBlueDocsSms(
+            nextParty.phone,
+            NEXT_SIGNER_MESSAGE(nameRow?.name ?? 'a document', nameRow?.property_address ?? '', link),
+          );
           await admin.from('contract_audit_events').insert({
             contract_instance_id: party.contract_instance_id,
             party_id: nextParty.id,

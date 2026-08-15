@@ -15,11 +15,13 @@ const STATUS_BADGE: Record<ContractInstance['status'], { label: string; classNam
 };
 
 /** Every generated instance is named after its template ("Letter Of Intent to
- * Purchase Real Estate"), which is identical across every deal — with no lead
- * required to generate one anymore, that name alone can't tell two LOIs for
- * different properties apart. Whatever field got mapped as the property
- * address is the next best thing, once it's actually been filled in. */
+ * Purchase Real Estate"), which is identical across every deal — that name
+ * alone can't tell two contracts for different properties apart. Prefers the
+ * address collected at send time (SendContractModal); older instances sent
+ * before that existed fall back to whatever field got mapped as the address,
+ * once it's actually been filled in by a signer. */
 function findAddress(instance: ContractInstance): string | null {
+  if (instance.propertyAddress?.trim()) return instance.propertyAddress.trim();
   const field = instance.templateFields.find((f) => f.type !== 'signature' && /address/i.test(f.label));
   const value = field ? instance.fieldValues[field.id] : null;
   return value?.trim() || null;
@@ -109,7 +111,9 @@ export function ContractInstanceRow({
                 key={p.id}
                 className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${p.status === 'signed' ? 'bg-success-dim text-success' : 'bg-surface-2 text-text-3'}`}
               >
-                {p.role === 'buyer' || p.role === 'seller' ? roleLabel(p.role, c.templateType ?? 'contract') : p.name}{' '}
+                {p.role === 'buyer' || p.role === 'seller'
+                  ? `${roleLabel(p.role, c.templateType ?? 'contract')} · ${p.name}`
+                  : p.name}{' '}
                 {p.status === 'signed' ? '✓' : '· pending'}
                 {p.status !== 'signed' && unlocked && (
                   <span title={lastViewed ? `Opened the link ${formatDateTime(lastViewed)}` : "Hasn't opened the link yet"}>

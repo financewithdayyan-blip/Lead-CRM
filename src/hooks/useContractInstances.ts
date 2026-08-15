@@ -25,6 +25,7 @@ export interface ContractInstance {
   leadId: string | null;
   leadName: string | null;
   name: string;
+  propertyAddress: string | null;
   fieldValues: Record<string, string>;
   status: 'draft' | 'sent' | 'partial' | 'signed' | 'voided' | 'declined' | 'expired';
   finalStoragePath: string | null;
@@ -62,6 +63,7 @@ function fromRow(r: any): ContractInstance {
     leadId: r.lead_id,
     leadName: r.leads ? `${r.leads.first_name ?? ''} ${r.leads.last_name ?? ''}`.trim() : null,
     name: r.name,
+    propertyAddress: r.property_address ?? null,
     fieldValues: r.field_values ?? {},
     status: r.status,
     finalStoragePath: r.final_storage_path,
@@ -114,6 +116,7 @@ export function useGenerateContract() {
       templateId: string;
       leadId?: string;
       name: string;
+      propertyAddress: string;
       fieldValues: Record<string, string>;
       parties: ContractParty[];
     }) => {
@@ -122,6 +125,7 @@ export function useGenerateContract() {
           templateId: input.templateId,
           leadId: input.leadId,
           name: input.name,
+          propertyAddress: input.propertyAddress,
           fieldValues: input.fieldValues,
           parties: input.parties.map((p) => ({ role: p.role, name: p.name, phone: p.phone, signOrder: p.signOrder })),
         },

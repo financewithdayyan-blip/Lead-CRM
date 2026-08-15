@@ -105,12 +105,8 @@ function toE164(raw: string): string | null {
   return null;
 }
 
-// DRAFT COPY — flagged for sign-off before this function is deployed live,
-// per the e-signing overhaul plan. {name}/{docName}/{link} are substituted
-// below; keep replacements short since the signing link itself already
-// takes up ~70-90 characters of a message.
-const INVITE_MESSAGE = (name: string, docName: string, link: string) =>
-  `Hi ${name}, ${docName} is ready for your signature from Bluebird Acquisition. Sign here: ${link}`;
+const INVITE_MESSAGE = (docName: string, address: string, link: string) =>
+  `Hey, here's the link to the ${docName} contract for your property\n${address}\n${link}\nSign it and let's start moving with it\nThanks,\nDayyan`;
 
 interface ContractField {
   id: string;
@@ -147,15 +143,18 @@ Deno.serve(async (req) => {
     if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
 
     const body = await req.json();
-    const { templateId, leadId, name, fieldValues, parties } = body as {
+    const { templateId, leadId, name, propertyAddress, fieldValues, parties } = body as {
       templateId: string;
       leadId?: string;
       name: string;
+      propertyAddress?: string;
       fieldValues: Record<string, string>;
       parties: PartyInput[];
     };
 
-    if (!templateId || !name || !parties?.length) return json({ error: 'Missing required fields.' }, 400);
+    if (!templateId || !name || !propertyAddress?.trim() || !parties?.length) {
+      return json({ error: 'Missing required fields.' }, 400);
+    }
     if (!BLUEDOCS_NUMBER.phone || !BLUEDOCS_NUMBER.email) {
       return json({ error: 'Blue Docs sending number is not configured yet.' }, 500);
     }
@@ -191,6 +190,7 @@ Deno.serve(async (req) => {
         template_id: templateId,
         lead_id: leadId ?? null,
         name,
+        property_address: propertyAddress.trim(),
         field_values: fieldValues ?? {},
         created_by: userId,
         status: 'sent',
@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
       const token = await withTimeout(zoomToken(), 'Zoom auth');
       await withTimeout(zoomUserId(BLUEDOCS_NUMBER.email, token), 'Zoom user lookup');
       await withTimeout(
-        sendZoomSms(BLUEDOCS_NUMBER.phone, firstParty.phone, INVITE_MESSAGE(firstParty.name, docKind, link), token),
+        sendZoomSms(BLUEDOCS_NUMBER.phone, firstParty.phone, INVITE_MESSAGE(docKind, propertyAddress.trim(), link), token),
         'Zoom send',
       );
       await admin.from('contract_audit_events').insert({

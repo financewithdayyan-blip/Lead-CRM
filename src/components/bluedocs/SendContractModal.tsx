@@ -42,6 +42,7 @@ export function SendContractModal({
   const firstRoleLabel = roleLabel('buyer', template.type);
 
   const [name, setName] = useState(template.name);
+  const [propertyAddress, setPropertyAddress] = useState('');
   const [parties, setParties] = useState<PartyDraft[]>([
     { key: 'buyer', role: 'buyer', name: '', phone: '' },
     { key: 'seller', role: 'seller', name: '', phone: '' },
@@ -49,7 +50,7 @@ export function SendContractModal({
   ]);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = name.trim() && parties.every((p) => p.name.trim() && isValidPhone(p.phone));
+  const canSubmit = name.trim() && propertyAddress.trim() && parties.every((p) => p.name.trim() && isValidPhone(p.phone));
 
   function updateParty(key: string, patch: Partial<PartyDraft>) {
     setParties((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
@@ -80,6 +81,7 @@ export function SendContractModal({
       const { parties: created } = await generate.mutateAsync({
         templateId: template.id,
         name: name.trim(),
+        propertyAddress: propertyAddress.trim(),
         fieldValues: {},
         parties: parties.map((p, i) => ({ role: p.role, name: p.name.trim(), phone: p.phone.trim(), signOrder: i + 1 })),
       });
@@ -99,6 +101,17 @@ export function SendContractModal({
         <div>
           <label className="mb-1 block text-[12px] font-medium text-text-2">Document name</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-text-2">Property address</label>
+          <input
+            className="input"
+            placeholder="123 Main St, Tampa, FL 33602"
+            value={propertyAddress}
+            onChange={(e) => setPropertyAddress(e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-text-3">Goes in the invite text so the signer knows which property this is for.</p>
         </div>
 
         <div>
