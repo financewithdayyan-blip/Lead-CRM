@@ -28,7 +28,7 @@ const JOB_STATUS_CONFIG: Record<BulkSmsJobStatus, { label: string; color: string
   paused: { label: 'Paused', color: '#f59e0b' },
 };
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
     <div className="card !p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
@@ -52,6 +52,17 @@ function BulkSmsHistory() {
   const deleteJob = useDeleteBulkSmsJob();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  const totals = useMemo(() => {
+    const totalSent = jobs.reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
+    const totalSkipped = jobs.reduce((sum, j) => sum + (j.skippedCount ?? 0), 0);
+    const totalFailed = jobs.reduce((sum, j) => sum + (j.failedCount ?? 0), 0);
+    const durations = jobs
+      .filter((j) => j.completedAt)
+      .map((j) => (new Date(j.completedAt!).getTime() - new Date(j.createdAt).getTime()) / 1000);
+    const avgDurationSeconds = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+    return { totalSent, totalSkipped, totalFailed, avgDurationSeconds };
+  }, [jobs]);
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
@@ -67,6 +78,19 @@ function BulkSmsHistory() {
           Go to Pipeline
         </button>
       </div>
+
+      {jobs.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Total Sent" value={totals.totalSent} color={STATUS_CONFIG.sent.color} />
+          <StatCard label="Total Skipped" value={totals.totalSkipped} color={STATUS_CONFIG.skipped.color} />
+          <StatCard label="Total Failed" value={totals.totalFailed} color={STATUS_CONFIG.failed.color} />
+          <StatCard
+            label="Avg Duration"
+            value={totals.avgDurationSeconds != null ? formatDuration(totals.avgDurationSeconds) : '—'}
+            color="#4f46e5"
+          />
+        </div>
+      )}
 
       <div className="card !p-0 overflow-hidden">
         {isLoading ? (

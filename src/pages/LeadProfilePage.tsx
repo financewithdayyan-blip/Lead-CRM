@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
 import { useActivities, useAddActivity, useDeleteActivity, useUpdateActivity } from '@/hooks/useActivities';
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl, useSignedFileUrls } from '@/hooks/useLeadFiles';
-import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useScoreLead } from '@/hooks/useScoreLead';
@@ -16,7 +15,7 @@ import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
-import { callerDisplayName, daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localIsoDate } from '@/lib/utils';
+import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localIsoDate } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
 import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
@@ -250,14 +249,15 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   stage_change: 'Stage changed',
 };
 
-const TABS = ['overview', 'property', 'packet', 'sms', 'script', 'activity', 'tasks', 'files'] as const;
+const TABS = ['overview', 'property', 'packet', 'sms', 'framework', 'notes', 'activity', 'tasks', 'files'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
   property: 'Property Details',
   packet: 'Deal Packet',
   sms: 'SMS',
-  script: 'Call Script',
+  framework: 'Framework',
+  notes: 'Notes',
   activity: 'Activity',
   tasks: 'Tasks',
   files: 'Files',
@@ -469,7 +469,8 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       {/* SMS is an admin-only feature — texting leads isn't part of a
           caller's job, which is manual cold calling only. */}
       {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
-      {tab === 'script' && <ScriptTab lead={lead} />}
+      {tab === 'framework' && <FrameworkTab lead={lead} />}
+      {tab === 'notes' && <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
       {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}
       {tab === 'files' && <FilesTab lead={lead} />}
@@ -607,7 +608,6 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
   }
 
   return (
-    <>
     <div className="card">
       <div className="grid grid-cols-2 gap-3">
         <Field label="First Name">
@@ -653,8 +653,6 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
         {saved && <span className="text-[12px] text-success">✓ Saved</span>}
       </div>
     </div>
-    <NotesChatSection leadId={leadId} legacyNote={lead.notes ?? null} />
-    </>
   );
 }
 
@@ -679,7 +677,7 @@ function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: 
   }
 
   return (
-    <div className="card mt-4">
+    <div className="card">
       <h3 className="mb-3 text-sm font-semibold text-text">Notes</h3>
 
       {/* Legacy note (old single-field notes migrated from lead.notes) */}
@@ -1012,64 +1010,43 @@ function PropertyTab({ lead }: { lead: Lead }) {
   );
 }
 
-function ScriptTab({ lead }: { lead: Lead }) {
-  const { profile, session } = useAuth();
-  const { answers, setAnswer, status } = useScriptAnswers(lead);
-  const fullName = `${lead.firstName} ${lead.lastName}`.trim();
-  const callerName = callerDisplayName(profile?.fullName, session?.user.email);
-  const addressLine =
-    [lead.address, lead.city, lead.state].filter(Boolean).join(', ') + (lead.zip ? ` ${lead.zip}` : '') || 'the property';
+function FrameworkTab({ lead }: { lead: Lead }) {
+  const answers = lead.scriptAnswers ?? {};
+  const stepComplete = (step: (typeof SCRIPT_STEPS)[number]) =>
+    step.questions.every((q) => (answers[q.key] ?? '').trim().length > 0);
+  const completedCount = SCRIPT_STEPS.filter(stepComplete).length;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[13px] text-text-3">Answers save automatically as you type.</p>
-        <span className="text-[12px] font-medium">
-          {status === 'saving' && <span className="text-text-3">Saving…</span>}
-          {status === 'saved' && <span className="text-success">✓ Saved</span>}
-        </span>
-      </div>
+      <p className="text-[13px] text-text-3">
+        {completedCount} of {SCRIPT_STEPS.length} steps completed
+      </p>
 
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold text-text">Introduction & Permission</h3>
-        <div className="space-y-2 text-[13px] leading-relaxed text-text-2">
-          <p className="rounded-md bg-surface-3 p-3">
-            "Hi, is this <strong className="text-text">{fullName}</strong>? My name is <strong className="text-text">{callerName}</strong>.
-            I'm calling about the property at <strong className="text-text">{addressLine}</strong>. Do you have a few minutes to talk about
-            it?"
-          </p>
-          <p className="rounded-md bg-surface-3 p-3">
-            "So we are basically an acquisition company — we help homeowners solve problems regarding their properties. We have access to
-            public records and we came across your property there, that's how we got your address and number. We are interested in your
-            house."
-          </p>
-          <p className="rounded-md bg-surface-3 p-3">› Are you interested in selling your house for the right price?</p>
-        </div>
-      </div>
-
-      {SCRIPT_STEPS.map((step, i) => (
-        <div key={step.title} className="card">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white">
-              {i + 3}
-            </span>
-            <h3 className="text-sm font-semibold text-text">{step.title}</h3>
+      {SCRIPT_STEPS.map((step) => {
+        const complete = stepComplete(step);
+        return (
+          <div key={step.title} className="card">
+            <div className="mb-3 flex items-center gap-2">
+              {complete ? (
+                <CheckCircle2 size={18} className="shrink-0 text-success" />
+              ) : (
+                <Circle size={18} className="shrink-0 text-text-3" />
+              )}
+              <h3 className="text-sm font-semibold text-text">{step.title}</h3>
+            </div>
+            <div className="space-y-3">
+              {step.questions.map((q) => (
+                <div key={q.key}>
+                  <p className="mb-1 text-[13px] text-text-2">{q.prompt}</p>
+                  <p className={`text-[13px] ${answers[q.key] ? 'text-text' : 'italic text-text-3'}`}>
+                    {answers[q.key] || 'No answer recorded'}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-3">
-            {step.questions.map((q) => (
-              <div key={q.key}>
-                <p className="mb-1.5 text-[13px] text-text-2">{q.prompt}</p>
-                <input
-                  className="input"
-                  value={answers[q.key] ?? ''}
-                  onChange={(e) => setAnswer(q.key, e.target.value)}
-                  placeholder="Type their answer…"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

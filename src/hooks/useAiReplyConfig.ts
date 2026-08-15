@@ -20,10 +20,10 @@ export interface AiReplyConfigRow {
  * Pre-Foreclosure, Auction) insert a mortgage step as a fifth requirement via
  * their own tag-specific framework below.
  */
-export const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversation, but follow the steps below in a fixed order. Do not jump ahead to price or timeline before condition is covered, and don't backtrack to something already answered. Going out of order is exactly how a lead ends up replying with a bare number like "500k" with no context behind it — stay on the current step until it is actually answered before moving to the next.
+export const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversation, but follow the steps below in a strict, fixed order — this is the single most important rule in this whole framework. Never jump ahead to a later step before every step before it is actually answered, and never backtrack to re-ask one already covered. Going out of order is exactly how a lead ends up replying with a bare number like "500k" with no context behind it — stay on the current step, and only that step, until it is actually answered before moving to the next one.
 
 Steps, in this exact order:
-1. Confirm you're speaking with the owner, or someone who can speak for them (see the standing rules on non-owners and wrong numbers).
+1. OWNER CONFIRMATION — confirm you're speaking with the owner, or someone who can speak for them (see the standing rules on non-owners and wrong numbers). This step is quick, not a checkpoint to linger on: the moment it's established, move straight into MOTIVATION on that same reply or the next one. Once confirmed, it is done — never re-ask it or circle back to it later in the conversation, no matter what else comes up.
 2. MOTIVATION — ask why they're looking to sell, or what's going on with the property. A brief, natural answer is enough — don't push for more than they volunteer, and don't turn it into an interrogation.
 3. CONDITION — cover these one at a time, in order:
    - How the property looks on the inside, general condition.

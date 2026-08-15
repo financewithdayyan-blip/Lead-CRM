@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Image as ImageIcon, Loader2, MessageSquare, Send, ThumbsUp } from 'lucide-react';
 import { useLeadThread, useSendManualReply } from '@/hooks/useLeadMessages';
 import { useAiSettings } from '@/hooks/useAiSettings';
-import { formatDateTime } from '@/lib/utils';
+import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
+import { formatDateTime, formatPhone } from '@/lib/utils';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead } from '@/types/domain';
 
@@ -51,10 +52,16 @@ function AiStatusChip({ lead, globalEnabled }: { lead: Lead; globalEnabled: bool
 export function SmsThreadTab({ lead }: { lead: Lead }) {
   const { data: thread = [], isLoading } = useLeadThread(lead.id);
   const { data: aiSettings } = useAiSettings();
+  const { data: numberLabels } = useSmsNumberLabels();
   const sendReply = useSendManualReply();
   const [message, setMessage] = useState('');
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [error, setError] = useState<string | null>(null);
+
+  function displayNumber(key: SmsNumberKey) {
+    const phone = numberLabels?.[key]?.phoneNumber;
+    return phone ? formatPhone(phone).replace(/^\+1/, '') : `Number ${key}`;
+  }
 
   const realMessages = thread.filter((m) => !m.isReaction);
   // Once a lead has been texted, every send after that — bulk or manual —
@@ -146,7 +153,7 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
                 className="rounded-full bg-border-2 px-2 py-1 text-[12px] font-semibold text-text-2"
                 title="This lead's whole thread lives on this number — every reply keeps going out from it."
               >
-                Sending from Number {pinnedNumber}
+                Sending from {displayNumber(pinnedNumber)}
               </span>
             ) : (
               <div className="flex gap-1">
@@ -156,7 +163,7 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
                     onClick={() => setFromKey(key)}
                     className={`btn !px-2 !py-1 text-[12px] ${fromKey === key ? 'btn-primary' : ''}`}
                   >
-                    Number {key}
+                    {displayNumber(key)}
                   </button>
                 ))}
               </div>

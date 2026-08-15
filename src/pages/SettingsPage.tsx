@@ -8,6 +8,7 @@ import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
 import { SmsTemplateEditor } from '@/components/sms/SmsTemplateEditor';
 import { BulkSmsSettingsEditor } from '@/components/sms/BulkSmsSettingsEditor';
 import { AiReviewSettingsEditor } from '@/components/sms/AiReviewSettingsEditor';
+import { SmsNumberLabelsEditor } from '@/components/sms/SmsNumberLabelsEditor';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const PRESETS = [
@@ -120,6 +121,7 @@ export function SettingsPage() {
         {isAdmin && <AiFrameworkEditor />}
         {isAdmin && <AiReviewSettingsEditor />}
         {isAdmin && <BulkSmsSettingsEditor />}
+        {isAdmin && <SmsNumberLabelsEditor />}
         {isAdmin && <SmsTemplateEditor />}
 
         <div className="card">
