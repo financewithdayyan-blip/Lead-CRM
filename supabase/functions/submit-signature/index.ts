@@ -169,17 +169,36 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
   return lines;
 }
 
-/** Small stateful cursor for the appended certificate page(s) — starts a new
- * page automatically once the current one runs out of room. */
+// Brand palette (normalized from the same hex values used on the marketing
+// site/CRM — see scripts/blog-template.mjs's :root tokens) so the appended
+// certificate reads as part of the same product, not a generic pdf-lib dump.
+const BRAND: [number, number, number] = [0.1176, 0.5608, 0.8353]; // #1E8FD5
+const INK: [number, number, number] = [0.0431, 0.1176, 0.2]; // #0B1E33
+const SLATE: [number, number, number] = [0.3412, 0.4, 0.4784]; // #57667A
+const SLATE_DIM: [number, number, number] = [0.5255, 0.5765, 0.6314]; // #8693A1
+const SUCCESS: [number, number, number] = [0.0627, 0.5255, 0.4157]; // #10866A
+const RULE: [number, number, number] = [0.87, 0.87, 0.87];
+
+function formatWhen(iso: string): string {
+  // Fixed to UTC regardless of the edge runtime's own locale/timezone, so a
+  // legal audit trail never has an ambiguous "whose clock is this" question.
+  return `${new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'UTC' })} UTC`;
+}
+
+/** Stateful cursor for the appended certificate page(s) — starts a new page
+ * automatically once the current one runs out of room, stamps a brand bar
+ * on every page as it's created, and stamps page-number footers on every
+ * page in one final pass once the total page count is actually known. */
 class CertWriter {
   doc: PDFDocument;
   font: PDFFont;
   bold: PDFFont;
   width: number;
   height: number;
-  margin = 56;
+  margin = 54;
   page: PDFPage;
   y: number;
+  pages: PDFPage[] = [];
 
   constructor(doc: PDFDocument, font: PDFFont, bold: PDFFont, width: number, height: number) {
     this.doc = doc;
@@ -187,42 +206,101 @@ class CertWriter {
     this.bold = bold;
     this.width = width;
     this.height = height;
-    this.page = doc.addPage([width, height]);
-    this.y = height - this.margin;
+    this.page = this.newPage();
+  }
+
+  private newPage(): PDFPage {
+    const page = this.doc.addPage([this.width, this.height]);
+    page.drawRectangle({ x: 0, y: this.height - 5, width: this.width, height: 5, color: rgb(...BRAND) });
+    this.pages.push(page);
+    this.y = this.height - this.margin - 12;
+    return page;
   }
 
   private ensureRoom(lineHeight: number) {
+    // Reserves a footer zone below `margin` so page-number/title stamps
+    // (drawn in the finalize() pass, after content is already placed) never
+    // collide with real content.
     if (this.y - lineHeight < this.margin) {
-      this.page = this.doc.addPage([this.width, this.height]);
-      this.y = this.height - this.margin;
+      this.page = this.newPage();
     }
   }
 
   heading(text: string) {
-    this.ensureRoom(24);
-    this.page.drawText(text, { x: this.margin, y: this.y, size: 16, font: this.bold, color: rgb(0.05, 0.05, 0.05) });
-    this.y -= 26;
+    this.ensureRoom(26);
+    this.page.drawText(text, { x: this.margin, y: this.y, size: 18, font: this.bold, color: rgb(...INK) });
+    this.y -= 28;
   }
 
-  subheading(text: string) {
-    this.ensureRoom(18);
-    this.page.drawText(text, { x: this.margin, y: this.y, size: 12, font: this.bold, color: rgb(0.05, 0.05, 0.05) });
-    this.y -= 18;
+  /** Small uppercase-ish section label, e.g. "DOCUMENT OVERVIEW". */
+  eyebrow(text: string) {
+    this.ensureRoom(20);
+    this.page.drawText(text.toUpperCase(), { x: this.margin, y: this.y, size: 9, font: this.bold, color: rgb(...BRAND) });
+    this.y -= 16;
   }
 
-  line(text: string, opts: { size?: number; color?: [number, number, number] } = {}) {
+  divider() {
+    this.ensureRoom(10);
+    this.page.drawLine({
+      start: { x: this.margin, y: this.y },
+      end: { x: this.width - this.margin, y: this.y },
+      thickness: 0.75,
+      color: rgb(...RULE),
+    });
+    this.y -= 14;
+  }
+
+  line(text: string, opts: { size?: number; color?: [number, number, number]; bold?: boolean } = {}) {
     const size = opts.size ?? 10;
-    const [r, g, b] = opts.color ?? [0.2, 0.2, 0.2];
+    const [r, g, b] = opts.color ?? SLATE;
+    const font = opts.bold ? this.bold : this.font;
     const maxWidth = this.width - this.margin * 2;
-    for (const wrapped of wrapText(text, this.font, size, maxWidth)) {
+    for (const wrapped of wrapText(text, font, size, maxWidth)) {
       this.ensureRoom(size * 1.4);
-      this.page.drawText(wrapped, { x: this.margin, y: this.y, size, font: this.font, color: rgb(r, g, b) });
+      this.page.drawText(wrapped, { x: this.margin, y: this.y, size, font, color: rgb(r, g, b) });
       this.y -= size * 1.4;
+    }
+  }
+
+  /** A bold label immediately followed by its value on the same baseline —
+   * the closest a single-column writer gets to a real table row without
+   * building full grid/border layout logic. Falls back to wrapping the
+   * value on its own indented line(s) if it won't fit next to the label. */
+  keyValue(label: string, value: string, opts: { size?: number } = {}) {
+    const size = opts.size ?? 9.5;
+    const labelText = `${label}:`;
+    const labelWidth = this.bold.widthOfTextAtSize(labelText, size);
+    const valueMaxWidth = this.width - this.margin * 2 - labelWidth - 6;
+    const wrapped = wrapText(value || '—', this.font, size, valueMaxWidth);
+
+    this.ensureRoom(size * 1.5);
+    this.page.drawText(labelText, { x: this.margin, y: this.y, size, font: this.bold, color: rgb(...SLATE) });
+    this.page.drawText(wrapped[0] ?? '', { x: this.margin + labelWidth + 6, y: this.y, size, font: this.font, color: rgb(...INK) });
+    this.y -= size * 1.5;
+    for (const extra of wrapped.slice(1)) {
+      this.ensureRoom(size * 1.5);
+      this.page.drawText(extra, { x: this.margin + labelWidth + 6, y: this.y, size, font: this.font, color: rgb(...INK) });
+      this.y -= size * 1.5;
     }
   }
 
   gap(px = 10) {
     this.y -= px;
+  }
+
+  /** Stamps "Page N of TOTAL" + a title footer on every page written so
+   * far — only callable once, after all real content is placed, since the
+   * total page count isn't known until then. */
+  finalize(footerTitle: string) {
+    const total = this.pages.length;
+    this.pages.forEach((page, i) => {
+      const footerY = this.margin - 20;
+      page.drawLine({ start: { x: this.margin, y: footerY + 12 }, end: { x: this.width - this.margin, y: footerY + 12 }, thickness: 0.5, color: rgb(...RULE) });
+      page.drawText(footerTitle, { x: this.margin, y: footerY, size: 7.5, font: this.font, color: rgb(...SLATE_DIM) });
+      const pageLabel = `Page ${i + 1} of ${total}`;
+      const w = this.font.widthOfTextAtSize(pageLabel, 7.5);
+      page.drawText(pageLabel, { x: this.width - this.margin - w, y: footerY, size: 7.5, font: this.font, color: rgb(...SLATE_DIM) });
+    });
   }
 }
 
@@ -424,48 +502,113 @@ Deno.serve(async (req) => {
       .eq('contract_instance_id', instance.id)
       .order('created_at', { ascending: true });
 
+    const EVENT_LABELS: Record<string, string> = {
+      sent: 'Invitation Sent',
+      viewed: 'Document Viewed',
+      consented: 'Consented to Electronic Signature',
+      signed: 'Signature Completed',
+      declined: 'Declined to Sign',
+      reminder_sent: 'Reminder Sent',
+      voided: 'Envelope Voided',
+      expired: 'Signing Link Expired',
+    };
+
+    const partyLabelById = new Map(
+      updatedParties.map((p) => [p.id, `${roleWordFor(p.role, template.type, partyRoles)} — ${p.name}`]),
+    );
+    // The signed event is the closest thing to a per-field timestamp/IP that
+    // actually exists (see the Fields Completed section below) — there is no
+    // finer-grained "this exact field was typed at this exact second" capture
+    // anywhere in the system, so every field a party filled is honestly
+    // attributed to the moment and location they actually pressed Sign.
+    const signedEventByParty = new Map<string, { ip: string | null; ua: string | null; at: string }>();
+    for (const e of auditEvents ?? []) {
+      if (e.event_type === 'signed' && e.party_id) {
+        signedEventByParty.set(e.party_id, { ip: e.ip_address, ua: e.user_agent, at: e.created_at });
+      }
+    }
+
     const [firstPage] = pages;
     const { width: certW, height: certH } = firstPage ? firstPage.getSize() : { width: 612, height: 792 };
     const cert = new CertWriter(pdfDoc, font, boldFont, certW, certH);
 
     const docKind = template.type === 'loi' ? 'Letter of Intent' : 'Contract';
-    cert.heading('Signing Certificate');
-    cert.line(`Document: ${instance.name} (${docKind})`);
-    cert.line(`Completed: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`);
+
+    cert.heading('Certificate of Completion');
+    cert.line('Bluebird Acquisition — Electronic Signature Audit Trail', { size: 9.5 });
+    cert.gap(14);
+    cert.divider();
+
+    cert.eyebrow('Document Overview');
+    cert.keyValue('Document', `${instance.name} (${docKind})`);
+    cert.keyValue('Certificate ID', instance.id);
+    cert.keyValue('Status', 'Completed — all required parties have signed');
+    cert.keyValue('Completed', formatWhen(new Date().toISOString()));
+    if (instance.property_address) cert.keyValue('Property', instance.property_address);
     // Only the starting template's hash can be printed here without being
     // circular — the final document's own hash necessarily depends on bytes
-    // that include this very page, so it's computed after save() below and
-    // stored on the contract instance instead (viewable in the admin
-    // preview), not printed on the page it would be hashing.
-    if (instance.template_pdf_sha256) cert.line(`Starting document hash (SHA-256): ${instance.template_pdf_sha256}`, { size: 8.5 });
-    cert.gap(14);
+    // that include this very certificate page, so it's computed after
+    // save() below and stored on the contract instance instead (viewable in
+    // the admin preview), not printed on the page it would be hashing.
+    if (instance.template_pdf_sha256) cert.keyValue('Starting Document Hash (SHA-256)', instance.template_pdf_sha256, { size: 7.5 });
+    cert.gap(10);
+    cert.divider();
 
-    cert.subheading('Timeline');
+    cert.eyebrow('Signers');
     for (const p of updatedParties) {
       const roleWord = roleWordFor(p.role, template.type, partyRoles);
-      cert.line(`${roleWord}: ${p.name}`, { size: 10.5, color: [0.05, 0.05, 0.05] });
-      const partyEvents = (auditEvents ?? []).filter((e) => e.party_id === p.id);
-      for (const evt of partyEvents) {
-        const label = { sent: 'Invited', viewed: 'Viewed', consented: 'Consented to sign electronically', signed: 'Signed' }[evt.event_type as string] ?? evt.event_type;
-        const when = new Date(evt.created_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-        cert.line(`  ${label}: ${when}`);
-        if (evt.event_type === 'signed') {
-          if (evt.ip_address) cert.line(`    IP address: ${evt.ip_address}`);
-          if (evt.user_agent) cert.line(`    Device: ${evt.user_agent}`);
-        }
-      }
-      cert.line(`  Signature: ${p.signature_data_url ? 'Signed' : 'No signature required for this role'}`);
-      cert.gap(8);
+      cert.keyValue(roleWord, `${p.name}${p.phone ? ` · ${p.phone}` : ''}`);
+      cert.line(p.signature_data_url ? 'Signed electronically' : 'No signature required for this role', {
+        size: 9,
+        color: p.signature_data_url ? SUCCESS : SLATE_DIM,
+      });
+      cert.gap(6);
     }
+    cert.gap(4);
+    cert.divider();
+
+    cert.eyebrow('Complete Event Timeline');
+    if (!auditEvents?.length) {
+      cert.line('No audit events were recorded for this envelope.', { size: 9 });
+    }
+    for (const evt of auditEvents ?? []) {
+      const who = evt.party_id ? (partyLabelById.get(evt.party_id) ?? 'Unknown party') : 'System';
+      const label = EVENT_LABELS[evt.event_type] ?? evt.event_type;
+      cert.line(who, { size: 9.5, color: INK, bold: true });
+      cert.line(`${label} — ${formatWhen(evt.created_at)}`, { size: 9 });
+      if (evt.ip_address) cert.line(`IP Address: ${evt.ip_address}`, { size: 8, color: SLATE_DIM });
+      if (evt.user_agent) cert.line(`Device: ${evt.user_agent}`, { size: 8, color: SLATE_DIM });
+      cert.gap(7);
+    }
+    cert.gap(4);
+    cert.divider();
 
     const fieldsWithValues = (template.fields ?? []).filter((f) => f.type !== 'signature' && fieldValues[f.id]);
     if (fieldsWithValues.length > 0) {
-      cert.gap(6);
-      cert.subheading('Fields Filled');
+      cert.eyebrow('Fields Completed');
+      const fieldsByRole = new Map<string, ContractField[]>();
       for (const f of fieldsWithValues) {
-        cert.line(`${f.label}: ${fieldValues[f.id]}`, { size: 10, color: [0.15, 0.15, 0.15] });
+        if (!fieldsByRole.has(f.role)) fieldsByRole.set(f.role, []);
+        fieldsByRole.get(f.role)!.push(f);
+      }
+      for (const [role, fields] of fieldsByRole) {
+        const p = partyByRole.get(role);
+        const roleWord = roleWordFor(role, template.type, partyRoles);
+        cert.line(`${roleWord}${p ? ` — ${p.name}` : ''}`, { size: 9.5, color: INK, bold: true });
+        const signedEvent = p ? signedEventByParty.get(p.id) : undefined;
+        if (signedEvent) {
+          cert.line(`Recorded at time of signing — ${formatWhen(signedEvent.at)}`, { size: 8, color: SLATE_DIM });
+          if (signedEvent.ip) cert.line(`IP Address: ${signedEvent.ip}`, { size: 8, color: SLATE_DIM });
+        }
+        cert.gap(3);
+        for (const f of fields) {
+          cert.keyValue(f.label, fieldValues[f.id], { size: 9 });
+        }
+        cert.gap(8);
       }
     }
+
+    cert.finalize('Bluebird Acquisition — Certificate of Completion');
 
     const finalBytes = await pdfDoc.save();
     const finalPath = `contracts/${instance.id}/signed-${Date.now()}.pdf`;
