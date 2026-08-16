@@ -731,6 +731,7 @@ Deno.serve(async (req) => {
                     description:
                       "Fill in ONLY the fields the seller just established for the first time on THIS message — omit every field not newly answered right now (don't repeat something already captured on an earlier turn, and don't include a field as an empty string). This writes directly into the CRM's call-script record, so use their actual wording, not a paraphrase that loses detail.",
                     properties: {
+                      confirmation_owner: { type: 'string', description: "How they confirmed being the owner (or someone who can speak for them) — e.g. \"Yes, I own it\" or \"I'm his daughter, he passed away.\" Only fill in once, the first time this is actually established." },
                       motivation_owned: { type: 'string', description: 'How long they said they have owned the property.' },
                       motivation_reason: { type: 'string', description: "Their stated motivation for selling." },
                       motivation_now: { type: 'string', description: 'Why they are looking to sell now specifically, if said separately from the general motivation.' },

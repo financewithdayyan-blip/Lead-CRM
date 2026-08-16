@@ -12,6 +12,12 @@ export interface ScriptStepDef {
 
 export const SCRIPT_STEPS: ScriptStepDef[] = [
   {
+    title: 'Confirmation',
+    questions: [
+      { key: 'confirmation_owner', prompt: 'Are you the owner of the property, or someone who can speak for them?' },
+    ],
+  },
+  {
     title: 'Motivation',
     questions: [
       { key: 'motivation_owned', prompt: 'How long have you owned it?' },

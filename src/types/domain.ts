@@ -93,6 +93,8 @@ export interface RepairFlags {
 }
 
 export interface ScriptAnswers {
+  // Confirmation
+  confirmation_owner?: string;
   // Motivation
   motivation_owned?: string;
   motivation_reason?: string;
