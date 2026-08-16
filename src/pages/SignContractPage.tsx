@@ -107,12 +107,12 @@ function DownloadCertificateButton({ token, docLabel }: { token: string; docLabe
 
   return (
     <button
-      className="mt-5 flex items-center gap-1.5 rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white px-3 py-2 text-[12.5px] font-medium text-text-2 transition-colors hover:bg-surface-3 disabled:cursor-not-allowed disabled:opacity-50"
       disabled={getFinalUrl.isPending}
       onClick={handleDownload}
     >
       {getFinalUrl.isPending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-      Download {docLabel} with Audit Trail
+      Download with Audit Trail
     </button>
   );
 }
@@ -131,8 +131,10 @@ export function SignContractPage() {
   const [justConsented, setJustConsented] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
 
+  const getFinalUrl = useSignedFinalDocUrl();
   const pageWidth = usePageWidth();
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [finalPdf, setFinalPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState('');
@@ -143,6 +145,13 @@ export function SignContractPage() {
   const seededRef = useRef(false);
 
   const ready = !!party && party.isTurn && party.status !== 'signed';
+  // Never show the fully-signed document on the screen right after THIS
+  // submission, even if it happened to be the last signature — everyone
+  // gets a text with their link once the contract is fully signed, and the
+  // document view opens from there instead. `submitted` only reflects this
+  // page load, so a fresh visit via that texted link (a new mount,
+  // `submitted` starts false again) still shows the document normally.
+  const fullyDone = !!party && !submitted && party.status === 'signed' && party.contractStatus === 'signed';
 
   useEffect(() => {
     loadSignatureFont();
@@ -167,6 +176,11 @@ export function SignContractPage() {
     if (!ready || !token) return;
     getPdfUrl.mutateAsync(token).then((url) => loadPdf(url)).then(setPdf);
   }, [ready, token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!fullyDone || !token) return;
+    getFinalUrl.mutateAsync(token).then((url) => loadPdf(url)).then(setFinalPdf);
+  }, [fullyDone, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // My own not-yet-filled fields — a full-name one starts pre-filled with
   // the name already on record for me, still editable.
@@ -261,14 +275,43 @@ export function SignContractPage() {
 
   if (submitted || party.status === 'signed') {
     const docLabel = party.templateType === 'loi' ? 'LOI' : 'Contract';
-    // Never show the download button on the screen right after THIS
-    // submission, even if it happened to be the last signature and/or the
-    // background poll flips contractStatus to 'signed' a few seconds later
-    // — everyone gets a text with their link once the contract is fully
-    // signed, and downloading happens from there instead. `submitted` only
-    // reflects this page load, so a fresh visit via that texted link (a new
-    // mount, submitted starts false again) still shows the button normally.
-    const fullyDone = !submitted && party.contractStatus === 'signed';
+
+    if (fullyDone) {
+      const finalPageNums = Array.from({ length: finalPdf?.numPages ?? 0 }, (_, i) => i + 1);
+      return (
+        <div className="min-h-screen bg-bg pb-16">
+          <div className="sticky top-0 z-10 border-b border-border bg-white/90 backdrop-blur">
+            <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+                  <FileSignature size={16} />
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-[14px] font-semibold text-text">{party.contractName}</div>
+                  <div className="truncate text-[11.5px] text-text-3">Fully signed — every party has completed this document</div>
+                </div>
+              </div>
+              {token && <DownloadCertificateButton token={token} docLabel={docLabel} />}
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-[720px] px-4 py-5">
+            {!finalPdf ? (
+              <div className="flex h-96 items-center justify-center rounded-md border border-border bg-white">
+                <Loader2 size={20} className="animate-spin text-text-3" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                {finalPageNums.map((n) => (
+                  <ContractDocumentPage key={n} pdf={finalPdf} pageNum={n} pageWidth={pageWidth} fields={[]} fieldValues={{}} signatures={[]} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-4 text-center">
         <SignSuccessCheck />
@@ -276,11 +319,8 @@ export function SignContractPage() {
           You've {needsSignature ? 'signed' : 'confirmed'} {party.contractName}
         </p>
         <p className="mt-1 text-[13.5px] text-text-3">
-          {fullyDone
-            ? 'Every party has completed this document — you can download the final copy below.'
-            : "Thank you — once every party has completed signing, we'll text you a link to download the final copy."}
+          Thank you — once every party has completed signing, we'll text you a link to download the final copy.
         </p>
-        {fullyDone && token && <DownloadCertificateButton token={token} docLabel={docLabel} />}
       </div>
     );
   }
