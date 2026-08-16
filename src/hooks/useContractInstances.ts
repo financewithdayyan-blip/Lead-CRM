@@ -37,11 +37,13 @@ export interface ContractInstance {
     id: string;
     role: PartyRole;
     name: string;
+    phone: string | null;
     status: 'pending' | 'signed' | 'declined';
     accessToken: string;
     signOrder: number;
     signatureDataUrl: string | null;
     signedAt: string | null;
+    declinedAt: string | null;
     declinedReason: string | null;
   }>;
 }
@@ -75,11 +77,13 @@ function fromRow(r: any): ContractInstance {
       id: p.id,
       role: p.role,
       name: p.name,
+      phone: p.phone ?? null,
       status: p.status,
       accessToken: p.access_token,
       signOrder: p.sign_order,
       signatureDataUrl: p.signature_data_url,
       signedAt: p.signed_at,
+      declinedAt: p.declined_at ?? null,
       declinedReason: p.declined_reason,
     })),
   };
@@ -361,7 +365,7 @@ export function useRecordConsent() {
 export interface ContractAuditEvent {
   id: string;
   partyId: string | null;
-  eventType: 'viewed' | 'signed';
+  eventType: 'viewed' | 'consented' | 'signed' | 'sent' | 'reminder_sent' | 'declined' | 'voided' | 'expired';
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
