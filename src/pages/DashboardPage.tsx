@@ -10,6 +10,7 @@ import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types
 import { formatPhone, localIsoDate } from '@/lib/utils';
 import { ScheduledCallsCard } from '@/components/dashboard/ScheduledCallsCard';
 import { TasksCard } from '@/components/dashboard/TasksCard';
+import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
@@ -22,32 +23,6 @@ const CallProgressChart = lazy(() =>
 );
 
 const WEEKDAY_LABELS = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
-
-type DateRange = 'today' | '7d' | '30d' | '90d' | 'all';
-
-const RANGE_OPTIONS: { key: DateRange; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: '7d', label: '7D' },
-  { key: '30d', label: '30D' },
-  { key: '90d', label: '90D' },
-  { key: 'all', label: 'All' },
-];
-
-function rangeCutoff(range: DateRange): Date | null {
-  const now = new Date();
-  switch (range) {
-    case 'today':
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    case '7d':
-      return new Date(now.getTime() - 7 * 86400000);
-    case '30d':
-      return new Date(now.getTime() - 30 * 86400000);
-    case '90d':
-      return new Date(now.getTime() - 90 * 86400000);
-    case 'all':
-      return null;
-  }
-}
 
 // A lead currently sitting in one of these stages has, by definition, been
 // qualified — either the AI got there via the framework, or a human moved it

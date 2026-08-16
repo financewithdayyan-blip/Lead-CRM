@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
-import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Send, FileSignature, Settings, Shield, LogOut, Eye } from 'lucide-react';
+import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Send, FileSignature, BarChart3, Settings, Shield, LogOut, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
@@ -111,6 +111,7 @@ export function Sidebar() {
         { to: '/kanban', label: 'Pipeline', icon: Kanban },
         ...(isOverseer ? [{ to: '/bulk-sms', label: 'Bulk SMS', icon: Send }] : []),
         ...(isOverseer ? [{ to: '/blue-docs', label: 'Blue Docs', icon: FileSignature }] : []),
+        ...(isOverseer ? [{ to: '/analytics', label: 'Analytics', icon: BarChart3 }] : []),
         { to: '/calls', label: 'Call History', icon: History },
         { to: '/settings', label: 'Settings', icon: Settings },
       ];

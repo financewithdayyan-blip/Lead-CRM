@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { useCreateLead } from '@/hooks/useLeads';
 import { expandStreetSuffix, formatPhone, getErrorMessage } from '@/lib/utils';
+import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
 
 export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; targetUserId?: string }) {
   const createLead = useCreateLead();
@@ -90,8 +91,20 @@ export function AddLeadModal({ onClose, targetUserId }: { onClose: () => void; t
             <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
           </div>
           <div>
-            <label className="label">Source</label>
-            <input className="input" placeholder="e.g. Cold Call" value={form.source} onChange={(e) => set('source', e.target.value)} />
+            <label className="label">Source *</label>
+            <input
+              className="input"
+              required
+              list="lead-source-suggestions"
+              placeholder="e.g. Cold Call"
+              value={form.source}
+              onChange={(e) => set('source', e.target.value)}
+            />
+            <datalist id="lead-source-suggestions">
+              {LEAD_SOURCE_SUGGESTIONS.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="label">Beds</label>
