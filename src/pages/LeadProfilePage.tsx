@@ -249,7 +249,7 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   stage_change: 'Stage changed',
 };
 
-const TABS = ['overview', 'property', 'packet', 'sms', 'framework', 'notes', 'activity', 'tasks', 'files'] as const;
+const TABS = ['overview', 'property', 'framework', 'sms', 'notes', 'activity', 'tasks', 'files', 'packet'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
