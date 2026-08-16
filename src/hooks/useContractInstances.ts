@@ -177,6 +177,28 @@ export function useVoidContractInstance() {
   });
 }
 
+/** Manually nudges whichever party is currently unlocked-and-pending on an
+ * envelope — distinct from the automatic 30-min contract-reminder-sweep
+ * cron, which has its own 24h/72h cadence and 3-reminder cap. This bypasses
+ * that cadence since an admin asking for it right now is deliberate, but it
+ * still updates the same reminder_count/last_reminded_at columns so the
+ * automatic sweep doesn't also fire again right after. See
+ * send-contract-reminder/index.ts for the actual send + server-side guards. */
+export function useSendContractReminder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (partyId: string) => {
+      const { data, error } = await supabase.functions.invoke('send-contract-reminder', { body: { partyId } });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
+  });
+}
+
 // ── Public signing side ─────────────────────────────────────────────────────
 
 export interface SigningPartyInfo {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Ban, Check, CheckCircle2, Clock, Copy, Download, Eye, EyeOff, MapPin, Send, Trash2 } from 'lucide-react';
-import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
+import { Ban, Bell, Check, CheckCircle2, Clock, Copy, Download, Eye, EyeOff, Loader2, MapPin, Send, Trash2 } from 'lucide-react';
+import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
 import { formatDate, formatDateTime } from '@/lib/utils';
 
@@ -47,8 +47,30 @@ export function ContractInstanceRow({
   onVoid?: () => void;
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
+  const [reminded, setReminded] = useState(false);
   const { data: events = [] } = useContractAuditEvents(c.id);
+  const sendReminder = useSendContractReminder();
   const address = useMemo(() => findAddress(c), [c]);
+
+  // The one party who can actually act right now — signing is strictly
+  // sequential, so at most one party is ever both pending and unlocked.
+  const pendingParty = useMemo(
+    () =>
+      c.parties.find(
+        (p) => p.status === 'pending' && !c.parties.some((other) => other.signOrder < p.signOrder && other.status !== 'signed'),
+      ),
+    [c.parties],
+  );
+
+  function handleRemind() {
+    if (!pendingParty) return;
+    sendReminder.mutate(pendingParty.id, {
+      onSuccess: () => {
+        setReminded(true);
+        setTimeout(() => setReminded(false), 2000);
+      },
+    });
+  }
 
   // Most recent "opened the link" moment per party, if any — lets an admin
   // tell "sent but never opened" apart from "opened, just hasn't signed yet."
@@ -141,6 +163,23 @@ export function ContractInstanceRow({
         {c.status === 'signed' && c.finalStoragePath && (
           <button className="btn !px-2 !py-1 text-[11px]" onClick={() => onDownload(c.finalStoragePath!, c.name)}>
             <Download size={12} /> Download signed PDF
+          </button>
+        )}
+        {pendingParty && (
+          <button
+            className="btn !px-2 !py-1 text-[11px]"
+            title={`Text ${pendingParty.name} a friendly reminder to sign`}
+            disabled={sendReminder.isPending}
+            onClick={handleRemind}
+          >
+            {sendReminder.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : reminded ? (
+              <Check size={12} />
+            ) : (
+              <Bell size={12} />
+            )}
+            {reminded ? 'Sent' : 'Send Reminder'}
           </button>
         )}
         {canVoid && (
