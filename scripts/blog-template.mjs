@@ -108,7 +108,7 @@ a{color:inherit;text-decoration:none;}
 img{max-width:100%;display:block;}
 button{font-family:inherit;cursor:pointer;border:none;background:none;}
 
-.site-header{ background:var(--ink); padding:18px 32px; }
+.site-header{ background:var(--ink); padding:18px 32px; position:sticky; top:0; z-index:100; }
 .header-inner{ display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
 .brand{ display:flex; align-items:center; gap:10px; font-family:var(--serif); font-weight:700; font-size:18px; color:var(--white); }
 .brand:hover{ opacity:0.88; }
