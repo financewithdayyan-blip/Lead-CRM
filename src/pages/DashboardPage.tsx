@@ -18,6 +18,9 @@ const PipelineActivityChart = lazy(() =>
 const PipelineFunnel = lazy(() =>
   import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
 );
+const ConversionTrendChart = lazy(() =>
+  import('@/components/dashboard/ConversionTrendChart').then((m) => ({ default: m.ConversionTrendChart })),
+);
 const CallProgressChart = lazy(() =>
   import('@/components/dashboard/CallProgressChart').then((m) => ({ default: m.CallProgressChart })),
 );
@@ -63,9 +66,14 @@ function funnelBucket(stage: LeadStage): FunnelKey | null {
   if (stage === 'initial_contact') return 'partial_qualified';
   if (stage === 'followup') return 'qualified';
   if (stage === 'negotiation') return 'negotiation';
-  if (stage === 'contract') return 'contract';
+  // In Title / Closed are downstream of Contract — no separate bars for them
+  // here, but a lead that's moved past Contract still needs to keep counting
+  // toward "reached Contract or further," not fall out of the funnel.
+  if (stage === 'contract' || stage === 'in_title' || stage === 'closed') return 'contract';
   return null;
 }
+
+const CLOSED_DEAL_STAGES: LeadStage[] = ['contract', 'in_title', 'closed'];
 
 function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
@@ -179,6 +187,39 @@ export function DashboardView({
       totalLeads: leads.length,
       coldCount: leads.filter((l) => l.stage === 'new').length,
     };
+  }, [leads]);
+
+  // The only one of the KPIs the business asked for that has real data
+  // behind it today — everything else needs marketing spend / assignment
+  // fee / lead-source data that isn't captured yet, so it isn't shown here.
+  const conversion = useMemo(() => {
+    const total = leads.length;
+    const deals = leads.filter((l) => CLOSED_DEAL_STAGES.includes(l.stage)).length;
+    return { total, deals, pct: total > 0 ? (deals / total) * 100 : 0 };
+  }, [leads]);
+
+  const conversionTrend = useMemo(() => {
+    const monthMap = new Map<string, { leadCount: number; dealCount: number }>();
+    for (const l of leads) {
+      const d = new Date(l.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const bucket = monthMap.get(key) ?? { leadCount: 0, dealCount: 0 };
+      bucket.leadCount += 1;
+      if (CLOSED_DEAL_STAGES.includes(l.stage)) bucket.dealCount += 1;
+      monthMap.set(key, bucket);
+    }
+    return Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-24)
+      .map(([key, { leadCount, dealCount }]) => {
+        const [y, m] = key.split('-').map(Number);
+        return {
+          month: new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          leadCount,
+          dealCount,
+          conversionPct: leadCount > 0 ? Math.round((dealCount / leadCount) * 1000) / 10 : 0,
+        };
+      });
   }, [leads]);
 
   const stats = useMemo(() => {
@@ -676,6 +717,24 @@ export function DashboardView({
               </div>
               <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
                 <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
+              </Suspense>
+            </div>
+          )}
+
+          {showSmsStats && (
+            <div className="card chart-layer">
+              <div className="mb-1 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text">Lead-to-Deal Conversion Rate</h3>
+                <span className="text-[11px] text-text-3">leads that reached Contract or further</span>
+              </div>
+              <div className="mb-3 flex items-baseline gap-2">
+                <span className="text-3xl font-semibold text-text">{conversion.pct.toFixed(2)}%</span>
+                <span className="text-[12px] text-text-3">
+                  {conversion.deals.toLocaleString()} of {conversion.total.toLocaleString()} leads
+                </span>
+              </div>
+              <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                <ConversionTrendChart data={conversionTrend} />
               </Suspense>
             </div>
           )}

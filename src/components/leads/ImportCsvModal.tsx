@@ -5,6 +5,7 @@ import { useBulkCreateLeads, useLeads } from '@/hooks/useLeads';
 import { useCreateTag, useTags, nextTagColor } from '@/hooks/useTags';
 import { CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, guessColumnMapping, mapRowsToLeads, parseCsvFile, type CsvParseResult } from '@/lib/csv';
 import { getErrorMessage } from '@/lib/utils';
+import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
 
 type Step = 'upload' | 'mapping' | 'tags';
 
@@ -42,6 +43,9 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   // same number is treated as a new lead worth another shot, not a dupe.
   const dedupeAgainst = existingLeads.filter((l) => l.stage !== 'dead_declined');
   const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, dedupeAgainst);
+  // A source is required for every import — either a mapped CSV column
+  // (per-row) or a batch fallback covering the whole file.
+  const sourceMissing = mapping.source == null && !batchSource.trim();
 
   async function handleImport() {
     setError(null);
@@ -175,8 +179,28 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Source (applies to whole import)</label>
-              <input className="input" value={batchSource} onChange={(e) => setBatchSource(e.target.value)} placeholder="e.g. March cold list" />
+              <label className="label">
+                Batch Source {mapping.source == null && <span className="text-danger">*</span>}
+              </label>
+              <input
+                className="input"
+                list="lead-source-suggestions"
+                value={batchSource}
+                onChange={(e) => setBatchSource(e.target.value)}
+                placeholder="e.g. March cold list"
+              />
+              <datalist id="lead-source-suggestions">
+                {LEAD_SOURCE_SUGGESTIONS.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+              {mapping.source == null ? (
+                <div className="mt-1 text-[11px] text-text-3">
+                  No Source column mapped above — required here instead so every imported lead has one.
+                </div>
+              ) : (
+                <div className="mt-1 text-[11px] text-text-3">Only used for rows with a blank Source cell.</div>
+              )}
             </div>
             <div>
               <label className="label">Fallback state (only used for rows with no State column)</label>
@@ -238,7 +262,12 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
             <button className="btn" onClick={() => setStep('mapping')}>
               Back
             </button>
-            <button disabled={bulkCreate.isPending || unique.length === 0} className="btn btn-primary" onClick={handleImport}>
+            <button
+              disabled={bulkCreate.isPending || unique.length === 0 || sourceMissing}
+              className="btn btn-primary"
+              onClick={handleImport}
+              title={sourceMissing ? 'Set a batch source, or go back and map a Source column' : undefined}
+            >
               Import {unique.length} lead{unique.length !== 1 ? 's' : ''}
             </button>
           </div>

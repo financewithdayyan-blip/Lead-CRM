@@ -767,6 +767,7 @@ function PropertyTab({ lead }: { lead: Lead }) {
     maxOffer: lead.maxOffer?.toString() ?? '',
     askingPrice: lead.askingPrice?.toString() ?? '',
     finalPrice: lead.finalPrice?.toString() ?? '',
+    assignmentFee: lead.assignmentFee?.toString() ?? '',
   });
   const [repairs, setRepairs] = useState(lead.repairs ?? {});
   const [comps, setComps] = useState<Array<Partial<Comp>>>(lead.comps ?? []);
@@ -797,6 +798,7 @@ function PropertyTab({ lead }: { lead: Lead }) {
         maxOffer: form.maxOffer ? Number(form.maxOffer) : null,
         askingPrice: form.askingPrice ? Number(form.askingPrice) : null,
         finalPrice: form.finalPrice ? Number(form.finalPrice) : null,
+        assignmentFee: form.assignmentFee ? Number(form.assignmentFee) : null,
         repairs,
       },
       { onSuccess: () => flash() },
@@ -923,6 +925,9 @@ function PropertyTab({ lead }: { lead: Lead }) {
           </Field>
           <Field label="Final Price">
             <input className="input" type="number" value={form.finalPrice} onChange={(e) => set('finalPrice', e.target.value)} />
+          </Field>
+          <Field label="Assignment Fee">
+            <input className="input" type="number" value={form.assignmentFee} onChange={(e) => set('assignmentFee', e.target.value)} />
           </Field>
         </div>
       </div>

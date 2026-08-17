@@ -1,7 +1,20 @@
-import type { AuctionTier, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import type { AuctionTier, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, MarketingSpendEntry, Profile, Tag, TeamInvite, Task } from '@/types/domain';
 
 export function dbToTag(row: any): Tag {
   return { id: row.id, userId: row.user_id, name: row.name, colorBg: row.color_bg, colorText: row.color_text };
+}
+
+export function dbToMarketingSpend(row: any): MarketingSpendEntry {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    source: row.source,
+    amount: row.amount,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    notes: row.notes,
+    createdAt: row.created_at,
+  };
 }
 
 export function dbToLead(row: any): Lead {
@@ -39,6 +52,7 @@ export function dbToLead(row: any): Lead {
     maxOffer: row.max_offer,
     askingPrice: row.asking_price,
     finalPrice: row.final_price,
+    assignmentFee: row.assignment_fee,
     repairs: row.repairs ?? {},
     scriptAnswers: row.script_answers ?? {},
     notes: row.notes,
@@ -112,6 +126,7 @@ export function leadToDbInsert(lead: Partial<Lead>, userId: string) {
     max_offer: lead.maxOffer ?? null,
     asking_price: lead.askingPrice ?? null,
     final_price: lead.finalPrice ?? null,
+    assignment_fee: lead.assignmentFee ?? null,
     repairs: lead.repairs ?? {},
     script_answers: lead.scriptAnswers ?? {},
     notes: lead.notes ?? null,
@@ -151,6 +166,7 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['maxOffer', 'max_offer'],
   ['askingPrice', 'asking_price'],
   ['finalPrice', 'final_price'],
+  ['assignmentFee', 'assignment_fee'],
   ['repairs', 'repairs'],
   ['scriptAnswers', 'script_answers'],
   ['notes', 'notes'],

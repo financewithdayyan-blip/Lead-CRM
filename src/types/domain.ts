@@ -73,6 +73,17 @@ export interface Tag {
   colorText: string;
 }
 
+export interface MarketingSpendEntry {
+  id: string;
+  userId: string;
+  source: string;
+  amount: number;
+  periodStart: string;
+  periodEnd: string;
+  notes: string | null;
+  createdAt: string;
+}
+
 export interface Comp {
   id: string;
   leadId: string;
@@ -168,6 +179,7 @@ export interface Lead {
   maxOffer: number | null;
   askingPrice: number | null;
   finalPrice: number | null;
+  assignmentFee: number | null;
   repairs: RepairFlags;
   scriptAnswers: ScriptAnswers;
   notes: string | null;
