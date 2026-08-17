@@ -1,25 +1,57 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
-import { ChevronUp, LayoutDashboard, Users, Kanban, History, Send, FileSignature, Settings, Shield, Eye } from 'lucide-react';
+import {
+  ChevronUp,
+  LayoutDashboard,
+  Users,
+  Kanban,
+  History,
+  Send,
+  FileSignature,
+  Settings,
+  Shield,
+  Eye,
+  PanelLeftClose,
+  PanelLeftOpen,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
 import { cn } from '@/lib/utils';
 
+const COLLAPSE_KEY = 'sidebar_collapsed';
+
 /** Active nav item is a solid filled pill rather than a subtle accent —
  * matches the reference dashboards, and reads unambiguously at a glance
- * which page is open. */
-function navLinkClass({ isActive }: { isActive: boolean }) {
-  return cn(
-    'flex items-center gap-2.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors',
-    isActive ? 'bg-primary text-white shadow-sm' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+ * which page is open. Collapsed mode centers the icon and drops the label
+ * instead of shrinking text illegibly. */
+function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label: string; icon: LucideIcon; end?: boolean; collapsed: boolean }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      title={collapsed ? label : undefined}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2.5 rounded-full py-2 text-sm font-medium transition-colors',
+          collapsed ? 'justify-center px-0' : 'px-3.5',
+          isActive ? 'bg-primary text-white shadow-sm' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+        )
+      }
+    >
+      <Icon size={16} className="shrink-0" />
+      {!collapsed && label}
+    </NavLink>
   );
 }
 
 /** Small uppercase eyebrow above a group of nav items — turns a flat list
  * into scannable sections (Workspace / Admin / Account) instead of one
- * undifferentiated stack. */
-function NavGroupLabel({ children }: { children: React.ReactNode }) {
+ * undifferentiated stack. Collapses to a thin divider when the sidebar is
+ * minimized, since there's no room for the label text. */
+function NavGroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
+  if (collapsed) return <div className="mx-2 mb-1 mt-3 border-t border-sidebar-border first:mt-0" />;
   return <div className="mb-1 mt-3 px-[10px] text-[10px] font-semibold uppercase tracking-wider text-sidebar-text/60 first:mt-0">{children}</div>;
 }
 
@@ -112,6 +144,17 @@ export function Sidebar() {
   const match = useMatch('/team/:memberId/*');
   const viewingId = match?.params.memberId;
 
+  // Persisted across reloads — a preference, not session state, same reason
+  // theme/collapse toggles anywhere else always remember the last choice.
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(COLLAPSE_KEY) === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(COLLAPSE_KEY, String(collapsed));
+  }, [collapsed]);
+
   const workspaceItems = viewingId
     ? [
         { to: `/team/${viewingId}`, label: 'Dashboard', icon: LayoutDashboard },
@@ -133,56 +176,51 @@ export function Sidebar() {
     : [];
 
   return (
-    <aside className="flex h-full w-60 flex-col bg-sidebar">
-      <div className="flex items-center gap-2.5 border-b border-sidebar-border px-5 py-5">
+    <aside className={cn('flex h-full shrink-0 flex-col bg-sidebar transition-[width] duration-200', collapsed ? 'w-[72px]' : 'w-60')}>
+      <div className={cn('flex items-center gap-2.5 border-b border-sidebar-border py-5', collapsed ? 'justify-center px-2' : 'px-5')}>
         <img src="/logo-mark.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
-        <div className="min-w-0">
-          <div className="font-serif text-base font-semibold leading-tight text-sidebar-textActive">BlueBird</div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-text">CRM</div>
-        </div>
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <div className="font-serif text-base font-semibold leading-tight text-sidebar-textActive">BlueBird</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-text">CRM</div>
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-text transition-colors hover:bg-sidebar-2 hover:text-sidebar-textActive"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3">
-        <NavGroupLabel>Workspace</NavGroupLabel>
+        <NavGroupLabel collapsed={collapsed}>Workspace</NavGroupLabel>
         <div className="space-y-1">
-          {workspaceItems.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} end={to === '/' || !!viewingId} className={navLinkClass}>
-              <Icon size={16} />
-              {label}
-            </NavLink>
+          {workspaceItems.map((item) => (
+            <NavItem key={item.to} {...item} end={item.to === '/' || !!viewingId} collapsed={collapsed} />
           ))}
         </div>
 
         {adminItems.length > 0 && (
           <>
-            <NavGroupLabel>Admin</NavGroupLabel>
+            <NavGroupLabel collapsed={collapsed}>Admin</NavGroupLabel>
             <div className="space-y-1">
-              {adminItems.map(({ to, label, icon: Icon }) => (
-                <NavLink key={to} to={to} className={navLinkClass}>
-                  <Icon size={16} />
-                  {label}
-                </NavLink>
+              {adminItems.map((item) => (
+                <NavItem key={item.to} {...item} collapsed={collapsed} />
               ))}
-              {!viewingId && (
-                <NavLink to="/team" end className={navLinkClass}>
-                  <Shield size={16} />
-                  Team
-                </NavLink>
-              )}
+              {!viewingId && <NavItem to="/team" label="Team" icon={Shield} end collapsed={collapsed} />}
             </div>
           </>
         )}
 
-        <NavGroupLabel>Account</NavGroupLabel>
+        <NavGroupLabel collapsed={collapsed}>Account</NavGroupLabel>
         <div className="space-y-1">
-          <NavLink to={viewingId ? `/team/${viewingId}/settings` : '/settings'} className={navLinkClass}>
-            <Settings size={16} />
-            Settings
-          </NavLink>
+          <NavItem to={viewingId ? `/team/${viewingId}/settings` : '/settings'} label="Settings" icon={Settings} collapsed={collapsed} />
         </div>
       </nav>
 
-      {isOverseer && <ViewingPullUp viewingId={viewingId} />}
+      {isOverseer && !collapsed && <ViewingPullUp viewingId={viewingId} />}
     </aside>
   );
 }

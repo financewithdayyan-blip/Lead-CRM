@@ -56,9 +56,6 @@ const PipelineActivityChart = lazy(() =>
 const PipelineFunnel = lazy(() =>
   import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
 );
-const ConversionTrendChart = lazy(() =>
-  import('@/components/dashboard/ConversionTrendChart').then((m) => ({ default: m.ConversionTrendChart })),
-);
 const CallProgressChart = lazy(() =>
   import('@/components/dashboard/CallProgressChart').then((m) => ({ default: m.CallProgressChart })),
 );
@@ -108,8 +105,6 @@ function funnelBucket(stage: LeadStage): FunnelKey | null {
   if (stage === 'contract' || stage === 'in_title' || stage === 'closed') return 'contract';
   return null;
 }
-
-const CLOSED_DEAL_STAGES: LeadStage[] = ['contract', 'in_title', 'closed'];
 
 function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0;
@@ -274,39 +269,6 @@ export function DashboardView({
       totalLeads: leads.length,
       coldCount: leads.filter((l) => l.stage === 'new').length,
     };
-  }, [leads]);
-
-  // The only one of the KPIs the business asked for that has real data
-  // behind it today — everything else needs marketing spend / assignment
-  // fee / lead-source data that isn't captured yet, so it isn't shown here.
-  const conversion = useMemo(() => {
-    const total = leads.length;
-    const deals = leads.filter((l) => CLOSED_DEAL_STAGES.includes(l.stage)).length;
-    return { total, deals, pct: total > 0 ? (deals / total) * 100 : 0 };
-  }, [leads]);
-
-  const conversionTrend = useMemo(() => {
-    const monthMap = new Map<string, { leadCount: number; dealCount: number }>();
-    for (const l of leads) {
-      const d = new Date(l.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const bucket = monthMap.get(key) ?? { leadCount: 0, dealCount: 0 };
-      bucket.leadCount += 1;
-      if (CLOSED_DEAL_STAGES.includes(l.stage)) bucket.dealCount += 1;
-      monthMap.set(key, bucket);
-    }
-    return Array.from(monthMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-24)
-      .map(([key, { leadCount, dealCount }]) => {
-        const [y, m] = key.split('-').map(Number);
-        return {
-          month: new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-          leadCount,
-          dealCount,
-          conversionPct: leadCount > 0 ? Math.round((dealCount / leadCount) * 1000) / 10 : 0,
-        };
-      });
   }, [leads]);
 
   // ── Sales: funnel efficiency (contact/qualify/close rate) ─────────────────
@@ -885,6 +847,67 @@ export function DashboardView({
             </div>
           )}
 
+          {showSmsStats && (
+            <div>
+              <SectionLabel>Sales Performance</SectionLabel>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <div className="card">
+                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → close" />
+                  <div className="mt-4 space-y-4">
+                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={72} strokeWidth={8} label="Contact Rate" sub="of all leads" />
+                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={72} strokeWidth={8} label="Qualify Rate" sub="of contacted" />
+                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={72} strokeWidth={8} label="Close Rate" sub="of qualified" />
+                  </div>
+                </div>
+
+                <div className="card">
+                  <CardHeader icon={Timer} title="Deal Velocity" sub="avg. days between milestones, this year" tone="info" />
+                  <div className="mt-3 space-y-2">
+                    {dealVelocity.map((v) => (
+                      <div key={v.toLabel} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
+                        <div className="text-[12.5px] text-text-2">
+                          {v.fromLabel} → {v.toLabel}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono text-[15px] font-semibold tabular-nums text-text">
+                            {v.avgDays !== null ? `${v.avgDays.toFixed(1)}d` : '—'}
+                          </div>
+                          <div className="text-[10px] text-text-3">
+                            {v.sampleSize} lead{v.sampleSize !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card">
+                  <CardHeader icon={Medal} title="Rep Performance" sub="calls, qualify rate, contracts — this year" tone="warning" />
+                  <div className="mt-3 space-y-1.5">
+                    {repLeaderboard.length === 0 ? (
+                      <div className="text-[13px] text-text-3">No activity logged yet this year.</div>
+                    ) : (
+                      repLeaderboard.map((r, i) => (
+                        <div key={r.userId} className="flex items-center gap-2.5 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-medium text-text">{r.name}</div>
+                            <div className="text-[11px] text-text-3">
+                              {r.calls} calls · {r.qualifyRate}% qualify rate
+                            </div>
+                          </div>
+                          <div className="font-mono text-[15px] font-semibold tabular-nums text-success">{r.contracts}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             <SectionLabel>Performance</SectionLabel>
             <div className="space-y-3">
@@ -910,21 +933,6 @@ export function DashboardView({
                 </div>
               )}
 
-              {showSmsStats && (
-                <div className="card chart-layer">
-                  <CardHeader icon={TrendingUp} title="Lead-to-Deal Conversion Rate" sub="leads that reached Contract or further" tone="success" />
-                  <div className="mb-3 mt-3">
-                    <RadialGauge
-                      pct={conversion.pct}
-                      color="#10b981"
-                      sub={`${conversion.deals.toLocaleString()} of ${conversion.total.toLocaleString()} leads`}
-                    />
-                  </div>
-                  <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                    <ConversionTrendChart data={conversionTrend} />
-                  </Suspense>
-                </div>
-              )}
             </div>
           </div>
 
@@ -1010,67 +1018,6 @@ export function DashboardView({
               )}
             </div>
           </div>
-
-          {showSmsStats && (
-            <div>
-              <SectionLabel>Sales Performance</SectionLabel>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                <div className="card">
-                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → close" />
-                  <div className="mt-4 space-y-4">
-                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={72} strokeWidth={8} label="Contact Rate" sub="of all leads" />
-                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={72} strokeWidth={8} label="Qualify Rate" sub="of contacted" />
-                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={72} strokeWidth={8} label="Close Rate" sub="of qualified" />
-                  </div>
-                </div>
-
-                <div className="card">
-                  <CardHeader icon={Timer} title="Deal Velocity" sub="avg. days between milestones, this year" tone="info" />
-                  <div className="mt-3 space-y-2">
-                    {dealVelocity.map((v) => (
-                      <div key={v.toLabel} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
-                        <div className="text-[12.5px] text-text-2">
-                          {v.fromLabel} → {v.toLabel}
-                        </div>
-                        <div className="text-right">
-                          <div className="font-mono text-[15px] font-semibold tabular-nums text-text">
-                            {v.avgDays !== null ? `${v.avgDays.toFixed(1)}d` : '—'}
-                          </div>
-                          <div className="text-[10px] text-text-3">
-                            {v.sampleSize} lead{v.sampleSize !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="card">
-                  <CardHeader icon={Medal} title="Rep Performance" sub="calls, qualify rate, contracts — this year" tone="warning" />
-                  <div className="mt-3 space-y-1.5">
-                    {repLeaderboard.length === 0 ? (
-                      <div className="text-[13px] text-text-3">No activity logged yet this year.</div>
-                    ) : (
-                      repLeaderboard.map((r, i) => (
-                        <div key={r.userId} className="flex items-center gap-2.5 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
-                            {i + 1}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-medium text-text">{r.name}</div>
-                            <div className="text-[11px] text-text-3">
-                              {r.calls} calls · {r.qualifyRate}% qualify rate
-                            </div>
-                          </div>
-                          <div className="font-mono text-[15px] font-semibold tabular-nums text-success">{r.contracts}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {showSmsStats && (
             <div>
