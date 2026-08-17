@@ -250,12 +250,32 @@ export function DashboardView({
   );
 
   const funnel = useMemo(() => {
-    const buckets = leads.map((l) => funnelBucket(l.stage)).filter((b): b is FunnelKey => b !== null);
+    // Current stage alone undercounts this — a lead that reached Negotiation
+    // before falling through to Dead/Declined still reached Negotiation, and
+    // "reached stage or further" is a historical claim, not a snapshot one.
+    // Real stage_change history fills in every lead whose current stage
+    // (dead_declined, onhold, others) sits outside the funnel entirely.
+    const furthestByLead = new Map<string, number>();
+    for (const a of activities) {
+      if (a.type !== 'stage_change') continue;
+      const bucket = funnelBucket((a.meta as any)?.to as LeadStage);
+      if (!bucket) continue;
+      const idx = FUNNEL_ORDER.indexOf(bucket);
+      const prev = furthestByLead.get(a.leadId) ?? -1;
+      if (idx > prev) furthestByLead.set(a.leadId, idx);
+    }
+    const buckets = leads
+      .map((l) => {
+        const currentBucket = funnelBucket(l.stage);
+        const currentIdx = currentBucket ? FUNNEL_ORDER.indexOf(currentBucket) : -1;
+        return Math.max(currentIdx, furthestByLead.get(l.id) ?? -1);
+      })
+      .filter((idx) => idx >= 0);
     const stages = FUNNEL_ORDER.map((key, idx) => ({
       key,
       label: FUNNEL_LABELS[key],
       color: FUNNEL_COLORS[key],
-      count: buckets.filter((b) => FUNNEL_ORDER.indexOf(b) >= idx).length,
+      count: buckets.filter((b) => b >= idx).length,
     }));
     const offFunnel = [
       { label: 'Dead / Declined', count: leads.filter((l) => l.stage === 'dead_declined').length, color: '#ef4444' },
@@ -269,7 +289,7 @@ export function DashboardView({
       totalLeads: leads.length,
       coldCount: leads.filter((l) => l.stage === 'new').length,
     };
-  }, [leads]);
+  }, [leads, activities]);
 
   // ── Sales: funnel efficiency (contact/qualify/close rate) ─────────────────
   // Real data, no new fetch — reuses the same cumulative funnel counts
