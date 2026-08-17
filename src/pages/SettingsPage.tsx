@@ -264,67 +264,6 @@ export function SettingsPage() {
           </div>
 
           <div>
-            <SectionLabel>Call Goals</SectionLabel>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="card">
-                <CardHeader icon={Target} title="Daily Call Goal" />
-                <p className="mt-1 text-[13px] text-text-2">
-                  {isAdmin ? "Tracked on your dashboard's daily goal bar." : 'Set by your admin. Tracked on your dashboard’s daily goal bar.'}
-                </p>
-                <div className="mt-3 flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="label">Daily target</label>
-                    <input
-                      className="input max-w-[140px]"
-                      type="number"
-                      min={1}
-                      disabled={!isAdmin}
-                      value={dailyGoal}
-                      onChange={(e) => setDailyGoal(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && saveDailyGoal()}
-                    />
-                  </div>
-                  {isAdmin && (
-                    <button className="btn btn-primary" onClick={saveDailyGoal}>
-                      Save
-                    </button>
-                  )}
-                  {dailyGoalSaved && <span className="text-[11px] text-success">✓ Saved</span>}
-                </div>
-              </div>
-
-              <div className="card">
-                <CardHeader icon={CalendarRange} title="Monthly Call Goal" />
-                <p className="mt-1 text-[13px] text-text-2">
-                  {isAdmin
-                    ? 'Target number of calls for the monthly goal bar on your dashboard.'
-                    : 'Set by your admin. Tracked on your dashboard’s monthly goal bar.'}
-                </p>
-                <div className="mt-3 flex flex-wrap items-end gap-3">
-                  <div>
-                    <label className="label">Monthly target</label>
-                    <input
-                      className="input max-w-[140px]"
-                      type="number"
-                      min={1}
-                      disabled={!isAdmin}
-                      value={monthlyGoal}
-                      onChange={(e) => setMonthlyGoal(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && saveMonthlyGoal()}
-                    />
-                  </div>
-                  {isAdmin && (
-                    <button className="btn btn-primary" onClick={saveMonthlyGoal}>
-                      Save
-                    </button>
-                  )}
-                  {monthlyGoalSaved && <span className="text-[11px] text-success">✓ Saved</span>}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
             <SectionLabel>Tags</SectionLabel>
             <div className="space-y-4">
               <div className="card">

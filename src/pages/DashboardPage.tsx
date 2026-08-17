@@ -12,7 +12,6 @@ import {
   Flame,
   Gauge,
   Hash,
-  MapPin,
   MessageSquare,
   Phone,
   PhoneCall,
@@ -54,8 +53,6 @@ const ConversionTrendChart = lazy(() =>
 const CallProgressChart = lazy(() =>
   import('@/components/dashboard/CallProgressChart').then((m) => ({ default: m.CallProgressChart })),
 );
-
-const WEEKDAY_LABELS = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
 
 // A lead currently sitting in one of these stages has, by definition, been
 // qualified — either the AI got there via the framework, or a human moved it
@@ -569,18 +566,6 @@ export function DashboardView({
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
   const maxNumber = Math.max(...stats.numberCounts.map((x) => x.count), 1);
 
-  function intensity(count: number, max: number) {
-    if (count === 0) return '#f1f5f9';
-    const level = Math.min(5, Math.max(1, Math.ceil((count / max) * 5)));
-    const alpha = 0.15 + level * 0.17;
-    return `rgba(21,104,168,${alpha.toFixed(2)})`;
-  }
-
-  function formatFullDate(iso: string) {
-    const [y, m, d] = iso.split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  }
-
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === dateRange)?.label ?? '';
   const followupLeadsCount = leads.filter((l) => l.stage === 'followup').length;
 
@@ -931,66 +916,6 @@ export function DashboardView({
                 icon={Sparkles}
               />
             </div>
-
-            <div className="card overflow-x-auto">
-              <CardHeader icon={CalendarDays} title={`Activity — ${new Date().getFullYear()}`} tone="success" />
-              <div className="mt-4 flex">
-              <div className="mr-2 flex flex-col gap-[3px] pt-[17px] text-[10px] text-text-3">
-                {WEEKDAY_LABELS.map((label, i) => (
-                  <div key={i} className="flex h-3 items-center">
-                    {label}
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="flex gap-[3px] pb-1">
-                  {heatmap.monthLabels.map((label, wi) => (
-                    <div key={wi} className="w-3 shrink-0 whitespace-nowrap text-[10px] text-text-3">
-                      {label}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-[3px]">
-                  {heatmap.cols.map((week, wi) => (
-                    <div key={wi} className="flex flex-col gap-[3px]">
-                      {week.map((cell) => (
-                        <div key={cell.iso} className="group relative">
-                          <div
-                            className={`h-3 w-3 rounded-[3px] transition-transform group-hover:scale-125 ${cell.isToday ? 'ring-1 ring-primary ring-offset-1' : ''}`}
-                            style={{ background: cell.isFuture ? 'transparent' : intensity(cell.count, heatmap.max) }}
-                          />
-                          {!cell.isFuture && (
-                            <div className="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 z-20 w-56 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-surface p-3 text-left opacity-0 shadow-popover transition-opacity group-hover:opacity-100">
-                              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
-                                <MapPin size={12} className="shrink-0 text-primary" />
-                                {formatFullDate(cell.iso)}
-                              </div>
-                              <div className="my-1.5 border-t border-border" />
-                              <div className="flex items-center justify-between gap-4 text-[11px] text-text-2">
-                                <span>Total Calls</span>
-                                <span className="font-medium text-text">{cell.calls || '—'}</span>
-                              </div>
-                              <div className="flex items-center justify-between gap-4 text-[11px] text-text-2">
-                                <span>Sessions</span>
-                                <span className="font-medium text-text">{cell.sessions || '—'}</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2.5 flex items-center justify-end gap-1 text-[10px] text-text-3">
-                  <span>Less</span>
-                  {[0, 1, 2, 3, 4, 5].map((lvl) => (
-                    <span key={lvl} className="h-2.5 w-2.5 rounded-[2px]" style={{ background: intensity(lvl, 5) }} />
-                  ))}
-                  <span>More</span>
-                </div>
-              </div>
-            </div>
-          </div>
           </div>
         </div>
       )}
