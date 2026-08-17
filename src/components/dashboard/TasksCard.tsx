@@ -3,8 +3,72 @@ import { Link } from 'react-router-dom';
 import { Calculator, ChevronDown, ChevronRight, ListChecks, MessageSquare, PhoneCall, RotateCw } from 'lucide-react';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useFollowupLeads, useNoPacketLeads, useSmsCampaignRanToday } from '@/hooks/useDashboardTaskSummary';
-import { formatDate, localIsoDate } from '@/lib/utils';
-import type { Lead } from '@/types/domain';
+import { formatDate, formatPhone, leadDisplayName, localIsoDate } from '@/lib/utils';
+import { STAGE_CONFIG, type Lead, type LeadStage } from '@/types/domain';
+
+/** "3d ago" / "Today" / "Never contacted" — how stale a lead's last touch
+ * is, which is the whole point of the Do Followups list (who's gone
+ * quietest the longest, not who's alphabetically first). */
+function lastTouchLabel(iso: string | null): string {
+  if (!iso) return 'Never contacted';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return '1 day ago';
+  return `${days} days ago`;
+}
+
+/** One lead row inside an expanded task category — name (falling back to
+ * phone when the name is blank/placeholder), with optional stage and
+ * staleness context. Shared shape across all three lead-backed categories
+ * instead of a bare text link each. */
+function TaskLeadRow({
+  id,
+  firstName,
+  lastName,
+  phone,
+  stage,
+  staleness,
+}: {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone?: string | null;
+  stage?: LeadStage;
+  staleness?: string;
+}) {
+  const name = leadDisplayName(firstName, lastName);
+  const stageCfg = stage ? STAGE_CONFIG[stage] : null;
+  return (
+    <Link
+      to={`/leads/${id}`}
+      className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface px-2.5 py-1.5 text-[12px] hover:border-primary/50"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium text-text">{name ?? (phone ? formatPhone(phone) : 'Unnamed lead')}</div>
+        {name && phone && <div className="truncate text-[11px] text-text-3">{formatPhone(phone)}</div>}
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {staleness && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              staleness === 'Never contacted' ? 'bg-danger-dim text-danger' : 'bg-surface-3 text-text-3'
+            }`}
+          >
+            {staleness}
+          </span>
+        )}
+        {stageCfg && (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{ backgroundColor: `${stageCfg.color}1f`, color: stageCfg.color }}
+          >
+            {stageCfg.label}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
 
 /** One of the four daily, aggregate rows — a count and an expandable list of
  * the actual leads behind it, rather than a flat row per lead. */
@@ -47,7 +111,9 @@ function TaskCategory({
         </span>
       </button>
       {count === 0 && <p className="px-3 pb-2 text-[12px] text-text-3">{emptyLabel}</p>}
-      {open && hasItems && <div className="space-y-1 border-t border-border-2 px-3 py-2">{children}</div>}
+      {open && hasItems && (
+        <div className="max-h-72 space-y-1 overflow-y-auto border-t border-border-2 px-2.5 py-2">{children}</div>
+      )}
     </div>
   );
 }
@@ -107,9 +173,15 @@ export function TasksCard({ userId, leads }: { userId: string; leads: Lead[] }) 
           emptyLabel="Nothing's gone quiet — every active lead has recent activity."
         >
           {followupLeads.map((l) => (
-            <Link key={l.id} to={`/leads/${l.id}`} className="block truncate text-[12px] text-text hover:text-primary hover:underline">
-              {l.firstName} {l.lastName}
-            </Link>
+            <TaskLeadRow
+              key={l.id}
+              id={l.id}
+              firstName={l.firstName}
+              lastName={l.lastName}
+              phone={l.phone}
+              stage={l.stage as LeadStage}
+              staleness={lastTouchLabel(l.lastActivityAt)}
+            />
           ))}
         </TaskCategory>
 
@@ -120,9 +192,7 @@ export function TasksCard({ userId, leads }: { userId: string; leads: Lead[] }) 
           emptyLabel="Nothing scheduled — see Scheduled Calls below once one comes in."
         >
           {scheduledCalls.map((l) => (
-            <Link key={l.id} to={`/leads/${l.id}`} className="block truncate text-[12px] text-text hover:text-primary hover:underline">
-              {l.firstName} {l.lastName}
-            </Link>
+            <TaskLeadRow key={l.id} id={l.id} firstName={l.firstName} lastName={l.lastName} phone={l.phone} stage={l.stage} />
           ))}
         </TaskCategory>
 
@@ -133,9 +203,7 @@ export function TasksCard({ userId, leads }: { userId: string; leads: Lead[] }) 
           emptyLabel="Every qualified lead already has a deal packet."
         >
           {noPacketLeads.map((l) => (
-            <Link key={l.id} to={`/leads/${l.id}`} className="block truncate text-[12px] text-text hover:text-primary hover:underline">
-              {l.firstName} {l.lastName}
-            </Link>
+            <TaskLeadRow key={l.id} id={l.id} firstName={l.firstName} lastName={l.lastName} phone={l.phone} />
           ))}
         </TaskCategory>
       </div>

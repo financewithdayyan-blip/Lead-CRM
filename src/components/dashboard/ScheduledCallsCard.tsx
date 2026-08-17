@@ -5,6 +5,7 @@ import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/t
 import { useAddActivity } from '@/hooks/useActivities';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { Modal } from '@/components/ui/Modal';
+import { formatPhone, leadDisplayName } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
 /** How urgent this callback reads at a glance — same overdue/today/upcoming
@@ -36,13 +37,21 @@ function MarkCompleteModal({ lead, onClose }: { lead: Lead; onClose: () => void 
 
   async function handleSubmit() {
     if (!notes.trim()) return;
-    await addActivity.mutateAsync({ leadId: lead.id, type: 'call', body: notes.trim(), meta: { scheduledCallCompleted: true } });
+    const body = notes.trim();
+    // Logged twice on purpose: as a 'call' activity so it still shows in Call
+    // History/stats, and as a 'note' so it actually shows up in the lead's
+    // Notes tab too — previously only the former happened, so a completed
+    // scheduled call left no visible trace in Notes at all.
+    await addActivity.mutateAsync({ leadId: lead.id, type: 'call', body, meta: { scheduledCallCompleted: true } });
+    await addActivity.mutateAsync({ leadId: lead.id, type: 'note', body: `Scheduled call: ${body}` });
     await updateLead.mutateAsync({ id: lead.id, scheduledCallbackAt: null, scheduledCallbackNote: null });
     onClose();
   }
 
+  const displayName = leadDisplayName(lead.firstName, lead.lastName) ?? 'this lead';
+
   return (
-    <Modal open onClose={onClose} title={`Mark call with ${lead.firstName} complete`} width="sm">
+    <Modal open onClose={onClose} title={`Mark call with ${displayName} complete`} width="sm">
       <div className="space-y-3">
         {lead.scheduledCallbackNote && (
           <p className="text-[12px] text-text-3">They asked for a call: "{lead.scheduledCallbackNote}"</p>
@@ -113,9 +122,7 @@ export function ScheduledCallsCard({ leads }: { leads: Lead[] }) {
                 className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[13px] hover:border-border"
               >
                 <Link to={`/leads/${lead.id}`} className="min-w-0 flex-1">
-                  <div className="truncate font-medium text-text">
-                    {lead.firstName} {lead.lastName}
-                  </div>
+                  <div className="truncate font-medium text-text">{leadDisplayName(lead.firstName, lead.lastName) ?? formatPhone(lead.phone)}</div>
                   {lead.scheduledCallbackNote && (
                     <div className="truncate text-[11px] text-text-3" title={lead.scheduledCallbackNote}>
                       "{lead.scheduledCallbackNote}"

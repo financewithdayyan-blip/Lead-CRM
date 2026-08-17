@@ -7,15 +7,18 @@ export interface FollowupLead {
   id: string;
   firstName: string;
   lastName: string;
+  phone: string;
   stage: string;
+  lastActivityAt: string | null;
 }
 
 /** Leads worth a nudge today — stalled in a stage where the conversation
  * should still be moving, with no activity at all in the last couple of
  * days. Self-resolving: any new activity on the lead (a reply, a call note,
  * an outbound text) drops it off this list on its own, so nothing has to
- * remember to mark it done. See get_followup_leads in
- * 0080_daily_task_summary.sql for the exact definition. */
+ * remember to mark it done. Sorted stalest-first (never-contacted leads
+ * first) rather than alphabetically. See get_followup_leads in
+ * 0101_task_summary_richer.sql for the exact definition. */
 export function useFollowupLeads() {
   const { session } = useAuth();
   return useQuery({
@@ -27,7 +30,9 @@ export function useFollowupLeads() {
         id: r.id,
         firstName: r.first_name,
         lastName: r.last_name,
+        phone: r.phone,
         stage: r.stage,
+        lastActivityAt: r.last_activity_at,
       })) as FollowupLead[];
     },
     enabled: !!session?.user.id,
@@ -38,11 +43,12 @@ export interface NoPacketLead {
   id: string;
   firstName: string;
   lastName: string;
+  phone: string;
 }
 
 /** Qualified leads nobody has actually run comps/ARV on yet — no deal
  * packet built at all. See get_no_packet_leads in
- * 0080_daily_task_summary.sql. */
+ * 0101_task_summary_richer.sql. */
 export function useNoPacketLeads() {
   const { session } = useAuth();
   return useQuery({
@@ -50,7 +56,7 @@ export function useNoPacketLeads() {
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_no_packet_leads');
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name })) as NoPacketLead[];
+      return (data ?? []).map((r: any) => ({ id: r.id, firstName: r.first_name, lastName: r.last_name, phone: r.phone })) as NoPacketLead[];
     },
     enabled: !!session?.user.id,
   });

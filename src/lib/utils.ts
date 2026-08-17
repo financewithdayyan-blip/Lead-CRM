@@ -19,6 +19,15 @@ export function formatPhone(raw: string | null | undefined): string {
   return `+1${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+/** Add Lead defaults a blank first name to "—" so the address/phone fields
+ * still line up positionally on import — fine in a form, but shown verbatim
+ * in a compact list it reads as broken data ("— AARON ST DENNIS"). Strips
+ * that placeholder out so lists fall back to whatever real name parts exist. */
+export function leadDisplayName(firstName: string | null | undefined, lastName: string | null | undefined): string | null {
+  const parts = [firstName, lastName].map((p) => p?.trim()).filter((p): p is string => !!p && p !== '—');
+  return parts.length ? parts.join(' ') : null;
+}
+
 export function extractPhones(raw: string | null | undefined): string[] {
   if (!raw) return [];
   const digitsOnly = raw.replace(/[^0-9]/g, '');
