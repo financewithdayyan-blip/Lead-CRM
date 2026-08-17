@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, LogOut, Search, Settings } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { cn, initials } from '@/lib/utils';
 
-/** Sits above every page (wired in AppShell) — the search/notifications/
- * profile cluster every reference dashboard puts in a persistent top bar
- * rather than buried in the sidebar. The search box is presentational for
- * now (no cross-page search exists yet in this app to wire it to) — visual
- * parity first, real behavior is a separate, deliberate addition later. */
+/** Sits above every page (wired in AppShell) — the notifications/profile
+ * cluster every reference dashboard puts in a persistent top bar rather
+ * than buried in the sidebar. */
 export function TopBar() {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
@@ -35,13 +33,8 @@ export function TopBar() {
   }, [menuOpen]);
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-6">
-      <div className="relative w-full max-w-sm">
-        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-        <input className="input !rounded-full !py-2 !pl-9" placeholder="Search leads, contracts…" />
-      </div>
-
-      <div className="ml-auto flex items-center gap-2">
+    <header className="flex h-16 shrink-0 items-center justify-end gap-4 border-b border-border bg-surface px-6">
+      <div className="flex items-center gap-2">
         <button
           onClick={() => navigate('/notifications')}
           className="relative flex h-9 w-9 items-center justify-center rounded-full text-text-2 transition-colors hover:bg-surface-3"
