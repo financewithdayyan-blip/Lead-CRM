@@ -102,13 +102,13 @@ export function Sidebar() {
     ? [
         { to: `/team/${viewingId}`, label: 'Dashboard', icon: LayoutDashboard },
         { to: `/team/${viewingId}/leads`, label: 'Leads', icon: Users },
-        { to: `/team/${viewingId}/kanban`, label: 'Pipeline', icon: Kanban },
+        { to: `/team/${viewingId}/kanban`, label: 'Kanban', icon: Kanban },
         { to: `/team/${viewingId}/settings`, label: 'Settings', icon: Settings },
       ]
     : [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/leads', label: 'Leads', icon: Users },
-        { to: '/kanban', label: 'Pipeline', icon: Kanban },
+        { to: '/kanban', label: 'Kanban', icon: Kanban },
         { to: '/calls', label: 'Call History', icon: History },
         ...(isOverseer ? [{ to: '/bulk-sms', label: 'Bulk SMS', icon: Send }] : []),
         ...(isOverseer ? [{ to: '/blue-docs', label: 'Blue Docs', icon: FileSignature }] : []),

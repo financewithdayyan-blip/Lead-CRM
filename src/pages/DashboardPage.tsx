@@ -672,7 +672,7 @@ export function DashboardView({
             <div className="card chart-layer">
               <div className="mb-1 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-text">Pipeline</h3>
-                <span className="text-[11px] text-text-3">current snapshot, every lead</span>
+                <span className="text-[11px] text-text-3">cumulative — reached stage or further</span>
               </div>
               <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
                 <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
