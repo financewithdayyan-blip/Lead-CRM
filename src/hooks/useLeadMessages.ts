@@ -2,12 +2,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { SmsNumberKey } from '@/lib/smsNumbers';
 
+export interface ThreadAttachment {
+  name: string;
+  type: string;
+  size: number;
+  /** Present once sms-webhook has re-hosted this attachment into the
+   * private lead-files bucket — Zoom's own download_url is JWT-signed and
+   * expires ~30 minutes after the webhook fires, so it's never usable by
+   * the time anyone opens the thread. Attachments received before this
+   * re-hosting existed only have the dead Zoom URL and render as a plain
+   * label instead of an image. */
+  storage_path?: string;
+}
+
 export interface ThreadMessage {
   id: string;
   direction: 'inbound' | 'outbound';
   body: string;
   at: string;
   hasAttachments: boolean;
+  attachments: ThreadAttachment[];
   isReaction: boolean;
 }
 
@@ -19,7 +33,7 @@ export function useLeadThread(leadId: string | undefined) {
       const [inboundRes, activityRes] = await Promise.all([
         supabase
           .from('inbound_messages')
-          .select('id, body, received_at, has_attachments, is_reaction')
+          .select('id, body, received_at, has_attachments, attachments, is_reaction')
           .eq('lead_id', leadId)
           .order('received_at', { ascending: true }),
         supabase
@@ -38,6 +52,7 @@ export function useLeadThread(leadId: string | undefined) {
         body: m.body,
         at: m.received_at,
         hasAttachments: m.has_attachments,
+        attachments: (m.attachments as ThreadAttachment[] | null) ?? [],
         isReaction: m.is_reaction,
       }));
 
@@ -53,6 +68,7 @@ export function useLeadThread(leadId: string | undefined) {
           body: a.body ?? '',
           at: a.created_at,
           hasAttachments: false,
+          attachments: [],
           isReaction: false,
         }));
 

@@ -30,6 +30,62 @@ function keyForSentFrom(sentFrom: string): string | undefined {
   return Object.entries(NUMBER_PHONES).find(([, phone]) => phone.replace(/[^0-9]/g, '').slice(-10) === digits)?.[0];
 }
 
+function guessContentType(name: string): string {
+  switch (name.split('.').pop()?.toLowerCase()) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'heic':
+      return 'image/heic';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+/** Zoom's inbound attachment download_url is a JWT-signed link that expires
+ * ~30 minutes after the webhook fires (confirmed against a real payload's
+ * iat/exp) — fine to read right now, useless by the time anyone opens the
+ * lead's SMS thread later. Re-hosted into the same private lead-files
+ * bucket the lead's Files tab already uses, keyed by storage_path instead
+ * of the dead Zoom URL, so it can be signed on demand whenever the thread
+ * is actually viewed. Best-effort per attachment — one failed download
+ * shouldn't lose the rest or fail the whole webhook. */
+async function rehostAttachments(
+  admin: ReturnType<typeof createClient>,
+  attachments: any[],
+  userId: string,
+  leadId: string,
+  messageId: string,
+): Promise<void> {
+  const rehosted = await Promise.all(
+    attachments.map(async (att, i) => {
+      try {
+        const res = await fetch(att.download_url);
+        if (!res.ok) throw new Error(`download failed: ${res.status}`);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const safeName = (att.name as string) || `attachment-${i}`;
+        const path = `${userId}/${leadId}/mms-${messageId}-${i}-${safeName}`;
+        const { error: uploadErr } = await admin.storage
+          .from('lead-files')
+          .upload(path, bytes, { contentType: guessContentType(safeName), upsert: true });
+        if (uploadErr) throw uploadErr;
+        const { download_url: _dropped, ...rest } = att;
+        return { ...rest, storage_path: path };
+      } catch (e) {
+        console.error(`MMS re-host failed for message ${messageId} attachment ${i}:`, e);
+        return att;
+      }
+    }),
+  );
+  await admin.from('inbound_messages').update({ attachments: rehosted }).eq('id', messageId);
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-zm-signature, x-zm-request-timestamp',
@@ -350,6 +406,10 @@ Deno.serve(async (req) => {
     }
     if (lead) {
       await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);
+
+      if (attachments.length > 0) {
+        await rehostAttachments(admin, attachments, lead.user_id, lead.id, inserted.id);
+      }
 
       // Pin the number this thread actually lives on the moment we see real
       // inbound traffic, not just on the first outbound send — otherwise a

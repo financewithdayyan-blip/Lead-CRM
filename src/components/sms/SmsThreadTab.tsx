@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Image as ImageIcon, Loader2, MessageSquare, Send, ThumbsUp } from 'lucide-react';
 import { useLeadThread, useSendManualReply } from '@/hooks/useLeadMessages';
+import { useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { useAiSettings } from '@/hooks/useAiSettings';
 import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatDateTime, formatPhone } from '@/lib/utils';
@@ -64,6 +65,14 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   }
 
   const realMessages = thread.filter((m) => !m.isReaction);
+  // Only messages re-hosted after the MMS-viewing fix have a storage_path —
+  // older ones only ever had Zoom's download_url, which is dead within 30
+  // minutes of being received and can't be recovered.
+  const attachmentPaths = useMemo(
+    () => thread.flatMap((m) => m.attachments.map((a) => a.storage_path).filter((p): p is string => !!p)),
+    [thread],
+  );
+  const { data: attachmentUrls = {} } = useSignedFileUrls(attachmentPaths);
   // Once a lead has been texted, every send after that — bulk or manual —
   // sticks to that same number server-side regardless of what's picked here.
   // The picker only matters, and only shows, before that first send exists.
@@ -119,9 +128,29 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
               >
                 {m.isReaction && <ThumbsUp size={11} className="mb-1 inline-block opacity-60" />}
                 <div className="whitespace-pre-wrap">{m.body}</div>
-                {m.hasAttachments && (
+                {m.hasAttachments && m.attachments.length === 0 && (
                   <div className={`mt-1 flex items-center gap-1 text-[11px] ${m.direction === 'outbound' ? 'text-white/70' : 'text-text-3'}`}>
                     <ImageIcon size={11} /> Attachment (MMS)
+                  </div>
+                )}
+                {m.attachments.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {m.attachments.map((att, i) => {
+                      const url = att.storage_path ? attachmentUrls[att.storage_path] : undefined;
+                      return url ? (
+                        <a key={i} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md border border-border-2">
+                          <img src={url} alt={att.name || 'MMS attachment'} className="h-28 w-28 object-cover" />
+                        </a>
+                      ) : (
+                        <div
+                          key={i}
+                          className={`flex items-center gap-1 text-[11px] ${m.direction === 'outbound' ? 'text-white/70' : 'text-text-3'}`}
+                          title={att.storage_path === undefined ? 'Sent before MMS viewing was supported — no longer retrievable.' : undefined}
+                        >
+                          <ImageIcon size={11} /> Attachment (MMS)
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 <div className={`mt-0.5 text-[10px] ${m.direction === 'outbound' ? 'text-white/60' : 'text-text-3'}`}>
