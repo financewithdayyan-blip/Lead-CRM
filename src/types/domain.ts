@@ -11,6 +11,8 @@ export type LeadStage =
   | 'followup'
   | 'negotiation'
   | 'contract'
+  | 'in_title'
+  | 'closed'
   | 'dead_declined'
   | 'onhold'
   | 'others';
@@ -24,10 +26,20 @@ export const STAGE_ORDER: LeadStage[] = [
   'followup',
   'negotiation',
   'contract',
+  'in_title',
+  'closed',
   'dead_declined',
   'onhold',
   'others',
 ];
+
+// Admins track deals past Contract through to close, and don't need a
+// column/option for a cold-calling concern — callers get the reverse:
+// Voicemail, but no In Title / Closed. Shared by the Kanban board's columns
+// and the lead profile's manual stage picker so both stay consistent.
+export function visibleStagesFor(isAdmin: boolean): LeadStage[] {
+  return STAGE_ORDER.filter((s) => (isAdmin ? s !== 'voicemail' : s !== 'in_title' && s !== 'closed'));
+}
 
 export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> = {
   new: { label: 'Cold Lead', color: '#60a5fa' },
@@ -43,6 +55,9 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   followup: { label: 'Qualified', color: '#c084fc' },
   negotiation: { label: 'Negotiation', color: '#fb923c' },
   contract: { label: 'Contract', color: '#10b981' },
+  // Post-contract, admin-only stages — a deal in title work, then closed.
+  in_title: { label: 'In Title', color: '#6366f1' },
+  closed: { label: 'Closed', color: '#eab308' },
   dead_declined: { label: 'Dead / Declined', color: '#ef4444' },
   onhold: { label: 'On Hold', color: '#2dd4bf' },
   // Catch-all — leads moved here manually for reasons that don't fit

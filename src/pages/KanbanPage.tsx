@@ -27,7 +27,7 @@ import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { formatDate, formatPhone, localIsoDate } from '@/lib/utils';
 import { isTouchScheduledToday, isTouchedToday, nextScheduledTouchDate, formatTouchDate } from '@/lib/followupSchedule';
-import { STAGE_ORDER, STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '@/types/domain';
+import { STAGE_ORDER, STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
@@ -522,6 +522,11 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   // cache patch lands so there is no visible snap-back.
   const [optimisticStages, setOptimisticStages] = useState<Record<string, LeadStage>>({});
 
+  // Based on the viewer's own role, not whichever board is being looked at,
+  // so an admin sees the same columns whether it's their own board or a
+  // team member's.
+  const visibleStages = useMemo(() => visibleStagesFor(isAdmin), [isAdmin]);
+
   // Require 8px movement before drag starts so button clicks aren't accidentally intercepted
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -664,7 +669,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     if (!over) return;
     const lead = leads.find((l) => l.id === active.id);
     const newStage = over.id as LeadStage;
-    if (!lead || lead.stage === newStage || !STAGE_ORDER.includes(newStage)) return;
+    if (!lead || lead.stage === newStage || !visibleStages.includes(newStage)) return;
 
     setOptimisticStages((prev) => ({ ...prev, [lead.id]: newStage }));
 
@@ -729,7 +734,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
         <div>
           <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
           <p className="text-sm text-text-3">
-            {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {STAGE_ORDER.length} stages
+            {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {visibleStages.length} stages
             {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
           </p>
         </div>
@@ -832,7 +837,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {STAGE_ORDER.map((stage) => (
+          {visibleStages.map((stage) => (
             <KanbanColumn
               key={stage}
               stage={stage}

@@ -14,7 +14,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { STAGE_ORDER, STAGE_CONFIG, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
+import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
 import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localIsoDate } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
@@ -344,11 +344,19 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 updateLead.mutate({ id: lead.id, stage: newStage });
               }}
             >
-              {STAGE_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {STAGE_CONFIG[s].label}
-                </option>
-              ))}
+              {(() => {
+                const stages = visibleStagesFor(isAdmin);
+                // Always include the lead's current stage even if it'd
+                // otherwise be filtered out for this viewer (e.g. an admin
+                // looking at a lead a caller left in Voicemail) — dropping
+                // it would leave the select showing nothing selected.
+                if (!stages.includes(lead.stage)) stages.push(lead.stage);
+                return stages.map((s) => (
+                  <option key={s} value={s}>
+                    {STAGE_CONFIG[s].label}
+                  </option>
+                ));
+              })()}
             </select>
             {/* Touch-lock warning + admin override */}
             {pendingStage === 'dead_declined' && lead.stage === 'followup' && (
