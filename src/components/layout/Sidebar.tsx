@@ -1,21 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
-import { Bell, ChevronUp, LayoutDashboard, Users, Kanban, History, Send, FileSignature, Settings, Shield, LogOut, Eye } from 'lucide-react';
+import { ChevronUp, LayoutDashboard, Users, Kanban, History, Send, FileSignature, Settings, Shield, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
-import { useNotificationsContext } from '@/contexts/NotificationsContext';
-import { cn, initials } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
-/** Active nav item reads as a left accent bar in the brand blue rather than
- * just a background swap — both states keep the same border width (just
- * transparent when inactive) so content never shifts on navigation. */
+/** Active nav item is a solid filled pill rather than a subtle accent —
+ * matches the reference dashboards, and reads unambiguously at a glance
+ * which page is open. */
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex items-center gap-2.5 rounded-md border-l-2 py-2 pl-[10px] pr-3 text-sm font-medium transition-colors',
-    isActive
-      ? 'border-primary bg-sidebar-2 text-sidebar-textActive'
-      : 'border-transparent text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+    'flex items-center gap-2.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors',
+    isActive ? 'bg-primary text-white shadow-sm' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
   );
 }
 
@@ -110,12 +107,10 @@ function ViewingPullUp({ viewingId }: { viewingId?: string }) {
 }
 
 export function Sidebar() {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const isOverseer = profile?.role === 'admin';
-  const [first, last] = (profile?.fullName ?? '').split(' ');
   const match = useMatch('/team/:memberId/*');
   const viewingId = match?.params.memberId;
-  const { unreadCount } = useNotificationsContext();
 
   const workspaceItems = viewingId
     ? [
@@ -180,51 +175,14 @@ export function Sidebar() {
 
         <NavGroupLabel>Account</NavGroupLabel>
         <div className="space-y-1">
-          {viewingId ? (
-            <NavLink to={`/team/${viewingId}/settings`} className={navLinkClass}>
-              <Settings size={16} />
-              Settings
-            </NavLink>
-          ) : (
-            <NavLink to="/settings" className={navLinkClass}>
-              <Settings size={16} />
-              Settings
-            </NavLink>
-          )}
-          <NavLink to="/notifications" className={navLinkClass}>
-            <Bell size={16} />
-            Notifications
-            {unreadCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
+          <NavLink to={viewingId ? `/team/${viewingId}/settings` : '/settings'} className={navLinkClass}>
+            <Settings size={16} />
+            Settings
           </NavLink>
         </div>
       </nav>
 
       {isOverseer && <ViewingPullUp viewingId={viewingId} />}
-
-      <div className="border-t border-sidebar-border p-3">
-        <div className="mb-2 flex items-center gap-2.5 rounded-md bg-sidebar-2 px-2.5 py-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white">
-            {initials(first ?? profile?.email ?? '', last ?? '')}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-medium text-sidebar-textActive">{profile?.fullName ?? profile?.email}</div>
-            <span className="mt-0.5 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-accent">
-              {profile?.role}
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={() => signOut()}
-          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-sidebar-text transition-colors hover:bg-sidebar-2 hover:text-danger"
-        >
-          <LogOut size={16} />
-          Sign out
-        </button>
-      </div>
     </aside>
   );
 }

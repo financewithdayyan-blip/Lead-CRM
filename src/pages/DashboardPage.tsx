@@ -40,6 +40,7 @@ import { ScheduledCallsCard } from '@/components/dashboard/ScheduledCallsCard';
 import { TasksCard } from '@/components/dashboard/TasksCard';
 import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
+import { RadialGauge } from '@/components/ui/RadialGauge';
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
@@ -121,14 +122,38 @@ function StatCard({
   sub,
   color,
   icon: Icon,
+  hero,
 }: {
   label: string;
   value: string | number;
   sub: string;
   color?: string;
   icon?: LucideIcon;
+  /** Solid-color block instead of a white card with a tinted icon — for the
+   * 3-4 headline numbers on the page, matching the bold hero-tile pattern
+   * real dashboard products use instead of treating every KPI equally. */
+  hero?: boolean;
 }) {
   const c = color ?? '#0B1E33';
+  if (hero) {
+    return (
+      <div
+        className="rounded-lg p-4 shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover"
+        style={{ background: c }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{label}</div>
+          {Icon && (
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/15 text-white">
+              <Icon size={14} />
+            </span>
+          )}
+        </div>
+        <div className="mt-2 font-mono text-2xl font-semibold tabular-nums text-white">{value}</div>
+        <div className="mt-0.5 text-[12px] text-white/75">{sub}</div>
+      </div>
+    );
+  }
   return (
     <div className="card !p-4 transition-transform hover:-translate-y-0.5 hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-2">
@@ -621,22 +646,43 @@ export function DashboardView({
         <div className="space-y-6">
           <div>
             <SectionLabel>Overview</SectionLabel>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {showSmsStats ? (
-                <>
+            {showSmsStats ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard
                     label="Total Leads"
                     value={stats.total.toLocaleString()}
                     sub={`${leads.filter((l) => l.stage === 'new').length} still cold`}
+                    color="#0B1E33"
                     icon={Users}
+                    hero
+                  />
+                  <StatCard
+                    label="Qualified Leads"
+                    value={stats.qualified.toLocaleString()}
+                    sub={`${stats.qualifiedRate}% of contacted`}
+                    color="#1568A8"
+                    icon={CheckCircle2}
+                    hero
+                  />
+                  <StatCard
+                    label="Contracts"
+                    value={stats.contracts.toLocaleString()}
+                    sub={`${stats.contractRate}% of qualified leads`}
+                    color="#10b981"
+                    icon={FileSignature}
+                    hero
                   />
                   <StatCard
                     label="SMS Sent"
                     value={stats.sentInRange.toLocaleString()}
                     sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
-                    color="#0891b2"
+                    color="#C9A24B"
                     icon={MessageSquare}
+                    hero
                   />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard
                     label="Replies"
                     value={stats.repliesInRange.toLocaleString()}
@@ -652,13 +698,6 @@ export function DashboardView({
                     icon={Bot}
                   />
                   <StatCard
-                    label="Qualified Leads"
-                    value={stats.qualified.toLocaleString()}
-                    sub={`${stats.qualifiedRate}% of contacted`}
-                    color="#a78bfa"
-                    icon={CheckCircle2}
-                  />
-                  <StatCard
                     label="Calls to Qualified Leads"
                     value={stats.callsToQualified.toLocaleString()}
                     sub={
@@ -670,30 +709,25 @@ export function DashboardView({
                     icon={PhoneCall}
                   />
                   <StatCard
-                    label="Contracts"
-                    value={stats.contracts.toLocaleString()}
-                    sub={`${stats.contractRate}% of qualified leads`}
-                    color="#10b981"
-                    icon={FileSignature}
-                  />
-                  <StatCard
                     label="Opted Out / DNC"
                     value={stats.optedOut.toLocaleString()}
                     sub={`${stats.optOutRate}% of contacted`}
                     color="#ef4444"
                     icon={UserX}
                   />
-                </>
-              ) : (
-                <>
-                  <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} icon={Users} />
-                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#1568A8" icon={Phone} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} color="#0B1E33" icon={Users} hero />
                   <StatCard
                     label="Qualified Leads"
                     value={stats.qualified}
                     sub={`${stats.qualifiedRate}% of contacted`}
-                    color="#a78bfa"
+                    color="#1568A8"
                     icon={CheckCircle2}
+                    hero
                   />
                   <StatCard
                     label="Contracts"
@@ -701,7 +735,11 @@ export function DashboardView({
                     sub={`${stats.contractRate}% of qualified`}
                     color="#10b981"
                     icon={FileSignature}
+                    hero
                   />
+                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#C9A24B" icon={Phone} hero />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#1568A8" icon={Activity} />
                   <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#1568A8" icon={CalendarCheck} />
                   <StatCard
@@ -733,9 +771,9 @@ export function DashboardView({
                     color="#ef4444"
                     icon={UserX}
                   />
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
 
           {showSmsStats && stats.callsOffProcess > 0 && (
@@ -808,11 +846,12 @@ export function DashboardView({
               {showSmsStats && (
                 <div className="card chart-layer">
                   <CardHeader icon={TrendingUp} title="Lead-to-Deal Conversion Rate" sub="leads that reached Contract or further" tone="success" />
-                  <div className="mb-3 mt-3 flex items-baseline gap-2">
-                    <span className="font-mono text-3xl font-semibold tabular-nums text-text">{conversion.pct.toFixed(2)}%</span>
-                    <span className="text-[12px] text-text-3">
-                      {conversion.deals.toLocaleString()} of {conversion.total.toLocaleString()} leads
-                    </span>
+                  <div className="mb-3 mt-3">
+                    <RadialGauge
+                      pct={conversion.pct}
+                      color="#10b981"
+                      sub={`${conversion.deals.toLocaleString()} of ${conversion.total.toLocaleString()} leads`}
+                    />
                   </div>
                   <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <ConversionTrendChart data={conversionTrend} />
@@ -839,7 +878,16 @@ export function DashboardView({
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                 <div className="card">
                   <CardHeader icon={Hash} title="Pipeline Breakdown" />
-                  <div className="mt-2">
+                  <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-surface-3">
+                    {STAGE_ORDER.filter((s) => stats.stageCounts[s] > 0).map((s) => (
+                      <div
+                        key={s}
+                        style={{ width: `${(stats.stageCounts[s] / Math.max(stats.total, 1)) * 100}%`, background: STAGE_CONFIG[s].color }}
+                        title={`${STAGE_CONFIG[s].label}: ${stats.stageCounts[s]}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-3">
                     {STAGE_ORDER.map((s) => (
                       <BarRow key={s} label={STAGE_CONFIG[s].label} count={stats.stageCounts[s]} max={maxStage} color={STAGE_CONFIG[s].color} />
                     ))}

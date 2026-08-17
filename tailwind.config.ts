@@ -32,8 +32,9 @@ export default {
         mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        lg: '10px',
-        md: '8px',
+        lg: '16px',
+        md: '10px',
+        xl: '20px',
       },
       boxShadow: {
         card: '0 1px 2px 0 rgba(11, 30, 51, 0.04), 0 2px 8px 0 rgba(11, 30, 51, 0.06)',
