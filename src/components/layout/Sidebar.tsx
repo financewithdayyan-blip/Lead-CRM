@@ -109,10 +109,9 @@ export function Sidebar() {
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/leads', label: 'Leads', icon: Users },
         { to: '/kanban', label: 'Pipeline', icon: Kanban },
+        { to: '/calls', label: 'Call History', icon: History },
         ...(isOverseer ? [{ to: '/bulk-sms', label: 'Bulk SMS', icon: Send }] : []),
         ...(isOverseer ? [{ to: '/blue-docs', label: 'Blue Docs', icon: FileSignature }] : []),
-        { to: '/calls', label: 'Call History', icon: History },
-        { to: '/settings', label: 'Settings', icon: Settings },
       ];
 
   return (
@@ -123,23 +122,6 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-3">
-        <NavLink
-          to="/notifications"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
-            )
-          }
-        >
-          <Bell size={16} />
-          Notifications
-          {unreadCount > 0 && (
-            <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </NavLink>
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
@@ -171,6 +153,37 @@ export function Sidebar() {
             Team
           </NavLink>
         )}
+        {!viewingId && (
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+              )
+            }
+          >
+            <Settings size={16} />
+            Settings
+          </NavLink>
+        )}
+        <NavLink
+          to="/notifications"
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+            )
+          }
+        >
+          <Bell size={16} />
+          Notifications
+          {unreadCount > 0 && (
+            <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </NavLink>
       </nav>
 
       {isOverseer && <ViewingPullUp viewingId={viewingId} />}
