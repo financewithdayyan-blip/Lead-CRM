@@ -8,10 +8,13 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  DollarSign,
   FileSignature,
   Flame,
   Gauge,
   Hash,
+  Medal,
+  Megaphone,
   MessageSquare,
   Phone,
   PhoneCall,
@@ -20,6 +23,8 @@ import {
   Sparkles,
   Star,
   Tags as TagsIcon,
+  Target,
+  Timer,
   TrendingUp,
   Trophy,
   UserX,
@@ -41,6 +46,9 @@ import { TasksCard } from '@/components/dashboard/TasksCard';
 import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useMarketingSpend } from '@/hooks/useMarketingSpend';
+import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVelocity } from '@/hooks/useSalesKpis';
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
@@ -224,6 +232,10 @@ export function DashboardView({
   const { data: tags = [] } = useTags(userId);
   const { data: sendLog = [] } = useSendLog(showSmsStats);
   const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { data: marketingSpend = [] } = useMarketingSpend();
+  const { data: orgLeads = [] } = useOrgLeads(showSmsStats);
+  const { data: orgActivities = [] } = useOrgActivities(showSmsStats);
 
   // One control drives the whole page — every range-scoped card and the
   // trend chart below all read off this same cutoff, so nothing on screen
@@ -296,6 +308,61 @@ export function DashboardView({
         };
       });
   }, [leads]);
+
+  // ── Sales: funnel efficiency (contact/qualify/close rate) ─────────────────
+  // Real data, no new fetch — reuses the same cumulative funnel counts
+  // already computed above for the Pipeline card, just expressed as
+  // stage-to-stage percentages instead of a bar chart.
+  const funnelEfficiency = useMemo(() => {
+    const contactedOrBeyond = funnel.stages[0]?.count ?? 0;
+    const qualifiedOrBeyond = funnel.stages[3]?.count ?? 0;
+    const contractOrBeyond = funnel.stages[5]?.count ?? 0;
+    return {
+      contactRate: funnel.totalLeads > 0 ? (contactedOrBeyond / funnel.totalLeads) * 100 : 0,
+      qualifyRate: contactedOrBeyond > 0 ? (qualifiedOrBeyond / contactedOrBeyond) * 100 : 0,
+      closeRate: qualifiedOrBeyond > 0 ? (contractOrBeyond / qualifiedOrBeyond) * 100 : 0,
+    };
+  }, [funnel]);
+
+  // ── Sales: per-rep performance (real, needs >0 org-wide activity data) ────
+  const repLeaderboard = useMemo(
+    () =>
+      computeRepLeaderboard(
+        orgLeads,
+        orgActivities,
+        teamMembers.map((m) => ({ memberId: m.memberId, name: m.member.fullName || m.member.email })),
+      ),
+    [orgLeads, orgActivities, teamMembers],
+  );
+
+  // ── Sales: deal velocity (avg days between real milestones) ───────────────
+  const dealVelocity = useMemo(() => computeDealVelocity(orgLeads, orgActivities), [orgLeads, orgActivities]);
+
+  // ── Marketing: lead volume by week (are we feeding the pipeline enough) ───
+  const leadVolumeTrend = useMemo(() => {
+    const weekMap = new Map<string, number>();
+    for (const l of leads) {
+      const d = new Date(l.createdAt);
+      const weekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
+      const key = localIsoDate(weekStart);
+      weekMap.set(key, (weekMap.get(key) ?? 0) + 1);
+    }
+    return Array.from(weekMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([iso, count]) => ({ label: new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count }));
+  }, [leads]);
+
+  // ── Marketing: spend logged + how much of the lead base is source-tagged —
+  // deliberately NOT a $/lead or $/deal ratio. $444 logged (mostly software
+  // costs, not ad spend) against thousands of leads would produce a
+  // technically-real but practically meaningless number. Shown as plain
+  // totals until there's enough real, representative spend data to divide.
+  const marketingSnapshot = useMemo(() => {
+    const totalSpend = marketingSpend.reduce((sum, s) => sum + Number(s.amount), 0);
+    const tagged = leads.filter((l) => l.source && l.source.trim()).length;
+    return { totalSpend, tagged, total: leads.length, taggedPct: leads.length > 0 ? (tagged / leads.length) * 100 : 0 };
+  }, [marketingSpend, leads]);
 
   const stats = useMemo(() => {
     const total = leads.length;
@@ -943,6 +1010,127 @@ export function DashboardView({
               )}
             </div>
           </div>
+
+          {showSmsStats && (
+            <div>
+              <SectionLabel>Sales Performance</SectionLabel>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <div className="card">
+                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → close" />
+                  <div className="mt-4 space-y-4">
+                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={72} strokeWidth={8} label="Contact Rate" sub="of all leads" />
+                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={72} strokeWidth={8} label="Qualify Rate" sub="of contacted" />
+                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={72} strokeWidth={8} label="Close Rate" sub="of qualified" />
+                  </div>
+                </div>
+
+                <div className="card">
+                  <CardHeader icon={Timer} title="Deal Velocity" sub="avg. days between milestones, this year" tone="info" />
+                  <div className="mt-3 space-y-2">
+                    {dealVelocity.map((v) => (
+                      <div key={v.toLabel} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
+                        <div className="text-[12.5px] text-text-2">
+                          {v.fromLabel} → {v.toLabel}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono text-[15px] font-semibold tabular-nums text-text">
+                            {v.avgDays !== null ? `${v.avgDays.toFixed(1)}d` : '—'}
+                          </div>
+                          <div className="text-[10px] text-text-3">
+                            {v.sampleSize} lead{v.sampleSize !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card">
+                  <CardHeader icon={Medal} title="Rep Performance" sub="calls, qualify rate, contracts — this year" tone="warning" />
+                  <div className="mt-3 space-y-1.5">
+                    {repLeaderboard.length === 0 ? (
+                      <div className="text-[13px] text-text-3">No activity logged yet this year.</div>
+                    ) : (
+                      repLeaderboard.map((r, i) => (
+                        <div key={r.userId} className="flex items-center gap-2.5 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-medium text-text">{r.name}</div>
+                            <div className="text-[11px] text-text-3">
+                              {r.calls} calls · {r.qualifyRate}% qualify rate
+                            </div>
+                          </div>
+                          <div className="font-mono text-[15px] font-semibold tabular-nums text-success">{r.contracts}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showSmsStats && (
+            <div>
+              <SectionLabel>Marketing</SectionLabel>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <div className="card lg:col-span-2">
+                  <CardHeader icon={Megaphone} title="Lead Volume" sub="new leads per week, last 12 weeks" />
+                  {(() => {
+                    const max = Math.max(...leadVolumeTrend.map((w) => w.count), 1);
+                    return (
+                      <div className="mt-4 flex items-end gap-1.5" style={{ height: 120 }}>
+                        {leadVolumeTrend.map((w) => (
+                          <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
+                            <div className="flex w-full flex-1 items-end">
+                              <div
+                                className="w-full rounded-t-sm bg-primary"
+                                style={{ height: `${Math.max((w.count / max) * 100, 3)}%` }}
+                                title={`${w.count} leads`}
+                              />
+                            </div>
+                            <div className="text-[9px] text-text-3">{w.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="card">
+                  <CardHeader icon={DollarSign} title="Spend & Source Coverage" tone="accent" />
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <div className="text-[11px] text-text-3">Marketing spend logged</div>
+                      <div className="font-mono text-xl font-semibold tabular-nums text-text">
+                        ${marketingSnapshot.totalSpend.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-[11px] text-text-3">
+                        <span>Leads with a source tagged</span>
+                        <span className="font-mono tabular-nums">
+                          {marketingSnapshot.tagged.toLocaleString()} / {marketingSnapshot.total.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-surface-3">
+                        <div
+                          className="h-full rounded-full bg-accent"
+                          style={{ width: `${marketingSnapshot.taggedPct > 0 ? Math.max(marketingSnapshot.taggedPct, 2) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-text-3">
+                      Cost Per Lead and CAC need more real spend logged and more leads tagged with a source before
+                      they'd mean anything — shown as plain totals for now, not a $/lead ratio.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <SectionLabel>Activity</SectionLabel>
