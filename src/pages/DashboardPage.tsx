@@ -1,6 +1,35 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CalendarClock, MapPin, PhoneCall } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  Bot,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  FileSignature,
+  Flame,
+  Gauge,
+  Hash,
+  MapPin,
+  MessageSquare,
+  Phone,
+  PhoneCall,
+  PhoneIncoming,
+  Reply,
+  Sparkles,
+  Star,
+  Tags as TagsIcon,
+  TrendingUp,
+  Trophy,
+  UserX,
+  Users,
+  Voicemail,
+  Waypoints,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
@@ -11,6 +40,7 @@ import { formatPhone, localIsoDate } from '@/lib/utils';
 import { ScheduledCallsCard } from '@/components/dashboard/ScheduledCallsCard';
 import { TasksCard } from '@/components/dashboard/TasksCard';
 import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
+import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
@@ -88,11 +118,34 @@ function BarRow({ label, count, max, color }: { label: string; count: number; ma
   );
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub: string; color?: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  color,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  sub: string;
+  color?: string;
+  icon?: LucideIcon;
+}) {
+  const c = color ?? '#0B1E33';
   return (
-    <div className="card !p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
-      <div className="mt-1 font-mono text-2xl font-semibold tabular-nums" style={{ color: color ?? '#0B1E33' }}>
+    <div className="card !p-4 transition-transform hover:-translate-y-0.5 hover:shadow-card-hover">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+        {Icon && (
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+            style={{ background: `${c}17`, color: c }}
+          >
+            <Icon size={14} />
+          </span>
+        )}
+      </div>
+      <div className="mt-2 font-mono text-2xl font-semibold tabular-nums" style={{ color: c }}>
         {value}
       </div>
       <div className="mt-0.5 text-[12px] text-text-3">{sub}</div>
@@ -110,14 +163,14 @@ function GoalBar({ label, done, goal, periodLabel }: { label: string; done: numb
         <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">
           {label} <span className="text-text-3">· {periodLabel}</span>
         </div>
-        <div className="text-[12px] font-semibold" style={{ color }}>
+        <div className="font-mono text-[12px] font-semibold tabular-nums" style={{ color }}>
           {isDone ? 'Goal reached' : `${pct}%`}
         </div>
       </div>
       <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-3">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <div className="mt-1.5 text-[12px] text-text-2">
+      <div className="mt-1.5 font-mono text-[12px] tabular-nums text-text-2">
         {done.toLocaleString()} / {goal.toLocaleString()}
       </div>
     </div>
@@ -580,73 +633,124 @@ export function DashboardView({
       {leads.length === 0 ? (
         <div className="card text-center text-text-3">Add some leads to see stats here.</div>
       ) : (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {showSmsStats ? (
-              <>
-                <StatCard label="Total Leads" value={stats.total.toLocaleString()} sub={`${leads.filter((l) => l.stage === 'new').length} still cold`} />
-                <StatCard
-                  label="SMS Sent"
-                  value={stats.sentInRange.toLocaleString()}
-                  sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
-                  color="#0891b2"
-                />
-                <StatCard
-                  label="Replies"
-                  value={stats.repliesInRange.toLocaleString()}
-                  sub={`${stats.responseRate}% response rate`}
-                  color="#22d3ee"
-                />
-                <StatCard
-                  label="AI Auto-Replies"
-                  value={stats.aiRepliesSent.toLocaleString()}
-                  sub="drafted and sent, no human touch"
-                  color="#a78bfa"
-                />
-                <StatCard
-                  label="Qualified Leads"
-                  value={stats.qualified.toLocaleString()}
-                  sub={`${stats.qualifiedRate}% of contacted`}
-                  color="#a78bfa"
-                />
-                <StatCard
-                  label="Calls to Qualified Leads"
-                  value={stats.callsToQualified.toLocaleString()}
-                  sub={
-                    stats.callsOffProcess > 0
-                      ? `${stats.callsOffProcess} off-process this ${dateRange === 'today' ? 'day' : 'range'}`
-                      : 'all on-process'
-                  }
-                  color={stats.callsOffProcess > 0 ? '#f59e0b' : '#fb923c'}
-                />
-                <StatCard
-                  label="Contracts"
-                  value={stats.contracts.toLocaleString()}
-                  sub={`${stats.contractRate}% of qualified leads`}
-                  color="#10b981"
-                />
-                <StatCard
-                  label="Opted Out / DNC"
-                  value={stats.optedOut.toLocaleString()}
-                  sub={`${stats.optOutRate}% of contacted`}
-                  color="#ef4444"
-                />
-              </>
-            ) : (
-              <>
-                <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} />
-                <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#1568A8" />
-                <StatCard label="Qualified Leads" value={stats.qualified} sub={`${stats.qualifiedRate}% of contacted`} color="#a78bfa" />
-                <StatCard label="Contracts" value={stats.contracts} sub={`${stats.contractRate}% of qualified`} color="#10b981" />
-                <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#1568A8" />
-                <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#1568A8" />
-                <StatCard label="Pickup Ratio" value={stats.pickupRatio ?? '—'} sub="calls per real outcome" color="#0891b2" />
-                <StatCard label="Qualifying Ratio" value={`${stats.qualifyingRate}%`} sub="of calls end Qualified" color="#a78bfa" />
-                <StatCard label="Voicemail Ratio" value={`${stats.voicemailRate}%`} sub="of calls end Voicemail" color="#f59e0b" />
-                <StatCard label="Dead Ratio" value={`${stats.deadRate}%`} sub="of calls end Dead/Declined" color="#ef4444" />
-                <StatCard label="Opted Out / DNC" value={stats.optedOut} sub={`${stats.optOutRate}% of contacted`} color="#ef4444" />
-              </>
-            )}
+        <div className="space-y-6">
+          <div>
+            <SectionLabel>Overview</SectionLabel>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {showSmsStats ? (
+                <>
+                  <StatCard
+                    label="Total Leads"
+                    value={stats.total.toLocaleString()}
+                    sub={`${leads.filter((l) => l.stage === 'new').length} still cold`}
+                    icon={Users}
+                  />
+                  <StatCard
+                    label="SMS Sent"
+                    value={stats.sentInRange.toLocaleString()}
+                    sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
+                    color="#0891b2"
+                    icon={MessageSquare}
+                  />
+                  <StatCard
+                    label="Replies"
+                    value={stats.repliesInRange.toLocaleString()}
+                    sub={`${stats.responseRate}% response rate`}
+                    color="#22d3ee"
+                    icon={Reply}
+                  />
+                  <StatCard
+                    label="AI Auto-Replies"
+                    value={stats.aiRepliesSent.toLocaleString()}
+                    sub="drafted and sent, no human touch"
+                    color="#a78bfa"
+                    icon={Bot}
+                  />
+                  <StatCard
+                    label="Qualified Leads"
+                    value={stats.qualified.toLocaleString()}
+                    sub={`${stats.qualifiedRate}% of contacted`}
+                    color="#a78bfa"
+                    icon={CheckCircle2}
+                  />
+                  <StatCard
+                    label="Calls to Qualified Leads"
+                    value={stats.callsToQualified.toLocaleString()}
+                    sub={
+                      stats.callsOffProcess > 0
+                        ? `${stats.callsOffProcess} off-process this ${dateRange === 'today' ? 'day' : 'range'}`
+                        : 'all on-process'
+                    }
+                    color={stats.callsOffProcess > 0 ? '#f59e0b' : '#fb923c'}
+                    icon={PhoneCall}
+                  />
+                  <StatCard
+                    label="Contracts"
+                    value={stats.contracts.toLocaleString()}
+                    sub={`${stats.contractRate}% of qualified leads`}
+                    color="#10b981"
+                    icon={FileSignature}
+                  />
+                  <StatCard
+                    label="Opted Out / DNC"
+                    value={stats.optedOut.toLocaleString()}
+                    sub={`${stats.optOutRate}% of contacted`}
+                    color="#ef4444"
+                    icon={UserX}
+                  />
+                </>
+              ) : (
+                <>
+                  <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} icon={Users} />
+                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#1568A8" icon={Phone} />
+                  <StatCard
+                    label="Qualified Leads"
+                    value={stats.qualified}
+                    sub={`${stats.qualifiedRate}% of contacted`}
+                    color="#a78bfa"
+                    icon={CheckCircle2}
+                  />
+                  <StatCard
+                    label="Contracts"
+                    value={stats.contracts}
+                    sub={`${stats.contractRate}% of qualified`}
+                    color="#10b981"
+                    icon={FileSignature}
+                  />
+                  <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#1568A8" icon={Activity} />
+                  <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#1568A8" icon={CalendarCheck} />
+                  <StatCard
+                    label="Pickup Ratio"
+                    value={stats.pickupRatio ?? '—'}
+                    sub="calls per real outcome"
+                    color="#0891b2"
+                    icon={PhoneIncoming}
+                  />
+                  <StatCard
+                    label="Qualifying Ratio"
+                    value={`${stats.qualifyingRate}%`}
+                    sub="of calls end Qualified"
+                    color="#a78bfa"
+                    icon={TrendingUp}
+                  />
+                  <StatCard
+                    label="Voicemail Ratio"
+                    value={`${stats.voicemailRate}%`}
+                    sub="of calls end Voicemail"
+                    color="#f59e0b"
+                    icon={Voicemail}
+                  />
+                  <StatCard label="Dead Ratio" value={`${stats.deadRate}%`} sub="of calls end Dead/Declined" color="#ef4444" icon={XCircle} />
+                  <StatCard
+                    label="Opted Out / DNC"
+                    value={stats.optedOut}
+                    sub={`${stats.optOutRate}% of contacted`}
+                    color="#ef4444"
+                    icon={UserX}
+                  />
+                </>
+              )}
+            </div>
           </div>
 
           {showSmsStats && stats.callsOffProcess > 0 && (
@@ -661,155 +765,176 @@ export function DashboardView({
           )}
 
           {showSmsStats && (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <ScheduledCallsCard leads={leads} />
-              <TasksCard userId={userId} leads={leads} />
+            <div>
+              <SectionLabel>Today</SectionLabel>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <ScheduledCallsCard leads={leads} />
+                <TasksCard userId={userId} leads={leads} />
+              </div>
             </div>
           )}
 
           {!showSmsStats && (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <GoalBar label="Daily Call Goal" done={stats.callsToday} goal={profile?.dailyGoal ?? 20} periodLabel="today" />
-              <GoalBar
-                label="Monthly Call Goal"
-                done={stats.monthCalls}
-                goal={profile?.monthlyGoal ?? 400}
-                periodLabel={(() => {
-                  const n = new Date();
-                  const s = new Date(n.getFullYear(), n.getMonth(), 1);
-                  const e = new Date(n.getFullYear(), n.getMonth() + 1, 1);
-                  const fmt = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                  return `${fmt(s)} – ${fmt(e)}`;
-                })()}
-              />
+            <div>
+              <SectionLabel>Today</SectionLabel>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <GoalBar label="Daily Call Goal" done={stats.callsToday} goal={profile?.dailyGoal ?? 20} periodLabel="today" />
+                <GoalBar
+                  label="Monthly Call Goal"
+                  done={stats.monthCalls}
+                  goal={profile?.monthlyGoal ?? 400}
+                  periodLabel={(() => {
+                    const n = new Date();
+                    const s = new Date(n.getFullYear(), n.getMonth(), 1);
+                    const e = new Date(n.getFullYear(), n.getMonth() + 1, 1);
+                    const fmt = (d: Date) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    return `${fmt(s)} – ${fmt(e)}`;
+                  })()}
+                />
+              </div>
             </div>
           )}
 
-          {showSmsStats && (
-            <div className="card chart-layer">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-text">Pipeline Activity</h3>
-                <span className="text-[11px] text-text-3">SMS sent, replies, newly qualified, and calls to qualified leads · {rangeLabel}</span>
-              </div>
-              <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                <PipelineActivityChart data={activityTrend} />
-              </Suspense>
-            </div>
-          )}
+          <div>
+            <SectionLabel>Performance</SectionLabel>
+            <div className="space-y-3">
+              {showSmsStats && (
+                <div className="card chart-layer">
+                  <CardHeader icon={Waypoints} title="Pipeline Activity" sub={`SMS sent, replies, newly qualified, and calls to qualified leads · ${rangeLabel}`} />
+                  <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3">
+                      <PipelineActivityChart data={activityTrend} />
+                    </div>
+                  </Suspense>
+                </div>
+              )}
 
-          {!showSmsStats && (
-            <div className="card">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-text">Calling Progress</h3>
-                <span className="text-[11px] text-text-3">Total calls, voicemails, dead, and qualified · last {trendDayCount} days</span>
-              </div>
-              <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                <CallProgressChart data={callsTrend} />
-              </Suspense>
-            </div>
-          )}
+              {!showSmsStats && (
+                <div className="card">
+                  <CardHeader icon={Waypoints} title="Calling Progress" sub={`Total calls, voicemails, dead, and qualified · last ${trendDayCount} days`} />
+                  <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3">
+                      <CallProgressChart data={callsTrend} />
+                    </div>
+                  </Suspense>
+                </div>
+              )}
 
-          {showSmsStats && (
-            <div className="card chart-layer">
-              <div className="mb-1 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-text">Pipeline</h3>
-                <span className="text-[11px] text-text-3">cumulative — reached stage or further</span>
-              </div>
-              <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
-                <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
-              </Suspense>
-            </div>
-          )}
-
-          {showSmsStats && (
-            <div className="card chart-layer">
-              <div className="mb-1 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-text">Lead-to-Deal Conversion Rate</h3>
-                <span className="text-[11px] text-text-3">leads that reached Contract or further</span>
-              </div>
-              <div className="mb-3 flex items-baseline gap-2">
-                <span className="font-mono text-3xl font-semibold tabular-nums text-text">{conversion.pct.toFixed(2)}%</span>
-                <span className="text-[12px] text-text-3">
-                  {conversion.deals.toLocaleString()} of {conversion.total.toLocaleString()} leads
-                </span>
-              </div>
-              <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                <ConversionTrendChart data={conversionTrend} />
-              </Suspense>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <div className="card">
-              <h3 className="mb-2 text-sm font-semibold text-text">Pipeline Breakdown</h3>
-              {STAGE_ORDER.map((s) => (
-                <BarRow key={s} label={STAGE_CONFIG[s].label} count={stats.stageCounts[s]} max={maxStage} color={STAGE_CONFIG[s].color} />
-              ))}
-            </div>
-            <div className="card">
-              <h3 className="mb-2 text-sm font-semibold text-text">Rating Breakdown</h3>
-              {[5, 4, 3, 2, 1].map((s) => (
-                <BarRow key={s} label={'★'.repeat(s) + '☆'.repeat(5 - s)} count={stats.ratingCounts[s - 1]} max={maxRating} color="#f59e0b" />
-              ))}
-            </div>
-            {showSmsStats ? (
-              <div className="card">
-                <h3 className="mb-2 text-sm font-semibold text-text">Sent By Number</h3>
-                {stats.numberCounts.length === 0 ? (
-                  <div className="text-[13px] text-text-3">No sends in this range.</div>
-                ) : (
-                  stats.numberCounts.map((n) => <BarRow key={n.phone} label={n.label} count={n.count} max={maxNumber} color="#0891b2" />)
-                )}
-              </div>
-            ) : (
-              <div className="card">
-                <h3 className="mb-2 text-sm font-semibold text-text">Tag Breakdown</h3>
-                {stats.tagCounts.length === 0 && <div className="text-[13px] text-text-3">No tagged leads yet.</div>}
-                {stats.tagCounts.map(({ tag, count }) => (
-                  <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {showSmsStats && (
-            <div className="card">
-              <h3 className="mb-2 text-sm font-semibold text-text">Tag Breakdown</h3>
-              {stats.tagCounts.length === 0 ? (
-                <div className="text-[13px] text-text-3">No tagged leads yet.</div>
-              ) : (
-                <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
-                  {stats.tagCounts.map(({ tag, count }) => (
-                    <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
-                  ))}
+              {showSmsStats && (
+                <div className="card chart-layer">
+                  <CardHeader icon={TrendingUp} title="Lead-to-Deal Conversion Rate" sub="leads that reached Contract or further" tone="success" />
+                  <div className="mb-3 mt-3 flex items-baseline gap-2">
+                    <span className="font-mono text-3xl font-semibold tabular-nums text-text">{conversion.pct.toFixed(2)}%</span>
+                    <span className="text-[12px] text-text-3">
+                      {conversion.deals.toLocaleString()} of {conversion.total.toLocaleString()} leads
+                    </span>
+                  </div>
+                  <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <ConversionTrendChart data={conversionTrend} />
+                  </Suspense>
                 </div>
               )}
             </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard
-              label="Current Streak"
-              value={heatmap.currentStreak}
-              sub={heatmap.currentStreak === 0 ? 'Start today!' : `${heatmap.currentStreak} day${heatmap.currentStreak !== 1 ? 's' : ''} in a row`}
-              color="#f59e0b"
-            />
-            <StatCard label="Active Days" value={heatmap.activeDays} sub="active days this year" color="#10b981" />
-            <StatCard label="Best Streak" value={heatmap.bestStreak} sub="personal best" color="#06b6d4" />
-            <StatCard
-              label="This Week"
-              value={`${heatmap.thisWeekActive}/${heatmap.thisWeekTotal}`}
-              sub="days active so far"
-              color="#a78bfa"
-            />
           </div>
 
-          <div className="card overflow-x-auto">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-success" />
-              <h3 className="text-sm font-semibold text-text">Activity — {new Date().getFullYear()}</h3>
+          <div>
+            <SectionLabel>Pipeline</SectionLabel>
+            <div className="space-y-3">
+              {showSmsStats && (
+                <div className="card chart-layer">
+                  <CardHeader icon={Gauge} title="Pipeline" sub="cumulative — reached stage or further" />
+                  <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
+                    <div className="mt-3">
+                      <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
+                    </div>
+                  </Suspense>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <div className="card">
+                  <CardHeader icon={Hash} title="Pipeline Breakdown" />
+                  <div className="mt-2">
+                    {STAGE_ORDER.map((s) => (
+                      <BarRow key={s} label={STAGE_CONFIG[s].label} count={stats.stageCounts[s]} max={maxStage} color={STAGE_CONFIG[s].color} />
+                    ))}
+                  </div>
+                </div>
+                <div className="card">
+                  <CardHeader icon={Star} title="Rating Breakdown" tone="warning" />
+                  <div className="mt-2">
+                    {[5, 4, 3, 2, 1].map((s) => (
+                      <BarRow key={s} label={'★'.repeat(s) + '☆'.repeat(5 - s)} count={stats.ratingCounts[s - 1]} max={maxRating} color="#f59e0b" />
+                    ))}
+                  </div>
+                </div>
+                {showSmsStats ? (
+                  <div className="card">
+                    <CardHeader icon={Phone} title="Sent By Number" tone="info" />
+                    <div className="mt-2">
+                      {stats.numberCounts.length === 0 ? (
+                        <div className="text-[13px] text-text-3">No sends in this range.</div>
+                      ) : (
+                        stats.numberCounts.map((n) => <BarRow key={n.phone} label={n.label} count={n.count} max={maxNumber} color="#0891b2" />)
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="card">
+                    <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
+                    <div className="mt-2">
+                      {stats.tagCounts.length === 0 && <div className="text-[13px] text-text-3">No tagged leads yet.</div>}
+                      {stats.tagCounts.map(({ tag, count }) => (
+                        <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {showSmsStats && (
+                <div className="card">
+                  <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
+                  <div className="mt-2">
+                    {stats.tagCounts.length === 0 ? (
+                      <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
+                        {stats.tagCounts.map(({ tag, count }) => (
+                          <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex">
+          </div>
+
+          <div>
+            <SectionLabel>Activity</SectionLabel>
+            <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard
+                label="Current Streak"
+                value={heatmap.currentStreak}
+                sub={heatmap.currentStreak === 0 ? 'Start today!' : `${heatmap.currentStreak} day${heatmap.currentStreak !== 1 ? 's' : ''} in a row`}
+                color="#f59e0b"
+                icon={Flame}
+              />
+              <StatCard label="Active Days" value={heatmap.activeDays} sub="active days this year" color="#10b981" icon={CalendarDays} />
+              <StatCard label="Best Streak" value={heatmap.bestStreak} sub="personal best" color="#06b6d4" icon={Trophy} />
+              <StatCard
+                label="This Week"
+                value={`${heatmap.thisWeekActive}/${heatmap.thisWeekTotal}`}
+                sub="days active so far"
+                color="#a78bfa"
+                icon={Sparkles}
+              />
+            </div>
+
+            <div className="card overflow-x-auto">
+              <CardHeader icon={CalendarDays} title={`Activity — ${new Date().getFullYear()}`} tone="success" />
+              <div className="mt-4 flex">
               <div className="mr-2 flex flex-col gap-[3px] pt-[17px] text-[10px] text-text-3">
                 {WEEKDAY_LABELS.map((label, i) => (
                   <div key={i} className="flex h-3 items-center">
@@ -865,6 +990,7 @@ export function DashboardView({
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}

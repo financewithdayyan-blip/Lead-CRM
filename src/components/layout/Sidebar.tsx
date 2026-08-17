@@ -19,6 +19,13 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
   );
 }
 
+/** Small uppercase eyebrow above a group of nav items — turns a flat list
+ * into scannable sections (Workspace / Admin / Account) instead of one
+ * undifferentiated stack. */
+function NavGroupLabel({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1 mt-3 px-[10px] text-[10px] font-semibold uppercase tracking-wider text-sidebar-text/60 first:mt-0">{children}</div>;
+}
+
 function ViewingPullUp({ viewingId }: { viewingId?: string }) {
   const navigate = useNavigate();
   const { data: members = [] } = useTeamMembers();
@@ -110,69 +117,104 @@ export function Sidebar() {
   const viewingId = match?.params.memberId;
   const { unreadCount } = useNotificationsContext();
 
-  const navItems = viewingId
+  const workspaceItems = viewingId
     ? [
         { to: `/team/${viewingId}`, label: 'Dashboard', icon: LayoutDashboard },
         { to: `/team/${viewingId}/leads`, label: 'Leads', icon: Users },
         { to: `/team/${viewingId}/kanban`, label: 'Kanban', icon: Kanban },
-        { to: `/team/${viewingId}/settings`, label: 'Settings', icon: Settings },
       ]
     : [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/leads', label: 'Leads', icon: Users },
         { to: '/kanban', label: 'Kanban', icon: Kanban },
         { to: '/calls', label: 'Call History', icon: History },
-        ...(isOverseer ? [{ to: '/bulk-sms', label: 'Bulk SMS', icon: Send }] : []),
-        ...(isOverseer ? [{ to: '/blue-docs', label: 'Blue Docs', icon: FileSignature }] : []),
       ];
+
+  const adminItems = isOverseer && !viewingId
+    ? [
+        { to: '/bulk-sms', label: 'Bulk SMS', icon: Send },
+        { to: '/blue-docs', label: 'Blue Docs', icon: FileSignature },
+      ]
+    : [];
 
   return (
     <aside className="flex h-full w-60 flex-col bg-sidebar">
-      <div className="flex items-center gap-2.5 px-5 py-5">
+      <div className="flex items-center gap-2.5 border-b border-sidebar-border px-5 py-5">
         <img src="/logo-mark.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
-        <span className="text-base font-semibold text-sidebar-textActive">BlueBird CRM</span>
+        <div className="min-w-0">
+          <div className="font-serif text-base font-semibold leading-tight text-sidebar-textActive">BlueBird</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-text">CRM</div>
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end={to === '/' || !!viewingId} className={navLinkClass}>
-            <Icon size={16} />
-            {label}
-          </NavLink>
-        ))}
-        {isOverseer && !viewingId && (
-          <NavLink to="/team" end className={navLinkClass}>
-            <Shield size={16} />
-            Team
-          </NavLink>
+      <nav className="flex-1 overflow-y-auto px-3 py-3">
+        <NavGroupLabel>Workspace</NavGroupLabel>
+        <div className="space-y-1">
+          {workspaceItems.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} end={to === '/' || !!viewingId} className={navLinkClass}>
+              <Icon size={16} />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+
+        {adminItems.length > 0 && (
+          <>
+            <NavGroupLabel>Admin</NavGroupLabel>
+            <div className="space-y-1">
+              {adminItems.map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={to} className={navLinkClass}>
+                  <Icon size={16} />
+                  {label}
+                </NavLink>
+              ))}
+              {!viewingId && (
+                <NavLink to="/team" end className={navLinkClass}>
+                  <Shield size={16} />
+                  Team
+                </NavLink>
+              )}
+            </div>
+          </>
         )}
-        {!viewingId && (
-          <NavLink to="/settings" className={navLinkClass}>
-            <Settings size={16} />
-            Settings
-          </NavLink>
-        )}
-        <NavLink to="/notifications" className={navLinkClass}>
-          <Bell size={16} />
-          Notifications
-          {unreadCount > 0 && (
-            <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+
+        <NavGroupLabel>Account</NavGroupLabel>
+        <div className="space-y-1">
+          {viewingId ? (
+            <NavLink to={`/team/${viewingId}/settings`} className={navLinkClass}>
+              <Settings size={16} />
+              Settings
+            </NavLink>
+          ) : (
+            <NavLink to="/settings" className={navLinkClass}>
+              <Settings size={16} />
+              Settings
+            </NavLink>
           )}
-        </NavLink>
+          <NavLink to="/notifications" className={navLinkClass}>
+            <Bell size={16} />
+            Notifications
+            {unreadCount > 0 && (
+              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </NavLink>
+        </div>
       </nav>
 
       {isOverseer && <ViewingPullUp viewingId={viewingId} />}
 
-      <div className="border-t border-sidebar-border px-3 py-3">
-        <div className="mb-2 flex items-center gap-2.5 px-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-2 text-[11px] font-semibold text-sidebar-textActive">
+      <div className="border-t border-sidebar-border p-3">
+        <div className="mb-2 flex items-center gap-2.5 rounded-md bg-sidebar-2 px-2.5 py-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white">
             {initials(first ?? profile?.email ?? '', last ?? '')}
           </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-sidebar-textActive">{profile?.fullName ?? profile?.email}</div>
-            <div className="text-[11px] capitalize text-sidebar-text">{profile?.role}</div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-medium text-sidebar-textActive">{profile?.fullName ?? profile?.email}</div>
+            <span className="mt-0.5 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-accent">
+              {profile?.role}
+            </span>
           </div>
         </div>
         <button
