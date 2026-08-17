@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Ban, Bell, Check, CheckCircle2, Clock, Copy, Download, Eye, Loader2, MapPin, Send, Trash2 } from 'lucide-react';
+import { Ban, Bell, Check, CheckCircle2, Clock, Copy, Download, Eye, Loader2, MapPin, PartyPopper, Send, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
 import { formatDateTime, formatPhone } from '@/lib/utils';
@@ -186,6 +186,13 @@ export function ContractInstanceRow({
           </button>
         </div>
       </div>
+
+      {signed && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-300/70 bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 px-3 py-2 text-[12px] font-semibold text-amber-800 shadow-sm">
+          <PartyPopper size={15} className="shrink-0 text-amber-600" />
+          Deal closed — contract fully signed. Congrats! 🎉
+        </div>
+      )}
 
       <div className="mt-3 space-y-0">
         {orderedParties.map((p, i) => {
