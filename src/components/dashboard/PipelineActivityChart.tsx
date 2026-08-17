@@ -18,7 +18,7 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           {[
-            ['gSent', '#0ea5e9'],
+            ['gSent', '#0891b2'],
             ['gReplies', '#22d3ee'],
             ['gQualified', '#a78bfa'],
             ['gCalls', '#fb923c'],
@@ -30,16 +30,16 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           ))}
         </defs>
         <CartesianGrid stroke="#e2e8f0" vertical={false} />
-        <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-        <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+        <XAxis dataKey="label" stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} />
+        <YAxis stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
         <Tooltip
-          cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
+          cursor={{ stroke: '#8693A1', strokeWidth: 1, strokeDasharray: '4 4' }}
           contentStyle={{
             background: '#ffffff',
             border: '1px solid #e2e8f0',
             borderRadius: 10,
             fontSize: 12,
-            boxShadow: '0 10px 25px -8px rgba(15,23,42,0.25)',
+            boxShadow: '0 10px 25px -8px rgba(11,30,51,0.25)',
             padding: '8px 12px',
           }}
           itemStyle={{ padding: '1px 0' }}
@@ -49,7 +49,7 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           type="linear"
           dataKey="sent"
           name="SMS Sent"
-          stroke="#0ea5e9"
+          stroke="#0891b2"
           fill="url(#gSent)"
           strokeWidth={2.5}
           dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#0ea5e9' }}

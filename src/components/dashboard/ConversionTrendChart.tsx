@@ -17,8 +17,8 @@ export function ConversionTrendChart({ data }: { data: ConversionTrendPoint[] })
     <ResponsiveContainer width="100%" height={240}>
       <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid stroke="#e2e8f0" vertical={false} />
-        <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-        <YAxis yAxisId="leads" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
+        <XAxis dataKey="month" stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} />
+        <YAxis yAxisId="leads" stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
         <YAxis
           yAxisId="pct"
           orientation="right"
@@ -36,12 +36,12 @@ export function ConversionTrendChart({ data }: { data: ConversionTrendPoint[] })
             border: '1px solid #e2e8f0',
             borderRadius: 10,
             fontSize: 12,
-            boxShadow: '0 10px 25px -8px rgba(15,23,42,0.25)',
+            boxShadow: '0 10px 25px -8px rgba(11,30,51,0.25)',
             padding: '8px 12px',
           }}
           formatter={(value, name) => (name === 'Conversion Rate' ? [`${value}%`, name] : [value, name])}
         />
-        <Bar yAxisId="leads" dataKey="leadCount" name="Leads Created" fill="#bfdbfe" radius={[3, 3, 0, 0]} />
+        <Bar yAxisId="leads" dataKey="leadCount" name="Leads Created" fill="#BBD8EC" radius={[3, 3, 0, 0]} />
         <Line
           yAxisId="pct"
           type="monotone"

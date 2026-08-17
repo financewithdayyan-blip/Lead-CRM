@@ -7,6 +7,18 @@ import { usePresence } from '@/contexts/PresenceContext';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import { cn, initials } from '@/lib/utils';
 
+/** Active nav item reads as a left accent bar in the brand blue rather than
+ * just a background swap — both states keep the same border width (just
+ * transparent when inactive) so content never shifts on navigation. */
+function navLinkClass({ isActive }: { isActive: boolean }) {
+  return cn(
+    'flex items-center gap-2.5 rounded-md border-l-2 py-2 pl-[10px] pr-3 text-sm font-medium transition-colors',
+    isActive
+      ? 'border-primary bg-sidebar-2 text-sidebar-textActive'
+      : 'border-transparent text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+  );
+}
+
 function ViewingPullUp({ viewingId }: { viewingId?: string }) {
   const navigate = useNavigate();
   const { data: members = [] } = useTeamMembers();
@@ -123,59 +135,24 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 px-3">
         {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/' || !!viewingId}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
-              )
-            }
-          >
+          <NavLink key={to} to={to} end={to === '/' || !!viewingId} className={navLinkClass}>
             <Icon size={16} />
             {label}
           </NavLink>
         ))}
         {isOverseer && !viewingId && (
-          <NavLink
-            to="/team"
-            end
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
-              )
-            }
-          >
+          <NavLink to="/team" end className={navLinkClass}>
             <Shield size={16} />
             Team
           </NavLink>
         )}
         {!viewingId && (
-          <NavLink
-            to="/settings"
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
-              )
-            }
-          >
+          <NavLink to="/settings" className={navLinkClass}>
             <Settings size={16} />
             Settings
           </NavLink>
         )}
-        <NavLink
-          to="/notifications"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              isActive ? 'bg-sidebar-2 text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
-            )
-          }
-        >
+        <NavLink to="/notifications" className={navLinkClass}>
           <Bell size={16} />
           Notifications
           {unreadCount > 0 && (

@@ -52,8 +52,8 @@ const FUNNEL_LABELS: Record<FunnelKey, string> = {
 // Matches STAGE_CONFIG's own colors for initial_contact/followup exactly,
 // rather than reusing one color for both now that they're separate bars.
 const FUNNEL_COLORS: Record<FunnelKey, string> = {
-  contacted: '#38bdf8',
-  replied: '#22d3ee',
+  contacted: '#5B9BD5',
+  replied: '#0891b2',
   partial_qualified: '#a78bfa',
   qualified: '#c084fc',
   negotiation: '#fb923c',
@@ -92,7 +92,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string |
   return (
     <div className="card !p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
-      <div className="mt-1 text-2xl font-semibold" style={{ color: color ?? '#0f172a' }}>
+      <div className="mt-1 font-mono text-2xl font-semibold tabular-nums" style={{ color: color ?? '#0B1E33' }}>
         {value}
       </div>
       <div className="mt-0.5 text-[12px] text-text-3">{sub}</div>
@@ -103,7 +103,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string |
 function GoalBar({ label, done, goal, periodLabel }: { label: string; done: number; goal: number; periodLabel: string }) {
   const pct = Math.min(100, Math.round((done / goal) * 100));
   const isDone = done >= goal;
-  const color = isDone ? '#10b981' : pct >= 70 ? '#4f46e5' : pct >= 40 ? '#f59e0b' : '#ef4444';
+  const color = isDone ? '#10b981' : pct >= 70 ? '#1568A8' : pct >= 40 ? '#f59e0b' : '#ef4444';
   return (
     <div className="card !p-4">
       <div className="flex items-center justify-between">
@@ -520,7 +520,7 @@ export function DashboardView({
     if (count === 0) return '#f1f5f9';
     const level = Math.min(5, Math.max(1, Math.ceil((count / max) * 5)));
     const alpha = 0.15 + level * 0.17;
-    return `rgba(79,70,229,${alpha.toFixed(2)})`;
+    return `rgba(21,104,168,${alpha.toFixed(2)})`;
   }
 
   function formatFullDate(iso: string) {
@@ -535,7 +535,7 @@ export function DashboardView({
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-text">{heading}</h1>
+          <h1 className="font-serif text-2xl font-semibold text-text">{heading}</h1>
           <p className="text-sm text-text-3">{subtitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -589,7 +589,7 @@ export function DashboardView({
                   label="SMS Sent"
                   value={stats.sentInRange.toLocaleString()}
                   sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
-                  color="#0ea5e9"
+                  color="#0891b2"
                 />
                 <StatCard
                   label="Replies"
@@ -635,12 +635,12 @@ export function DashboardView({
             ) : (
               <>
                 <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} />
-                <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#4f46e5" />
+                <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#1568A8" />
                 <StatCard label="Qualified Leads" value={stats.qualified} sub={`${stats.qualifiedRate}% of contacted`} color="#a78bfa" />
                 <StatCard label="Contracts" value={stats.contracts} sub={`${stats.contractRate}% of qualified`} color="#10b981" />
-                <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#4f46e5" />
-                <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#4f46e5" />
-                <StatCard label="Pickup Ratio" value={stats.pickupRatio ?? '—'} sub="calls per real outcome" color="#0ea5e9" />
+                <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#1568A8" />
+                <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#1568A8" />
+                <StatCard label="Pickup Ratio" value={stats.pickupRatio ?? '—'} sub="calls per real outcome" color="#0891b2" />
                 <StatCard label="Qualifying Ratio" value={`${stats.qualifyingRate}%`} sub="of calls end Qualified" color="#a78bfa" />
                 <StatCard label="Voicemail Ratio" value={`${stats.voicemailRate}%`} sub="of calls end Voicemail" color="#f59e0b" />
                 <StatCard label="Dead Ratio" value={`${stats.deadRate}%`} sub="of calls end Dead/Declined" color="#ef4444" />
@@ -728,7 +728,7 @@ export function DashboardView({
                 <span className="text-[11px] text-text-3">leads that reached Contract or further</span>
               </div>
               <div className="mb-3 flex items-baseline gap-2">
-                <span className="text-3xl font-semibold text-text">{conversion.pct.toFixed(2)}%</span>
+                <span className="font-mono text-3xl font-semibold tabular-nums text-text">{conversion.pct.toFixed(2)}%</span>
                 <span className="text-[12px] text-text-3">
                   {conversion.deals.toLocaleString()} of {conversion.total.toLocaleString()} leads
                 </span>
@@ -758,7 +758,7 @@ export function DashboardView({
                 {stats.numberCounts.length === 0 ? (
                   <div className="text-[13px] text-text-3">No sends in this range.</div>
                 ) : (
-                  stats.numberCounts.map((n) => <BarRow key={n.phone} label={n.label} count={n.count} max={maxNumber} color="#0ea5e9" />)
+                  stats.numberCounts.map((n) => <BarRow key={n.phone} label={n.label} count={n.count} max={maxNumber} color="#0891b2" />)
                 )}
               </div>
             ) : (

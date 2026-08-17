@@ -57,7 +57,7 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   contract: { label: 'Contract', color: '#10b981' },
   // Post-contract, admin-only stages — a deal in title work, then closed.
   in_title: { label: 'In Title', color: '#6366f1' },
-  closed: { label: 'Closed', color: '#eab308' },
+  closed: { label: 'Closed', color: '#C9A24B' },
   dead_declined: { label: 'Dead / Declined', color: '#ef4444' },
   onhold: { label: 'On Hold', color: '#2dd4bf' },
   // Catch-all — leads moved here manually for reasons that don't fit
