@@ -192,16 +192,18 @@ export function ContractInstanceRow({
       </div>
 
       {signed && (
-        <div className="relative mt-3 overflow-hidden rounded-lg bg-gradient-to-r from-[#0B1E33] via-[#132A45] to-[#0B1E33] px-4 py-3.5">
-          <div className="relative mx-1 flex items-center gap-2 overflow-hidden bg-gradient-to-r from-accent-hover via-accent to-accent-hover py-2 pl-4 pr-14 shadow-[0_2px_6px_rgba(0,0,0,0.3)] [clip-path:polygon(1.5%_0,98.5%_0,100%_50%,98.5%_100%,1.5%_100%,0_50%)]">
+        <div className="relative mt-3 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#0B1E33] via-[#0f2745] to-[#0B1E33] px-3 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="relative mx-9 flex items-center gap-2 overflow-hidden bg-gradient-to-r from-[#b3893a] via-[#e2c17c] to-[#b3893a] py-2.5 pl-5 pr-6 shadow-[0_3px_10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] [clip-path:polygon(0%_0%,96%_0%,100%_50%,96%_100%,0%_100%,4%_50%)]">
             <Handshake size={13} className="shrink-0 text-[#0B1E33]" />
-            <span className="text-[12px] font-semibold tracking-wide text-[#0B1E33]">Deal closed — contract fully signed</span>
-            <Sparkles size={11} className="pointer-events-none absolute right-8 top-1.5 text-white/60" />
-            <Sparkles size={8} className="pointer-events-none absolute right-16 bottom-1.5 text-white/45" />
-            <Sparkles size={9} className="pointer-events-none absolute right-3 bottom-1 text-white/35" />
+            <span className="text-[12.5px] font-semibold tracking-wide text-[#0B1E33]">Deal closed — contract fully signed</span>
+            <Sparkles size={12} className="pointer-events-none absolute right-12 top-1.5 text-white/55" />
+            <Sparkles size={8} className="pointer-events-none absolute right-24 bottom-1.5 text-white/40" />
+            <Sparkles size={9} className="pointer-events-none absolute right-6 bottom-1.5 text-white/30" />
           </div>
-          <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed border-[#0B1E33]/70 bg-gradient-to-br from-[#e7c988] to-accent shadow-[0_0_0_3px_#0B1E33]">
-            <Handshake size={14} className="text-[#0B1E33]" />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0B1E33] shadow-[0_2px_10px_rgba(0,0,0,0.45)]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-accent/80 bg-gradient-to-br from-[#eccf94] to-accent">
+              <Handshake size={15} className="text-[#0B1E33]" />
+            </div>
           </div>
         </div>
       )}
