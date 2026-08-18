@@ -124,7 +124,6 @@ export interface ScriptAnswers {
   // Motivation
   motivation_owned?: string;
   motivation_reason?: string;
-  motivation_now?: string;
   // Condition
   condition_general?: string;
   condition_rating?: string;

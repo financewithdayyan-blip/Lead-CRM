@@ -28,7 +28,6 @@ const STEPS_BEFORE_MORTGAGE: ScriptStepDef[] = [
     questions: [
       { key: 'motivation_owned', prompt: 'How long have you owned it?' },
       { key: 'motivation_reason', prompt: "What's the motivation for you to sell?" },
-      { key: 'motivation_now', prompt: 'Why are you looking to sell now?' },
     ],
   },
   {

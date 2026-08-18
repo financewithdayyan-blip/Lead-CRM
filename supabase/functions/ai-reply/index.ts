@@ -734,7 +734,6 @@ Deno.serve(async (req) => {
                       confirmation_owner: { type: 'string', description: "How they confirmed being the owner (or someone who can speak for them) — e.g. \"Yes, I own it\" or \"I'm his daughter, he passed away.\" Only fill in once, the first time this is actually established." },
                       motivation_owned: { type: 'string', description: 'How long they said they have owned the property.' },
                       motivation_reason: { type: 'string', description: "Their stated motivation for selling." },
-                      motivation_now: { type: 'string', description: 'Why they are looking to sell now specifically, if said separately from the general motivation.' },
                       condition_general: { type: 'string', description: 'General condition of the property as they described it.' },
                       condition_rating: { type: 'string', description: 'Their self-rating out of 10.' },
                       condition_issues: { type: 'string', description: 'Catch-all for issues that are NOT HVAC, plumbing, or roof — electrical, foundation, windows/doors, mold, pests, etc. belong here, never in condition_hvac.' },
