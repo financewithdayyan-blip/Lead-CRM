@@ -1262,21 +1262,21 @@ section{ padding: 120px 0; position:relative; }
   background-size: 26px 26px;
   opacity:0.3;
 }
-.cta-inner{
+.cta-grid{
   position:relative; z-index:2;
-  text-align:center;
-  max-width: 680px;
-  margin: 0 auto;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
+  align-items:center;
 }
-.cta-inner h2{
+.cta-text h2{
   font-size: clamp(30px,4vw,46px);
   color: var(--white);
   margin-bottom: 18px;
 }
-.cta-inner p{
+.cta-text p{
   font-size: 17px;
   color: rgba(255,255,255,0.85);
-  margin-bottom: 36px;
   line-height:1.6;
 }
 .cta-band .btn-primary{
@@ -1285,6 +1285,15 @@ section{ padding: 120px 0; position:relative; }
   box-shadow: 0 16px 36px -10px rgba(0,0,0,0.35);
 }
 .cta-band .btn-primary:hover{ background: var(--brass-soft); color: var(--ink); }
+.cta-form-card{
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow-deep);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.cta-form-card .field{ margin-bottom: 16px; }
+.cta-form-card .field:last-of-type{ margin-bottom: 20px; }
 
 /* ============================================
    CONTACT FORM
@@ -1637,7 +1646,7 @@ footer{
   .blog-preview-grid{ grid-template-columns:1fr; }
   .hero-inner{ grid-template-columns:1fr; }
   .hero-scene{ height:420px; order:-1; margin-top:20px; }
-  .burden-grid, .market-grid, .contact-grid{ grid-template-columns:1fr; }
+  .burden-grid, .market-grid, .contact-grid, .cta-grid{ grid-template-columns:1fr; }
   .burden-visual{ order:-1; max-width:420px; margin:0 auto 48px; }
   .offers-grid{ grid-template-columns:1fr; }
   .promise-grid{ grid-template-columns:1fr 1fr; }
@@ -1999,13 +2008,30 @@ footer{
      CTA BAND
      ============================================ -->
 <section class="cta-band">
-  <div class="container cta-inner reveal">
-    <h2>Ready to put the deadline behind you?</h2>
-    <p>Tell us about your property. We'll review your situation and get back to you with a real offer — usually within 24 hours.</p>
-    <a href="/contact-us" class="btn-primary">
-      Start My Free Offer
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-    </a>
+  <div class="container cta-grid">
+    <div class="cta-text reveal">
+      <h2>Ready to put the deadline behind you?</h2>
+      <p>Tell us about your property. We'll review your situation and get back to you with a real offer — usually within 24 hours.</p>
+    </div>
+    <form class="cta-form-card reveal" id="ctaQuickForm">
+      <div class="field">
+        <label for="ctaName">Name</label>
+        <input type="text" id="ctaName" name="ctaName" placeholder="Jordan Carter" required>
+      </div>
+      <div class="field">
+        <label for="ctaPhone">Phone Number</label>
+        <input type="tel" id="ctaPhone" name="ctaPhone" placeholder="(217) 408-2781" required>
+      </div>
+      <div class="field">
+        <label for="ctaDesc">Tell Us About Your Property</label>
+        <textarea id="ctaDesc" name="ctaDesc" placeholder="Address, situation, timeline..." required></textarea>
+      </div>
+      <button type="submit" class="form-submit">
+        Start My Free Offer
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+      <div class="form-note">No obligation. We respond within 1 business day.</div>
+    </form>
   </div>
 </section>
 
@@ -2483,6 +2509,52 @@ const io = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
 revealEls.forEach(el => io.observe(el));
+
+// ===== Homepage quick-offer form (CTA band) =====
+// Posts into the CRM's own web_leads table (same one the full Contact Us
+// page uses, and the same one the CRM's Notifications page already reads
+// from) — not a separate/legacy backend.
+(function(){
+  var form = document.getElementById('ctaQuickForm');
+  if (!form) return;
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var btn = form.querySelector('.form-submit');
+    var note = form.querySelector('.form-note');
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Sending&hellip;';
+
+    var fullName = form.ctaName.value.trim();
+    var spaceAt = fullName.indexOf(' ');
+    var firstName = spaceAt === -1 ? fullName : fullName.slice(0, spaceAt);
+    var lastName = spaceAt === -1 ? '' : fullName.slice(spaceAt + 1).trim();
+
+    fetch('https://ggfpvrdxqopippzqkojr.supabase.co/rest/v1/web_leads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZnB2cmR4cW9waXBwenFrb2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMjUzNTgsImV4cCI6MjA5OTgwMTM1OH0.5sxa2PkS5Ed3M-lOmY1hwutmPMHXViEBRLLqZxj_Atg',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZnB2cmR4cW9waXBwenFrb2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMjUzNTgsImV4cCI6MjA5OTgwMTM1OH0.5sxa2PkS5Ed3M-lOmY1hwutmPMHXViEBRLLqZxj_Atg',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        phone: form.ctaPhone.value.trim(),
+        property_address: '',
+        notes: form.ctaDesc.value.trim()
+      })
+    }).then(function(res){
+      if (!res.ok) throw new Error();
+      form.innerHTML = '<div style="text-align:center;padding:32px 8px;"><svg width="48" height="48" viewBox="0 0 54 54" fill="none" style="display:block;margin:0 auto 16px"><circle cx="27" cy="27" r="27" fill="rgba(30,143,213,.1)"/><path d="M16 27l8 8 15-17" stroke="#1E8FD5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><h3 style="font-family:var(--serif);font-size:1.2rem;font-weight:700;color:var(--ink);margin:0 0 8px">We received your inquiry!</h3><p style="font-size:.88rem;color:var(--slate);line-height:1.6;max-width:280px;margin:0 auto">Our team will reach out within 1 business day.</p></div>';
+    }).catch(function(){
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      if (note) { note.textContent = 'Something went wrong — please call (217) 408-2781.'; note.style.color = '#ef4444'; }
+    });
+  });
+})();
 
 // ===== US Map: real state geography via TopoJSON, target states highlighted =====
 const mapVisual = document.getElementById('mapVisual');
