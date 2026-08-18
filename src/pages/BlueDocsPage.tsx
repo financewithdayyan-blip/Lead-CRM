@@ -151,7 +151,17 @@ function ContractTemplatesTab() {
         label="Purchase Contracts"
         docType="contract"
         typeOptions={PURCHASE_CONTRACT_TYPES}
-        items={templates.filter((t) => t.contractType !== null)}
+        // Deal-type order (Cash, Novation, Subject-To, Seller Finance) rather
+        // than upload recency — Cash Deal is the one actually in daily use
+        // and should always lead the list, not whichever was (re)uploaded
+        // most recently.
+        items={templates
+          .filter((t) => t.contractType !== null)
+          .sort(
+            (a, b) =>
+              PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === a.contractType) -
+              PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === b.contractType),
+          )}
         onOpenMapper={flow.openMapper}
         onSend={flow.setSendTarget}
         onDeleteTarget={flow.setDeleteTarget}
