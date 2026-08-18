@@ -1603,8 +1603,37 @@ footer{
 }
 .testimonials-more a:hover{ color:var(--sky); }
 
+/* ============================================
+   BLOG PREVIEW
+   ============================================ */
+.blog-preview-grid{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:40px;
+}
+.blog-preview-card{
+  background:var(--white); border:1.5px solid var(--paper-line); border-radius:var(--radius-md);
+  padding:26px 24px; box-shadow:var(--shadow-card); display:flex; flex-direction:column; gap:12px;
+  transition:transform 0.2s, box-shadow 0.2s;
+}
+.blog-preview-card:hover{ transform:translateY(-3px); box-shadow:0 4px 8px rgba(11,30,51,0.06), 0 16px 32px -12px rgba(11,30,51,0.2); }
+.blog-preview-tag{
+  display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600;
+  letter-spacing:0.08em; text-transform:uppercase; color:var(--sky-deep);
+  background:rgba(30,143,213,0.1); padding:4px 9px; border-radius:100px; align-self:flex-start;
+}
+.blog-preview-card h3{ font-family:var(--serif); font-size:1.15rem; font-weight:700; color:var(--ink); line-height:1.32; }
+.blog-preview-card p{ font-size:14px; line-height:1.6; color:var(--slate); flex:1; }
+.blog-preview-read{ font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--sky-deep); display:inline-flex; align-items:center; gap:6px; }
+.blog-preview-card:hover .blog-preview-read{ color:var(--sky); }
+.blog-preview-more{ text-align:center; margin-top:36px; }
+.blog-preview-more a{
+  font-family:var(--sans); font-size:14px; font-weight:700; color:var(--sky-deep);
+  display:inline-flex; align-items:center; gap:6px;
+}
+.blog-preview-more a:hover{ color:var(--sky); }
+
 @media (max-width: 980px){
   .testimonial-grid{ grid-template-columns:1fr; }
+  .blog-preview-grid{ grid-template-columns:1fr; }
   .hero-inner{ grid-template-columns:1fr; }
   .hero-scene{ height:420px; order:-1; margin-top:20px; }
   .burden-grid, .market-grid, .contact-grid{ grid-template-columns:1fr; }
@@ -1976,6 +2005,47 @@ footer{
       Start My Free Offer
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
+  </div>
+</section>
+
+<!-- ============================================
+     BLOG PREVIEW
+     ============================================ -->
+<section class="blog-preview" id="blog-preview">
+  <div class="container">
+    <div class="section-head center reveal" style="max-width:600px;margin-left:auto;margin-right:auto;">
+      <span class="eyebrow">From the Blog</span>
+      <h2>Straight answers, before you call.</h2>
+      <p>Real guidance on foreclosure, tax liens, and selling a distressed property — written for homeowners, not lawyers.</p>
+    </div>
+
+    <div class="blog-preview-grid">
+      <a href="/blog/how-long-before-county-takes-house-unpaid-taxes" class="blog-preview-card reveal">
+        <span class="blog-preview-tag">Property Taxes</span>
+        <h3>How Long Before the County Takes My House for Unpaid Taxes?</h3>
+        <p>The real Florida timeline, step by step — and how much time you actually have before an auction is even possible.</p>
+        <span class="blog-preview-read">Read article <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+      <a href="/blog/can-i-sell-my-house-if-i-owe-back-property-taxes" class="blog-preview-card reveal">
+        <span class="blog-preview-tag">Selling Distressed Property</span>
+        <h3>Can I Sell My House If I Owe Back Property Taxes?</h3>
+        <p>Owing back taxes feels like it should block a sale — it doesn't. Here's exactly how the payoff works at closing.</p>
+        <span class="blog-preview-read">Read article <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+      <a href="/blog/behind-on-property-taxes-what-are-my-options" class="blog-preview-card reveal">
+        <span class="blog-preview-tag">Property Taxes</span>
+        <h3>I'm Behind on Property Taxes — What Are My Options?</h3>
+        <p>Every real, practical path forward — from payment plans to selling outright — in the order most homeowners should consider them.</p>
+        <span class="blog-preview-read">Read article <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </a>
+    </div>
+
+    <div class="blog-preview-more">
+      <a href="/blog">
+        Read more on the blog
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
   </div>
 </section>
 
