@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Ban, Bell, Check, CheckCircle2, ChevronDown, Clock, Copy, Download, Eye, Handshake, Loader2, MapPin, Send, Sparkles, Trash2 } from 'lucide-react';
+import { Ban, Bell, Check, CheckCircle2, ChevronDown, Clock, Copy, Download, Eye, Loader2, MapPin, PartyPopper, Send, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
 import { formatDateTime, formatPhone } from '@/lib/utils';
@@ -14,20 +14,17 @@ const STATUS_BADGE: Record<ContractInstance['status'], { label: string; classNam
   expired: { label: 'Expired', className: 'bg-surface-2 text-text-3', icon: Clock },
 };
 
-/** One color language per step-in-the-signing-chain state, drawn from the
- * app's own brand tokens (not arbitrary Tailwind hues) so this reads as part
- * of the same CRM instead of a bolted-on component. "Signed" uses the same
- * brass/accent tone as the deal-closed ribbon — one gold thread running from
- * the moment a party signs through to the closing banner, rather than
- * switching to an unrelated green. */
+/** One color language per step-in-the-signing-chain state — deliberately its
+ * own palette (not this app's success/warning/danger tokens), since these
+ * describe a party's position in a sequential flow, not a pass/fail outcome. */
 const PARTY_STEP_STYLE: Record<
   'signed' | 'viewed' | 'sent' | 'waiting' | 'declined',
   { badge: string; card: string; pill: string; label: string }
 > = {
-  signed: { badge: 'bg-accent text-[#0B1E33]', card: 'border-accent/25 bg-accent-dim', pill: 'bg-accent/20 text-accent-hover', label: 'Signed' },
-  viewed: { badge: 'bg-primary text-white', card: 'border-border-2 bg-surface', pill: 'bg-primary-dim text-primary-text', label: 'Viewed' },
-  sent: { badge: 'bg-info text-white', card: 'border-border-2 bg-surface', pill: 'bg-info-dim text-info-text', label: 'Sent' },
-  waiting: { badge: 'bg-surface-3 text-text-3 ring-1 ring-inset ring-border-2', card: 'border-border-2 bg-surface', pill: 'bg-surface-3 text-text-3', label: 'Waiting' },
+  signed: { badge: 'bg-amber-400 text-white', card: 'border-amber-200 bg-amber-50', pill: 'bg-amber-100 text-amber-700', label: 'Signed' },
+  viewed: { badge: 'bg-cyan-500 text-white', card: 'border-cyan-200 bg-cyan-50', pill: 'bg-cyan-100 text-cyan-700', label: 'Viewed' },
+  sent: { badge: 'bg-blue-500 text-white', card: 'border-blue-200 bg-blue-50', pill: 'bg-blue-100 text-blue-700', label: 'Sent' },
+  waiting: { badge: 'bg-violet-300 text-white', card: 'border-violet-200 bg-violet-50', pill: 'bg-violet-100 text-violet-700', label: 'Waiting' },
   declined: { badge: 'bg-danger text-white', card: 'border-danger/25 bg-danger-dim', pill: 'bg-danger-dim text-danger', label: 'Declined' },
 };
 
@@ -127,12 +124,10 @@ export function ContractInstanceRow({
 
   return (
     <div
-      className={`overflow-hidden rounded-xl border bg-surface shadow-card ${
-        signed ? 'border-success/25' : voidedOrDeclined ? 'border-danger/25' : 'border-border-2'
+      className={`rounded-lg border p-3.5 ${
+        signed ? 'border-success/30 bg-success-dim' : voidedOrDeclined ? 'border-danger/30 bg-danger-dim' : 'border-border-2 bg-surface-3'
       }`}
     >
-      <div className={`h-[3px] w-full ${signed ? 'bg-success' : voidedOrDeclined ? 'bg-danger' : 'bg-border-2'}`} />
-      <div className="p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-text">
@@ -194,38 +189,9 @@ export function ContractInstanceRow({
       </div>
 
       {signed && (
-        <div className="relative mt-3 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#0B1E33] via-[#0f2745] to-[#0B1E33] p-4">
-          <div className="relative">
-            {/* Ribbon shape lives in its own SVG layer, purely decorative —
-               the text row below is never clipped by its geometry. */}
-            <svg
-              className="pointer-events-none absolute inset-y-0 left-6 right-6 my-auto h-8 w-[calc(100%-3rem)]"
-              viewBox="0 0 400 40"
-              preserveAspectRatio="none"
-            >
-              <defs>
-                <linearGradient id="dealRibbonGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#b3893a" />
-                  <stop offset="50%" stopColor="#e6c988" />
-                  <stop offset="100%" stopColor="#b3893a" />
-                </linearGradient>
-              </defs>
-              <polygon points="0,20 20,2 380,2 400,20 380,38 20,38" fill="url(#dealRibbonGrad)" />
-            </svg>
-
-            <div className="relative flex h-8 items-center gap-2 pl-12 pr-8 text-[12.5px] font-semibold tracking-wide text-[#0B1E33]">
-              <Handshake size={13} className="shrink-0" />
-              <span>Deal closed — contract fully signed</span>
-            </div>
-
-            <Sparkles size={10} className="pointer-events-none absolute right-10 -top-1 text-white/50" />
-
-            <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0B1E33] shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-accent/80 bg-gradient-to-br from-[#eccf94] to-accent">
-                <Handshake size={15} className="text-[#0B1E33]" />
-              </div>
-            </div>
-          </div>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-300/70 bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 px-3 py-2 text-[12px] font-semibold text-amber-800 shadow-sm">
+          <PartyPopper size={15} className="shrink-0 text-amber-600" />
+          Deal closed — contract fully signed. Congrats! 🎉
         </div>
       )}
 
@@ -289,7 +255,6 @@ export function ContractInstanceRow({
         })}
       </div>
       )}
-      </div>
     </div>
   );
 }
