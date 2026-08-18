@@ -19,7 +19,7 @@ import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localI
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
 import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
-import { SCRIPT_STEPS } from '@/lib/callScript';
+import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
 import { PacketTab } from '@/components/packets/PacketTab';
 import { SmsThreadTab } from '@/components/sms/SmsThreadTab';
 
@@ -1024,18 +1024,23 @@ function PropertyTab({ lead }: { lead: Lead }) {
 }
 
 function FrameworkTab({ lead }: { lead: Lead }) {
+  const { data: tags = [] } = useTags();
+  const leadTagNames = lead.tagIds.map((tid) => tags.find((t) => t.id === tid)?.name).filter((n): n is string => !!n);
+  const hasMortgageStep = leadTagNames.some((n) => LIEN_TAG_NAMES.includes(n));
+  const steps = getScriptSteps(hasMortgageStep);
+
   const answers = lead.scriptAnswers ?? {};
-  const stepComplete = (step: (typeof SCRIPT_STEPS)[number]) =>
+  const stepComplete = (step: (typeof steps)[number]) =>
     step.questions.every((q) => (answers[q.key] ?? '').trim().length > 0);
-  const completedCount = SCRIPT_STEPS.filter(stepComplete).length;
+  const completedCount = steps.filter(stepComplete).length;
 
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-text-3">
-        {completedCount} of {SCRIPT_STEPS.length} steps completed
+        {completedCount} of {steps.length} steps completed
       </p>
 
-      {SCRIPT_STEPS.map((step) => {
+      {steps.map((step) => {
         const complete = stepComplete(step);
         return (
           <div

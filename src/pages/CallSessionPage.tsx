@@ -36,7 +36,7 @@ import { useTags } from '@/hooks/useTags';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
 import { useMyTodaySummary, useSubmitDailySummary } from '@/hooks/useDailySummaries';
 import { TagPill } from '@/components/ui/TagPill';
-import { SCRIPT_STEPS } from '@/lib/callScript';
+import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
 import { callerDisplayName, daysUntil, formatPhone, initials, localIsoDate } from '@/lib/utils';
 import {
@@ -1026,7 +1026,11 @@ export function CallSessionPage() {
                   </div>
                 </div>
               </ScriptStep>
-              {SCRIPT_STEPS.map((step, i) => (
+              {getScriptSteps(
+                currentLead.tagIds
+                  .map((tid) => tags.find((t) => t.id === tid)?.name)
+                  .some((n) => n && LIEN_TAG_NAMES.includes(n)),
+              ).map((step, i) => (
                 <ScriptStep key={step.title} index={i + 3} title={step.title} collapsible>
                   {step.questions.map((q) => (
                     <div key={q.key} className="space-y-1.5">

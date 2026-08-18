@@ -1,4 +1,5 @@
 import type { ScriptAnswers } from '@/types/domain';
+import { LIEN_TAG_NAMES } from '@/hooks/useAiReplyConfig';
 
 export interface ScriptSubQuestion {
   key: keyof ScriptAnswers;
@@ -10,7 +11,12 @@ export interface ScriptStepDef {
   questions: ScriptSubQuestion[];
 }
 
-export const SCRIPT_STEPS: ScriptStepDef[] = [
+// Re-exported so callers only need one import to decide whether a given
+// lead's steps should include Mortgage — same tag list LIEN_ADDENDUM uses
+// server-side to decide whether the AI asks these questions at all.
+export { LIEN_TAG_NAMES };
+
+const STEPS_BEFORE_MORTGAGE: ScriptStepDef[] = [
   {
     title: 'Confirmation',
     questions: [
@@ -49,6 +55,24 @@ export const SCRIPT_STEPS: ScriptStepDef[] = [
       { key: 'price_reasoning', prompt: 'How did you arrive at that number?' },
     ],
   },
+];
+
+/** Foreclosure/lis pendens/auction leads only — see LIEN_ADDENDUM in
+ * useAiReplyConfig.ts, which is what actually tells the AI to ask these on
+ * these tags. Deliberately left out of the default step list so a normal
+ * lead's framework isn't stuck permanently "incomplete" waiting on mortgage
+ * questions nobody's meant to ask them. */
+const MORTGAGE_STEP: ScriptStepDef = {
+  title: 'Mortgage',
+  questions: [
+    { key: 'mortgage_payment', prompt: "What's your monthly mortgage payment?" },
+    { key: 'mortgage_balance', prompt: "What's the total remaining balance owed on the mortgage?" },
+    { key: 'mortgage_rate', prompt: "What's your interest rate?" },
+    { key: 'mortgage_statement', prompt: 'Could you email a copy of your mortgage statement to dayyan@bluebirdacquisition.com?' },
+  ],
+};
+
+const STEPS_AFTER_MORTGAGE: ScriptStepDef[] = [
   {
     title: 'Decision',
     questions: [
@@ -70,3 +94,17 @@ export const SCRIPT_STEPS: ScriptStepDef[] = [
     questions: [{ key: 'callback', prompt: 'When is a good time to call you back?' }],
   },
 ];
+
+/** The default framework — no Mortgage step, matching every lead without a
+ * foreclosure/lis pendens/auction tag. Kept as a plain export (rather than
+ * only the function below) since most callers don't have tag context handy
+ * for a quick reference. */
+export const SCRIPT_STEPS: ScriptStepDef[] = [...STEPS_BEFORE_MORTGAGE, ...STEPS_AFTER_MORTGAGE];
+
+/** The real steps for a given lead — insert Mortgage right after Price
+ * (before Decision) when they're tagged Lis Pendens, Pre-Foreclosure,
+ * Foreclosure, or Auction, exactly where LIEN_ADDENDUM places it in the
+ * conversation itself. */
+export function getScriptSteps(hasMortgageStep: boolean): ScriptStepDef[] {
+  return hasMortgageStep ? [...STEPS_BEFORE_MORTGAGE, MORTGAGE_STEP, ...STEPS_AFTER_MORTGAGE] : SCRIPT_STEPS;
+}

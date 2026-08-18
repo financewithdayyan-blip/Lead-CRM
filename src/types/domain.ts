@@ -137,6 +137,11 @@ export interface ScriptAnswers {
   // Price
   price_asking?: string;
   price_reasoning?: string;
+  // Mortgage (foreclosure/auction/lien leads only — see LIEN_ADDENDUM)
+  mortgage_payment?: string;
+  mortgage_balance?: string;
+  mortgage_rate?: string;
+  mortgage_statement?: string;
   // Decision
   decision?: string;
   // Photo request
