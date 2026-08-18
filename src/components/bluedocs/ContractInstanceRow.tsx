@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Ban, Bell, Check, CheckCircle2, Clock, Copy, Download, Eye, Handshake, Loader2, MapPin, Send, Sparkles, Trash2 } from 'lucide-react';
+import { Ban, Bell, Check, CheckCircle2, ChevronDown, Clock, Copy, Download, Eye, Handshake, Loader2, MapPin, Send, Sparkles, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
 import { formatDateTime, formatPhone } from '@/lib/utils';
@@ -16,14 +16,15 @@ const STATUS_BADGE: Record<ContractInstance['status'], { label: string; classNam
 
 /** One color language per step-in-the-signing-chain state, drawn from the
  * app's own brand tokens (not arbitrary Tailwind hues) so this reads as part
- * of the same CRM instead of a bolted-on component. Color lives in the
- * numbered badge and the small pill only — the row itself stays neutral,
- * matching how every other card in this app is built. */
+ * of the same CRM instead of a bolted-on component. "Signed" uses the same
+ * brass/accent tone as the deal-closed ribbon — one gold thread running from
+ * the moment a party signs through to the closing banner, rather than
+ * switching to an unrelated green. */
 const PARTY_STEP_STYLE: Record<
   'signed' | 'viewed' | 'sent' | 'waiting' | 'declined',
   { badge: string; card: string; pill: string; label: string }
 > = {
-  signed: { badge: 'bg-success text-white', card: 'border-border-2 bg-surface', pill: 'bg-success-dim text-success', label: 'Signed' },
+  signed: { badge: 'bg-accent text-[#0B1E33]', card: 'border-accent/25 bg-accent-dim', pill: 'bg-accent/20 text-accent-hover', label: 'Signed' },
   viewed: { badge: 'bg-primary text-white', card: 'border-border-2 bg-surface', pill: 'bg-primary-dim text-primary-text', label: 'Viewed' },
   sent: { badge: 'bg-info text-white', card: 'border-border-2 bg-surface', pill: 'bg-info-dim text-info-text', label: 'Sent' },
   waiting: { badge: 'bg-surface-3 text-text-3 ring-1 ring-inset ring-border-2', card: 'border-border-2 bg-surface', pill: 'bg-surface-3 text-text-3', label: 'Waiting' },
@@ -64,6 +65,7 @@ export function ContractInstanceRow({
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
   const [reminded, setReminded] = useState(false);
+  const [showParties, setShowParties] = useState(false);
   const { data: events = [] } = useContractAuditEvents(c.id);
   const sendReminder = useSendContractReminder();
   const address = useMemo(() => findAddress(c), [c]);
@@ -192,12 +194,12 @@ export function ContractInstanceRow({
       </div>
 
       {signed && (
-        <div className="relative mt-3 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#0B1E33] via-[#0f2745] to-[#0B1E33] p-5">
+        <div className="relative mt-3 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#0B1E33] via-[#0f2745] to-[#0B1E33] p-4">
           <div className="relative">
             {/* Ribbon shape lives in its own SVG layer, purely decorative —
                the text row below is never clipped by its geometry. */}
             <svg
-              className="pointer-events-none absolute inset-y-0 left-6 right-6 my-auto h-9 w-[calc(100%-3rem)]"
+              className="pointer-events-none absolute inset-y-0 left-6 right-6 my-auto h-8 w-[calc(100%-3rem)]"
               viewBox="0 0 400 40"
               preserveAspectRatio="none"
             >
@@ -211,24 +213,31 @@ export function ContractInstanceRow({
               <polygon points="0,20 20,2 380,2 400,20 380,38 20,38" fill="url(#dealRibbonGrad)" />
             </svg>
 
-            <div className="relative flex h-9 items-center gap-2 pl-12 pr-8 text-[12.5px] font-semibold tracking-wide text-[#0B1E33]">
+            <div className="relative flex h-8 items-center gap-2 pl-12 pr-8 text-[12.5px] font-semibold tracking-wide text-[#0B1E33]">
               <Handshake size={13} className="shrink-0" />
               <span>Deal closed — contract fully signed</span>
             </div>
 
-            <Sparkles size={11} className="pointer-events-none absolute right-14 -top-1 text-white/55" />
-            <Sparkles size={8} className="pointer-events-none absolute right-24 bottom-0 text-white/35" />
-            <Sparkles size={9} className="pointer-events-none absolute right-8 top-0 text-white/40" />
+            <Sparkles size={10} className="pointer-events-none absolute right-10 -top-1 text-white/50" />
 
-            <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0B1E33] shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-accent/80 bg-gradient-to-br from-[#eccf94] to-accent">
-                <Handshake size={17} className="text-[#0B1E33]" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0B1E33] shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-accent/80 bg-gradient-to-br from-[#eccf94] to-accent">
+                <Handshake size={15} className="text-[#0B1E33]" />
               </div>
             </div>
           </div>
         </div>
       )}
 
+      <button
+        className="mt-3 flex w-full items-center justify-between rounded-lg border border-border-2 bg-surface-2 px-3 py-2 text-[12px] font-medium text-text-2 transition-colors hover:bg-surface-3"
+        onClick={() => setShowParties((v) => !v)}
+      >
+        <span>See signees ({orderedParties.length})</span>
+        <ChevronDown size={14} className={`transition-transform ${showParties ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showParties && (
       <div className="mt-3 space-y-0">
         {orderedParties.map((p, i) => {
           const unlocked = !orderedParties.some((other) => other.signOrder < p.signOrder && other.status !== 'signed');
@@ -279,6 +288,7 @@ export function ContractInstanceRow({
           );
         })}
       </div>
+      )}
       </div>
     </div>
   );
