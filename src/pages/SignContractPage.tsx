@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Clock, Download, FileSignature, FileText, Loader2, PenLine, Type } from 'lucide-react';
+import { ChevronDown, Clock, Download, FileSignature, FileText, Loader2 } from 'lucide-react';
 import {
   usePublicSigningParty,
   useSigningPdfUrl,
@@ -12,9 +12,8 @@ import {
 } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
-import { SignaturePad, type SignaturePadHandle } from '@/components/bluedocs/SignaturePad';
 import { formatCurrency } from '@/lib/currency';
-import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONT } from '@/lib/typedSignature';
+import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONTS } from '@/lib/typedSignature';
 import { roleLabel } from '@/hooks/useDocTemplates';
 
 const MAX_PAGE_WIDTH = 680;
@@ -138,9 +137,9 @@ export function SignContractPage() {
   const [submitted, setSubmitted] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
   const [signatureName, setSignatureName] = useState('');
-  const [signatureMode, setSignatureMode] = useState<'draw' | 'type'>('draw');
-  const [hasDrawing, setHasDrawing] = useState(false);
-  const padRef = useRef<SignaturePadHandle>(null);
+  const [signatureFontId, setSignatureFontId] = useState(SIGNATURE_FONTS[0].id);
+  const [fontPickerOpen, setFontPickerOpen] = useState(false);
+  const fontPickerRef = useRef<HTMLDivElement>(null);
   const loggedRef = useRef(false);
   const seededRef = useRef(false);
 
@@ -156,6 +155,15 @@ export function SignContractPage() {
   useEffect(() => {
     loadSignatureFont();
   }, []);
+
+  useEffect(() => {
+    if (!fontPickerOpen) return;
+    function onClick(e: MouseEvent) {
+      if (fontPickerRef.current && !fontPickerRef.current.contains(e.target as Node)) setFontPickerOpen(false);
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [fontPickerOpen]);
 
   // The tab otherwise just says "BlueBird CRM" — a real giveaway that a
   // seller is clicking a link into someone else's internal software rather
@@ -215,18 +223,13 @@ export function SignContractPage() {
 
   const filledCount = myPendingFields.filter((f) => fieldInputs[f.id]?.trim()).length;
   const allFieldsFilled = filledCount === myPendingFields.length;
-  const signatureReady = signatureMode === 'draw' ? hasDrawing : !!signatureName.trim();
+  const signatureReady = !!signatureName.trim();
   const canSubmit = allFieldsFilled && (!needsSignature || signatureReady);
+  const selectedFont = SIGNATURE_FONTS.find((f) => f.id === signatureFontId) ?? SIGNATURE_FONTS[0];
 
   async function handleSubmit() {
     if (!token || !canSubmit) return;
-    let dataUrl: string | undefined;
-    if (needsSignature) {
-      dataUrl =
-        signatureMode === 'draw' && padRef.current && !padRef.current.isEmpty()
-          ? padRef.current.toDataUrl()
-          : await renderTypedSignature(signatureName.trim());
-    }
+    const dataUrl = needsSignature ? await renderTypedSignature(signatureName.trim(), selectedFont.family) : undefined;
     const formatted = { ...fieldInputs };
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
@@ -445,59 +448,54 @@ export function SignContractPage() {
 
         {needsSignature ? (
           <div className="rounded-md border border-border bg-white p-4 shadow-card">
-            <div className="mb-2.5 flex items-center justify-between">
-              <div className="text-[13px] font-semibold text-text">Your signature</div>
-              <div className="flex rounded-md border border-border-2 p-0.5">
-                <button
-                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
-                    signatureMode === 'draw' ? 'bg-primary text-white' : 'text-text-3 hover:text-text'
-                  }`}
-                  onClick={() => setSignatureMode('draw')}
-                >
-                  <PenLine size={12} /> Draw
-                </button>
-                <button
-                  className={`flex items-center gap-1 rounded px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
-                    signatureMode === 'type' ? 'bg-primary text-white' : 'text-text-3 hover:text-text'
-                  }`}
-                  onClick={() => setSignatureMode('type')}
-                >
-                  <Type size={12} /> Type
-                </button>
-              </div>
+            <div className="text-[13px] font-semibold text-text">Your signature</div>
+
+            <input
+              className="input mt-2.5"
+              placeholder="Type your full name"
+              value={signatureName}
+              onChange={(e) => setSignatureName(e.target.value)}
+            />
+
+            <div className="relative mt-2.5" ref={fontPickerRef}>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-md border border-border-2 bg-white px-3 py-2 text-[12px] font-medium text-text-2 hover:bg-surface-3"
+                onClick={() => setFontPickerOpen((v) => !v)}
+              >
+                <span>
+                  Signature style: <span className="font-semibold text-text">{selectedFont.label}</span>
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${fontPickerOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {fontPickerOpen && (
+                <div className="absolute inset-x-0 z-10 mt-1 overflow-hidden rounded-md border border-border bg-white py-1 shadow-popover">
+                  {SIGNATURE_FONTS.map((font) => (
+                    <button
+                      key={font.id}
+                      type="button"
+                      className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-surface-3 ${
+                        font.id === signatureFontId ? 'bg-primary-dim' : ''
+                      }`}
+                      onClick={() => {
+                        setSignatureFontId(font.id);
+                        setFontPickerOpen(false);
+                      }}
+                    >
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-text-3">{font.label}</span>
+                      <span style={{ fontFamily: `"${font.family}", cursive`, fontSize: 24, color: '#111827' }}>
+                        {signatureName || 'Your Name'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {signatureMode === 'draw' ? (
-              <>
-                <div className="relative h-32 overflow-hidden rounded-md border border-dashed border-border-2 bg-surface-3">
-                  <SignaturePad ref={padRef} onChange={setHasDrawing} />
-                  {!hasDrawing && (
-                    <span className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-[11.5px] text-text-3">
-                      Sign above with your finger, stylus, or mouse
-                    </span>
-                  )}
-                </div>
-                <button
-                  className="mt-1.5 text-[11.5px] font-medium text-text-3 hover:text-text disabled:opacity-40"
-                  disabled={!hasDrawing}
-                  onClick={() => padRef.current?.clear()}
-                >
-                  Clear
-                </button>
-              </>
-            ) : (
-              <>
-                <input
-                  className="input"
-                  placeholder="Type your full name"
-                  value={signatureName}
-                  onChange={(e) => setSignatureName(e.target.value)}
-                />
-                <div className="mt-2 flex h-24 items-center justify-center rounded-md border border-dashed border-border-2 bg-surface-3">
-                  <span style={{ fontFamily: `"${SIGNATURE_FONT}", cursive`, fontSize: 40, color: '#111827' }}>{signatureName || ' '}</span>
-                </div>
-              </>
-            )}
+            <div className="mt-2.5 flex h-24 items-center justify-center rounded-md border border-dashed border-border-2 bg-surface-3">
+              <span style={{ fontFamily: `"${selectedFont.family}", cursive`, fontSize: 40, color: '#111827' }}>{signatureName || ' '}</span>
+            </div>
           </div>
         ) : (
           <div className="rounded-md border border-border bg-white p-4 shadow-card">
