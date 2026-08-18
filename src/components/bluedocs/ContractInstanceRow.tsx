@@ -14,17 +14,19 @@ const STATUS_BADGE: Record<ContractInstance['status'], { label: string; classNam
   expired: { label: 'Expired', className: 'bg-surface-2 text-text-3', icon: Clock },
 };
 
-/** One color language per step-in-the-signing-chain state — deliberately its
- * own palette (not this app's success/warning/danger tokens), since these
- * describe a party's position in a sequential flow, not a pass/fail outcome. */
+/** One color language per step-in-the-signing-chain state, drawn from the
+ * app's own brand tokens (not arbitrary Tailwind hues) so this reads as part
+ * of the same CRM instead of a bolted-on component. Color lives in the
+ * numbered badge and the small pill only — the row itself stays neutral,
+ * matching how every other card in this app is built. */
 const PARTY_STEP_STYLE: Record<
   'signed' | 'viewed' | 'sent' | 'waiting' | 'declined',
   { badge: string; card: string; pill: string; label: string }
 > = {
-  signed: { badge: 'bg-amber-400 text-white', card: 'border-amber-200 bg-amber-50', pill: 'bg-amber-100 text-amber-700', label: 'Signed' },
-  viewed: { badge: 'bg-cyan-500 text-white', card: 'border-cyan-200 bg-cyan-50', pill: 'bg-cyan-100 text-cyan-700', label: 'Viewed' },
-  sent: { badge: 'bg-blue-500 text-white', card: 'border-blue-200 bg-blue-50', pill: 'bg-blue-100 text-blue-700', label: 'Sent' },
-  waiting: { badge: 'bg-violet-300 text-white', card: 'border-violet-200 bg-violet-50', pill: 'bg-violet-100 text-violet-700', label: 'Waiting' },
+  signed: { badge: 'bg-success text-white', card: 'border-border-2 bg-surface', pill: 'bg-success-dim text-success', label: 'Signed' },
+  viewed: { badge: 'bg-primary text-white', card: 'border-border-2 bg-surface', pill: 'bg-primary-dim text-primary-text', label: 'Viewed' },
+  sent: { badge: 'bg-info text-white', card: 'border-border-2 bg-surface', pill: 'bg-info-dim text-info-text', label: 'Sent' },
+  waiting: { badge: 'bg-surface-3 text-text-3 ring-1 ring-inset ring-border-2', card: 'border-border-2 bg-surface', pill: 'bg-surface-3 text-text-3', label: 'Waiting' },
   declined: { badge: 'bg-danger text-white', card: 'border-danger/25 bg-danger-dim', pill: 'bg-danger-dim text-danger', label: 'Declined' },
 };
 
@@ -123,10 +125,12 @@ export function ContractInstanceRow({
 
   return (
     <div
-      className={`rounded-lg border p-3.5 ${
-        signed ? 'border-success/30 bg-success-dim' : voidedOrDeclined ? 'border-danger/30 bg-danger-dim' : 'border-border-2 bg-surface-3'
+      className={`overflow-hidden rounded-xl border bg-surface shadow-card ${
+        signed ? 'border-success/25' : voidedOrDeclined ? 'border-danger/25' : 'border-border-2'
       }`}
     >
+      <div className={`h-[3px] w-full ${signed ? 'bg-success' : voidedOrDeclined ? 'bg-danger' : 'bg-border-2'}`} />
+      <div className="p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-text">
@@ -188,9 +192,9 @@ export function ContractInstanceRow({
       </div>
 
       {signed && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-300/70 bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 px-3 py-2 text-[12px] font-semibold text-amber-800 shadow-sm">
-          <PartyPopper size={15} className="shrink-0 text-amber-600" />
-          Deal closed — contract fully signed. Congrats! 🎉
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent-dim px-3 py-2 text-[12px] font-semibold text-accent-hover">
+          <PartyPopper size={14} className="shrink-0 text-accent" />
+          Deal closed — contract fully signed
         </div>
       )}
 
@@ -243,6 +247,7 @@ export function ContractInstanceRow({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
