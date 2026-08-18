@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, Archive, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { CardHeader } from '@/components/ui/CardHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -249,7 +250,7 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   stage_change: 'Stage changed',
 };
 
-const TABS = ['overview', 'property', 'framework', 'sms', 'notes', 'activity', 'tasks', 'files', 'packet'] as const;
+const TABS = ['overview', 'property', 'framework', 'sms', 'activity', 'tasks', 'files', 'packet'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
@@ -257,7 +258,6 @@ const TAB_LABELS: Record<TabKey, string> = {
   packet: 'Deal Packet',
   sms: 'SMS',
   framework: 'Framework',
-  notes: 'Notes',
   activity: 'Activity',
   tasks: 'Tasks',
   files: 'Files',
@@ -471,14 +471,18 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab lead={lead} leadId={lead.id} />}
+      {tab === 'overview' && (
+        <div className="space-y-5">
+          <OverviewTab lead={lead} leadId={lead.id} />
+          <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
+        </div>
+      )}
       {tab === 'property' && <PropertyTab lead={lead} />}
       {tab === 'packet' && <PacketTab lead={lead} />}
       {/* SMS is an admin-only feature — texting leads isn't part of a
           caller's job, which is manual cold calling only. */}
       {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
       {tab === 'framework' && <FrameworkTab lead={lead} />}
-      {tab === 'notes' && <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />}
       {tab === 'activity' && <ActivityTab leadId={lead.id} />}
       {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}
       {tab === 'files' && <FilesTab lead={lead} />}
@@ -686,40 +690,49 @@ function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: 
 
   return (
     <div className="card">
-      <h3 className="mb-3 text-sm font-semibold text-text">Notes</h3>
+      <CardHeader icon={MessageSquareText} title="Notes" sub={`${notes.length} logged`} />
 
-      {/* Legacy note (old single-field notes migrated from lead.notes) */}
+      {/* Legacy note (old single-field notes migrated from lead.notes) — its
+          own labeled block rather than an inline badge crammed into a
+          paragraph, so it reads as an archived record, not just clutter. */}
       {legacyNote && (
-        <div className="mb-3 rounded-xl border border-amber-200/40 bg-amber-50/30 px-3 py-2 text-[12px] text-text-3 dark:border-amber-900/30 dark:bg-amber-950/20">
-          <span className="mr-1.5 font-semibold text-amber-600 dark:text-amber-400">Legacy note:</span>
-          {legacyNote}
+        <div className="mt-3 rounded-lg border border-border-2 bg-surface-3 p-3">
+          <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
+            <Archive size={11} /> Legacy note
+          </div>
+          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-text-2">{legacyNote}</p>
         </div>
       )}
 
       {/* Chat bubbles */}
-      {isLoading && <div className="text-[13px] text-text-3">Loading…</div>}
+      {isLoading && <div className="mt-3 text-[13px] text-text-3">Loading…</div>}
       {!isLoading && notes.length === 0 && !legacyNote && (
-        <div className="text-[13px] text-text-3">No notes yet.</div>
+        <div className="mt-4 flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border-2 py-6 text-center">
+          <MessageSquareText size={18} className="text-text-3" />
+          <p className="text-[13px] text-text-3">No notes yet — add the first one below.</p>
+        </div>
       )}
-      <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-        {notes.map((a) => (
-          <ActivityBubble
-            key={a.id}
-            a={a}
-            isAdmin={profile?.role === 'admin'}
-            leadId={leadId}
-            onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
-            onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
-          />
-        ))}
-        <div ref={bottomRef} />
-      </div>
+      {notes.length > 0 && (
+        <div className="mt-3 max-h-80 space-y-3 overflow-y-auto rounded-lg border border-border-2 bg-surface-3/50 p-3 pr-2">
+          {notes.map((a) => (
+            <ActivityBubble
+              key={a.id}
+              a={a}
+              isAdmin={profile?.role === 'admin'}
+              leadId={leadId}
+              onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
+              onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
+            />
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      )}
 
       {/* Compose */}
-      <div className="mt-3 flex items-end gap-2">
+      <div className="mt-3 flex items-end gap-2 rounded-lg border border-border-2 bg-surface p-2 focus-within:border-primary/50">
         <textarea
-          className="input flex-1 resize-none"
-          rows={2}
+          className="max-h-32 flex-1 resize-none bg-transparent px-1 py-1 text-[13px] text-text outline-none placeholder:text-text-3"
+          rows={1}
           placeholder="Add a note…"
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -727,7 +740,12 @@ function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: 
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
           }}
         />
-        <button className="btn btn-primary self-end" onClick={handleSend} disabled={addActivity.isPending || !body.trim()}>
+        <button
+          className="btn btn-primary shrink-0 !p-2"
+          title="Send (Enter)"
+          onClick={handleSend}
+          disabled={addActivity.isPending || !body.trim()}
+        >
           <Send size={14} />
         </button>
       </div>
