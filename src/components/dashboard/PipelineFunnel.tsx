@@ -4,12 +4,6 @@ export interface FunnelStage {
   count: number;
   color: string;
   hint?: string;
-  /** Leads currently sitting at this stage or a later *active* one — the
-   * same population the Kanban board shows. `count` is larger whenever
-   * leads reached this milestone and then left the active pipeline (Dead/
-   * Declined, On Hold, Other); the gap is spelled out under the bar instead
-   * of left for someone to puzzle over next to the Kanban board. */
-  activeCount?: number;
 }
 
 export interface OffFunnelBucket {
@@ -25,13 +19,12 @@ export interface OffFunnelBucket {
  * Qualified because that's the actual rule now (calls happen to qualified
  * leads, not cold ones).
  *
- * Each bar is cumulative — "Replied" counts every lead that reached Replied
- * *or moved further* (Qualified, Negotiation, Contract, etc. all count
- * toward it too), the standard funnel-chart convention so the bars taper
- * monotonically. That's why these numbers run higher than the Kanban
- * board's per-column counts, which show only leads sitting in that exact
- * stage right now — the two are answering different questions, not
- * disagreeing on the underlying leads.
+ * Each bar is cumulative by *current* stage — "Replied" counts every lead
+ * presently sitting at Replied or a later active stage (Qualified,
+ * Negotiation, Contract, etc.), the same live population the Kanban board
+ * shows summed across its columns. A lead that reached a stage and then
+ * went Dead/Declined, On Hold, or Other no longer counts anywhere here —
+ * that population is broken out in the off-pipeline chips below instead.
  *
  * `stages` should start at the first real funnel step (Contacted), not the
  * whole lead universe — a "Cold" bar scaled against thousands of never-
@@ -64,8 +57,7 @@ export function PipelineFunnel({
         </span>
       </div>
       <p className="mb-4 text-[11px] text-text-3">
-        Each bar counts leads that reached that stage or further — not a live headcount. For who's sitting where
-        right now, see the Kanban board.
+        Each bar is a live headcount — leads currently at that stage or a later active one, same as the Kanban board.
       </p>
 
       <div className="space-y-1">
@@ -73,7 +65,6 @@ export function PipelineFunnel({
           const pct = (s.count / max) * 100;
           const prev = stages[i - 1];
           const dropOffPct = prev && prev.count > 0 ? Math.round((1 - s.count / prev.count) * 100) : null;
-          const dropped = s.activeCount !== undefined ? s.count - s.activeCount : 0;
           return (
             <div key={s.key}>
               {i > 0 && (
@@ -93,12 +84,6 @@ export function PipelineFunnel({
                   </div>
                 </div>
               </div>
-              {dropped > 0 && (
-                <div className="ml-[108px] mt-0.5 text-[10.5px] text-text-3">
-                  {s.activeCount!.toLocaleString()} still active now · {dropped.toLocaleString()} reached this stage,
-                  then went Dead/Declined, On Hold, or Other
-                </div>
-              )}
             </div>
           );
         })}

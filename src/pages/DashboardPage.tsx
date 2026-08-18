@@ -250,38 +250,24 @@ export function DashboardView({
   );
 
   const funnel = useMemo(() => {
-    // Current stage alone undercounts this — a lead that reached Negotiation
-    // before falling through to Dead/Declined still reached Negotiation, and
-    // "reached stage or further" is a historical claim, not a snapshot one.
-    // Real stage_change history fills in every lead whose current stage
-    // (dead_declined, onhold, others) sits outside the funnel entirely.
-    const furthestByLead = new Map<string, number>();
-    for (const a of activities) {
-      if (a.type !== 'stage_change') continue;
-      const bucket = funnelBucket((a.meta as any)?.to as LeadStage);
-      if (!bucket) continue;
-      const idx = FUNNEL_ORDER.indexOf(bucket);
-      const prev = furthestByLead.get(a.leadId) ?? -1;
-      if (idx > prev) furthestByLead.set(a.leadId, idx);
-    }
-    // Tracked separately from the "ever reached" buckets below — the gap
-    // between the two is exactly what makes a big cumulative number make
-    // sense next to a much smaller Kanban column: most of it is leads that
-    // reached this milestone and then left the active pipeline entirely.
-    const activeBuckets: number[] = [];
-    const everBuckets: number[] = [];
-    for (const l of leads) {
-      const currentBucket = funnelBucket(l.stage);
-      const currentIdx = currentBucket ? FUNNEL_ORDER.indexOf(currentBucket) : -1;
-      const everIdx = Math.max(currentIdx, furthestByLead.get(l.id) ?? -1);
-      if (currentIdx >= 0) activeBuckets.push(currentIdx);
-      if (everIdx >= 0) everBuckets.push(everIdx);
-    }
-    const stages = FUNNEL_ORDER.map((key, idx) => {
-      const count = everBuckets.filter((b) => b >= idx).length;
-      const activeCount = activeBuckets.filter((b) => b >= idx).length;
-      return { key, label: FUNNEL_LABELS[key], color: FUNNEL_COLORS[key], count, activeCount };
-    });
+    // Live headcount, cumulative by current stage — "Replied" counts every
+    // lead currently sitting at Replied or any later active stage, matching
+    // what the Kanban board shows right now. A lead that reached a stage and
+    // then went Dead/Declined, On Hold, or Other no longer counts anywhere
+    // here — that population is already broken out in the off-pipeline chips
+    // below instead of being folded back into these bars.
+    const activeBuckets = leads
+      .map((l) => {
+        const bucket = funnelBucket(l.stage);
+        return bucket ? FUNNEL_ORDER.indexOf(bucket) : -1;
+      })
+      .filter((idx) => idx >= 0);
+    const stages = FUNNEL_ORDER.map((key, idx) => ({
+      key,
+      label: FUNNEL_LABELS[key],
+      color: FUNNEL_COLORS[key],
+      count: activeBuckets.filter((b) => b >= idx).length,
+    }));
     const offFunnel = [
       { label: 'Dead / Declined', count: leads.filter((l) => l.stage === 'dead_declined').length, color: '#ef4444' },
       { label: 'On Hold', count: leads.filter((l) => l.stage === 'onhold').length, color: '#2dd4bf' },
@@ -294,7 +280,7 @@ export function DashboardView({
       totalLeads: leads.length,
       coldCount: leads.filter((l) => l.stage === 'new').length,
     };
-  }, [leads, activities]);
+  }, [leads]);
 
   // ── Sales: funnel efficiency (contact/qualify/close rate) ─────────────────
   // Real data, no new fetch — reuses the same cumulative funnel counts
@@ -966,7 +952,7 @@ export function DashboardView({
             <div className="space-y-3">
               {showSmsStats && (
                 <div className="card chart-layer">
-                  <CardHeader icon={Gauge} title="Pipeline" sub="cumulative — reached stage or further" />
+                  <CardHeader icon={Gauge} title="Pipeline" sub="live headcount — matches the Kanban board" />
                   <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
                     <div className="mt-3">
                       <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
