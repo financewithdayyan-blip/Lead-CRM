@@ -92,10 +92,8 @@ export function TemplateCategoryCard({
   const deleteTemplate = useDeleteDocTemplate();
   const getSignedUrl = useSignedTemplateUrl();
   const [uploading, setUploading] = useState(false);
-  const [pickedType, setPickedType] = useState<ContractType | undefined>(typeOptions?.[0]?.key);
+  const pickedType = typeOptions?.[0]?.key;
   const pdfInput = useRef<HTMLInputElement>(null);
-  const docxInput = useRef<HTMLInputElement>(null);
-  const pendingDocx = useRef<File | undefined>(undefined);
   const alwaysOpen = multi || !!typeOptions;
 
   async function handlePdfFile(file: File) {
@@ -105,9 +103,7 @@ export function TemplateCategoryCard({
         docType,
         contractType: typeOptions ? pickedType : contractType,
         pdfFile: file,
-        docxFile: pendingDocx.current,
       });
-      pendingDocx.current = undefined;
       onOpenMapper(template);
     } finally {
       setUploading(false);
@@ -136,27 +132,6 @@ export function TemplateCategoryCard({
         </div>
         {(items.length === 0 || alwaysOpen) && (
           <div className="flex items-center gap-1.5">
-            {typeOptions && (
-              <select
-                className="input !h-auto !w-auto !py-1.5 !text-[11px]"
-                value={pickedType}
-                onChange={(e) => setPickedType(e.target.value as ContractType)}
-                title="Which deal type is this template for?"
-              >
-                {typeOptions.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              className="btn !px-2.5 !py-1.5 text-[11px]"
-              onClick={() => docxInput.current?.click()}
-              title="Attach an optional Word original (reference only) before uploading the PDF"
-            >
-              + Word (optional)
-            </button>
             <button className="btn btn-primary !px-3 !py-1.5 text-[12px]" disabled={uploading} onClick={() => pdfInput.current?.click()}>
               {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
               {alwaysOpen ? 'Add Contract' : 'Upload template'}
@@ -171,20 +146,6 @@ export function TemplateCategoryCard({
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handlePdfFile(file);
-            e.target.value = '';
-          }}
-        />
-        <input
-          ref={docxInput}
-          type="file"
-          className="hidden"
-          accept=".doc,.docx"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              pendingDocx.current = file;
-              pdfInput.current?.click();
-            }
             e.target.value = '';
           }}
         />
