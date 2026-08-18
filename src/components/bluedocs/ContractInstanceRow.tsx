@@ -192,17 +192,38 @@ export function ContractInstanceRow({
       </div>
 
       {signed && (
-        <div className="relative mt-3 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#0B1E33] via-[#0f2745] to-[#0B1E33] px-3 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-          <div className="relative mx-9 flex items-center gap-2 overflow-hidden bg-gradient-to-r from-[#b3893a] via-[#e2c17c] to-[#b3893a] py-2.5 pl-5 pr-6 shadow-[0_3px_10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] [clip-path:polygon(0%_0%,96%_0%,100%_50%,96%_100%,0%_100%,4%_50%)]">
-            <Handshake size={13} className="shrink-0 text-[#0B1E33]" />
-            <span className="text-[12.5px] font-semibold tracking-wide text-[#0B1E33]">Deal closed — contract fully signed</span>
-            <Sparkles size={12} className="pointer-events-none absolute right-12 top-1.5 text-white/55" />
-            <Sparkles size={8} className="pointer-events-none absolute right-24 bottom-1.5 text-white/40" />
-            <Sparkles size={9} className="pointer-events-none absolute right-6 bottom-1.5 text-white/30" />
-          </div>
-          <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0B1E33] shadow-[0_2px_10px_rgba(0,0,0,0.45)]">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-accent/80 bg-gradient-to-br from-[#eccf94] to-accent">
-              <Handshake size={15} className="text-[#0B1E33]" />
+        <div className="relative mt-3 overflow-hidden rounded-xl border border-white/5 bg-gradient-to-br from-[#0B1E33] via-[#0f2745] to-[#0B1E33] p-5">
+          <div className="relative">
+            {/* Ribbon shape lives in its own SVG layer, purely decorative —
+               the text row below is never clipped by its geometry. */}
+            <svg
+              className="pointer-events-none absolute inset-y-0 left-6 right-6 my-auto h-9 w-[calc(100%-3rem)]"
+              viewBox="0 0 400 40"
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <linearGradient id="dealRibbonGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#b3893a" />
+                  <stop offset="50%" stopColor="#e6c988" />
+                  <stop offset="100%" stopColor="#b3893a" />
+                </linearGradient>
+              </defs>
+              <polygon points="0,20 20,2 380,2 400,20 380,38 20,38" fill="url(#dealRibbonGrad)" />
+            </svg>
+
+            <div className="relative flex h-9 items-center gap-2 pl-12 pr-8 text-[12.5px] font-semibold tracking-wide text-[#0B1E33]">
+              <Handshake size={13} className="shrink-0" />
+              <span>Deal closed — contract fully signed</span>
+            </div>
+
+            <Sparkles size={11} className="pointer-events-none absolute right-14 -top-1 text-white/55" />
+            <Sparkles size={8} className="pointer-events-none absolute right-24 bottom-0 text-white/35" />
+            <Sparkles size={9} className="pointer-events-none absolute right-8 top-0 text-white/40" />
+
+            <div className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#0B1E33] shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-accent/80 bg-gradient-to-br from-[#eccf94] to-accent">
+                <Handshake size={17} className="text-[#0B1E33]" />
+              </div>
             </div>
           </div>
         </div>
