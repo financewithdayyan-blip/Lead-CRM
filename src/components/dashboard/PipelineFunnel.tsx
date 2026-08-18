@@ -4,6 +4,12 @@ export interface FunnelStage {
   count: number;
   color: string;
   hint?: string;
+  /** Leads currently sitting at this stage or a later *active* one — the
+   * same population the Kanban board shows. `count` is larger whenever
+   * leads reached this milestone and then left the active pipeline (Dead/
+   * Declined, On Hold, Other); the gap is spelled out under the bar instead
+   * of left for someone to puzzle over next to the Kanban board. */
+  activeCount?: number;
 }
 
 export interface OffFunnelBucket {
@@ -67,6 +73,7 @@ export function PipelineFunnel({
           const pct = (s.count / max) * 100;
           const prev = stages[i - 1];
           const dropOffPct = prev && prev.count > 0 ? Math.round((1 - s.count / prev.count) * 100) : null;
+          const dropped = s.activeCount !== undefined ? s.count - s.activeCount : 0;
           return (
             <div key={s.key}>
               {i > 0 && (
@@ -86,6 +93,12 @@ export function PipelineFunnel({
                   </div>
                 </div>
               </div>
+              {dropped > 0 && (
+                <div className="ml-[108px] mt-0.5 text-[10.5px] text-text-3">
+                  {s.activeCount!.toLocaleString()} still active now · {dropped.toLocaleString()} reached this stage,
+                  then went Dead/Declined, On Hold, or Other
+                </div>
+              )}
             </div>
           );
         })}

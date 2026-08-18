@@ -264,19 +264,24 @@ export function DashboardView({
       const prev = furthestByLead.get(a.leadId) ?? -1;
       if (idx > prev) furthestByLead.set(a.leadId, idx);
     }
-    const buckets = leads
-      .map((l) => {
-        const currentBucket = funnelBucket(l.stage);
-        const currentIdx = currentBucket ? FUNNEL_ORDER.indexOf(currentBucket) : -1;
-        return Math.max(currentIdx, furthestByLead.get(l.id) ?? -1);
-      })
-      .filter((idx) => idx >= 0);
-    const stages = FUNNEL_ORDER.map((key, idx) => ({
-      key,
-      label: FUNNEL_LABELS[key],
-      color: FUNNEL_COLORS[key],
-      count: buckets.filter((b) => b >= idx).length,
-    }));
+    // Tracked separately from the "ever reached" buckets below — the gap
+    // between the two is exactly what makes a big cumulative number make
+    // sense next to a much smaller Kanban column: most of it is leads that
+    // reached this milestone and then left the active pipeline entirely.
+    const activeBuckets: number[] = [];
+    const everBuckets: number[] = [];
+    for (const l of leads) {
+      const currentBucket = funnelBucket(l.stage);
+      const currentIdx = currentBucket ? FUNNEL_ORDER.indexOf(currentBucket) : -1;
+      const everIdx = Math.max(currentIdx, furthestByLead.get(l.id) ?? -1);
+      if (currentIdx >= 0) activeBuckets.push(currentIdx);
+      if (everIdx >= 0) everBuckets.push(everIdx);
+    }
+    const stages = FUNNEL_ORDER.map((key, idx) => {
+      const count = everBuckets.filter((b) => b >= idx).length;
+      const activeCount = activeBuckets.filter((b) => b >= idx).length;
+      return { key, label: FUNNEL_LABELS[key], color: FUNNEL_COLORS[key], count, activeCount };
+    });
     const offFunnel = [
       { label: 'Dead / Declined', count: leads.filter((l) => l.stage === 'dead_declined').length, color: '#ef4444' },
       { label: 'On Hold', count: leads.filter((l) => l.stage === 'onhold').length, color: '#2dd4bf' },
