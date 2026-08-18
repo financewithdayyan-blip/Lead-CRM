@@ -2,8 +2,16 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useGenerateContract } from '@/hooks/useContractInstances';
+import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatCurrency } from '@/lib/currency';
+import { formatPhone } from '@/lib/utils';
 import type { DocTemplate } from '@/hooks/useDocTemplates';
+
+// Blue Docs always sends/receives from slot 2 — see BLUEDOCS_NUMBER in
+// create-contract-instance/submit-signature (ZOOM_FROM_NUMBER_2). The
+// buyer's printed contact number on the PSA should always be this same
+// number, not a separately typed one that could drift out of sync with it.
+const BLUEDOCS_SMS_SLOT = '2';
 
 // The Cash Deal PSA's own field IDs, captured off its live `doc_templates.fields`
 // mapping — see supabase/functions/create-contract-instance for how these land
@@ -67,11 +75,12 @@ export function FillCashDealContractModal({
 }) {
   const generate = useGenerateContract();
   const buyerRole = template.partyRoles[0]?.id;
+  const { data: numberLabels } = useSmsNumberLabels();
+  const buyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
 
   const [sellerName, setSellerName] = useState('');
   const [sellerPhone, setSellerPhone] = useState('');
   const [buyerName, setBuyerName] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
   const [values, setValues] = useState<Record<FieldKey, string>>({
     sellerName: '',
     buyerName: '',
@@ -152,8 +161,13 @@ export function FillCashDealContractModal({
             <input className="input" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Phone (your number)</label>
-            <input className="input" inputMode="tel" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} />
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Phone</label>
+            {buyerPhone ? (
+              <div className="input flex items-center !bg-surface-3 text-text-2">{formatPhone(buyerPhone)}</div>
+            ) : (
+              <div className="input flex items-center !bg-danger-dim text-danger">Blue Docs number not configured</div>
+            )}
+            <p className="mt-1 text-[11px] text-text-3">Always matches the number Blue Docs sends and receives from — not editable here.</p>
           </div>
         </div>
 
