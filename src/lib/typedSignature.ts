@@ -5,19 +5,34 @@ export interface SignatureFontOption {
 }
 
 /** Four distinct script styles to choose from — one flourished (Great
- * Vibes, the long-standing default), one casual/handwritten (Dancing
- * Script), one flowing brush script (Alex Brush), and one classic looping
- * cursive (Sacramento) — so a typed signature doesn't always look identical
- * regardless of who's signing. */
+ * Vibes, the long-standing default), one flowing brush script (Allura), one
+ * romantic looping script (Parisienne), and one classic looping cursive
+ * (Sacramento) — so a typed signature doesn't always look identical
+ * regardless of who's signing. Dancing Script and Alex Brush were dropped:
+ * both are designed around lowercase/mixed-case flow, and a party whose
+ * name is on record in ALL CAPS (common on these contracts) turned them
+ * into blocky or overlapping messes — these four hold up in either case. */
 export const SIGNATURE_FONTS: SignatureFontOption[] = [
   { id: 'great-vibes', label: 'Great Vibes', family: 'Great Vibes' },
-  { id: 'dancing-script', label: 'Dancing Script', family: 'Dancing Script' },
-  { id: 'alex-brush', label: 'Alex Brush', family: 'Alex Brush' },
+  { id: 'allura', label: 'Allura', family: 'Allura' },
+  { id: 'parisienne', label: 'Parisienne', family: 'Parisienne' },
   { id: 'sacramento', label: 'Sacramento', family: 'Sacramento' },
 ];
 
 const SIGNATURE_FONT_HREF =
-  'https://fonts.googleapis.com/css2?family=Great+Vibes&family=Dancing+Script&family=Alex+Brush&family=Sacramento&display=swap';
+  'https://fonts.googleapis.com/css2?family=Great+Vibes&family=Allura&family=Parisienne&family=Sacramento&display=swap';
+
+/** Script fonts are drawn to connect lowercase letterforms — feeding them an
+ * ALL-CAPS name (common here, since some parties have their legal name on
+ * file that way) breaks that flow into blocky or overlapping capitals. This
+ * normalizes purely for display/rasterization, never touching the raw
+ * value typed into the name field. */
+export function formatSignatureName(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
 
 /** Injects the signature fonts' stylesheet once per page load — only the
  * public signing page needs it, so it's loaded on demand rather than

@@ -13,7 +13,7 @@ import {
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
 import { formatCurrency } from '@/lib/currency';
-import { loadSignatureFont, renderTypedSignature, SIGNATURE_FONTS } from '@/lib/typedSignature';
+import { formatSignatureName, loadSignatureFont, renderTypedSignature, SIGNATURE_FONTS } from '@/lib/typedSignature';
 import { roleLabel } from '@/hooks/useDocTemplates';
 
 const MAX_PAGE_WIDTH = 680;
@@ -226,10 +226,11 @@ export function SignContractPage() {
   const signatureReady = !!signatureName.trim();
   const canSubmit = allFieldsFilled && (!needsSignature || signatureReady);
   const selectedFont = SIGNATURE_FONTS.find((f) => f.id === signatureFontId) ?? SIGNATURE_FONTS[0];
+  const displaySignatureName = formatSignatureName(signatureName);
 
   async function handleSubmit() {
     if (!token || !canSubmit) return;
-    const dataUrl = needsSignature ? await renderTypedSignature(signatureName.trim(), selectedFont.family) : undefined;
+    const dataUrl = needsSignature ? await renderTypedSignature(displaySignatureName, selectedFont.family) : undefined;
     const formatted = { ...fieldInputs };
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
@@ -485,7 +486,7 @@ export function SignContractPage() {
                     >
                       <span className="text-[10px] font-medium uppercase tracking-wide text-text-3">{font.label}</span>
                       <span style={{ fontFamily: `"${font.family}", cursive`, fontSize: 24, color: '#111827' }}>
-                        {signatureName || 'Your Name'}
+                        {displaySignatureName || 'Your Name'}
                       </span>
                     </button>
                   ))}
@@ -494,7 +495,7 @@ export function SignContractPage() {
             </div>
 
             <div className="mt-2.5 flex h-24 items-center justify-center rounded-md border border-dashed border-border-2 bg-surface-3">
-              <span style={{ fontFamily: `"${selectedFont.family}", cursive`, fontSize: 40, color: '#111827' }}>{signatureName || ' '}</span>
+              <span style={{ fontFamily: `"${selectedFont.family}", cursive`, fontSize: 40, color: '#111827' }}>{displaySignatureName || ' '}</span>
             </div>
           </div>
         ) : (
