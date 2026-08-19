@@ -34,24 +34,88 @@ const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 // faded cards) rather than removed, so a full pipeline doesn't bury the
 // stages that still need attention.
 const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'onhold', 'others'];
-// A closed deal earns a quiet color tint on its own card — brass for a
-// fully closed file, green while the contract is still in motion, light
-// red for Dead/Declined — the same accent colors STAGE_CONFIG already uses
-// for those stages, just applied to the card itself instead of only the
-// column's dot/top border. Qualified isn't here — it gets the full
-// navy/gold spotlight treatment on every card instead (see spotlightOn).
-const CARD_TINT: Partial<Record<LeadStage, { border: string; bg: string }>> = {
-  contract: { border: 'border-success/40', bg: 'bg-success-dim' },
-  closed: { border: 'border-accent/40', bg: 'bg-accent-dim' },
-  dead_declined: { border: 'border-danger/30', bg: 'bg-danger-dim' },
+interface CardTheme {
+  gradient: string;
+  text: string;
+  sub: string;
+  sub3: string;
+  divider: string;
+  callBtn: string;
+  textBtn: string;
+  iconBtn: string;
+}
+
+// Gold-on-dark is the one recurring signature — the same "this button
+// matters" accent used for the Call button on every full-color card below
+// except Closed, where the card itself is already gold and needs the
+// inverse (navy button) to read against it.
+const GOLD_CALL_BTN = 'bg-accent text-text hover:bg-accent-hover';
+const WHITE_TEXT_BTN = 'bg-white/10 text-white hover:bg-white/20';
+const WHITE_ICON_BTN = 'text-white/70 hover:bg-white/10 hover:text-white';
+
+const NAVY_THEME: CardTheme = {
+  gradient: 'from-sidebar to-sidebar-2',
+  text: 'text-white',
+  sub: 'text-white/70',
+  sub3: 'text-white/50',
+  divider: 'border-white/10',
+  callBtn: GOLD_CALL_BTN,
+  textBtn: WHITE_TEXT_BTN,
+  iconBtn: WHITE_ICON_BTN,
+};
+
+// Every fully-colored card below shares the same shape — a gradient built
+// from that stage's own STAGE_CONFIG color, not an arbitrary new palette —
+// so the board reads as "here's what's happening with this lead" at a
+// glance instead of every stage past Qualified looking the same pale gray.
+const CARD_THEME: Partial<Record<LeadStage, CardTheme>> = {
+  // Qualified — every card, not just the best-scored one (see `themed` below).
+  followup: NAVY_THEME,
+  // Contract — a deal actively in motion.
+  contract: {
+    gradient: 'from-[#059669] to-[#065f46]',
+    text: 'text-white',
+    sub: 'text-white/70',
+    sub3: 'text-white/50',
+    divider: 'border-white/10',
+    callBtn: GOLD_CALL_BTN,
+    textBtn: WHITE_TEXT_BTN,
+    iconBtn: WHITE_ICON_BTN,
+  },
+  // Closed — the brass "closing-table" accent, sparingly used everywhere
+  // else in the app, gets its one moment to be the whole card. Gold-on-gold
+  // has no contrast, so the Call button flips to navy here instead of gold.
+  closed: {
+    gradient: 'from-accent to-accent-hover',
+    text: 'text-text',
+    sub: 'text-text/75',
+    sub3: 'text-text/55',
+    divider: 'border-text/15',
+    callBtn: 'bg-sidebar text-white hover:bg-sidebar-2',
+    textBtn: 'bg-text/10 text-text hover:bg-text/15',
+    iconBtn: 'text-text/60 hover:bg-text/10 hover:text-text',
+  },
+  // Dead/Declined — still visually recedes (see DIMMED_STAGES' opacity-70
+  // below), but the card itself is a real, deliberate red rather than a
+  // washed-out pink tint.
+  dead_declined: {
+    gradient: 'from-[#dc2626] to-[#991b1b]',
+    text: 'text-white',
+    sub: 'text-white/70',
+    sub3: 'text-white/50',
+    divider: 'border-white/10',
+    callBtn: GOLD_CALL_BTN,
+    textBtn: WHITE_TEXT_BTN,
+    iconBtn: WHITE_ICON_BTN,
+  },
 };
 // The one dark "spotlight" card per column — the strongest lead in that
 // stage, using the AI Lead Score already computed on the Lead Profile
 // rather than a made-up rule. Gated at "Good" (65+) so a column with no
 // scored leads, or only weak ones, simply has no spotlight card — same as
-// the mockup, where not every column has one. Qualified is excluded here
-// since every one of its cards already gets the spotlight look regardless
-// of score.
+// the mockup, where not every column has one. Stages already in CARD_THEME
+// are excluded (see spotlightIds below) since every card there already
+// gets a themed look regardless of score.
 const SPOTLIGHT_MIN_SCORE = 65;
 
 /** Lowercases and reduces every run of punctuation to a single space, so commas,
@@ -184,29 +248,23 @@ function KanbanCardVisual({
     });
   }
 
-  const tint = CARD_TINT[lead.stage];
   const dimmed = DIMMED_STAGES.includes(lead.stage);
-  // Spotlight applies to the single highest-scored lead per column, PLUS
-  // every card in Qualified — that stage gets the navy/gold treatment
-  // across the board, not just its best-scored lead — as long as nothing
-  // higher-priority (an in-progress multi-select, a shared-lead badge) is
-  // already claiming the card's background.
-  const spotlightOn = (spotlight || lead.stage === 'followup') && !selected && !sharedFrom;
+  // A stage in CARD_THEME gets its theme on every card; anywhere else, only
+  // the single AI-score spotlight lead (if any) borrows the navy look —
+  // either way, nothing higher-priority (an in-progress multi-select, a
+  // shared-lead badge) is already claiming the card's background.
+  const theme = CARD_THEME[lead.stage] ?? (spotlight ? NAVY_THEME : null);
+  const themed = !!theme && !selected && !sharedFrom;
 
-  const sx = spotlightOn
-    ? {
-        sub: 'text-white/70',
-        sub3: 'text-white/50',
-        divider: 'border-white/10',
-        callBtn: 'bg-accent text-text hover:bg-accent-hover',
-        textBtn: 'bg-white/10 text-white hover:bg-white/20',
-      }
+  const sx = themed
+    ? theme!
     : {
         sub: 'text-text-2',
         sub3: 'text-text-3',
         divider: 'border-surface-3',
         callBtn: 'border border-primary/30 bg-primary-dim text-primary hover:bg-primary/20',
         textBtn: 'border border-border-2 bg-surface-3 text-text-2 hover:bg-surface-3/70',
+        iconBtn: 'text-text-3 hover:bg-surface-3 hover:text-text-2',
       };
 
   return (
@@ -216,11 +274,9 @@ function KanbanCardVisual({
           ? 'border-primary bg-primary/5'
           : sharedFrom
             ? 'border-info/30 bg-info-dim'
-            : spotlightOn
-              ? 'border-transparent bg-gradient-to-br from-[#0B1E33] to-[#132A45]'
-              : tint
-                ? `${tint.border} ${tint.bg}`
-                : 'border-border-2 bg-surface'
+            : themed
+              ? `border-transparent bg-gradient-to-br ${theme!.gradient}`
+              : 'border-border-2 bg-surface'
       } ${dimmed && !selected ? 'opacity-70' : ''} ${lifted ? 'rotate-1 shadow-2xl' : 'shadow-card hover:shadow-card-hover'}`}
       style={lifted ? { willChange: 'transform' } : undefined}
       onDoubleClick={onOpen}
@@ -237,7 +293,7 @@ function KanbanCardVisual({
         <div {...dragProps} className={`min-w-0 flex-1 ${dragProps ? 'cursor-grab active:cursor-grabbing' : ''}`}>
           <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
             <div className="flex min-w-0 items-center gap-1.5">
-              <span className={`truncate font-medium ${spotlightOn ? 'text-white' : 'text-text'}`}>
+              <span className={`truncate font-medium ${themed ? theme!.text : 'text-text'}`}>
                 {lead.firstName} {lead.lastName}
               </span>
             </div>
@@ -262,7 +318,7 @@ function KanbanCardVisual({
               {lead.phone && (
                 <button
                   onClick={copyPhone}
-                  className={`rounded p-1 transition-colors ${copied ? 'text-success' : `${sx.sub3} hover:bg-surface-3 hover:text-text-2`}`}
+                  className={`rounded p-1 transition-colors ${copied ? 'text-success' : sx.iconBtn}`}
                   title={copied ? 'Copied!' : 'Copy phone'}
                 >
                   {copied ? <Check size={11} /> : <Copy size={11} />}
@@ -273,7 +329,7 @@ function KanbanCardVisual({
                   e.stopPropagation();
                   onOpen();
                 }}
-                className={`rounded p-1 ${sx.sub3} transition-colors hover:bg-surface-3 hover:text-text-2`}
+                className={`rounded p-1 transition-colors ${sx.iconBtn}`}
                 title="Edit"
               >
                 <Pencil size={11} />
@@ -284,7 +340,7 @@ function KanbanCardVisual({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className={`rounded p-1 ${sx.sub3} transition-colors hover:bg-danger-dim hover:text-danger`}
+                  className={`rounded p-1 transition-colors ${themed ? sx.iconBtn : 'text-text-3 hover:bg-danger-dim hover:text-danger'}`}
                   title="Delete"
                 >
                   <Trash2 size={11} />
@@ -634,7 +690,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const spotlightIds = useMemo(() => {
     const ids = new Set<string>();
     for (const stage of STAGE_ORDER) {
-      if (DIMMED_STAGES.includes(stage) || stage === 'followup') continue;
+      if (DIMMED_STAGES.includes(stage) || stage in CARD_THEME) continue;
       let best: Lead | null = null;
       for (const l of byStage[stage]) {
         if (l.aiScore !== null && l.aiScore >= SPOTLIGHT_MIN_SCORE && (!best || l.aiScore > best.aiScore!)) best = l;
