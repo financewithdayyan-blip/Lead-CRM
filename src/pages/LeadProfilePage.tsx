@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Archive, ChevronDown, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
@@ -23,14 +23,7 @@ import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
 import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
 import { PacketTab } from '@/components/packets/PacketTab';
 import { SmsThreadTab } from '@/components/sms/SmsThreadTab';
-
-function scoreColor(score: number) {
-  if (score >= 85) return { ring: 'ring-emerald-500', bg: 'bg-emerald-500', text: 'text-emerald-400', label: 'High' };
-  if (score >= 65) return { ring: 'ring-blue-500', bg: 'bg-blue-500', text: 'text-blue-400', label: 'Good' };
-  if (score >= 45) return { ring: 'ring-amber-500', bg: 'bg-amber-500', text: 'text-amber-400', label: 'Moderate' };
-  if (score >= 25) return { ring: 'ring-orange-500', bg: 'bg-orange-500', text: 'text-orange-400', label: 'Low' };
-  return { ring: 'ring-red-500', bg: 'bg-red-500', text: 'text-red-400', label: 'Dead' };
-}
+import { scoreColor } from '@/lib/aiScore';
 
 function AiScoreCard({ lead }: { lead: Lead }) {
   const scoreLead = useScoreLead();
@@ -377,7 +370,15 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   const updateLead = useUpdateLead();
   const setLeadTags = useSetLeadTags();
   const overrideEarlyExit = useOverrideFollowupEarlyExit();
-  const [tab, setTab] = useState<TabKey>('overview');
+  // Lets a link (e.g. the Kanban card's "Text" action) land straight on a
+  // specific tab via `?tab=sms` instead of always opening on Overview. Read
+  // once at mount — this page doesn't re-init the tab if the query string
+  // changes underneath an already-open profile.
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [tab, setTab] = useState<TabKey>(
+    tabParam && (TABS as readonly string[]).includes(tabParam) ? (tabParam as TabKey) : 'overview',
+  );
   const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);

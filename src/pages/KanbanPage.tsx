@@ -11,7 +11,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, X as XIcon } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon } from 'lucide-react';
+import { scoreColor } from '@/lib/aiScore';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
@@ -42,6 +43,12 @@ const CARD_TINT: Partial<Record<LeadStage, { border: string; bg: string }>> = {
   contract: { border: 'border-success/40', bg: 'bg-success-dim' },
   closed: { border: 'border-accent/40', bg: 'bg-accent-dim' },
 };
+// The one dark "spotlight" card per column — the strongest lead in that
+// stage, using the AI Lead Score already computed on the Lead Profile
+// rather than a made-up rule. Gated at "Good" (65+) so a column with no
+// scored leads, or only weak ones, simply has no spotlight card — same as
+// the mockup, where not every column has one.
+const SPOTLIGHT_MIN_SCORE = 65;
 
 /** Lowercases and reduces every run of punctuation to a single space, so commas,
  *  periods, hashes and hyphens can't block a match on either side. */
@@ -136,8 +143,11 @@ function KanbanCardVisual({
   sharedFrom,
   messageCount = 0,
   selected,
+  spotlight = false,
+  canSms,
   onToggleSelect,
   onCall,
+  onText,
   onOpen,
   onDelete,
   dragProps,
@@ -149,8 +159,11 @@ function KanbanCardVisual({
   sharedFrom?: string;
   messageCount?: number;
   selected: boolean;
+  spotlight?: boolean;
+  canSms: boolean;
   onToggleSelect: () => void;
   onCall: () => void;
+  onText: () => void;
   onOpen: () => void;
   onDelete: () => void;
   dragProps?: React.HTMLAttributes<HTMLDivElement>;
@@ -169,6 +182,29 @@ function KanbanCardVisual({
 
   const tint = CARD_TINT[lead.stage];
   const dimmed = DIMMED_STAGES.includes(lead.stage);
+  // Spotlight only actually applies once nothing higher-priority (an
+  // in-progress multi-select, a shared-lead badge) is already claiming the
+  // card's background.
+  const spotlightOn = spotlight && !selected && !sharedFrom;
+  const scoreColors = lead.aiScore !== null ? scoreColor(lead.aiScore) : null;
+
+  const sx = spotlightOn
+    ? {
+        sub: 'text-white/70',
+        sub3: 'text-white/50',
+        divider: 'border-white/10',
+        iconBtn: 'border-white/20 bg-white/10 text-white hover:border-white/40',
+        callBtn: 'bg-accent text-text hover:bg-accent-hover',
+        textBtn: 'bg-white/10 text-white hover:bg-white/20',
+      }
+    : {
+        sub: 'text-text-2',
+        sub3: 'text-text-3',
+        divider: 'border-surface-3',
+        iconBtn: 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2',
+        callBtn: 'border border-primary/30 bg-primary-dim text-primary hover:bg-primary/20',
+        textBtn: 'border border-border-2 bg-surface-3 text-text-2 hover:bg-surface-3/70',
+      };
 
   return (
     <div
@@ -177,9 +213,11 @@ function KanbanCardVisual({
           ? 'border-primary bg-primary/5'
           : sharedFrom
             ? 'border-info/30 bg-info-dim'
-            : tint
-              ? `${tint.border} ${tint.bg}`
-              : 'border-border-2 bg-surface'
+            : spotlightOn
+              ? 'border-transparent bg-gradient-to-br from-[#0B1E33] to-[#132A45]'
+              : tint
+                ? `${tint.border} ${tint.bg}`
+                : 'border-border-2 bg-surface'
       } ${dimmed && !selected ? 'opacity-70' : ''} ${lifted ? 'rotate-1 shadow-2xl' : 'shadow-card hover:shadow-card-hover'}`}
       style={lifted ? { willChange: 'transform' } : undefined}
       onDoubleClick={onOpen}
@@ -195,12 +233,20 @@ function KanbanCardVisual({
         />
         <div {...dragProps} className={`min-w-0 flex-1 ${dragProps ? 'cursor-grab active:cursor-grabbing' : ''}`}>
           <div className="flex items-start justify-between gap-1">
-            <div className="truncate font-medium text-text">
+            <div className={`truncate font-medium ${spotlightOn ? 'text-white' : 'text-text'}`}>
               {lead.firstName} {lead.lastName}
             </div>
-            <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
+            <div className={`shrink-0 text-[10px] ${sx.sub3}`}>#{lead.leadNum}</div>
           </div>
-          <div className="mt-1 flex items-center gap-1.5 text-text-2">
+          {scoreColors && (
+            <div
+              className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${scoreColors.bg} text-white`}
+              title={`AI Lead Score: ${lead.aiScore} (${scoreColors.label})`}
+            >
+              <Sparkles size={9} /> {lead.aiScore}
+            </div>
+          )}
+          <div className={`mt-1 flex items-center gap-1.5 ${sx.sub}`}>
             <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
             {messageCount > 0 && (
               <span
@@ -212,7 +258,7 @@ function KanbanCardVisual({
             )}
           </div>
           {lead.address && (
-            <div className="mt-0.5 flex items-start gap-1 truncate text-text-3" title={lead.address}>
+            <div className={`mt-0.5 flex items-start gap-1 truncate ${sx.sub3}`} title={lead.address}>
               <MapPin size={10} className="mt-0.5 shrink-0" />
               <span className="truncate">{lead.address}</span>
             </div>
@@ -288,22 +334,16 @@ function KanbanCardVisual({
           {lead.phone && (
             <button
               onClick={copyPhone}
-              className={`rounded-full border p-1 transition-colors ${copied ? 'border-success bg-surface-3 text-success' : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'}`}
+              className={`rounded-full border p-1 transition-colors ${
+                copied
+                  ? 'border-success bg-surface-3 text-success'
+                  : spotlightOn
+                    ? sx.iconBtn
+                    : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'
+              }`}
               title={copied ? 'Copied!' : 'Copy phone'}
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
-            </button>
-          )}
-          {!viewOnly && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCall();
-              }}
-              className="rounded-full border border-primary/30 bg-primary-dim p-1 text-primary hover:border-primary"
-              title="Log a call"
-            >
-              <Phone size={12} />
             </button>
           )}
           <button
@@ -311,7 +351,7 @@ function KanbanCardVisual({
               e.stopPropagation();
               onOpen();
             }}
-            className="rounded-full border border-border-2 bg-surface-3 p-1 text-text-2 hover:border-border-2"
+            className={`rounded-full border p-1 ${spotlightOn ? sx.iconBtn : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'}`}
             title="Edit"
           >
             <Pencil size={12} />
@@ -322,7 +362,7 @@ function KanbanCardVisual({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="rounded-full border border-border-2 bg-surface-3 p-1 text-danger hover:border-danger"
+              className={`rounded-full border p-1 ${spotlightOn ? `${sx.iconBtn} !text-red-300` : 'border-border-2 bg-surface-3 text-danger hover:border-danger'}`}
               title="Delete"
             >
               <Trash2 size={12} />
@@ -330,6 +370,32 @@ function KanbanCardVisual({
           )}
         </div>
       </div>
+      {(!viewOnly || canSms) && lead.phone && (
+        <div className={`mt-1.5 flex gap-1.5 border-t pt-2 ${sx.divider}`}>
+          {!viewOnly && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCall();
+              }}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors ${sx.callBtn}`}
+            >
+              <Phone size={11} /> Call
+            </button>
+          )}
+          {canSms && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onText();
+              }}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors ${sx.textBtn}`}
+            >
+              <MessageSquare size={11} /> Text
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -344,8 +410,11 @@ const KanbanCard = memo(
     sharedFrom,
     messageCount,
     selected,
+    spotlight,
+    canSms,
     onToggleSelect,
     onCall,
+    onText,
     onOpen,
     onDelete,
   }: {
@@ -355,8 +424,11 @@ const KanbanCard = memo(
     sharedFrom?: string;
     messageCount?: number;
     selected: boolean;
+    spotlight: boolean;
+    canSms: boolean;
     onToggleSelect: () => void;
     onCall: () => void;
+    onText: () => void;
     onOpen: () => void;
     onDelete: () => void;
   }) {
@@ -375,8 +447,11 @@ const KanbanCard = memo(
             sharedFrom={sharedFrom}
             messageCount={messageCount}
             selected={selected}
+            spotlight={spotlight}
+            canSms={canSms}
             onToggleSelect={onToggleSelect}
             onCall={onCall}
+            onText={onText}
             onOpen={onOpen}
             onDelete={onDelete}
             dragProps={{ ...listeners, ...attributes }}
@@ -392,7 +467,9 @@ const KanbanCard = memo(
     prev.tags === next.tags &&
     prev.sharedFrom === next.sharedFrom &&
     prev.messageCount === next.messageCount &&
-    prev.selected === next.selected,
+    prev.selected === next.selected &&
+    prev.spotlight === next.spotlight &&
+    prev.canSms === next.canSms,
 );
 
 // ─── Column ───────────────────────────────────────────────────────────────────
@@ -405,9 +482,12 @@ const KanbanColumn = memo(function KanbanColumn({
   receivedShares,
   messageCounts,
   selectedIds,
+  spotlightIds,
+  canSms,
   onToggleSelect,
   onToggleSelectMany,
   onCall,
+  onText,
   onOpen,
   onDelete,
   setClearTarget,
@@ -419,9 +499,12 @@ const KanbanColumn = memo(function KanbanColumn({
   receivedShares: Record<string, string>;
   messageCounts: Record<string, number>;
   selectedIds: Set<string>;
+  spotlightIds: Set<string>;
+  canSms: boolean;
   onToggleSelect: (id: string) => void;
   onToggleSelectMany: (ids: string[], select: boolean) => void;
   onCall: (id: string) => void;
+  onText: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   setClearTarget: (stage: LeadStage | null) => void;
@@ -485,8 +568,11 @@ const KanbanColumn = memo(function KanbanColumn({
               sharedFrom={receivedShares[l.id]}
               messageCount={messageCounts[l.id]}
               selected={selectedIds.has(l.id)}
+              spotlight={spotlightIds.has(l.id)}
+              canSms={canSms}
               onToggleSelect={() => onToggleSelect(l.id)}
               onCall={() => onCall(l.id)}
+              onText={() => onText(l.id)}
               onOpen={() => onOpen(l.id)}
               onDelete={() => onDelete(l.id)}
             />
@@ -565,6 +651,23 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     for (const lead of filtered) map[lead.stage as LeadStage]?.push(lead);
     return map;
   }, [filtered]);
+
+  // One "spotlight" card per active column — the highest AI Lead Score in
+  // that stage, when it's actually strong (65+). Reuses the score already
+  // computed on the Lead Profile instead of a made-up highlighting rule;
+  // stages with no scored (or only weak) leads simply get no spotlight.
+  const spotlightIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const stage of STAGE_ORDER) {
+      if (DIMMED_STAGES.includes(stage)) continue;
+      let best: Lead | null = null;
+      for (const l of byStage[stage]) {
+        if (l.aiScore !== null && l.aiScore >= SPOTLIGHT_MIN_SCORE && (!best || l.aiScore > best.aiScore!)) best = l;
+      }
+      if (best) ids.add(best.id);
+    }
+    return ids;
+  }, [byStage]);
 
   // Whoever's leads are actually shown on this board — targetUserId when
   // viewing a team member's board (MemberKanbanPage), otherwise the viewing
@@ -724,6 +827,10 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`);
   }, [navigate, targetUserId]);
 
+  const handleOpenSms = useCallback((id: string) => {
+    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}?tab=sms` : `/leads/${id}?tab=sms`);
+  }, [navigate, targetUserId]);
+
   const selCount = selectedIds.size;
 
   async function handleSendReminders() {
@@ -862,9 +969,12 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               receivedShares={receivedShares}
               messageCounts={messageCounts}
               selectedIds={selectedIds}
+              spotlightIds={spotlightIds}
+              canSms={isAdmin}
               onToggleSelect={handleToggleSelect}
               onToggleSelectMany={handleToggleSelectMany}
               onCall={handleCall}
+              onText={handleOpenSms}
               onOpen={handleOpen}
               onDelete={setDeleteTarget}
               setClearTarget={setClearTarget}
@@ -883,8 +993,11 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               sharedFrom={receivedShares[activeLead.id]}
               messageCount={messageCounts[activeLead.id]}
               selected={false}
+              spotlight={spotlightIds.has(activeLead.id)}
+              canSms={isAdmin}
               onToggleSelect={() => {}}
               onCall={() => {}}
+              onText={() => {}}
               onOpen={() => {}}
               onDelete={() => {}}
               lifted
