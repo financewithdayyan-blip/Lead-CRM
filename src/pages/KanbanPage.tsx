@@ -525,7 +525,7 @@ const KanbanColumn = memo(function KanbanColumn({
         )}
       </div>
       {leads.length === 0 ? (
-        <div className="flex-1 overflow-y-auto p-1.5" style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}>
+        <div className="flex-1 overflow-y-auto p-1.5" style={{ minHeight: 80, maxHeight: 'calc(100vh - 140px)' }}>
           <div className="py-6 text-center text-[12px] text-text-3">No leads</div>
         </div>
       ) : (
@@ -534,7 +534,7 @@ const KanbanColumn = memo(function KanbanColumn({
           getKey={(l) => l.id}
           estimateSize={110}
           className="flex-1 overflow-y-auto p-1.5"
-          style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}
+          style={{ minHeight: 80, maxHeight: 'calc(100vh - 140px)' }}
           renderItem={(l) => (
             <KanbanCard
               lead={l}
