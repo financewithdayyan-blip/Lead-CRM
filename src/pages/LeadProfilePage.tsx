@@ -618,7 +618,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       </div>
 
       {tab === 'overview' && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">
             <OverviewTab lead={lead} leadId={lead.id} />
             <PropertySnapshotCard lead={lead} onViewFull={() => setTab('property')} />

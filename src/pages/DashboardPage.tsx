@@ -826,7 +826,7 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Today</SectionLabel>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
                 <ScheduledCallsCard leads={leads} />
                 <TasksCard userId={userId} leads={leads} />
               </div>
@@ -857,7 +857,7 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Sales Performance</SectionLabel>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
                 <div className="card">
                   <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → close" />
                   <div className="mt-5 flex justify-between">
@@ -957,7 +957,7 @@ export function DashboardView({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
                 <div className="card">
                   <CardHeader icon={Hash} title="Pipeline Breakdown" />
                   <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-surface-3">
@@ -1021,7 +1021,7 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Marketing</SectionLabel>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
                 <div className="card lg:col-span-2">
                   <CardHeader icon={Megaphone} title="Lead Volume" sub="new leads per week, last 12 weeks" />
                   {(() => {
@@ -1030,11 +1030,15 @@ export function DashboardView({
                       <div className="mt-4 flex items-end gap-1.5" style={{ height: 120 }}>
                         {leadVolumeTrend.map((w) => (
                           <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
-                            <div className="flex w-full flex-1 items-end">
+                            {/* A faint full-height track behind the bar so a genuinely
+                                small week (real leads, just few of them) still reads as
+                                "a little" against the axis, not indistinguishable from
+                                zero next to a much bigger historical import spike. */}
+                            <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
                               <div
                                 className="w-full rounded-t-sm bg-primary"
-                                style={{ height: `${Math.max((w.count / max) * 100, 3)}%` }}
-                                title={`${w.count} leads`}
+                                style={{ height: `${Math.max((w.count / max) * 100, 4)}%` }}
+                                title={`${w.label}: ${w.count} lead${w.count === 1 ? '' : 's'}`}
                               />
                             </div>
                             <div className="text-[9px] text-text-3">{w.label}</div>
