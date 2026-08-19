@@ -11,8 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon } from 'lucide-react';
-import { scoreColor } from '@/lib/aiScore';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
@@ -27,7 +26,6 @@ import { useThreadMessageCounts } from '@/hooks/useLeadMessages';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { formatDate, formatPhone, localIsoDate, toE164 } from '@/lib/utils';
-import { isTouchScheduledToday, isTouchedToday, nextScheduledTouchDate, formatTouchDate } from '@/lib/followupSchedule';
 import { STAGE_ORDER, STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
@@ -194,7 +192,6 @@ function KanbanCardVisual({
   // higher-priority (an in-progress multi-select, a shared-lead badge) is
   // already claiming the card's background.
   const spotlightOn = (spotlight || lead.stage === 'followup') && !selected && !sharedFrom;
-  const scoreColors = lead.aiScore !== null ? scoreColor(lead.aiScore) : null;
 
   const sx = spotlightOn
     ? {
@@ -243,14 +240,6 @@ function KanbanCardVisual({
               <span className={`truncate font-medium ${spotlightOn ? 'text-white' : 'text-text'}`}>
                 {lead.firstName} {lead.lastName}
               </span>
-              {scoreColors && (
-                <span
-                  className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${scoreColors.bg} text-white`}
-                  title={`AI Lead Score: ${lead.aiScore} (${scoreColors.label})`}
-                >
-                  <Sparkles size={8} /> {lead.aiScore}
-                </span>
-              )}
             </div>
             <div className={`shrink-0 text-[10px] ${sx.sub3}`}>#{lead.leadNum}</div>
           </div>
@@ -310,11 +299,11 @@ function KanbanCardVisual({
             </div>
           )}
           {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
-          {/* Every small status pill shares one wrapping row instead of each
-              stacking on its own full-width line — a card with a follow-up
-              date, a share badge, tags, and a touch counter used to run six
-              lines tall; here they just wrap. */}
-          {(lead.tagIds.length > 0 || lead.nextFollowUp || sharedFrom || lead.stage === 'followup') && (
+          {/* Deliberately not everything lives on the card — AI score and
+              touch-progress are real, useful facts, but they belong on the
+              Lead Profile, not crammed onto a small board tile. Tags and a
+              due-today nudge are the two things worth a glance from here. */}
+          {(lead.tagIds.length > 0 || lead.nextFollowUp || sharedFrom) && (
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {lead.tagIds.slice(0, 2).map((tid) => {
                 const tag = tags.find((t) => t.id === tid);
@@ -350,44 +339,21 @@ function KanbanCardVisual({
                   <Share2 size={9} /> Shared by {sharedFrom}
                 </span>
               )}
-              {lead.stage === 'followup' &&
-                (() => {
-                  const todayStr = localIsoDate(new Date());
-                  const dueToday =
-                    isTouchScheduledToday(lead.followupStartDate, todayStr) &&
-                    !isTouchedToday(lead.touchDates, todayStr) &&
-                    lead.touchCount < 10;
-                  const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
-                  return (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                        dueToday ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-text-3'
-                      }`}
-                    >
-                      <span>{lead.touchCount}/10 touches</span>
-                      {dueToday ? (
-                        <span>· due today</span>
-                      ) : nextDate ? (
-                        <span>· next {formatTouchDate(nextDate)}</span>
-                      ) : null}
-                    </span>
-                  );
-                })()}
             </div>
           )}
         </div>
       </div>
       {(!viewOnly || canSms) && lead.phone && (
-        <div className={`mt-1.5 flex gap-1.5 border-t pt-2 ${sx.divider}`}>
+        <div className={`mt-1 flex gap-1 border-t pt-1 ${sx.divider}`}>
           {!viewOnly && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onCall();
               }}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors ${sx.callBtn}`}
+              className={`flex flex-1 items-center justify-center gap-1 rounded py-1 text-[10.5px] font-semibold transition-colors ${sx.callBtn}`}
             >
-              <Phone size={11} /> Call
+              <Phone size={10} /> Call
             </button>
           )}
           {canSms && (
@@ -396,9 +362,9 @@ function KanbanCardVisual({
                 e.stopPropagation();
                 onText();
               }}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors ${sx.textBtn}`}
+              className={`flex flex-1 items-center justify-center gap-1 rounded py-1 text-[10.5px] font-semibold transition-colors ${sx.textBtn}`}
             >
-              <MessageSquare size={11} /> Text
+              <MessageSquare size={10} /> Text
             </button>
           )}
         </div>
@@ -534,10 +500,12 @@ const KanbanColumn = memo(function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-lg border ${dimmed ? 'bg-surface-3/50' : 'bg-surface-2'} ${isOver ? 'border-primary' : 'border-border'}`}
-      style={{ borderTopWidth: 3, borderTopColor: cfg.color }}
+      className={`flex w-64 shrink-0 flex-col rounded-2xl border ${dimmed ? 'bg-surface-3/50' : 'bg-surface-2'} ${isOver ? 'border-primary' : 'border-border'}`}
     >
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+      {/* Stage color lives on the dot below, not a thick top border — a
+          heavy colored border following a large corner radius rendered as
+          an odd melted-looking cap rather than a clean strip. */}
+      <div className="flex items-center gap-2 border-b border-border px-2.5 py-2">
         <input
           ref={headerCheckbox}
           type="checkbox"
@@ -547,9 +515,9 @@ const KanbanColumn = memo(function KanbanColumn({
           className="h-3 w-3 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
           title={allSelected ? `Deselect all ${cfg.label}` : `Select all ${cfg.label}`}
         />
-        <span className="h-2 w-2 rounded-full" style={{ background: cfg.color }} />
-        <div className="flex-1 text-[13px] font-semibold text-text">{cfg.label}</div>
-        <div className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[11px] text-text-3">{leads.length}</div>
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cfg.color }} />
+        <div className="flex-1 truncate text-[12.5px] font-semibold text-text">{cfg.label}</div>
+        <div className="shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[10.5px] text-text-3">{leads.length}</div>
         {CLEARABLE_STAGES.includes(stage) && leads.length > 0 && (
           <button onClick={() => setClearTarget(stage)} className="text-text-3 hover:text-danger" title={`Delete all ${cfg.label}`}>
             <Trash2 size={13} />
@@ -557,15 +525,15 @@ const KanbanColumn = memo(function KanbanColumn({
         )}
       </div>
       {leads.length === 0 ? (
-        <div className="flex-1 overflow-y-auto p-2" style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}>
+        <div className="flex-1 overflow-y-auto p-1.5" style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}>
           <div className="py-6 text-center text-[12px] text-text-3">No leads</div>
         </div>
       ) : (
         <VirtualCardList
           items={leads}
           getKey={(l) => l.id}
-          estimateSize={150}
-          className="flex-1 overflow-y-auto p-2"
+          estimateSize={110}
+          className="flex-1 overflow-y-auto p-1.5"
           style={{ minHeight: 80, maxHeight: 'calc(100vh - 230px)' }}
           renderItem={(l) => (
             <KanbanCard
@@ -868,22 +836,22 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       {/* Title, search/filter and the reminder button all share one row —
           these used to be two full-width rows stacked on top of each
           other, most of it empty space either side of a narrow search box. */}
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <div className="mb-1 flex flex-nowrap items-center justify-between gap-3">
+        <div className="shrink-0">
           <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
           <p className="text-sm text-text-3">
             {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {visibleStages.length} stages
             {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-nowrap items-center gap-2">
           <input
-            className="input max-w-xs"
+            className="input w-56 shrink"
             placeholder="Search name, phone, or paste a full address…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <select className="input max-w-[160px]" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+          <select className="input w-[130px] shrink-0" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
             <option value="">All tags</option>
             {tags.map((t) => (
               <option key={t.id} value={t.id}>
@@ -893,7 +861,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           </select>
           {isAdmin && !viewOnly && (
             <button
-              className="btn btn-sm flex items-center gap-1.5"
+              className="btn btn-sm flex shrink-0 items-center gap-1.5"
               disabled={sendReminders.isPending}
               onClick={handleSendReminders}
               title="Checks every Replied / Partial Qualified lead due for a nudge and texts them about whatever's still outstanding"
@@ -974,7 +942,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       )}
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-2.5 overflow-x-auto pb-2">
           {visibleStages.map((stage) => (
             <KanbanColumn
               key={stage}

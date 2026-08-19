@@ -59,7 +59,7 @@ export function VirtualCardList<T>({
               transform: `translateY(${virtualItem.start}px)`,
               // Stands in for the `space-y-2` the plain list used, and is
               // included in the measured height so spacing stays consistent.
-              paddingBottom: 8,
+              paddingBottom: 6,
             }}
           >
             {renderItem(items[virtualItem.index])}
