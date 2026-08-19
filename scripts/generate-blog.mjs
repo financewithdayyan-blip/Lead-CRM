@@ -236,6 +236,23 @@ ${relatedSection(related, coverUrl)}
   const featuredIds = new Set([featured, ...secondary].filter(Boolean).map((p) => p.id));
   const rest = posts.filter((p) => !featuredIds.has(p.id));
 
+  // Real-time search + tag filtering on the listing page is entirely
+  // client-side — the whole catalog is small enough to ship as one JSON
+  // payload, so filtering is instant with no server round-trip. `<` is
+  // escaped so a post title/excerpt containing it can never prematurely
+  // close the embedding <script> tag.
+  const searchPayload = posts.map((p) => ({
+    slug: p.slug,
+    title: p.title,
+    excerpt: p.excerpt || stripHtml(p.body_html, 140),
+    tags: p.tags ?? [],
+    tagSlugs: (p.tags ?? []).map((t) => slugify(t)),
+    date: formatDate(p.published_at),
+    image: coverUrl(p.cover_image_path),
+  }));
+  const searchDataJson = JSON.stringify(searchPayload).replace(/</g, '\\u003c');
+  const allTags = [...tagMap.keys()];
+
   await writeFile(path.join(BLOG_DIR, 'index.html'), renderLayout({
     title: 'Blog | Bluebird Acquisition',
     description: 'Guidance on selling a distressed property fast, for cash, without repairs or agent fees.',
@@ -250,6 +267,21 @@ ${relatedSection(related, coverUrl)}
 </div>
 <div class="section">
   <div class="section-inner">
+    <div class="blog-toolbar">
+      <div class="blog-search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="blogSearchInput" placeholder="Search articles..." autocomplete="off">
+      </div>
+      ${
+        allTags.length
+          ? `<div class="blog-filter-chips" id="blogFilterChips">
+        <button type="button" class="blog-filter-chip active" data-tag="all">All</button>
+        ${allTags.map((t) => `<button type="button" class="blog-filter-chip" data-tag="${slugify(t)}">${escapeHtml(t)}</button>`).join('\n        ')}
+      </div>`
+          : ''
+      }
+    </div>
+    <div id="blogDefaultView">
     ${
       featured
         ? `<div class="blog-featured${secondary.length ? '' : ' single'}">
@@ -273,8 +305,68 @@ ${relatedSection(related, coverUrl)}
     }`
         : `<div class="blog-empty">New posts are on the way — check back soon.</div>`
     }
+    </div>
+    <div id="blogResultsGrid" class="blog-grid" hidden></div>
+    <p class="blog-search-empty" id="blogSearchEmpty" hidden>No articles match your search.</p>
   </div>
 </div>
+<script>
+(function(){
+  var DATA = ${searchDataJson};
+  var grid = document.getElementById('blogResultsGrid');
+  var defaultView = document.getElementById('blogDefaultView');
+  var emptyMsg = document.getElementById('blogSearchEmpty');
+  var input = document.getElementById('blogSearchInput');
+  var chips = document.querySelectorAll('.blog-filter-chip');
+  var activeTag = 'all';
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function cardHtml(p){
+    return '<a class="blog-card" href="/blog/' + p.slug + '">' +
+      (p.image ? '<img class="blog-card-thumb" src="' + p.image + '" alt="" loading="lazy">' : '') +
+      '<div class="blog-card-body"><div class="blog-card-date">' + p.date + '</div>' +
+      '<h2>' + escapeHtml(p.title) + '</h2><p>' + escapeHtml(p.excerpt) + '</p>' +
+      (p.tags.length ? '<div class="blog-card-tags">' + p.tags.map(function(t){ return '<span class="tag-chip">' + escapeHtml(t) + '</span>'; }).join(' ') + '</div>' : '') +
+      '</div></a>';
+  }
+
+  function render(){
+    var q = input.value.trim().toLowerCase();
+    if (!q && activeTag === 'all') {
+      defaultView.hidden = false;
+      grid.hidden = true;
+      grid.innerHTML = '';
+      emptyMsg.hidden = true;
+      return;
+    }
+    defaultView.hidden = true;
+    var matches = DATA.filter(function(p){
+      var matchesTag = activeTag === 'all' || p.tagSlugs.indexOf(activeTag) !== -1;
+      var haystack = (p.title + ' ' + p.excerpt + ' ' + p.tags.join(' ')).toLowerCase();
+      var matchesQuery = !q || haystack.indexOf(q) !== -1;
+      return matchesTag && matchesQuery;
+    });
+    grid.innerHTML = matches.map(cardHtml).join('');
+    grid.hidden = matches.length === 0;
+    emptyMsg.hidden = matches.length !== 0;
+  }
+
+  if (input) input.addEventListener('input', render);
+  chips.forEach(function(chip){
+    chip.addEventListener('click', function(){
+      chips.forEach(function(c){ c.classList.remove('active'); });
+      chip.classList.add('active');
+      activeTag = chip.getAttribute('data-tag');
+      render();
+    });
+  });
+})();
+</script>
 `,
   }));
 
