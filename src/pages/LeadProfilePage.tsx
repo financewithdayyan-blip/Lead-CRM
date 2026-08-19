@@ -4,7 +4,7 @@ import { ArrowLeft, Archive, ChevronDown, Hash, MessageSquareText, Pencil, Plus,
 import { CardHeader } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
+import { useLead, useUpdateLead, useSetLeadTags, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
 import { useActivities, useAddActivity, useDeleteActivity, useUpdateActivity } from '@/hooks/useActivities';
 import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
@@ -15,7 +15,7 @@ import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
+import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
 import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localIsoDate } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
@@ -245,32 +245,27 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
 
 // 'property' is deliberately not a tab any more — Property Details is now
 // edited directly on Overview (see PropertyEditCard), so there's no second
-// place left that needs its own tab.
-const TABS = ['overview', 'framework', 'sms', 'activity', 'tasks', 'files', 'packet'] as const;
+// place left that needs its own tab. 'activity' isn't a tab either —
+// notes have their own chat on Overview, call/stage-change logging happens
+// automatically elsewhere, and the raw activity feed itself is a backend
+// record now rather than a page anyone navigates to.
+const TABS = ['overview', 'sms', 'tasks', 'files', 'packet'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
   packet: 'Deal Packet',
   sms: 'SMS',
-  framework: 'Framework',
-  activity: 'Activity',
   tasks: 'Tasks',
   files: 'Files',
 };
-// Overview already surfaces a live snapshot of Framework and leads with
-// Notes directly below it, so those — plus the tabs someone reaches
-// for far less often day to day — sit behind "More" instead of crowding
-// the primary row. Nothing here is removed: every tab keeps its full,
-// unchanged content, just reached one extra click away.
-const PRIMARY_TABS: TabKey[] = ['overview', 'sms', 'tasks'];
-const MORE_TABS: TabKey[] = ['framework', 'activity', 'files', 'packet'];
 
-/** Read-only "at a glance" version of the Framework tab's own completion
- * math (same getScriptSteps/scriptAnswers this Framework tab uses) — moving
- * the tab behind More shouldn't mean losing the one-glance progress view
- * Overview is supposed to give. Clicking through still opens the real tab
- * for full question/answer editing. */
-function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: () => void }) {
+/** The old separate Framework tab only ever displayed these questions and
+ * answers read-only (no edit inputs anywhere in it — answers come from the
+ * call script / AI conversation, not typed in here), so folding it into
+ * Overview as an expand-to-read accordion loses nothing: every step, every
+ * question, every recorded answer is still here, just collapsed until
+ * clicked instead of a permanently-open tab. */
+function FrameworkSnapshotCard({ lead }: { lead: Lead }) {
   const { data: tags = [] } = useTags();
   const leadTagNames = lead.tagIds.map((tid) => tags.find((t) => t.id === tid)?.name).filter((n): n is string => !!n);
   const hasMortgageStep = leadTagNames.some((n) => LIEN_TAG_NAMES.includes(n));
@@ -278,6 +273,7 @@ function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: (
   const answers = lead.scriptAnswers ?? {};
   const stepComplete = (step: (typeof steps)[number]) => step.questions.every((q) => (answers[q.key] ?? '').trim().length > 0);
   const completedCount = steps.filter(stepComplete).length;
+  const [openTitle, setOpenTitle] = useState<string | null>(null);
 
   return (
     <div className="card">
@@ -288,17 +284,33 @@ function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: (
       <div className="mt-3 space-y-1">
         {steps.map((step) => {
           const complete = stepComplete(step);
+          const open = openTitle === step.title;
           return (
-            <div key={step.title} className="flex items-center gap-2.5 rounded-md px-1 py-1.5">
-              {complete ? <CheckCircle2 size={15} className="shrink-0 text-success" /> : <Circle size={15} className="shrink-0 text-text-3" />}
-              <span className={`text-[12.5px] ${complete ? 'text-text' : 'text-text-3'}`}>{step.title}</span>
+            <div key={step.title} className="rounded-md">
+              <button
+                onClick={() => setOpenTitle(open ? null : step.title)}
+                className="flex w-full items-center gap-2.5 rounded-md px-1 py-1.5 text-left hover:bg-surface-3"
+              >
+                {complete ? <CheckCircle2 size={15} className="shrink-0 text-success" /> : <Circle size={15} className="shrink-0 text-text-3" />}
+                <span className={`flex-1 text-[12.5px] ${complete ? 'text-text' : 'text-text-3'}`}>{step.title}</span>
+                <ChevronDown size={13} className={`shrink-0 text-text-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+              </button>
+              {open && (
+                <div className="ml-[23px] space-y-2.5 border-l border-border-2 py-2 pl-3">
+                  {step.questions.map((q) => (
+                    <div key={q.key}>
+                      <p className="text-[11.5px] text-text-3">{q.prompt}</p>
+                      <p className={`mt-0.5 text-[12.5px] ${answers[q.key] ? 'text-text' : 'italic text-text-3'}`}>
+                        {answers[q.key] || 'No answer recorded'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-      <button onClick={onViewFull} className="mt-3 w-full text-center text-[12px] font-semibold text-primary hover:text-primary-hover">
-        View full framework →
-      </button>
     </div>
   );
 }
@@ -329,9 +341,13 @@ function QuickFactsCard({ lead }: { lead: Lead }) {
  * separate "Property Details" tab entirely (moved here verbatim, same
  * fields, same save/comps behavior) rather than duplicating a read-only
  * summary next to the real editable form on another tab. */
+/** Pricing (ARV, offers, comps, etc.) deliberately lives only in Deal Packet
+ * now — it already has its own ARV/comps workflow (with an "Import from
+ * lead" pull of whatever's in lead_comps) for building investor-facing
+ * packets, and duplicating a second editable pricing form here was the
+ * redundant one. This card only owns the physical property facts. */
 function PropertyEditCard({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
-  const upsertComps = useUpsertComps();
   const [form, setForm] = useState({
     propType: lead.propType ?? '',
     beds: lead.beds?.toString() ?? '',
@@ -342,17 +358,8 @@ function PropertyEditCard({ lead }: { lead: Lead }) {
     auctionDate: lead.auctionDate ?? '',
     condition: lead.condition ?? '',
     motivation: lead.motivation ?? '',
-    arv: lead.arv?.toString() ?? '',
-    asIs: lead.asIs?.toString() ?? '',
-    estRepairs: lead.estRepairs?.toString() ?? '',
-    minOffer: lead.minOffer?.toString() ?? '',
-    maxOffer: lead.maxOffer?.toString() ?? '',
-    askingPrice: lead.askingPrice?.toString() ?? '',
-    finalPrice: lead.finalPrice?.toString() ?? '',
-    assignmentFee: lead.assignmentFee?.toString() ?? '',
   });
   const [repairs, setRepairs] = useState(lead.repairs ?? {});
-  const [comps, setComps] = useState<Array<Partial<Comp>>>(lead.comps ?? []);
   const [saved, setSaved] = useState(false);
 
   function set<K extends keyof typeof form>(key: K, value: string) {
@@ -372,14 +379,6 @@ function PropertyEditCard({ lead }: { lead: Lead }) {
         auctionDate: form.auctionDate || null,
         condition: form.condition || null,
         motivation: form.motivation || null,
-        arv: form.arv ? Number(form.arv) : null,
-        asIs: form.asIs ? Number(form.asIs) : null,
-        estRepairs: form.estRepairs ? Number(form.estRepairs) : null,
-        minOffer: form.minOffer ? Number(form.minOffer) : null,
-        maxOffer: form.maxOffer ? Number(form.maxOffer) : null,
-        askingPrice: form.askingPrice ? Number(form.askingPrice) : null,
-        finalPrice: form.finalPrice ? Number(form.finalPrice) : null,
-        assignmentFee: form.assignmentFee ? Number(form.assignmentFee) : null,
         repairs,
       },
       { onSuccess: () => flash() },
@@ -391,204 +390,62 @@ function PropertyEditCard({ lead }: { lead: Lead }) {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  function updateComp(i: number, key: keyof Comp, value: string) {
-    setComps((prev) => prev.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)));
-  }
-  function addComp() {
-    setComps((prev) => [
-      ...prev,
-      { kind: 'sold', address: '', price: null, saleDate: null, sqft: null, beds: null, baths: null, distance: null, notes: null },
-    ]);
-  }
-  function removeComp(i: number) {
-    setComps((prev) => prev.filter((_, idx) => idx !== i));
-  }
-  function saveComps() {
-    upsertComps.mutate({
-      leadId: lead.id,
-      comps: comps.map((c) => ({
-        kind: (c.kind as 'sold' | 'listing') || 'sold',
-        address: c.address || null,
-        price: c.price ? Number(c.price) : null,
-        sale_date: c.saleDate || null,
-        sqft: c.sqft ? Number(c.sqft) : null,
-        beds: c.beds ? Number(c.beds) : null,
-        baths: c.baths ? Number(c.baths) : null,
-        distance: c.distance || null,
-        notes: c.notes || null,
-      })),
-    });
-  }
-
   return (
-    <div className="space-y-5">
-      <div className="card">
-        <CardHeader icon={Archive} title="Property Details" sub="edit and save directly here" />
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <Field label="Property Type">
-            <input className="input" value={form.propType} onChange={(e) => set('propType', e.target.value)} />
+    <div className="card">
+      <CardHeader icon={Archive} title="Property Details" sub="edit and save directly here" />
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        <Field label="Property Type">
+          <input className="input" value={form.propType} onChange={(e) => set('propType', e.target.value)} />
+        </Field>
+        <Field label="Beds">
+          <input className="input" type="number" value={form.beds} onChange={(e) => set('beds', e.target.value)} />
+        </Field>
+        <Field label="Baths">
+          <input className="input" type="number" value={form.baths} onChange={(e) => set('baths', e.target.value)} />
+        </Field>
+        <Field label="Sqft">
+          <input className="input" type="number" value={form.sqft} onChange={(e) => set('sqft', e.target.value)} />
+        </Field>
+        <Field label="Lot Size">
+          <input className="input" value={form.lotSize} onChange={(e) => set('lotSize', e.target.value)} />
+        </Field>
+        <Field label="Year Built">
+          <input className="input" type="number" value={form.yearBuilt} onChange={(e) => set('yearBuilt', e.target.value)} />
+        </Field>
+        <Field label="Auction Date">
+          <input className="input" type="date" value={form.auctionDate} onChange={(e) => set('auctionDate', e.target.value)} />
+        </Field>
+        <Field label="Condition">
+          <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
+        </Field>
+        <div className="col-span-2">
+          <Field label="Motivation">
+            <input className="input" value={form.motivation} onChange={(e) => set('motivation', e.target.value)} />
           </Field>
-          <Field label="Beds">
-            <input className="input" type="number" value={form.beds} onChange={(e) => set('beds', e.target.value)} />
-          </Field>
-          <Field label="Baths">
-            <input className="input" type="number" value={form.baths} onChange={(e) => set('baths', e.target.value)} />
-          </Field>
-          <Field label="Sqft">
-            <input className="input" type="number" value={form.sqft} onChange={(e) => set('sqft', e.target.value)} />
-          </Field>
-          <Field label="Lot Size">
-            <input className="input" value={form.lotSize} onChange={(e) => set('lotSize', e.target.value)} />
-          </Field>
-          <Field label="Year Built">
-            <input className="input" type="number" value={form.yearBuilt} onChange={(e) => set('yearBuilt', e.target.value)} />
-          </Field>
-          <Field label="Auction Date">
-            <input className="input" type="date" value={form.auctionDate} onChange={(e) => set('auctionDate', e.target.value)} />
-          </Field>
-          <Field label="Condition">
-            <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
-          </Field>
-          <div className="col-span-2">
-            <Field label="Motivation">
-              <input className="input" value={form.motivation} onChange={(e) => set('motivation', e.target.value)} />
-            </Field>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <div className="label">Repairs needed</div>
-          <div className="flex flex-wrap gap-3">
-            {REPAIR_FLAGS.map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-1.5 text-[13px] text-text-2">
-                <input
-                  type="checkbox"
-                  checked={!!repairs[key]}
-                  onChange={(e) => setRepairs((r) => ({ ...r, [key]: e.target.checked }))}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4 border-t border-border-2 pt-4">
-          <h3 className="mb-3 text-sm font-semibold text-text">Pricing</h3>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="ARV">
-              <input className="input" type="number" value={form.arv} onChange={(e) => set('arv', e.target.value)} />
-            </Field>
-            <Field label="As-Is Value">
-              <input className="input" type="number" value={form.asIs} onChange={(e) => set('asIs', e.target.value)} />
-            </Field>
-            <Field label="Est. Repairs">
-              <input className="input" type="number" value={form.estRepairs} onChange={(e) => set('estRepairs', e.target.value)} />
-            </Field>
-            <Field label="Min Offer">
-              <input className="input" type="number" value={form.minOffer} onChange={(e) => set('minOffer', e.target.value)} />
-            </Field>
-            <Field label="Max Offer">
-              <input className="input" type="number" value={form.maxOffer} onChange={(e) => set('maxOffer', e.target.value)} />
-            </Field>
-            <Field label="Asking Price">
-              <input className="input" type="number" value={form.askingPrice} onChange={(e) => set('askingPrice', e.target.value)} />
-            </Field>
-            <Field label="Final Price">
-              <input className="input" type="number" value={form.finalPrice} onChange={(e) => set('finalPrice', e.target.value)} />
-            </Field>
-            <Field label="Assignment Fee">
-              <input className="input" type="number" value={form.assignmentFee} onChange={(e) => set('assignmentFee', e.target.value)} />
-            </Field>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
-          <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
-            Save property & pricing
-          </button>
-          {saved && <span className="text-[12px] text-success">✓ Saved</span>}
         </div>
       </div>
 
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-text">Comps</h3>
-          <button className="btn !px-2 !py-1 text-[12px]" onClick={addComp}>
-            <Plus size={13} /> Add comp
-          </button>
-        </div>
-        {comps.length === 0 && <div className="text-[13px] text-text-3">No comps added yet.</div>}
-        <div className="space-y-2 overflow-x-auto">
-          {comps.map((c, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-[76px_1fr_86px_112px_64px_50px_50px_86px_auto] items-center gap-1.5 rounded-md border border-border-2 bg-surface-3 p-2"
-            >
-              <select
-                className="input !py-1 text-[12px]"
-                value={c.kind ?? 'sold'}
-                onChange={(e) => updateComp(i, 'kind', e.target.value)}
-              >
-                <option value="sold">Sold</option>
-                <option value="listing">Listed</option>
-              </select>
+      <div className="mt-4">
+        <div className="label">Repairs needed</div>
+        <div className="flex flex-wrap gap-3">
+          {REPAIR_FLAGS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-1.5 text-[13px] text-text-2">
               <input
-                className="input !py-1 text-[12px]"
-                placeholder="Address"
-                value={c.address ?? ''}
-                onChange={(e) => updateComp(i, 'address', e.target.value)}
+                type="checkbox"
+                checked={!!repairs[key]}
+                onChange={(e) => setRepairs((r) => ({ ...r, [key]: e.target.checked }))}
               />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder={c.kind === 'listing' ? 'List price' : 'Sale price'}
-                type="number"
-                value={c.price ?? ''}
-                onChange={(e) => updateComp(i, 'price', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                type="date"
-                value={c.saleDate ?? ''}
-                onChange={(e) => updateComp(i, 'saleDate', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Sqft"
-                type="number"
-                value={c.sqft ?? ''}
-                onChange={(e) => updateComp(i, 'sqft', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Bd"
-                type="number"
-                value={c.beds ?? ''}
-                onChange={(e) => updateComp(i, 'beds', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Ba"
-                type="number"
-                value={c.baths ?? ''}
-                onChange={(e) => updateComp(i, 'baths', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Distance"
-                value={c.distance ?? ''}
-                onChange={(e) => updateComp(i, 'distance', e.target.value)}
-              />
-              <button className="flex items-center justify-center text-text-3 hover:text-danger" onClick={() => removeComp(i)}>
-                <Trash2 size={13} />
-              </button>
-            </div>
+              {label}
+            </label>
           ))}
         </div>
-        {comps.length > 0 && (
-          <button className="btn btn-primary mt-3" onClick={saveComps} disabled={upsertComps.isPending}>
-            Save comps
-          </button>
-        )}
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
+          Save property details
+        </button>
+        {saved && <span className="text-[12px] text-success">✓ Saved</span>}
       </div>
     </div>
   );
@@ -613,17 +470,6 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
     tabParam && (TABS as readonly string[]).includes(tabParam) ? (tabParam as TabKey) : 'overview',
   );
   const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
-    }
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, [moreOpen]);
 
   if (isLoading) return <div className="text-text-3">Loading…</div>;
   if (!lead) return <div className="text-text-3">Lead not found.</div>;
@@ -806,49 +652,18 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         <AiScoreCard lead={lead} />
       </div>
 
-      <div className="mb-4 flex items-center justify-between border-b border-border">
-        <div className="flex gap-1">
-          {PRIMARY_TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-2 text-[13px] font-medium transition-colors ${
-                tab === t ? 'border-b-2 border-primary text-primary' : 'text-text-3 hover:text-text'
-              }`}
-            >
-              {TAB_LABELS[t]}
-            </button>
-          ))}
-        </div>
-        <div ref={moreRef} className="relative mb-1.5">
+      <div className="mb-4 flex gap-1 border-b border-border">
+        {TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
           <button
-            onClick={() => setMoreOpen((v) => !v)}
-            className={`flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-              MORE_TABS.includes(tab) ? 'bg-primary/10 text-primary' : 'text-text-3 hover:bg-surface-3 hover:text-text'
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-3 py-2 text-[13px] font-medium transition-colors ${
+              tab === t ? 'border-b-2 border-primary text-primary' : 'text-text-3 hover:text-text'
             }`}
           >
-            {MORE_TABS.includes(tab) ? TAB_LABELS[tab] : 'More'}
-            <ChevronDown size={13} className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+            {TAB_LABELS[t]}
           </button>
-          {moreOpen && (
-            <div className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-border bg-white py-1 shadow-popover">
-              {MORE_TABS.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    setTab(t);
-                    setMoreOpen(false);
-                  }}
-                  className={`flex w-full items-center px-3 py-1.5 text-left text-[12.5px] font-medium ${
-                    tab === t ? 'bg-primary/10 text-primary' : 'text-text-2 hover:bg-surface-3'
-                  }`}
-                >
-                  {TAB_LABELS[t]}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        ))}
       </div>
 
       {tab === 'overview' && (
@@ -860,7 +675,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           </div>
           <div className="space-y-5">
             <QuickFactsCard lead={lead} />
-            <FrameworkSnapshotCard lead={lead} onViewFull={() => setTab('framework')} />
+            <FrameworkSnapshotCard lead={lead} />
           </div>
         </div>
       )}
@@ -868,8 +683,6 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       {/* SMS is an admin-only feature — texting leads isn't part of a
           caller's job, which is manual cold calling only. */}
       {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
-      {tab === 'framework' && <FrameworkTab lead={lead} />}
-      {tab === 'activity' && <ActivityTab leadId={lead.id} />}
       {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}
       {tab === 'files' && <FilesTab lead={lead} />}
     </div>
@@ -1151,61 +964,6 @@ const REPAIR_FLAGS: Array<{ key: keyof Lead['repairs']; label: string }> = [
   { key: 'flooring', label: 'Flooring' },
 ];
 
-
-function FrameworkTab({ lead }: { lead: Lead }) {
-  const { data: tags = [] } = useTags();
-  const leadTagNames = lead.tagIds.map((tid) => tags.find((t) => t.id === tid)?.name).filter((n): n is string => !!n);
-  const hasMortgageStep = leadTagNames.some((n) => LIEN_TAG_NAMES.includes(n));
-  const steps = getScriptSteps(hasMortgageStep);
-
-  const answers = lead.scriptAnswers ?? {};
-  const stepComplete = (step: (typeof steps)[number]) =>
-    step.questions.every((q) => (answers[q.key] ?? '').trim().length > 0);
-  const completedCount = steps.filter(stepComplete).length;
-
-  return (
-    <div className="space-y-4">
-      <p className="text-[13px] text-text-3">
-        {completedCount} of {steps.length} steps completed
-      </p>
-
-      {steps.map((step) => {
-        const complete = stepComplete(step);
-        return (
-          <div
-            key={step.title}
-            className={`card ${complete ? 'border-success/40 bg-success/5' : ''}`}
-          >
-            <div className="mb-3 flex items-center gap-2">
-              {complete ? (
-                <CheckCircle2 size={18} className="shrink-0 text-success" />
-              ) : (
-                <Circle size={18} className="shrink-0 text-text-3" />
-              )}
-              <h3 className="text-sm font-semibold text-text">{step.title}</h3>
-              {complete && (
-                <span className="ml-auto rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
-                  Qualified
-                </span>
-              )}
-            </div>
-            <div className="space-y-3">
-              {step.questions.map((q) => (
-                <div key={q.key}>
-                  <p className="mb-1 text-[13px] text-text-2">{q.prompt}</p>
-                  <p className={`text-[13px] ${answers[q.key] ? 'text-text' : 'italic text-text-3'}`}>
-                    {answers[q.key] || 'No answer recorded'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function ActivityBubble({
   a,
   isAdmin,
@@ -1308,78 +1066,6 @@ function ActivityBubble({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-function ActivityTab({ leadId }: { leadId: string }) {
-  const { profile } = useAuth();
-  const { data: activities = [], isLoading } = useActivities(leadId);
-  const addActivity = useAddActivity();
-  const deleteActivity = useDeleteActivity();
-  const updateActivity = useUpdateActivity();
-  const [type, setType] = useState<ActivityType>('note');
-  const [body, setBody] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activities.length]);
-
-  function handleAdd() {
-    if (!body.trim()) return;
-    addActivity.mutate({ leadId, type, body: body.trim() }, { onSuccess: () => setBody('') });
-  }
-
-  const isAdmin = profile?.role === 'admin';
-
-  return (
-    <div className="space-y-4">
-      {/* Chat history */}
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold text-text">Activity</h3>
-        {isLoading && <div className="text-[13px] text-text-3">Loading…</div>}
-        {!isLoading && activities.length === 0 && (
-          <div className="text-[13px] text-text-3">No activity yet — notes and call logs will appear here.</div>
-        )}
-        <div className="max-h-[480px] overflow-y-auto space-y-3 pr-1">
-          {activities.map((a) => (
-            <ActivityBubble
-              key={a.id}
-              a={a}
-              isAdmin={isAdmin}
-              leadId={leadId}
-              onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
-              onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
-            />
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      {/* Compose */}
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold text-text">Log activity</h3>
-        <div className="flex flex-wrap items-end gap-2">
-          <select className="input !w-auto" value={type} onChange={(e) => setType(e.target.value as ActivityType)}>
-            <option value="note">Note</option>
-            <option value="call">Call</option>
-            <option value="email">Email</option>
-            <option value="meeting">Meeting</option>
-            <option value="sms">Text</option>
-          </select>
-          <input
-            className="input flex-1 min-w-[200px]"
-            placeholder="What happened?"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          />
-          <button className="btn btn-primary" onClick={handleAdd} disabled={addActivity.isPending || !body.trim()}>
-            <Send size={14} /> Send
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

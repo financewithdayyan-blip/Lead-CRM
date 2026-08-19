@@ -37,12 +37,12 @@ const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 // stages that still need attention.
 const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'onhold', 'others'];
 // A closed deal earns a quiet color tint on its own card — brass for a
-// fully closed file, green while the contract is still in motion, blue for
-// Qualified, light red for Dead/Declined — the same accent colors
-// STAGE_CONFIG already uses for those stages, just applied to the card
-// itself instead of only the column's dot/top border.
+// fully closed file, green while the contract is still in motion, light
+// red for Dead/Declined — the same accent colors STAGE_CONFIG already uses
+// for those stages, just applied to the card itself instead of only the
+// column's dot/top border. Qualified isn't here — it gets the full
+// navy/gold spotlight treatment on every card instead (see spotlightOn).
 const CARD_TINT: Partial<Record<LeadStage, { border: string; bg: string }>> = {
-  followup: { border: 'border-primary/30', bg: 'bg-primary-dim' },
   contract: { border: 'border-success/40', bg: 'bg-success-dim' },
   closed: { border: 'border-accent/40', bg: 'bg-accent-dim' },
   dead_declined: { border: 'border-danger/30', bg: 'bg-danger-dim' },
@@ -51,7 +51,9 @@ const CARD_TINT: Partial<Record<LeadStage, { border: string; bg: string }>> = {
 // stage, using the AI Lead Score already computed on the Lead Profile
 // rather than a made-up rule. Gated at "Good" (65+) so a column with no
 // scored leads, or only weak ones, simply has no spotlight card — same as
-// the mockup, where not every column has one.
+// the mockup, where not every column has one. Qualified is excluded here
+// since every one of its cards already gets the spotlight look regardless
+// of score.
 const SPOTLIGHT_MIN_SCORE = 65;
 
 /** Lowercases and reduces every run of punctuation to a single space, so commas,
@@ -186,10 +188,12 @@ function KanbanCardVisual({
 
   const tint = CARD_TINT[lead.stage];
   const dimmed = DIMMED_STAGES.includes(lead.stage);
-  // Spotlight only actually applies once nothing higher-priority (an
-  // in-progress multi-select, a shared-lead badge) is already claiming the
-  // card's background.
-  const spotlightOn = spotlight && !selected && !sharedFrom;
+  // Spotlight applies to the single highest-scored lead per column, PLUS
+  // every card in Qualified — that stage gets the navy/gold treatment
+  // across the board, not just its best-scored lead — as long as nothing
+  // higher-priority (an in-progress multi-select, a shared-lead badge) is
+  // already claiming the card's background.
+  const spotlightOn = (spotlight || lead.stage === 'followup') && !selected && !sharedFrom;
   const scoreColors = lead.aiScore !== null ? scoreColor(lead.aiScore) : null;
 
   const sx = spotlightOn
@@ -197,7 +201,6 @@ function KanbanCardVisual({
         sub: 'text-white/70',
         sub3: 'text-white/50',
         divider: 'border-white/10',
-        iconBtn: 'border-white/20 bg-white/10 text-white hover:border-white/40',
         callBtn: 'bg-accent text-text hover:bg-accent-hover',
         textBtn: 'bg-white/10 text-white hover:bg-white/20',
       }
@@ -205,14 +208,13 @@ function KanbanCardVisual({
         sub: 'text-text-2',
         sub3: 'text-text-3',
         divider: 'border-surface-3',
-        iconBtn: 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2',
         callBtn: 'border border-primary/30 bg-primary-dim text-primary hover:bg-primary/20',
         textBtn: 'border border-border-2 bg-surface-3 text-text-2 hover:bg-surface-3/70',
       };
 
   return (
     <div
-      className={`rounded-md border p-2.5 text-[12px] transition-shadow ${
+      className={`rounded-md border p-2 text-[11.5px] transition-shadow ${
         selected
           ? 'border-primary bg-primary/5'
           : sharedFrom
@@ -252,16 +254,54 @@ function KanbanCardVisual({
             </div>
             <div className={`shrink-0 text-[10px] ${sx.sub3}`}>#{lead.leadNum}</div>
           </div>
-          <div className={`mt-1 flex items-center gap-1.5 ${sx.sub}`}>
-            <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
-            {messageCount > 0 && (
-              <span
-                className="inline-flex items-center gap-0.5 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-semibold text-info-text"
-                title={`${messageCount} SMS message${messageCount === 1 ? '' : 's'} (sent + received)`}
+          <div className="mt-1 flex items-center justify-between gap-1">
+            <div className={`flex min-w-0 items-center gap-1.5 ${sx.sub}`}>
+              <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
+              {messageCount > 0 && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-semibold text-info-text"
+                  title={`${messageCount} SMS message${messageCount === 1 ? '' : 's'} (sent + received)`}
+                >
+                  <MessageSquare size={9} /> {messageCount}
+                </span>
+              )}
+            </div>
+            {/* Slim by living on the phone row instead of a row of their
+                own — same copy/edit/delete, just no longer a dedicated
+                strip under every card. */}
+            <div className="flex shrink-0 items-center gap-0.5">
+              {lead.phone && (
+                <button
+                  onClick={copyPhone}
+                  className={`rounded p-1 transition-colors ${copied ? 'text-success' : `${sx.sub3} hover:bg-surface-3 hover:text-text-2`}`}
+                  title={copied ? 'Copied!' : 'Copy phone'}
+                >
+                  {copied ? <Check size={11} /> : <Copy size={11} />}
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen();
+                }}
+                className={`rounded p-1 ${sx.sub3} transition-colors hover:bg-surface-3 hover:text-text-2`}
+                title="Edit"
               >
-                <MessageSquare size={9} /> {messageCount}
-              </span>
-            )}
+                <Pencil size={11} />
+              </button>
+              {DELETABLE_STAGES.includes(lead.stage) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className={`rounded p-1 ${sx.sub3} transition-colors hover:bg-danger-dim hover:text-danger`}
+                  title="Delete"
+                >
+                  <Trash2 size={11} />
+                </button>
+              )}
+            </div>
           </div>
           {lead.address && (
             <div className={`mt-0.5 flex items-start gap-1 truncate ${sx.sub3}`} title={lead.address}>
@@ -334,47 +374,6 @@ function KanbanCardVisual({
                   );
                 })()}
             </div>
-          )}
-        </div>
-      </div>
-      <div className="mt-1.5 flex items-center justify-end">
-        <div className="flex gap-1">
-          {lead.phone && (
-            <button
-              onClick={copyPhone}
-              className={`rounded-full border p-1 transition-colors ${
-                copied
-                  ? 'border-success bg-surface-3 text-success'
-                  : spotlightOn
-                    ? sx.iconBtn
-                    : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'
-              }`}
-              title={copied ? 'Copied!' : 'Copy phone'}
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-            </button>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen();
-            }}
-            className={`rounded-full border p-1 ${spotlightOn ? sx.iconBtn : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'}`}
-            title="Edit"
-          >
-            <Pencil size={12} />
-          </button>
-          {DELETABLE_STAGES.includes(lead.stage) && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className={`rounded-full border p-1 ${spotlightOn ? `${sx.iconBtn} !text-red-300` : 'border-border-2 bg-surface-3 text-danger hover:border-danger'}`}
-              title="Delete"
-            >
-              <Trash2 size={12} />
-            </button>
           )}
         </div>
       </div>
@@ -667,7 +666,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const spotlightIds = useMemo(() => {
     const ids = new Set<string>();
     for (const stage of STAGE_ORDER) {
-      if (DIMMED_STAGES.includes(stage)) continue;
+      if (DIMMED_STAGES.includes(stage) || stage === 'followup') continue;
       let best: Lead | null = null;
       for (const l of byStage[stage]) {
         if (l.aiScore !== null && l.aiScore >= SPOTLIGHT_MIN_SCORE && (!best || l.aiScore > best.aiScore!)) best = l;
@@ -866,7 +865,10 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      {/* Title, search/filter and the reminder button all share one row —
+          these used to be two full-width rows stacked on top of each
+          other, most of it empty space either side of a narrow search box. */}
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
           <p className="text-sm text-text-3">
@@ -874,8 +876,22 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
             {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
           </p>
         </div>
-        {isAdmin && !viewOnly && (
-          <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="input max-w-xs"
+            placeholder="Search name, phone, or paste a full address…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select className="input max-w-[160px]" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+            <option value="">All tags</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          {isAdmin && !viewOnly && (
             <button
               className="btn btn-sm flex items-center gap-1.5"
               disabled={sendReminders.isPending}
@@ -883,28 +899,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               title="Checks every Replied / Partial Qualified lead due for a nudge and texts them about whatever's still outstanding"
             >
               {sendReminders.isPending ? <Loader2 size={13} className="animate-spin" /> : <BellRing size={13} />}
-              {sendReminders.isPending ? 'Sending…' : 'Send Reminder Messages'}
+              {sendReminders.isPending ? 'Sending…' : 'Send Reminders'}
             </button>
-            {reminderSummary && <span className="text-[11px] text-text-3">{reminderSummary}</span>}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          className="input max-w-xs"
-          placeholder="Search name, phone, or paste a full address…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select className="input max-w-[160px]" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-          <option value="">All tags</option>
-          {tags.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-[11px] text-text-3">
+        {reminderSummary && <span>{reminderSummary}</span>}
         {calledId && <span className="text-[12px] text-success">✓ Call logged</span>}
       </div>
 
