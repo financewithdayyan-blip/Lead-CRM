@@ -1982,7 +1982,7 @@ footer{
     <div class="section-head reveal">
       <span class="eyebrow">Target Market</span>
       <h2>Where Bluebird is buying right now.</h2>
-      <p>We're actively acquiring distressed properties across ten states and 30+ counties — with local market knowledge in every one.</p>
+      <p>We're actively acquiring distressed properties across nineteen states and 30+ counties — with local market knowledge in every one.</p>
     </div>
 
     <div class="market-grid">
@@ -1998,6 +1998,15 @@ footer{
           <div class="state-card"><span class="s-name">Texas</span><span class="s-code">TX</span></div>
           <div class="state-card"><span class="s-name">Tennessee</span><span class="s-code">TN</span></div>
           <div class="state-card"><span class="s-name">Indiana</span><span class="s-code">IN</span></div>
+          <div class="state-card"><span class="s-name">Pennsylvania</span><span class="s-code">PA</span></div>
+          <div class="state-card"><span class="s-name">New York</span><span class="s-code">NY</span></div>
+          <div class="state-card"><span class="s-name">Wisconsin</span><span class="s-code">WI</span></div>
+          <div class="state-card"><span class="s-name">Kentucky</span><span class="s-code">KY</span></div>
+          <div class="state-card"><span class="s-name">Delaware</span><span class="s-code">DE</span></div>
+          <div class="state-card"><span class="s-name">New Jersey</span><span class="s-code">NJ</span></div>
+          <div class="state-card"><span class="s-name">Arkansas</span><span class="s-code">AR</span></div>
+          <div class="state-card"><span class="s-name">California</span><span class="s-code">CA</span></div>
+          <div class="state-card"><span class="s-name">Oklahoma</span><span class="s-code">OK</span></div>
         </div>
         <div class="market-counties reveal">
           <span class="mc-num">30+</span>
@@ -2572,7 +2581,7 @@ revealEls.forEach(el => io.observe(el));
 
 // ===== US Map: real state geography via TopoJSON, target states highlighted =====
 const mapVisual = document.getElementById('mapVisual');
-const targetAbbrs = ['FL','NC','SC','IL','OH','GA','VA','TX','TN','IN'];
+const targetAbbrs = ['FL','NC','SC','IL','OH','GA','VA','TX','TN','IN','PA','NY','WI','KY','DE','NJ','AR','CA','OK'];
 
 // FIPS state code -> USPS abbreviation
 const FIPS_TO_ABBR = {
@@ -2586,7 +2595,9 @@ const FIPS_TO_ABBR = {
 };
 const STATE_NAMES = {
   FL:'Florida', NC:'North Carolina', SC:'South Carolina', IL:'Illinois', OH:'Ohio',
-  GA:'Georgia', VA:'Virginia', TX:'Texas', TN:'Tennessee', IN:'Indiana'
+  GA:'Georgia', VA:'Virginia', TX:'Texas', TN:'Tennessee', IN:'Indiana',
+  PA:'Pennsylvania', NY:'New York', WI:'Wisconsin', KY:'Kentucky', DE:'Delaware',
+  NJ:'New Jersey', AR:'Arkansas', CA:'California', OK:'Oklahoma'
 };
 
 function loadMapLibs() {
