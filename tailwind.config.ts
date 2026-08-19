@@ -32,13 +32,16 @@ export default {
         mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        lg: '16px',
-        md: '10px',
-        xl: '20px',
+        lg: '22px',
+        md: '12px',
+        xl: '26px',
       },
       boxShadow: {
-        card: '0 1px 2px 0 rgba(11, 30, 51, 0.04), 0 2px 8px 0 rgba(11, 30, 51, 0.06)',
-        'card-hover': '0 2px 4px 0 rgba(11, 30, 51, 0.06), 0 6px 16px 0 rgba(11, 30, 51, 0.09)',
+        // Softer, deeper "floating" card shadow — the premium-SaaS pass
+        // traded the old tight/flat shadow for more spread and less
+        // opacity, so cards read as lifted rather than merely outlined.
+        card: '0 2px 4px 0 rgba(11, 30, 51, 0.03), 0 14px 32px -16px rgba(11, 30, 51, 0.14)',
+        'card-hover': '0 4px 8px 0 rgba(11, 30, 51, 0.05), 0 20px 40px -16px rgba(11, 30, 51, 0.18)',
         popover: '0 10px 15px -3px rgba(11, 30, 51, 0.10), 0 4px 6px -4px rgba(11, 30, 51, 0.06)',
       },
     },

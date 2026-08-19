@@ -101,7 +101,7 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed;
   }
   /* Was done ad hoc with `!py-1 !text-[12px]`-style overrides at every call
      site — a real class now instead, same sizing every time it's used. */

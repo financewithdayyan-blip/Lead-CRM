@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Archive, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, Archive, ChevronDown, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
@@ -262,6 +262,81 @@ const TAB_LABELS: Record<TabKey, string> = {
   tasks: 'Tasks',
   files: 'Files',
 };
+// Overview already surfaces a live snapshot of Framework and leads with
+// Notes directly below it, so those two — plus the tabs someone reaches
+// for far less often day to day — sit behind "More" instead of crowding
+// the primary row. Nothing here is removed: every tab keeps its full,
+// unchanged content, just reached one extra click away.
+const PRIMARY_TABS: TabKey[] = ['overview', 'sms', 'tasks'];
+const MORE_TABS: TabKey[] = ['property', 'framework', 'activity', 'files', 'packet'];
+
+/** Read-only "at a glance" version of the Framework tab's own completion
+ * math (same getScriptSteps/scriptAnswers this Framework tab uses) — moving
+ * the tab behind More shouldn't mean losing the one-glance progress view
+ * Overview is supposed to give. Clicking through still opens the real tab
+ * for full question/answer editing. */
+function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: () => void }) {
+  const { data: tags = [] } = useTags();
+  const leadTagNames = lead.tagIds.map((tid) => tags.find((t) => t.id === tid)?.name).filter((n): n is string => !!n);
+  const hasMortgageStep = leadTagNames.some((n) => LIEN_TAG_NAMES.includes(n));
+  const steps = getScriptSteps(hasMortgageStep);
+  const answers = lead.scriptAnswers ?? {};
+  const stepComplete = (step: (typeof steps)[number]) => step.questions.every((q) => (answers[q.key] ?? '').trim().length > 0);
+  const completedCount = steps.filter(stepComplete).length;
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between gap-3">
+        <CardHeader icon={CheckCircle2} title="Qualification Framework" sub={`${completedCount} of ${steps.length} steps answered`} tone="success" />
+        <button onClick={onViewFull} className="shrink-0 text-[12px] font-semibold text-primary hover:text-primary-hover">
+          View full →
+        </button>
+      </div>
+      <div className="mt-3 space-y-1">
+        {steps.map((step) => {
+          const complete = stepComplete(step);
+          return (
+            <div key={step.title} className="flex items-center gap-2.5 rounded-md px-1 py-1.5">
+              {complete ? <CheckCircle2 size={15} className="shrink-0 text-success" /> : <Circle size={15} className="shrink-0 text-text-3" />}
+              <span className={`text-[12.5px] ${complete ? 'text-text' : 'text-text-3'}`}>{step.title}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Same idea as FrameworkSnapshotCard, for the handful of Property Details
+ * fields worth seeing without leaving Overview — the full form (including
+ * comps) stays exactly as-is behind the real tab. */
+function PropertySnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: () => void }) {
+  const rows: Array<[string, string]> = [
+    ['Bedrooms', lead.beds != null ? String(lead.beds) : '—'],
+    ['Bathrooms', lead.baths != null ? String(lead.baths) : '—'],
+    ['Square Feet', lead.sqft != null ? lead.sqft.toLocaleString() : '—'],
+    ['Year Built', lead.yearBuilt != null ? String(lead.yearBuilt) : '—'],
+    ['Condition', lead.condition || '—'],
+  ];
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between gap-3">
+        <CardHeader icon={Archive} title="Property Details" sub="quick snapshot" />
+        <button onClick={onViewFull} className="shrink-0 text-[12px] font-semibold text-primary hover:text-primary-hover">
+          View full →
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+            <div className="mt-0.5 text-[13px] text-text">{value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function LeadProfileView({ id, backTo, allowShare = false }: { id: string | undefined; backTo: string; allowShare?: boolean }) {
   const navigate = useNavigate();
@@ -274,6 +349,17 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   const overrideEarlyExit = useOverrideFollowupEarlyExit();
   const [tab, setTab] = useState<TabKey>('overview');
   const [pendingStage, setPendingStage] = useState<LeadStage | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [moreOpen]);
 
   if (isLoading) return <div className="text-text-3">Loading…</div>;
   if (!lead) return <div className="text-text-3">Lead not found.</div>;
@@ -457,23 +543,58 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         <AiScoreCard lead={lead} />
       </div>
 
-      <div className="mb-4 flex gap-1 border-b border-border">
-        {TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
+      <div className="mb-4 flex items-center justify-between border-b border-border">
+        <div className="flex gap-1">
+          {PRIMARY_TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-3 py-2 text-[13px] font-medium transition-colors ${
+                tab === t ? 'border-b-2 border-primary text-primary' : 'text-text-3 hover:text-text'
+              }`}
+            >
+              {TAB_LABELS[t]}
+            </button>
+          ))}
+        </div>
+        <div ref={moreRef} className="relative mb-1.5">
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-2 text-[13px] font-medium transition-colors ${
-              tab === t ? 'border-b-2 border-primary text-primary' : 'text-text-3 hover:text-text'
+            onClick={() => setMoreOpen((v) => !v)}
+            className={`flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+              MORE_TABS.includes(tab) ? 'bg-primary/10 text-primary' : 'text-text-3 hover:bg-surface-3 hover:text-text'
             }`}
           >
-            {TAB_LABELS[t]}
+            {MORE_TABS.includes(tab) ? TAB_LABELS[tab] : 'More'}
+            <ChevronDown size={13} className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
           </button>
-        ))}
+          {moreOpen && (
+            <div className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-border bg-white py-1 shadow-popover">
+              {MORE_TABS.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    setTab(t);
+                    setMoreOpen(false);
+                  }}
+                  className={`flex w-full items-center px-3 py-1.5 text-left text-[12.5px] font-medium ${
+                    tab === t ? 'bg-primary/10 text-primary' : 'text-text-2 hover:bg-surface-3'
+                  }`}
+                >
+                  {TAB_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {tab === 'overview' && (
         <div className="space-y-5">
           <OverviewTab lead={lead} leadId={lead.id} />
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <PropertySnapshotCard lead={lead} onViewFull={() => setTab('property')} />
+            <FrameworkSnapshotCard lead={lead} onViewFull={() => setTab('framework')} />
+          </div>
           <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
         </div>
       )}
