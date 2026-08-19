@@ -1265,8 +1265,8 @@ section{ padding: 120px 0; position:relative; }
 .cta-grid{
   position:relative; z-index:2;
   display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 56px;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 48px;
   align-items:center;
 }
 .cta-text h2{
@@ -1294,6 +1294,13 @@ section{ padding: 120px 0; position:relative; }
 }
 .cta-form-card .field{ margin-bottom: 16px; }
 .cta-form-card .field:last-of-type{ margin-bottom: 20px; }
+.cta-form-card .field-row{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.cta-form-card .field-row .field{ margin-bottom: 0; }
 
 /* ============================================
    CONTACT FORM
@@ -1647,6 +1654,7 @@ footer{
   .hero-inner{ grid-template-columns:1fr; }
   .hero-scene{ height:420px; order:-1; margin-top:20px; }
   .burden-grid, .market-grid, .contact-grid, .cta-grid{ grid-template-columns:1fr; }
+  .cta-form-card .field-row{ grid-template-columns:1fr; gap:16px; }
   .burden-visual{ order:-1; max-width:420px; margin:0 auto 48px; }
   .offers-grid{ grid-template-columns:1fr; }
   .promise-grid{ grid-template-columns:1fr 1fr; }
@@ -2014,17 +2022,23 @@ footer{
       <p>Tell us about your property. We'll review your situation and get back to you with a real offer — usually within 24 hours.</p>
     </div>
     <form class="cta-form-card reveal" id="ctaQuickForm">
-      <div class="field">
-        <label for="ctaName">Name</label>
-        <input type="text" id="ctaName" name="ctaName" placeholder="Jordan Carter" required>
+      <div class="field-row">
+        <div class="field">
+          <label for="ctaName">Name</label>
+          <input type="text" id="ctaName" name="ctaName" placeholder="Jordan Carter" required>
+        </div>
+        <div class="field">
+          <label for="ctaPhone">Phone Number</label>
+          <input type="tel" id="ctaPhone" name="ctaPhone" placeholder="(217) 408-2781" required>
+        </div>
       </div>
       <div class="field">
-        <label for="ctaPhone">Phone Number</label>
-        <input type="tel" id="ctaPhone" name="ctaPhone" placeholder="(217) 408-2781" required>
+        <label for="ctaAddress">Property Address</label>
+        <input type="text" id="ctaAddress" name="ctaAddress" placeholder="123 Main St, Tampa, FL 33602" required>
       </div>
       <div class="field">
         <label for="ctaDesc">Tell Us About Your Property</label>
-        <textarea id="ctaDesc" name="ctaDesc" placeholder="Address, situation, timeline..." required></textarea>
+        <textarea id="ctaDesc" name="ctaDesc" placeholder="Situation, timeline..." required></textarea>
       </div>
       <button type="submit" class="form-submit">
         Start My Free Offer
@@ -2542,7 +2556,7 @@ revealEls.forEach(el => io.observe(el));
         first_name: firstName,
         last_name: lastName,
         phone: form.ctaPhone.value.trim(),
-        property_address: '',
+        property_address: form.ctaAddress.value.trim(),
         notes: form.ctaDesc.value.trim()
       })
     }).then(function(res){
