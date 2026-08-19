@@ -942,7 +942,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       )}
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-2.5 overflow-x-auto pb-2">
+        <div className="flex items-start gap-2.5 overflow-x-auto pb-2">
           {visibleStages.map((stage) => (
             <KanbanColumn
               key={stage}
