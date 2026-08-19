@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, X as XIcon } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
@@ -31,6 +31,17 @@ import { STAGE_ORDER, STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage,
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
+// Stages that are no longer active work — visually receded (muted column,
+// faded cards) rather than removed, so a full pipeline doesn't bury the
+// stages that still need attention.
+const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'onhold', 'others'];
+// A closed deal earns a quiet color tint on its own card — brass for a
+// fully closed file, green while the contract is still in motion — the
+// same accent colors STAGE_CONFIG already uses for those stages.
+const CARD_TINT: Partial<Record<LeadStage, { border: string; bg: string }>> = {
+  contract: { border: 'border-success/40', bg: 'bg-success-dim' },
+  closed: { border: 'border-accent/40', bg: 'bg-accent-dim' },
+};
 
 /** Lowercases and reduces every run of punctuation to a single space, so commas,
  *  periods, hashes and hyphens can't block a match on either side. */
@@ -156,15 +167,20 @@ function KanbanCardVisual({
     });
   }
 
+  const tint = CARD_TINT[lead.stage];
+  const dimmed = DIMMED_STAGES.includes(lead.stage);
+
   return (
     <div
-      className={`rounded-md border p-2.5 text-[12px] ${
+      className={`rounded-md border p-2.5 text-[12px] transition-shadow ${
         selected
           ? 'border-primary bg-primary/5'
           : sharedFrom
             ? 'border-info/30 bg-info-dim'
-            : 'border-border-2 bg-surface'
-      } ${lifted ? 'rotate-1 shadow-2xl' : 'shadow-card'}`}
+            : tint
+              ? `${tint.border} ${tint.bg}`
+              : 'border-border-2 bg-surface'
+      } ${dimmed && !selected ? 'opacity-70' : ''} ${lifted ? 'rotate-1 shadow-2xl' : 'shadow-card hover:shadow-card-hover'}`}
       style={lifted ? { willChange: 'transform' } : undefined}
       onDoubleClick={onOpen}
     >
@@ -185,7 +201,7 @@ function KanbanCardVisual({
             <div className="shrink-0 text-[10px] text-text-3">#{lead.leadNum}</div>
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-text-2">
-            {formatPhone(lead.phone)}
+            <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
             {messageCount > 0 && (
               <span
                 className="inline-flex items-center gap-0.5 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-semibold text-info-text"
@@ -196,8 +212,9 @@ function KanbanCardVisual({
             )}
           </div>
           {lead.address && (
-            <div className="mt-0.5 truncate text-text-3" title={lead.address}>
-              📍 {lead.address}
+            <div className="mt-0.5 flex items-start gap-1 truncate text-text-3" title={lead.address}>
+              <MapPin size={10} className="mt-0.5 shrink-0" />
+              <span className="truncate">{lead.address}</span>
             </div>
           )}
           {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
@@ -271,7 +288,7 @@ function KanbanCardVisual({
           {lead.phone && (
             <button
               onClick={copyPhone}
-              className={`rounded-md border p-1 transition-colors ${copied ? 'border-success bg-surface-3 text-success' : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'}`}
+              className={`rounded-full border p-1 transition-colors ${copied ? 'border-success bg-surface-3 text-success' : 'border-border-2 bg-surface-3 text-text-2 hover:border-border-2'}`}
               title={copied ? 'Copied!' : 'Copy phone'}
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
@@ -283,7 +300,7 @@ function KanbanCardVisual({
                 e.stopPropagation();
                 onCall();
               }}
-              className="rounded-md border border-border-2 bg-surface-3 p-1 text-primary hover:border-primary"
+              className="rounded-full border border-primary/30 bg-primary-dim p-1 text-primary hover:border-primary"
               title="Log a call"
             >
               <Phone size={12} />
@@ -294,7 +311,7 @@ function KanbanCardVisual({
               e.stopPropagation();
               onOpen();
             }}
-            className="rounded-md border border-border-2 bg-surface-3 p-1 text-text-2 hover:border-border-2"
+            className="rounded-full border border-border-2 bg-surface-3 p-1 text-text-2 hover:border-border-2"
             title="Edit"
           >
             <Pencil size={12} />
@@ -305,7 +322,7 @@ function KanbanCardVisual({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="rounded-md border border-border-2 bg-surface-3 p-1 text-danger hover:border-danger"
+              className="rounded-full border border-border-2 bg-surface-3 p-1 text-danger hover:border-danger"
               title="Delete"
             >
               <Trash2 size={12} />
@@ -410,6 +427,7 @@ const KanbanColumn = memo(function KanbanColumn({
   setClearTarget: (stage: LeadStage | null) => void;
 }) {
   const cfg = STAGE_CONFIG[stage];
+  const dimmed = DIMMED_STAGES.includes(stage);
   const { setNodeRef, isOver } = useDroppable({ id: stage });
 
   const ids = useMemo(() => leads.map((l) => l.id), [leads]);
@@ -426,7 +444,7 @@ const KanbanColumn = memo(function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-md border bg-surface-2 ${isOver ? 'border-primary' : 'border-border'}`}
+      className={`flex w-72 shrink-0 flex-col rounded-lg border ${dimmed ? 'bg-surface-3/50' : 'bg-surface-2'} ${isOver ? 'border-primary' : 'border-border'}`}
       style={{ borderTopWidth: 3, borderTopColor: cfg.color }}
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
