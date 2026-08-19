@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader2, Lock, MapPin, TrendingUp, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Send, X } from 'lucide-react';
 import { useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
@@ -15,13 +15,32 @@ import { DEAL_TYPE_CONFIG } from '@/types/domain';
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
+/** Big serif figure used for both the property-detail grid and the comp breakdown. */
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-text-3">{label}</div>
-      <div className="mt-0.5 text-[15px] font-semibold text-text">{value}</div>
+      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+      <div className="mt-1 font-serif text-[19px] font-bold text-text">{value}</div>
     </div>
   );
+}
+
+/** Numbered magazine-style break that opens every content section. */
+function SectionHead({ num, title }: { num: number; title: string }) {
+  return (
+    <div className="mb-3.5 flex items-baseline gap-3.5">
+      <span className="shrink-0 rounded-full bg-accent-dim px-2.5 py-0.5 font-mono text-[11px] font-bold text-accent-hover">
+        {String(num).padStart(2, '0')}
+      </span>
+      <span className="shrink-0 font-serif text-[19px] font-semibold text-text">{title}</span>
+      <span className="h-px flex-1 bg-gradient-to-r from-border-2 to-transparent" />
+    </div>
+  );
+}
+
+/** Plain white section container — the numbering above it carries the title now. */
+function Panel({ children }: { children: React.ReactNode }) {
+  return <section className="rounded-2xl border border-border bg-surface p-6 shadow-card">{children}</section>;
 }
 
 /** Shared by the listings and sold tables — same columns, different labels. */
@@ -44,34 +63,34 @@ function CompTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-[13px]">
-        <thead className="border-b border-border text-[11px] uppercase tracking-wide text-text-3">
+      <table className="w-full text-left text-[12.5px]">
+        <thead className="border-b-2 border-border-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">
           <tr>
-            <th className="pb-2 pr-3">Address</th>
-            <th className="pb-2 pr-3 text-right">{priceLabel}</th>
-            <th className="pb-2 pr-3 text-right">Bed</th>
-            <th className="pb-2 pr-3 text-right">Bath</th>
-            <th className="pb-2 pr-3 text-right">Sq ft</th>
-            <th className="pb-2 pr-3 text-right">{dateLabel}</th>
-            {scores && <th className="pb-2 text-right">Match</th>}
+            <th className="pb-2.5 pr-3">Address</th>
+            <th className="pb-2.5 pr-3 text-right">{priceLabel}</th>
+            <th className="pb-2.5 pr-3 text-right">Bed</th>
+            <th className="pb-2.5 pr-3 text-right">Bath</th>
+            <th className="pb-2.5 pr-3 text-right">Sq ft</th>
+            <th className="pb-2.5 pr-3 text-right">{dateLabel}</th>
+            {scores && <th className="pb-2.5 text-right">Match</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((c) => (
             <tr key={c.id} className="border-b border-border last:border-b-0">
-              <td className="py-2 pr-3 text-text-2">{c.address || '—'}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-text">{money(c.salePrice)}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.beds ?? '—'}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.baths ?? '—'}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-text-2">{c.sqft?.toLocaleString() ?? '—'}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-text-3">
+              <td className="py-2.5 pr-3 font-medium text-text-2">{c.address || '—'}</td>
+              <td className="py-2.5 pr-3 text-right font-mono font-semibold tabular-nums text-text">{money(c.salePrice)}</td>
+              <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.beds ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.baths ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.sqft?.toLocaleString() ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right tabular-nums text-text-3">
                 {c.saleDate ? new Date(c.saleDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
               </td>
               {scores && (
-                <td className="py-2 text-right">
+                <td className="py-2.5 text-right">
                   {scores[c.id] ? (
                     <span
-                      className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${matchTone(scores[c.id].score)}`}
+                      className={`inline-block rounded-full px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums ${matchTone(scores[c.id].score)}`}
                       title={scores[c.id].reasons.join(' · ') || 'Close match on size, beds and baths'}
                     >
                       {scores[c.id].score}/10
@@ -102,28 +121,19 @@ function ConfidenceBlock({ confidence }: { confidence: SetConfidence }) {
     confidence.label === 'High' ? 'bg-success' : confidence.label === 'Moderate' ? 'bg-warning' : 'bg-danger';
 
   return (
-    <div className="mt-3 border-t border-border pt-3">
+    <div className="mt-4 border-t border-border pt-3.5">
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-border-2">
         <div className={`h-full rounded-full transition-all ${tone}`} style={{ width: `${confidence.score * 10}%` }} />
       </div>
-      <ul className="mt-2 space-y-0.5">
+      <ul className="mt-2.5 space-y-1">
         {confidence.notes.map((n, i) => (
-          <li key={i} className="flex gap-1.5 text-[12px] leading-snug text-text-3">
-            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-40" />
+          <li key={i} className="flex gap-2 text-[11.5px] leading-snug text-text-3">
+            <span className="mt-1.5 h-[3.5px] w-[3.5px] shrink-0 rounded-full bg-current opacity-50" />
             {n}
           </li>
         ))}
       </ul>
     </div>
-  );
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-xl border border-border bg-surface p-5 shadow-card">
-      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-text-3">{title}</h2>
-      <div className="mt-3">{children}</div>
-    </section>
   );
 }
 
@@ -202,7 +212,7 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
   const valid = name.trim().length > 1;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-4">
       <form
         className="w-full max-w-sm rounded-2xl border border-border bg-surface p-7 shadow-2xl"
         onSubmit={(e) => {
@@ -211,7 +221,7 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
         }}
       >
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Investment Opportunity</div>
-        <h1 className="mt-1.5 text-[19px] font-semibold text-text">Who's viewing?</h1>
+        <h1 className="mt-1.5 font-serif text-[19px] font-semibold text-text">Who's viewing?</h1>
         <p className="mt-1 text-[13px] leading-snug text-text-3">
           Just your name — the full packet opens straight away.
         </p>
@@ -243,92 +253,112 @@ function Line({
 }) {
   const toneClass = tone === 'bad' ? 'text-danger' : tone === 'good' ? 'text-success' : 'text-text';
   return (
-    <div className="flex items-baseline justify-between gap-3 py-0.5">
+    <div className="flex items-baseline justify-between gap-3 py-1">
       <dt className={`text-[13px] ${strong ? 'font-semibold text-text' : 'text-text-2'}`}>
         {label}
         {hint && <span className="ml-1.5 text-[11px] font-normal text-text-3">{hint}</span>}
       </dt>
-      <dd className={`shrink-0 tabular-nums ${strong ? `text-[15px] font-bold ${toneClass}` : 'text-[13px] text-text'}`}>
+      <dd className={`shrink-0 font-mono tabular-nums ${strong ? `text-[15px] font-bold ${toneClass}` : 'text-[13px] font-medium text-text'}`}>
         {sign && value != null ? sign : ''}{money(value)}
       </dd>
     </div>
   );
 }
 
-/** Verdict, an itemised breakdown, and the rule the verdict comes from. */
+/** Verdict, equity as the centerpiece, and an itemised breakdown beneath it. */
 function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; arv: number | null; market: ComparableEstimate | null }) {
   const style = VERDICT_STYLE[analysis.verdict];
   // Tracks headroom against the ceiling, the same measure the verdict uses, so
-  // the bar and the badge can never disagree. Full at 25% under max.
+  // the meter and the badge can never disagree. Full at 25% under max.
   const fill =
     analysis.mao != null && analysis.mao > 0 && analysis.headroom != null
       ? Math.max(0, Math.min(100, (analysis.headroom / analysis.mao / 0.25) * 100))
       : 0;
+  const equityColor = analysis.spread != null && analysis.spread < 0 ? 'text-rose-300' : 'text-emerald-300';
 
   return (
-    <section className={`rounded-xl border p-5 shadow-card ${style.box}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-text-3">Deal Analysis</h2>
-        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${style.pill}`}>
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+      <div className="bg-gradient-to-br from-sidebar to-sidebar-2 px-7 py-6 text-white">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10.5px] font-extrabold uppercase tracking-wide ${style.pill}`}>
+          <Check size={10} strokeWidth={3.5} />
           {style.label}
         </span>
-      </div>
 
-      {/* Headline is the verdict's own reasoning, so the badge and the number
-          under it can never tell different stories. */}
-      <p className="mt-2 text-[15px] font-medium leading-snug text-text">{analysis.notes[0]}</p>
+        {analysis.spread != null ? (
+          <>
+            <div className={`mt-3 font-serif text-[36px] font-bold sm:text-[44px] ${equityColor}`}>{money(analysis.spread)}</div>
+            <p className="mt-1 max-w-md text-[13px] leading-relaxed text-[#B9C6D6]">{analysis.notes[0]}</p>
+          </>
+        ) : (
+          <p className="mt-3 max-w-md text-[14px] font-medium leading-snug text-white">{analysis.notes[0]}</p>
+        )}
 
-      {analysis.headroom != null && (
-        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-black/10">
-          <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${fill}%` }} />
-        </div>
-      )}
-
-      {/* ── What the buyer is in for ─────────────────────────────────────── */}
-      <div className="mt-4 border-t border-black/10 pt-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Buyer's cost</div>
-        <dl className="mt-2">
-          <Line label="Asking price" value={analysis.askingPrice} />
-          <Line label="Repairs" value={analysis.repairs} sign="+" />
-          {analysis.closingCost != null && (
-            <Line label="Closing costs" value={analysis.closingCost} sign="+" hint="paid by buyer" />
-          )}
-          <div className="mt-1 border-t border-black/15 pt-1">
-            <Line label="All-in cost" value={analysis.allIn} strong />
+        {analysis.headroom != null && analysis.mao != null && (
+          <div className="mt-5">
+            <div className="relative h-2 rounded-full bg-white/[0.14]">
+              <span
+                className="absolute -top-[19px] -translate-x-1/2 font-mono text-[10.5px] font-bold text-emerald-300"
+                style={{ left: `${fill}%` }}
+              >
+                You are here
+              </span>
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300" style={{ width: `${fill}%` }} />
+            </div>
+            <div className="mt-1.5 flex justify-between text-[10px] text-[#7691AC]">
+              <span>Thin margin</span>
+              <span>Strong margin</span>
+            </div>
           </div>
-        </dl>
+        )}
       </div>
 
-      {/* ── What it's worth ──────────────────────────────────────────────── */}
-      <div className="mt-3 border-t border-black/10 pt-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Value</div>
-        <dl className="mt-2">
-          <Line label="ARV" value={arv} hint={market ? "comparable average" : undefined} />
-          {market && (
-            <Line
-              label="Comparable average"
-              value={market.value}
-              hint={
-                market.method === 'per_sqft'
-                  ? `${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'} · price/sqft basis`
-                  : `${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'} · flat average`
-              }
-            />
-          )}
-          <Line
-            label="Projected equity"
-            value={analysis.spread}
-            strong
-            hint={analysis.margin != null ? `${Math.round(analysis.margin * 100)}% of ARV` : undefined}
-            tone={analysis.spread != null && analysis.spread < 0 ? 'bad' : 'good'}
-          />
-        </dl>
+      <div className="grid sm:grid-cols-2">
+        <div className="px-7 py-5">
+          <div className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">Buyer's cost</div>
+          <dl>
+            <Line label="Asking price" value={analysis.askingPrice} />
+            <Line label="Repairs" value={analysis.repairs} sign="+" />
+            {analysis.closingCost != null && (
+              <Line label="Closing costs" value={analysis.closingCost} sign="+" hint="paid by buyer" />
+            )}
+            <div className="mt-1 border-t border-border pt-1.5">
+              <Line label="All-in cost" value={analysis.allIn} strong />
+            </div>
+          </dl>
+        </div>
+
+        <div className="border-t border-border px-7 py-5 sm:border-l sm:border-t-0">
+          <div className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">Value</div>
+          <dl>
+            <Line label="ARV" value={arv} hint={market ? 'comparable average' : undefined} />
+            {market && (
+              <Line
+                label="Comparable average"
+                value={market.value}
+                hint={
+                  market.method === 'per_sqft'
+                    ? `${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'} · price/sqft basis`
+                    : `${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'} · flat average`
+                }
+              />
+            )}
+            <div className="mt-1 border-t border-border pt-1.5">
+              <Line
+                label="Projected equity"
+                value={analysis.spread}
+                strong
+                hint={analysis.margin != null ? `${Math.round(analysis.margin * 100)}% of ARV` : undefined}
+                tone={analysis.spread != null && analysis.spread < 0 ? 'bad' : 'good'}
+              />
+            </div>
+          </dl>
+        </div>
       </div>
 
-      <p className="mt-3 border-t border-black/10 pt-3 text-[11px] leading-snug text-text-3">
+      <p className="border-t border-border bg-surface-2 px-7 py-3 text-[11px] leading-snug text-text-3">
         Figures are estimates provided for evaluation and are not a warranty or an offer.
       </p>
-    </section>
+    </div>
   );
 }
 
@@ -459,6 +489,23 @@ export function PublicPacketPage() {
     [packet?.purchasePrice, adjustedArv, packet?.closingCost, repairTotalValue],
   );
 
+  // Purchase price / ARV / repairs / equity — whichever of these the admin
+  // actually filled in, floated in the hero's glass stat strip in that order.
+  const statItems = useMemo(() => {
+    const items: { label: string; value: string; valueClass: string }[] = [];
+    if (packet?.purchasePrice != null) items.push({ label: 'Purchase Price', value: money(packet.purchasePrice), valueClass: 'text-white' });
+    if (adjustedArv != null) items.push({ label: 'ARV', value: money(adjustedArv), valueClass: 'text-sky-300' });
+    if (repairTotalValue > 0) items.push({ label: 'Est. Repairs', value: money(repairTotalValue), valueClass: 'text-white' });
+    if (analysis.spread != null) {
+      items.push({
+        label: 'Projected Equity',
+        value: money(analysis.spread),
+        valueClass: analysis.spread >= 0 ? 'text-emerald-300' : 'text-rose-300',
+      });
+    }
+    return items;
+  }, [packet?.purchasePrice, adjustedArv, repairTotalValue, analysis.spread]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface-2 text-text-3">
@@ -494,198 +541,270 @@ export function PublicPacketPage() {
 
   const areaLine = [area?.city, area?.state, area?.zip].filter(Boolean).join(', ');
 
+  // Every content section below, in reading order, skipped whenever the admin
+  // left that part empty. Numbering comes from position in this list, not a
+  // fixed constant, since which sections actually render varies per packet.
+  const sections: { title: string; body: React.ReactNode }[] = [];
+
+  if (packet.images.length > 0) {
+    sections.push({ title: 'The Property', body: <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} /> });
+  }
+
+  sections.push({ title: 'Deal Analysis', body: <DealAnalysisCard analysis={analysis} arv={adjustedArv} market={market} /> });
+
+  if (packet.narrative) {
+    sections.push({
+      title: 'The Opportunity',
+      body: (
+        <Panel>
+          {packet.narrative.split('\n').filter((l) => l.trim()).map((line, i) => (
+            <div key={i} className="mt-3 flex gap-2.5 text-[14.5px] leading-relaxed text-text-2 first:mt-0">
+              <span className="shrink-0 font-serif text-[20px] font-bold leading-[1.2] text-accent">&ldquo;</span>
+              {line.trim()}
+            </div>
+          ))}
+        </Panel>
+      ),
+    });
+  }
+
+  sections.push({
+    title: 'Property Detail',
+    body: (
+      <Panel>
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+          <Stat label="Beds" value={packet.beds ?? '—'} />
+          <Stat label="Baths" value={packet.baths ?? '—'} />
+          <Stat label="Sq ft" value={packet.sqft?.toLocaleString() ?? '—'} />
+          <Stat label="Year built" value={packet.yearBuilt ?? '—'} />
+          {packet.showAssignmentFee && packet.assignmentFee != null && (
+            <Stat label="Assignment fee" value={money(packet.assignmentFee)} />
+          )}
+        </div>
+      </Panel>
+    ),
+  });
+
+  if (packet.dealTypes.length > 0) {
+    sections.push({
+      title: 'Deal Structures Available',
+      body: (
+        <div className="grid gap-3.5 sm:grid-cols-2">
+          {packet.dealTypes.map((t, i) => {
+            const cfg = DEAL_TYPE_CONFIG[t];
+            if (!cfg) return null;
+            const navy = i % 2 === 0;
+            return (
+              <div
+                key={t}
+                className={`rounded-2xl p-5 ${navy ? 'bg-gradient-to-br from-sidebar to-sidebar-2 text-white' : 'bg-gradient-to-br from-accent to-accent-hover text-text'}`}
+              >
+                <div className="font-serif text-[15px] font-bold">{cfg.label}</div>
+                <p className={`mt-1.5 text-[12px] leading-relaxed ${navy ? 'text-white/85' : 'text-text/80'}`}>{cfg.description}</p>
+              </div>
+            );
+          })}
+        </div>
+      ),
+    });
+  }
+
+  if (mapPins.length > 0) {
+    sections.push({
+      title: 'The Area',
+      body: (
+        <Panel>
+          <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-surface-3" />}>
+            <PacketMap pins={mapPins} center={subjectCenter} />
+          </Suspense>
+          {unmappedCompCount > 0 && (
+            <p className="mt-2.5 text-[11.5px] text-text-3">
+              {unmappedCompCount} comp{unmappedCompCount !== 1 ? 's' : ''} couldn't be placed on the map — still listed in the tables below.
+            </p>
+          )}
+        </Panel>
+      ),
+    });
+  }
+
+  if (listings.length > 0 || sold.length > 0) {
+    sections.push({
+      title: 'Comparable Sales',
+      body: (
+        <div className="space-y-3.5">
+          {listings.length > 0 && (
+            <Panel>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Currently on the Market</div>
+              <div className="mt-2.5"><CompTable rows={listings} priceLabel="List Price" dateLabel="Listed" scores={confidence?.byId} /></div>
+            </Panel>
+          )}
+          {sold.length > 0 && (
+            <Panel>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Recently Sold</div>
+              <div className="mt-2.5"><CompTable rows={sold} priceLabel="Sale Price" dateLabel="Sold" scores={confidence?.byId} /></div>
+            </Panel>
+          )}
+        </div>
+      ),
+    });
+  }
+
+  if (market) {
+    sections.push({
+      title: 'Comparable Average',
+      body: (
+        <Panel>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="font-serif text-[34px] font-bold text-text">{money(market.value)}</div>
+              <div className="mt-1 max-w-md text-[12px] leading-snug text-text-3">
+                {market.method === 'per_sqft'
+                  ? `price/sqft across ${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'}, applied to this property's sq ft`
+                  : `flat average across ${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'}`}
+                {market.listingCount > 0 ? ` (${market.listingCount} active listing${market.listingCount === 1 ? '' : 's'} shown above for reference only)` : ''}
+              </div>
+            </div>
+
+            {confidence && (
+              <div className="text-right">
+                <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">Comp confidence</div>
+                <div className="mt-1 flex items-baseline justify-end gap-1.5">
+                  <span className={`font-mono text-[26px] font-extrabold tabular-nums ${confidenceText(confidence.label)}`}>
+                    {confidence.score}
+                  </span>
+                  <span className="text-[13px] text-text-3">/ 10 · {confidence.label}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {market.method === 'per_sqft' ? (
+            <div className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-4">
+              <Stat label="Avg sale price" value={money(market.avgSalePrice)} />
+              <Stat label="Avg sq ft" value={market.avgSqft?.toLocaleString() ?? '—'} />
+              <Stat label="Avg $/sq ft" value={market.avgPricePerSqft != null ? money(Math.round(market.avgPricePerSqft)) : '—'} />
+            </div>
+          ) : (
+            <p className="mt-2.5 text-[12.5px] leading-snug text-text-3">
+              Sold comp prices added together and divided by how many there are — square footage wasn't available
+              to price this per square foot instead.
+            </p>
+          )}
+
+          {confidence && <ConfidenceBlock confidence={confidence} />}
+        </Panel>
+      ),
+    });
+  }
+
+  if (packet.repairs.length > 0) {
+    sections.push({
+      title: 'Repair Estimate',
+      body: (
+        <Panel>
+          <table className="w-full text-left text-[13px]">
+            <tbody>
+              {packet.repairs.map((r) => (
+                <tr key={r.id} className="border-b border-border last:border-b-0">
+                  <td className="py-2.5 text-text-2">{r.item || '—'}</td>
+                  <td className="py-2.5 text-right font-mono font-medium tabular-nums text-text">{money(r.cost)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td className="pt-3 text-[13px] font-semibold text-text">Total</td>
+                <td className="pt-3 text-right font-mono text-[15px] font-bold tabular-nums text-text">{money(repairTotalValue)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </Panel>
+      ),
+    });
+  }
+
   return (
     <div className="min-h-screen bg-surface-2 pb-16">
-      {/* Dark hero — the headline price and the property carry the top of the page. */}
-      <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-        <div className="mx-auto max-w-5xl px-5 py-8">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-400">
+      {/* Full-bleed navy/gold hero — the address is never in this payload by
+          design (get_public_packet withholds it), so the property type carries
+          the headline instead, same as the packet's own admin-facing label. */}
+      <header
+        className="relative overflow-hidden bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] text-white"
+        style={{
+          backgroundImage:
+            'radial-gradient(ellipse 900px 500px at 82% 8%, rgba(201,162,75,.28), transparent 60%), repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 1px, transparent 1px 74px), linear-gradient(200deg, #0d3a63 0%, #0B1E33 45%, #081527 100%)',
+        }}
+      >
+        <div className="relative mx-auto flex max-w-5xl items-center gap-2 px-5 pt-6 sm:px-8">
+          <div className="flex h-[27px] w-[27px] shrink-0 items-center justify-center rounded-lg bg-primary">
+            <Send size={13} className="text-white" />
+          </div>
+          <div className="font-serif text-[14px]"><span className="font-bold">Bluebird</span> <span className="font-medium text-[#8CA0B8]">Acquisition</span></div>
+        </div>
+
+        {analysis.verdict !== 'unknown' && (
+          <div className="absolute right-5 top-6 z-[2] flex items-center gap-2 rounded-full bg-gradient-to-br from-accent to-accent-hover py-2 pl-2.5 pr-4 shadow-[0_10px_24px_-8px_rgba(201,162,75,0.55)] sm:right-8">
+            <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#0B1E33]/[0.18]">
+              <Check size={11} strokeWidth={3.5} className="text-sidebar" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-[9px] font-bold uppercase tracking-wide text-sidebar/65">Deal Rating</div>
+              <div className="font-serif text-[15px] font-bold text-sidebar">{VERDICT_STYLE[analysis.verdict].label}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="relative mx-auto max-w-5xl px-5 pt-8 sm:px-8">
+          <div className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
+            <span className="h-px w-[22px] bg-accent" />
             Investment Opportunity
           </div>
-          <h1 className="mt-2 text-3xl font-semibold leading-tight">
+          <h1 className="mt-3.5 font-serif text-[32px] font-semibold leading-[1.05] tracking-tight sm:text-[44px]">
             {packet.propType || 'Property'}
           </h1>
-          <div className="mt-1.5 flex items-center gap-1.5 text-[14px] text-slate-300">
+          <div className="mt-2.5 flex items-center gap-1.5 text-[14px] font-medium text-[#AEC2D8]">
             <MapPin size={14} className="shrink-0" />
             {areaLine || 'Location available on enquiry'}
           </div>
-
-          <div className="mt-5 flex flex-wrap gap-x-8 gap-y-3">
-            {packet.purchasePrice != null && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">Purchase price</div>
-                <div className="text-2xl font-bold tabular-nums">{money(packet.purchasePrice)}</div>
-              </div>
-            )}
-            {adjustedArv != null && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">ARV</div>
-                <div className="text-2xl font-bold tabular-nums text-sky-300">{money(adjustedArv)}</div>
-              </div>
-            )}
-            {repairTotalValue > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">Est. repairs</div>
-                <div className="text-2xl font-bold tabular-nums">{money(repairTotalValue)}</div>
-              </div>
-            )}
-            {analysis.spread != null && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-slate-400">Projected equity</div>
-                <div className={`text-2xl font-bold tabular-nums ${analysis.spread >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                  {money(analysis.spread)}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
-            {packet.leadStatus && (
-              <span className="rounded-full bg-white/10 px-2.5 py-1 font-medium">{packet.leadStatus}</span>
-            )}
-            {packet.beds != null && <span className="rounded-full bg-white/10 px-2.5 py-1">{packet.beds} bed</span>}
-            {packet.baths != null && <span className="rounded-full bg-white/10 px-2.5 py-1">{packet.baths} bath</span>}
-            {packet.sqft != null && <span className="rounded-full bg-white/10 px-2.5 py-1">{packet.sqft.toLocaleString()} sq ft</span>}
-            {packet.yearBuilt != null && <span className="rounded-full bg-white/10 px-2.5 py-1">Built {packet.yearBuilt}</span>}
-          </div>
         </div>
+
+        {statItems.length > 0 && <div className="h-16 sm:h-[76px]" />}
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-4 px-5 py-6">
-        <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} />
-
-        <DealAnalysisCard analysis={analysis} arv={adjustedArv} market={market} />
-
-        {packet.narrative && (
-          <Card title="The opportunity">
-            <div className="space-y-1.5">
-              {packet.narrative.split('\n').filter((l) => l.trim()).map((line, i) => (
-                <p key={i} className="flex gap-2 text-[14px] leading-relaxed text-text-2">
-                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/50" />
-                  {line.trim()}
-                </p>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        <Card title="Property detail">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="Beds" value={packet.beds ?? '—'} />
-            <Stat label="Baths" value={packet.baths ?? '—'} />
-            <Stat label="Sq ft" value={packet.sqft?.toLocaleString() ?? '—'} />
-            <Stat label="Year built" value={packet.yearBuilt ?? '—'} />
-            {packet.showAssignmentFee && packet.assignmentFee != null && (
-              <Stat label="Assignment fee" value={money(packet.assignmentFee)} />
-            )}
+      {statItems.length > 0 && (
+        <div className="relative z-[3] mx-auto -mt-14 max-w-5xl px-5 sm:-mt-16 sm:px-8">
+          <div className="flex divide-x divide-accent/20 rounded-[20px] border border-white/[0.14] bg-sidebar/60 py-5 shadow-[0_24px_48px_-20px_rgba(11,30,51,0.45)] backdrop-blur-md">
+            {statItems.map((s) => (
+              <div key={s.label} className="flex-1 px-4 text-center sm:px-6 sm:text-left">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-[#8CA0B8]">{s.label}</div>
+                <div className={`mt-1 font-serif text-[19px] font-bold sm:text-[26px] ${s.valueClass}`}>{s.value}</div>
+              </div>
+            ))}
           </div>
-        </Card>
+        </div>
+      )}
 
-        {packet.dealTypes.length > 0 && (
-          <Card title="Deal structures available">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {packet.dealTypes.map((t) => {
-                const cfg = DEAL_TYPE_CONFIG[t];
-                if (!cfg) return null;
-                return (
-                  <div key={t} className="rounded-lg border border-border-2 bg-surface-3 p-3">
-                    <div className="text-[13px] font-semibold text-text">{cfg.label}</div>
-                    <p className="mt-1 text-[12px] leading-snug text-text-3">{cfg.description}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-
-        {mapPins.length > 0 && (
-          <Card title="The area">
-            <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-surface-3" />}>
-              <PacketMap pins={mapPins} center={subjectCenter} />
-            </Suspense>
-            {unmappedCompCount > 0 && (
-              <p className="mt-2 text-[12px] text-text-3">
-                {unmappedCompCount} comp{unmappedCompCount !== 1 ? 's' : ''} couldn't be placed on the map — still listed in the tables below.
-              </p>
+      <main className={`mx-auto max-w-5xl px-5 sm:px-8 ${statItems.length > 0 ? 'pt-6' : 'pt-8'}`}>
+        {(packet.leadStatus || packet.beds != null || packet.baths != null || packet.sqft != null || packet.yearBuilt != null) && (
+          <div className="mb-7 flex flex-wrap gap-2">
+            {packet.leadStatus && (
+              <span className="rounded-full bg-accent-dim px-3 py-1.5 text-[12px] font-semibold text-accent-hover">{packet.leadStatus}</span>
             )}
-          </Card>
+            {packet.beds != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">{packet.beds} bed</span>}
+            {packet.baths != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">{packet.baths} bath</span>}
+            {packet.sqft != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">{packet.sqft.toLocaleString()} sq ft</span>}
+            {packet.yearBuilt != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">Built {packet.yearBuilt}</span>}
+          </div>
         )}
 
-        {listings.length > 0 && (
-          <Card title="Currently on the market">
-            <CompTable rows={listings} priceLabel="List price" dateLabel="Listed" scores={confidence?.byId} />
-          </Card>
-        )}
-
-        {sold.length > 0 && (
-          <Card title="Recently sold">
-            <CompTable rows={sold} priceLabel="Sale price" dateLabel="Sold" scores={confidence?.byId} />
-          </Card>
-        )}
-
-        {market && (
-          <Card title="Comparable average">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <div className="text-3xl font-bold tabular-nums text-text">{money(market.value)}</div>
-                <div className="mt-0.5 text-[12.5px] text-text-3">
-                  {market.method === 'per_sqft'
-                    ? `price/sqft across ${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'}, applied to this property's sq ft`
-                    : `flat average across ${market.soldCount} sold comp${market.soldCount === 1 ? '' : 's'}`}
-                  {market.listingCount > 0 ? ` (${market.listingCount} active listing${market.listingCount === 1 ? '' : 's'} shown above for reference only)` : ''}
-                </div>
-              </div>
-
-              {confidence && (
-                <div className="text-right">
-                  <div className="text-[11px] uppercase tracking-wide text-text-3">Comp confidence</div>
-                  <div className="mt-0.5 flex items-baseline justify-end gap-1.5">
-                    <span className={`text-2xl font-bold tabular-nums ${confidenceText(confidence.label)}`}>
-                      {confidence.score}
-                    </span>
-                    <span className="text-[13px] text-text-3">/ 10 · {confidence.label}</span>
-                  </div>
-                </div>
-              )}
+        <div className="space-y-8 pb-2">
+          {sections.map((s, i) => (
+            <div key={s.title}>
+              <SectionHead num={i + 1} title={s.title} />
+              {s.body}
             </div>
+          ))}
+        </div>
 
-            {market.method === 'per_sqft' ? (
-              <div className="mt-3 grid grid-cols-3 gap-3 border-t border-border pt-3">
-                <Stat label="Avg sale price" value={money(market.avgSalePrice)} />
-                <Stat label="Avg sq ft" value={market.avgSqft?.toLocaleString() ?? '—'} />
-                <Stat label="Avg $/sq ft" value={market.avgPricePerSqft != null ? money(Math.round(market.avgPricePerSqft)) : '—'} />
-              </div>
-            ) : (
-              <p className="mt-2 text-[12.5px] leading-snug text-text-3">
-                Sold comp prices added together and divided by how many there are — square footage wasn't available
-                to price this per square foot instead.
-              </p>
-            )}
-
-            {confidence && <ConfidenceBlock confidence={confidence} />}
-          </Card>
-        )}
-
-        {packet.repairs.length > 0 && (
-          <Card title="Repair estimate">
-            <table className="w-full text-left text-[13px]">
-              <tbody>
-                {packet.repairs.map((r) => (
-                  <tr key={r.id} className="border-b border-border last:border-b-0">
-                    <td className="py-2 text-text-2">{r.item || '—'}</td>
-                    <td className="py-2 text-right tabular-nums text-text">{money(r.cost)}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="pt-2 text-[13px] font-semibold text-text">Total</td>
-                  <td className="pt-2 text-right text-[13px] font-semibold tabular-nums text-text">{money(repairTotalValue)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </Card>
-        )}
-
-        <p className="px-1 text-center text-[11px] text-text-3">
+        <p className="mt-8 px-1 text-center text-[11px] text-text-3">
           Figures are estimates provided for evaluation and are not a warranty or an offer.
         </p>
       </main>
