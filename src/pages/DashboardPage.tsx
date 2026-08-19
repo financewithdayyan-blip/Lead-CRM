@@ -21,7 +21,6 @@ import {
   PhoneIncoming,
   Reply,
   Sparkles,
-  Star,
   Tags as TagsIcon,
   Target,
   Timer,
@@ -202,41 +201,6 @@ function GoalBar({ label, done, goal, periodLabel }: { label: string; done: numb
   );
 }
 
-/** The one "spotlight" tile in the Overview row — a dark card standing out
- * from the flat grid of solid-color hero tiles, with a real sparkline (last
- * 6 weeks of lead volume, the same series the Marketing section charts)
- * instead of a decorative flourish. */
-function TotalLeadsSpotlight({ total, cold, trend }: { total: number; cold: number; trend: Array<{ label: string; count: number }> }) {
-  const recent = trend.slice(-6);
-  const max = Math.max(...recent.map((w) => w.count), 1);
-  return (
-    <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-[#0B1E33] to-[#132A45] p-5 text-white shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className="pointer-events-none absolute -right-14 -top-14 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(95,168,222,0.18),transparent_70%)]" />
-      <div className="relative flex items-start justify-between gap-2">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Total Leads</div>
-          <div className="mt-2 font-mono text-3xl font-semibold tabular-nums">{total.toLocaleString()}</div>
-          <div className="mt-1 text-[12px] text-white/75">{cold.toLocaleString()} still cold</div>
-        </div>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/15">
-          <Users size={16} />
-        </span>
-      </div>
-      <div className="relative mt-5 flex items-end gap-2" style={{ height: 56 }}>
-        {recent.map((w) => (
-          <div key={w.label} className="flex flex-1 flex-col items-center gap-1.5">
-            <div
-              className="w-full rounded-t bg-gradient-to-t from-[#C9A24B] to-[#e6c988]"
-              style={{ height: `${Math.max((w.count / max) * 100, 6)}%` }}
-              title={`${w.label}: ${w.count} leads`}
-            />
-            <div className="text-[9px] text-white/50">{w.label}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function DashboardView({
   userId,
@@ -455,8 +419,6 @@ export function DashboardView({
     STAGE_ORDER.forEach((s) => (stageCounts[s] = 0));
     leads.forEach((l) => (stageCounts[l.stage] = (stageCounts[l.stage] || 0) + 1));
 
-    const ratingCounts = [1, 2, 3, 4, 5].map((s) => leads.filter((l) => l.rating === s).length);
-
     const tagCounts = tags
       .map((t) => ({ tag: t, count: leads.filter((l) => l.tagIds.includes(t.id)).length }))
       .filter((x) => x.count > 0)
@@ -490,7 +452,6 @@ export function DashboardView({
       monthCalls,
       totalSessions,
       stageCounts,
-      ratingCounts,
       tagCounts,
     };
   }, [leads, calls, tags, activities, sendLog, inboundMessages, qualifiedPlusIds, cutoff]);
@@ -663,7 +624,6 @@ export function DashboardView({
   }, [activities]);
 
   const maxStage = Math.max(...Object.values(stats.stageCounts), 1);
-  const maxRating = Math.max(...stats.ratingCounts, 1);
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
   const maxNumber = Math.max(...stats.numberCounts.map((x) => x.count), 1);
 
@@ -724,34 +684,39 @@ export function DashboardView({
             <SectionLabel>Overview</SectionLabel>
             {showSmsStats ? (
               <>
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.6fr_1fr]">
-                  <TotalLeadsSpotlight total={stats.total} cold={leads.filter((l) => l.stage === 'new').length} trend={leadVolumeTrend} />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                    <StatCard
-                      label="Qualified Leads"
-                      value={stats.qualified.toLocaleString()}
-                      sub={`${stats.qualifiedRate}% of contacted`}
-                      color="#1568A8"
-                      icon={CheckCircle2}
-                      hero
-                    />
-                    <StatCard
-                      label="Contracts"
-                      value={stats.contracts.toLocaleString()}
-                      sub={`${stats.contractRate}% of qualified leads`}
-                      color="#10b981"
-                      icon={FileSignature}
-                      hero
-                    />
-                    <StatCard
-                      label="SMS Sent"
-                      value={stats.sentInRange.toLocaleString()}
-                      sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
-                      color="#C9A24B"
-                      icon={MessageSquare}
-                      hero
-                    />
-                  </div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <StatCard
+                    label="Total Leads"
+                    value={stats.total.toLocaleString()}
+                    sub={`${leads.filter((l) => l.stage === 'new').length} still cold`}
+                    color="#0B1E33"
+                    icon={Users}
+                    hero
+                  />
+                  <StatCard
+                    label="Qualified Leads"
+                    value={stats.qualified.toLocaleString()}
+                    sub={`${stats.qualifiedRate}% of contacted`}
+                    color="#1568A8"
+                    icon={CheckCircle2}
+                    hero
+                  />
+                  <StatCard
+                    label="Contracts"
+                    value={stats.contracts.toLocaleString()}
+                    sub={`${stats.contractRate}% of qualified leads`}
+                    color="#10b981"
+                    icon={FileSignature}
+                    hero
+                  />
+                  <StatCard
+                    label="SMS Sent"
+                    value={stats.sentInRange.toLocaleString()}
+                    sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
+                    color="#C9A24B"
+                    icon={MessageSquare}
+                    hero
+                  />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard
@@ -992,7 +957,7 @@ export function DashboardView({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 <div className="card">
                   <CardHeader icon={Hash} title="Pipeline Breakdown" />
                   <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-surface-3">
@@ -1007,14 +972,6 @@ export function DashboardView({
                   <div className="mt-3">
                     {STAGE_ORDER.map((s) => (
                       <BarRow key={s} label={STAGE_CONFIG[s].label} count={stats.stageCounts[s]} max={maxStage} color={STAGE_CONFIG[s].color} />
-                    ))}
-                  </div>
-                </div>
-                <div className="card">
-                  <CardHeader icon={Star} title="Rating Breakdown" tone="warning" />
-                  <div className="mt-2">
-                    {[5, 4, 3, 2, 1].map((s) => (
-                      <BarRow key={s} label={'★'.repeat(s) + '☆'.repeat(5 - s)} count={stats.ratingCounts[s - 1]} max={maxRating} color="#f59e0b" />
                     ))}
                   </div>
                 </div>

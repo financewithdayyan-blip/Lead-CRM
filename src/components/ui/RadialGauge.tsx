@@ -31,6 +31,13 @@ export function RadialGauge({
   const offset = circumference * (1 - clamped / 100);
   const center = size / 2;
   const patternId = `gauge-hatch-${useId()}`;
+  // The label's font size was a fixed text-lg (18px), fine at this
+  // component's original ~76-96px sizes but overflowing badly once
+  // something like a compact card-header ring asks for a much smaller
+  // size — scale it, and drop the decimal below a size where "100.0%"
+  // physically can't fit.
+  const fontSize = Math.max(9, Math.round(size / 4.2));
+  const displayValue = size < 56 ? `${Math.round(clamped)}%` : `${clamped.toFixed(1)}%`;
 
   const ring = (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -55,7 +62,9 @@ export function RadialGauge({
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-mono text-lg font-semibold tabular-nums text-text">{clamped.toFixed(1)}%</span>
+        <span className="font-mono font-semibold tabular-nums text-text" style={{ fontSize }}>
+          {displayValue}
+        </span>
       </div>
     </div>
   );

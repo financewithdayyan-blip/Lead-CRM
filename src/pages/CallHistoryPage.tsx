@@ -4,7 +4,6 @@ import { ClipboardList, Trash2, X } from 'lucide-react';
 import { useRecentActivities, useDeleteAllCallActivities } from '@/hooks/useActivities';
 import { useLeads } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
-import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_CONFIG } from '@/types/domain';
@@ -48,7 +47,6 @@ export function CallHistoryPage() {
   const [search, setSearch] = useState('');
   const [outcome, setOutcome] = useState('');
   const [time, setTime] = useState('all');
-  const [rating, setRating] = useState('');
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const leadsById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
@@ -78,7 +76,6 @@ export function CallHistoryPage() {
       today: calls.filter((a) => localIsoDate(new Date(a.createdAt)) === todayIso).length,
       followUps: calls.filter((a) => (a.meta as { outcome?: string })?.outcome === 'followup').length,
       contracts: enriched.filter((e) => e.lead?.stage === 'contract').length,
-      fiveStar: enriched.filter((e) => e.lead?.rating === 5).length,
     };
   }, [calls, enriched]);
 
@@ -87,7 +84,6 @@ export function CallHistoryPage() {
     const now = new Date();
     return enriched.filter(({ activity, lead, outcomeInfo }) => {
       if (outcome && outcomeInfo?.key !== outcome) return false;
-      if (rating && lead?.rating !== Number(rating)) return false;
       if (time !== 'all') {
         const d = new Date(activity.createdAt);
         if (time === 'today' && localIsoDate(d) !== localIsoDate(now)) return false;
@@ -101,16 +97,15 @@ export function CallHistoryPage() {
       }
       return true;
     });
-  }, [enriched, search, outcome, time, rating]);
+  }, [enriched, search, outcome, time]);
 
   function clearFilters() {
     setSearch('');
     setOutcome('');
     setTime('all');
-    setRating('');
   }
 
-  const hasFilters = search || outcome || time !== 'all' || rating;
+  const hasFilters = search || outcome || time !== 'all';
 
   return (
     <div>
@@ -139,12 +134,11 @@ export function CallHistoryPage() {
         onCancel={() => setConfirmDeleteAll(false)}
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total Calls" value={stats.total} color="#10b981" />
         <StatCard label="Today" value={stats.today} color="#4f46e5" />
         <StatCard label="Follow Ups" value={stats.followUps} color="#a78bfa" />
         <StatCard label="Contracts" value={stats.contracts} color="#10b981" />
-        <StatCard label="5-Star Calls" value={stats.fiveStar} color="#f59e0b" />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -169,14 +163,6 @@ export function CallHistoryPage() {
             </option>
           ))}
         </select>
-        <select className="input max-w-[140px]" value={rating} onChange={(e) => setRating(e.target.value)}>
-          <option value="">All ratings</option>
-          {[5, 4, 3, 2, 1].map((n) => (
-            <option key={n} value={n}>
-              {n} star{n !== 1 ? 's' : ''}
-            </option>
-          ))}
-        </select>
         {hasFilters && (
           <button className="btn ml-auto" onClick={clearFilters}>
             <X size={14} /> Clear
@@ -194,7 +180,6 @@ export function CallHistoryPage() {
               <th className="px-3 py-2.5">Phone</th>
               <th className="px-3 py-2.5">Address</th>
               <th className="px-3 py-2.5">Outcome</th>
-              <th className="px-3 py-2.5">Rating</th>
               <th className="px-3 py-2.5">Tags</th>
               <th className="px-3 py-2.5">Note</th>
             </tr>
@@ -202,14 +187,14 @@ export function CallHistoryPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={8} className="px-3 py-8 text-center text-text-3">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-16 text-center text-text-3">
+                <td colSpan={8} className="px-3 py-16 text-center text-text-3">
                   <div className="flex flex-col items-center gap-2">
                     <ClipboardList size={28} />
                     <div className="font-medium text-text-2">No calls logged yet</div>
@@ -241,7 +226,6 @@ export function CallHistoryPage() {
                     <span className="text-text-3">—</span>
                   )}
                 </td>
-                <td className="px-3 py-2.5">{lead ? <StarRating value={lead.rating} size={13} /> : '—'}</td>
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
                     {lead?.tagIds.map((tid) => {

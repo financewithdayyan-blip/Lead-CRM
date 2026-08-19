@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Archive, ChevronDown, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, Archive, ChevronDown, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
+import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags, useUpsertComps, useOverrideFollowupEarlyExit } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -12,7 +13,6 @@ import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller, useT
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
-import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Comp, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
@@ -288,9 +288,7 @@ function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: (
     <div className="card">
       <div className="flex items-center justify-between gap-3">
         <CardHeader icon={CheckCircle2} title="Qualification Framework" sub={`${completedCount} of ${steps.length} steps answered`} tone="success" />
-        <button onClick={onViewFull} className="shrink-0 text-[12px] font-semibold text-primary hover:text-primary-hover">
-          View full →
-        </button>
+        <RadialGauge pct={(completedCount / steps.length) * 100} color="#10b981" size={40} strokeWidth={5} centered />
       </div>
       <div className="mt-3 space-y-1">
         {steps.map((step) => {
@@ -303,6 +301,31 @@ function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: (
           );
         })}
       </div>
+      <button onClick={onViewFull} className="mt-3 w-full text-center text-[12px] font-semibold text-primary hover:text-primary-hover">
+        View full framework →
+      </button>
+    </div>
+  );
+}
+
+/** Lead #, created date — the safe, always-accurate subset of "at a glance"
+ * facts; nothing here is inferred or guessed. */
+function QuickFactsCard({ lead }: { lead: Lead }) {
+  const rows: Array<[string, string]> = [
+    ['Lead #', lead.leadNum != null ? `#${lead.leadNum}` : '—'],
+    ['Created', formatDate(lead.createdAt)],
+  ];
+  return (
+    <div className="card">
+      <CardHeader icon={Hash} title="Quick Facts" />
+      <div className="mt-3 space-y-2.5">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between">
+            <div className="text-[12px] text-text-3">{label}</div>
+            <div className="text-[12.5px] font-medium text-text">{value}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -312,11 +335,12 @@ function FrameworkSnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: (
  * comps) stays exactly as-is behind the real tab. */
 function PropertySnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: () => void }) {
   const rows: Array<[string, string]> = [
+    ['Property Type', lead.propType || '—'],
     ['Bedrooms', lead.beds != null ? String(lead.beds) : '—'],
     ['Bathrooms', lead.baths != null ? String(lead.baths) : '—'],
     ['Square Feet', lead.sqft != null ? lead.sqft.toLocaleString() : '—'],
-    ['Year Built', lead.yearBuilt != null ? String(lead.yearBuilt) : '—'],
     ['Condition', lead.condition || '—'],
+    ['ARV', lead.arv != null ? `$${lead.arv.toLocaleString()}` : '—'],
   ];
   return (
     <div className="card">
@@ -334,6 +358,12 @@ function PropertySnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: ()
           </div>
         ))}
       </div>
+      {lead.motivation && (
+        <div className="mt-3 border-t border-border-2 pt-3">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">Motivation</div>
+          <div className="mt-0.5 text-[13px] text-text">{lead.motivation}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -409,7 +439,6 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
             })()}
           </div>
           <div className="flex flex-col items-end gap-2">
-            <StarRating value={lead.rating} onChange={(v) => updateLead.mutate({ id: lead.id, rating: v })} />
             <select
               className="input !w-auto !py-1.5 text-[12px]"
               value={lead.stage}
@@ -589,13 +618,16 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       </div>
 
       {tab === 'overview' && (
-        <div className="space-y-5">
-          <OverviewTab lead={lead} leadId={lead.id} />
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-5">
+            <OverviewTab lead={lead} leadId={lead.id} />
             <PropertySnapshotCard lead={lead} onViewFull={() => setTab('property')} />
+            <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
+          </div>
+          <div className="space-y-5">
+            <QuickFactsCard lead={lead} />
             <FrameworkSnapshotCard lead={lead} onViewFull={() => setTab('framework')} />
           </div>
-          <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
         </div>
       )}
       {tab === 'property' && <PropertyTab lead={lead} />}
@@ -742,7 +774,8 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
 
   return (
     <div className="card">
-      <div className="grid grid-cols-2 gap-3">
+      <CardHeader icon={User} title="Contact Info" sub="how to reach this lead" />
+      <div className="mt-4 grid grid-cols-2 gap-3">
         <Field label="First Name">
           <input className="input" value={form.firstName} onChange={(e) => set('firstName', e.target.value)} />
         </Field>
@@ -898,7 +931,6 @@ function PropertyTab({ lead }: { lead: Lead }) {
     auctionDate: lead.auctionDate ?? '',
     condition: lead.condition ?? '',
     motivation: lead.motivation ?? '',
-    propertyRating: lead.propertyRating?.toString() ?? '',
     arv: lead.arv?.toString() ?? '',
     asIs: lead.asIs?.toString() ?? '',
     estRepairs: lead.estRepairs?.toString() ?? '',
@@ -931,7 +963,6 @@ function PropertyTab({ lead }: { lead: Lead }) {
         motivation: form.motivation || null,
         arv: form.arv ? Number(form.arv) : null,
         asIs: form.asIs ? Number(form.asIs) : null,
-        propertyRating: form.propertyRating ? Number(form.propertyRating) : null,
         estRepairs: form.estRepairs ? Number(form.estRepairs) : null,
         minOffer: form.minOffer ? Number(form.minOffer) : null,
         maxOffer: form.maxOffer ? Number(form.maxOffer) : null,
@@ -1006,16 +1037,6 @@ function PropertyTab({ lead }: { lead: Lead }) {
           </Field>
           <Field label="Condition">
             <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
-          </Field>
-          <Field label="Property Rating (1-10)">
-            <select className="input" value={form.propertyRating} onChange={(e) => set('propertyRating', e.target.value)}>
-              <option value="">—</option>
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
           </Field>
           <div className="col-span-2">
             <Field label="Motivation">

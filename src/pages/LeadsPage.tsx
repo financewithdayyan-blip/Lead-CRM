@@ -5,7 +5,6 @@ import { useLeads } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { StageBadge } from '@/components/ui/StageBadge';
-import { StarRating } from '@/components/ui/StarRating';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
@@ -146,7 +145,6 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
               <th className="px-3 py-2.5">Phone</th>
               <th className="px-3 py-2.5">Address</th>
               <th className="px-3 py-2.5">Stage</th>
-              <th className="px-3 py-2.5">Rating</th>
               <th className="px-3 py-2.5">Tags</th>
               <th className="px-3 py-2.5">Auction</th>
               {targetUserId && <th className="px-3 py-2.5" />}
@@ -193,9 +191,6 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                   <td className="max-w-[220px] truncate px-3 py-2.5 text-text-2">{lead.address}</td>
                   <td className="px-3 py-2.5">
                     <StageBadge stage={lead.stage} />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <StarRating value={lead.rating} size={13} />
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap gap-1">

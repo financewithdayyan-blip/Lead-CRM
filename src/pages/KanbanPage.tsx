@@ -83,7 +83,7 @@ function leadMatchesSearch(lead: Lead, tokens: string[], queryDigits: string) {
 
 function exportCsv(selectedLeads: Lead[], tags: Tag[]) {
   const tagMap = Object.fromEntries(tags.map((t) => [t.id, t.name]));
-  const header = ['Lead#', 'First Name', 'Last Name', 'Phone', 'Phone 2', 'Email', 'Address', 'City', 'State', 'Zip', 'Stage', 'Tags', 'Rating', 'Notes', 'Source', 'Created'];
+  const header = ['Lead#', 'First Name', 'Last Name', 'Phone', 'Phone 2', 'Email', 'Address', 'City', 'State', 'Zip', 'Stage', 'Tags', 'Notes', 'Source', 'Created'];
   const rows = selectedLeads.map((l) => [
     l.leadNum ?? '',
     l.firstName,
@@ -97,7 +97,6 @@ function exportCsv(selectedLeads: Lead[], tags: Tag[]) {
     l.zip ?? '',
     STAGE_CONFIG[l.stage].label,
     l.tagIds.map((id) => tagMap[id] ?? '').filter(Boolean).join('; '),
-    l.rating,
     l.notes ?? '',
     l.source ?? '',
     l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '',
@@ -146,7 +145,6 @@ function KanbanCardVisual({
   dragProps?: React.HTMLAttributes<HTMLDivElement>;
   lifted?: boolean;
 }) {
-  const stars = lead.rating > 0 ? '★'.repeat(lead.rating) + '☆'.repeat(5 - lead.rating) : '';
   const [copied, setCopied] = useState(false);
 
   function copyPhone(e: React.MouseEvent) {
@@ -268,8 +266,7 @@ function KanbanCardVisual({
             })()}
         </div>
       </div>
-      <div className="mt-1.5 flex items-center justify-between">
-        <div>{stars && <div className="text-warning">{stars}</div>}</div>
+      <div className="mt-1.5 flex items-center justify-end">
         <div className="flex gap-1">
           {lead.phone && (
             <button
