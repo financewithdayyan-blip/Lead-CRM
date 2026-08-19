@@ -1195,6 +1195,101 @@ section{ padding: 120px 0; position:relative; }
   color: rgba(246,243,236,0.7);
 }
 
+.state-search{
+  background: var(--ink-soft);
+  border: 1px solid rgba(246,243,236,0.1);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  position: relative;
+}
+.state-search-label{
+  display:block;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight:700;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color: var(--brass-soft);
+  margin-bottom: 12px;
+}
+.state-search-box{ position:relative; display:flex; align-items:center; }
+.state-search-box svg{
+  position:absolute; left:16px;
+  color: rgba(246,243,236,0.4);
+  pointer-events:none;
+}
+.state-search-box input{
+  width:100%;
+  padding: 14px 16px 14px 46px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(246,243,236,0.16);
+  background: rgba(11,30,51,0.5);
+  color: var(--white);
+  font-size: 15px;
+  font-family: var(--sans);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.state-search-box input::placeholder{ color: rgba(246,243,236,0.35); }
+.state-search-box input:focus{
+  outline:none;
+  border-color: var(--sky);
+  box-shadow: 0 0 0 4px rgba(30,143,213,0.18);
+}
+.state-search-dropdown{
+  position:absolute;
+  left:24px; right:24px;
+  margin-top:6px;
+  border-radius: var(--radius-sm);
+  max-height:0;
+  overflow:hidden;
+  z-index:5;
+  transition: max-height 0.2s var(--ease);
+}
+.state-search-dropdown.open{
+  max-height: 260px;
+  overflow-y:auto;
+  border: 1px solid rgba(246,243,236,0.14);
+  background: var(--ink);
+  box-shadow: var(--shadow-deep);
+}
+.state-search-option{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 11px 16px;
+  cursor:pointer;
+  font-size:14px;
+  color: var(--white);
+  transition: background 0.15s;
+}
+.state-search-option:hover{ background: rgba(30,143,213,0.15); }
+.state-search-option .s-code{ font-family: var(--mono); font-size:11px; color: var(--brass-soft); }
+.state-search-answer:empty{ display:none; }
+.state-answer-card{
+  display:flex; flex-direction:column; align-items:flex-start; gap:14px;
+  margin-top:18px;
+  padding: 20px;
+  border-radius: var(--radius-md);
+  animation: stateAnswerIn 0.35s var(--ease);
+}
+.state-answer-card.is-active{
+  background: linear-gradient(135deg, rgba(30,143,213,0.16), rgba(30,143,213,0.05));
+  border: 1px solid rgba(30,143,213,0.35);
+}
+.state-answer-card.is-inactive{
+  background: linear-gradient(135deg, rgba(201,162,75,0.14), rgba(201,162,75,0.04));
+  border: 1px solid rgba(201,162,75,0.3);
+}
+.state-answer-top{ display:flex; align-items:flex-start; gap:12px; }
+.state-answer-icon{
+  display:flex; align-items:center; justify-content:center; flex:none;
+  width:34px; height:34px; border-radius:50%;
+}
+.is-active .state-answer-icon{ background: var(--sky); color:var(--white); }
+.is-inactive .state-answer-icon{ background: var(--brass); color:var(--ink); }
+.state-answer-text strong{ display:block; font-size:15.5px; color:var(--white); margin-bottom:3px; }
+.state-answer-text span{ font-size:13px; line-height:1.5; color: rgba(246,243,236,0.68); }
+.state-answer-card .btn-primary{ padding:13px 24px; font-size:14px; }
+@keyframes stateAnswerIn{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+
 .map-visual{
   position:relative;
   display:flex;
@@ -1987,26 +2082,14 @@ footer{
 
     <div class="market-grid">
       <div class="market-left">
-        <div class="state-list reveal">
-          <div class="state-card"><span class="s-name">Florida</span><span class="s-code">FL</span></div>
-          <div class="state-card"><span class="s-name">North Carolina</span><span class="s-code">NC</span></div>
-          <div class="state-card"><span class="s-name">South Carolina</span><span class="s-code">SC</span></div>
-          <div class="state-card"><span class="s-name">Illinois</span><span class="s-code">IL</span></div>
-          <div class="state-card"><span class="s-name">Ohio</span><span class="s-code">OH</span></div>
-          <div class="state-card"><span class="s-name">Georgia</span><span class="s-code">GA</span></div>
-          <div class="state-card"><span class="s-name">Virginia</span><span class="s-code">VA</span></div>
-          <div class="state-card"><span class="s-name">Texas</span><span class="s-code">TX</span></div>
-          <div class="state-card"><span class="s-name">Tennessee</span><span class="s-code">TN</span></div>
-          <div class="state-card"><span class="s-name">Indiana</span><span class="s-code">IN</span></div>
-          <div class="state-card"><span class="s-name">Pennsylvania</span><span class="s-code">PA</span></div>
-          <div class="state-card"><span class="s-name">New York</span><span class="s-code">NY</span></div>
-          <div class="state-card"><span class="s-name">Wisconsin</span><span class="s-code">WI</span></div>
-          <div class="state-card"><span class="s-name">Kentucky</span><span class="s-code">KY</span></div>
-          <div class="state-card"><span class="s-name">Delaware</span><span class="s-code">DE</span></div>
-          <div class="state-card"><span class="s-name">New Jersey</span><span class="s-code">NJ</span></div>
-          <div class="state-card"><span class="s-name">Arkansas</span><span class="s-code">AR</span></div>
-          <div class="state-card"><span class="s-name">California</span><span class="s-code">CA</span></div>
-          <div class="state-card"><span class="s-name">Oklahoma</span><span class="s-code">OK</span></div>
+        <div class="state-search reveal">
+          <label for="stateSearchInput" class="state-search-label">Search Your State</label>
+          <div class="state-search-box">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="text" id="stateSearchInput" placeholder="Type your state — e.g. Texas or TX" autocomplete="off">
+          </div>
+          <div class="state-search-dropdown" id="stateSearchDropdown"></div>
+          <div class="state-search-answer" id="stateSearchAnswer"></div>
         </div>
         <div class="market-counties reveal">
           <span class="mc-num">30+</span>
@@ -2669,6 +2752,105 @@ const mapIO = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1, rootMargin: '200px 0px' });
 mapIO.observe(mapVisual);
+
+// ===== State search — "do you buy in my state?" =====
+// All 50 states + DC, independent of targetAbbrs (the active-market list) so
+// someone can search literally any state and get a real yes/no answer
+// instead of only ever finding the ones we already service.
+const ALL_STATES = [
+  {abbr:'AL',name:'Alabama'},{abbr:'AK',name:'Alaska'},{abbr:'AZ',name:'Arizona'},{abbr:'AR',name:'Arkansas'},
+  {abbr:'CA',name:'California'},{abbr:'CO',name:'Colorado'},{abbr:'CT',name:'Connecticut'},{abbr:'DE',name:'Delaware'},
+  {abbr:'DC',name:'Washington D.C.'},{abbr:'FL',name:'Florida'},{abbr:'GA',name:'Georgia'},{abbr:'HI',name:'Hawaii'},
+  {abbr:'ID',name:'Idaho'},{abbr:'IL',name:'Illinois'},{abbr:'IN',name:'Indiana'},{abbr:'IA',name:'Iowa'},
+  {abbr:'KS',name:'Kansas'},{abbr:'KY',name:'Kentucky'},{abbr:'LA',name:'Louisiana'},{abbr:'ME',name:'Maine'},
+  {abbr:'MD',name:'Maryland'},{abbr:'MA',name:'Massachusetts'},{abbr:'MI',name:'Michigan'},{abbr:'MN',name:'Minnesota'},
+  {abbr:'MS',name:'Mississippi'},{abbr:'MO',name:'Missouri'},{abbr:'MT',name:'Montana'},{abbr:'NE',name:'Nebraska'},
+  {abbr:'NV',name:'Nevada'},{abbr:'NH',name:'New Hampshire'},{abbr:'NJ',name:'New Jersey'},{abbr:'NM',name:'New Mexico'},
+  {abbr:'NY',name:'New York'},{abbr:'NC',name:'North Carolina'},{abbr:'ND',name:'North Dakota'},{abbr:'OH',name:'Ohio'},
+  {abbr:'OK',name:'Oklahoma'},{abbr:'OR',name:'Oregon'},{abbr:'PA',name:'Pennsylvania'},{abbr:'RI',name:'Rhode Island'},
+  {abbr:'SC',name:'South Carolina'},{abbr:'SD',name:'South Dakota'},{abbr:'TN',name:'Tennessee'},{abbr:'TX',name:'Texas'},
+  {abbr:'UT',name:'Utah'},{abbr:'VT',name:'Vermont'},{abbr:'VA',name:'Virginia'},{abbr:'WA',name:'Washington'},
+  {abbr:'WV',name:'West Virginia'},{abbr:'WI',name:'Wisconsin'},{abbr:'WY',name:'Wyoming'},
+];
+(function(){
+  const input = document.getElementById('stateSearchInput');
+  const dropdown = document.getElementById('stateSearchDropdown');
+  const answer = document.getElementById('stateSearchAnswer');
+  if (!input || !dropdown || !answer) return;
+
+  function closeDropdown(){ dropdown.classList.remove('open'); dropdown.innerHTML = ''; }
+
+  function renderOptions(list){
+    if (!list.length) { closeDropdown(); return; }
+    dropdown.innerHTML = list.map(function(s){
+      return '<div class="state-search-option" data-abbr="' + s.abbr + '"><span>' + s.name + '</span><span class="s-code">' + s.abbr + '</span></div>';
+    }).join('');
+    dropdown.classList.add('open');
+  }
+
+  function findMatches(query){
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    let matches = ALL_STATES.filter(function(s){ return s.name.toLowerCase().indexOf(q) === 0 || s.abbr.toLowerCase() === q; });
+    if (!matches.length) matches = ALL_STATES.filter(function(s){ return s.name.toLowerCase().indexOf(q) !== -1; });
+    return matches.slice(0, 8);
+  }
+
+  function showAnswer(state){
+    const isActive = targetAbbrs.includes(state.abbr);
+    const arrow = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+    if (isActive) {
+      answer.innerHTML =
+        '<div class="state-answer-card is-active">' +
+          '<div class="state-answer-top">' +
+            '<span class="state-answer-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span>' +
+            '<span class="state-answer-text"><strong>Good news — we buy in ' + state.name + '.</strong>' +
+            '<span>Our team is actively closing deals there right now.</span></span>' +
+          '</div>' +
+          '<a href="/contact-us" class="btn-primary">Get My Cash Offer ' + arrow + '</a>' +
+        '</div>';
+    } else {
+      answer.innerHTML =
+        '<div class="state-answer-card is-inactive">' +
+          '<div class="state-answer-top">' +
+            '<span class="state-answer-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></span>' +
+            '<span class="state-answer-text"><strong>We\'re not active in ' + state.name + ' yet.</strong>' +
+            '<span>We\'re expanding fast — reach out and we\'ll see what we can do.</span></span>' +
+          '</div>' +
+          '<a href="/contact-us" class="btn-primary">Get My Cash Offer ' + arrow + '</a>' +
+        '</div>';
+    }
+  }
+
+  function selectState(state){
+    input.value = state.name;
+    closeDropdown();
+    showAnswer(state);
+  }
+
+  input.addEventListener('input', function(){ renderOptions(findMatches(input.value)); });
+
+  dropdown.addEventListener('click', function(e){
+    const opt = e.target.closest('.state-search-option');
+    if (!opt) return;
+    const state = ALL_STATES.find(function(s){ return s.abbr === opt.getAttribute('data-abbr'); });
+    if (state) selectState(state);
+  });
+
+  input.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') { closeDropdown(); return; }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = input.value.trim().toLowerCase();
+    let state = ALL_STATES.find(function(s){ return s.name.toLowerCase() === q || s.abbr.toLowerCase() === q; });
+    if (!state) state = findMatches(input.value)[0];
+    if (state) selectState(state);
+  });
+
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.state-search')) closeDropdown();
+  });
+})();
 
 // ===== Legal pages overlay =====
 const legalOverlay = document.getElementById('legalOverlay');
