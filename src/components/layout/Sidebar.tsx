@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
+  Bell,
   ChevronUp,
   LayoutDashboard,
   Users,
@@ -8,6 +9,7 @@ import {
   History,
   Send,
   FileSignature,
+  LogOut,
   Settings,
   Shield,
   Eye,
@@ -18,7 +20,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
-import { cn } from '@/lib/utils';
+import { useNotificationsContext } from '@/contexts/NotificationsContext';
+import { cn, initials } from '@/lib/utils';
 
 const COLLAPSE_KEY = 'sidebar_collapsed';
 
@@ -138,6 +141,100 @@ function ViewingPullUp({ viewingId }: { viewingId?: string }) {
   );
 }
 
+/** Notifications + profile/settings/sign-out, folded into the sidebar's own
+ *  footer instead of a separate top bar — the top bar had nothing else in
+ *  it on any page, so it was a permanent empty band across the whole app.
+ *  Opens upward, same as ViewingPullUp just above it, since both live at
+ *  the bottom of the screen. */
+function SidebarFooterProfile({ collapsed }: { collapsed: boolean }) {
+  const navigate = useNavigate();
+  const { profile, signOut } = useAuth();
+  const { unreadCount } = useNotificationsContext();
+  const [first, last] = (profile?.fullName ?? '').split(' ');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className={cn('relative border-t border-sidebar-border', collapsed ? 'px-2 py-3' : 'px-3 py-3')}>
+      {open && (
+        <div
+          className={cn(
+            'absolute bottom-full mb-2 rounded-md border border-sidebar-border bg-sidebar-2 p-1.5 shadow-popover',
+            collapsed ? 'left-2 w-48' : 'left-3 right-3',
+          )}
+        >
+          <button
+            onClick={() => {
+              setOpen(false);
+              navigate('/notifications');
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive"
+          >
+            <Bell size={14} /> Notifications
+            {unreadCount > 0 && (
+              <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount}</span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false);
+              navigate('/settings');
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive"
+          >
+            <Settings size={14} /> Settings
+          </button>
+          <button
+            onClick={() => signOut()}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-danger hover:bg-sidebar"
+          >
+            <LogOut size={14} /> Sign out
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-full transition-colors hover:bg-sidebar-2',
+          collapsed ? 'justify-center p-1.5' : 'py-1.5 pl-1.5 pr-2',
+        )}
+        title={collapsed ? (profile?.fullName ?? profile?.email) : undefined}
+      >
+        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-semibold text-white">
+          {initials(first ?? profile?.email ?? '', last ?? '')}
+          {unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-sidebar" />}
+        </div>
+        {!collapsed && (
+          <>
+            <div className="min-w-0 flex-1 text-left leading-tight">
+              <div className="truncate text-[12.5px] font-medium text-sidebar-textActive">{profile?.fullName ?? profile?.email}</div>
+              <div className="text-[10.5px] capitalize text-sidebar-text">{profile?.role}</div>
+            </div>
+            <ChevronUp size={13} className={cn('shrink-0 text-sidebar-text transition-transform', open && 'rotate-180')} />
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const { profile } = useAuth();
   const isOverseer = profile?.role === 'admin';
@@ -177,7 +274,12 @@ export function Sidebar() {
 
   return (
     <aside className={cn('flex h-full shrink-0 flex-col bg-sidebar transition-[width] duration-200', collapsed ? 'w-[72px]' : 'w-60')}>
-      <div className={cn('flex items-center gap-2.5 border-b border-sidebar-border py-5', collapsed ? 'justify-center px-2' : 'px-5')}>
+      <div
+        className={cn(
+          'flex items-center border-b border-sidebar-border',
+          collapsed ? 'flex-col gap-2 px-2 py-4' : 'gap-2.5 px-5 py-5',
+        )}
+      >
         <img src="/logo-mark.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
         {!collapsed && (
           <div className="min-w-0 flex-1">
@@ -221,6 +323,7 @@ export function Sidebar() {
       </nav>
 
       {isOverseer && !collapsed && <ViewingPullUp viewingId={viewingId} />}
+      <SidebarFooterProfile collapsed={collapsed} />
     </aside>
   );
 }

@@ -1027,7 +1027,13 @@ export function DashboardView({
                   {(() => {
                     const max = Math.max(...leadVolumeTrend.map((w) => w.count), 1);
                     return (
-                      <div className="mt-4 flex items-end gap-1.5" style={{ height: 120 }}>
+                      // `items-stretch` (the default, made explicit here) so
+                      // each week column actually inherits this row's 120px
+                      // height — with `items-end` instead, a column had no
+                      // definite height of its own, so the child below with
+                      // height:{pct}% had nothing real to be a percentage
+                      // of and rendered at 0px regardless of lead count.
+                      <div className="mt-4 flex items-stretch gap-1.5" style={{ height: 120 }}>
                         {leadVolumeTrend.map((w) => (
                           <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
                             {/* A faint full-height track behind the bar so a genuinely

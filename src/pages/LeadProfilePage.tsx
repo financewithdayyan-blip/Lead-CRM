@@ -243,11 +243,13 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
   stage_change: 'Stage changed',
 };
 
-const TABS = ['overview', 'property', 'framework', 'sms', 'activity', 'tasks', 'files', 'packet'] as const;
+// 'property' is deliberately not a tab any more — Property Details is now
+// edited directly on Overview (see PropertyEditCard), so there's no second
+// place left that needs its own tab.
+const TABS = ['overview', 'framework', 'sms', 'activity', 'tasks', 'files', 'packet'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
-  property: 'Property Details',
   packet: 'Deal Packet',
   sms: 'SMS',
   framework: 'Framework',
@@ -256,12 +258,12 @@ const TAB_LABELS: Record<TabKey, string> = {
   files: 'Files',
 };
 // Overview already surfaces a live snapshot of Framework and leads with
-// Notes directly below it, so those two — plus the tabs someone reaches
+// Notes directly below it, so those — plus the tabs someone reaches
 // for far less often day to day — sit behind "More" instead of crowding
 // the primary row. Nothing here is removed: every tab keeps its full,
 // unchanged content, just reached one extra click away.
 const PRIMARY_TABS: TabKey[] = ['overview', 'sms', 'tasks'];
-const MORE_TABS: TabKey[] = ['property', 'framework', 'activity', 'files', 'packet'];
+const MORE_TABS: TabKey[] = ['framework', 'activity', 'files', 'packet'];
 
 /** Read-only "at a glance" version of the Framework tab's own completion
  * math (same getScriptSteps/scriptAnswers this Framework tab uses) — moving
@@ -323,40 +325,271 @@ function QuickFactsCard({ lead }: { lead: Lead }) {
   );
 }
 
-/** Same idea as FrameworkSnapshotCard, for the handful of Property Details
- * fields worth seeing without leaving Overview — the full form (including
- * comps) stays exactly as-is behind the real tab. */
-function PropertySnapshotCard({ lead, onViewFull }: { lead: Lead; onViewFull: () => void }) {
-  const rows: Array<[string, string]> = [
-    ['Property Type', lead.propType || '—'],
-    ['Bedrooms', lead.beds != null ? String(lead.beds) : '—'],
-    ['Bathrooms', lead.baths != null ? String(lead.baths) : '—'],
-    ['Square Feet', lead.sqft != null ? lead.sqft.toLocaleString() : '—'],
-    ['Condition', lead.condition || '—'],
-    ['ARV', lead.arv != null ? `$${lead.arv.toLocaleString()}` : '—'],
-  ];
+/** Property Details, fully editable right on Overview — this replaced the
+ * separate "Property Details" tab entirely (moved here verbatim, same
+ * fields, same save/comps behavior) rather than duplicating a read-only
+ * summary next to the real editable form on another tab. */
+function PropertyEditCard({ lead }: { lead: Lead }) {
+  const updateLead = useUpdateLead();
+  const upsertComps = useUpsertComps();
+  const [form, setForm] = useState({
+    propType: lead.propType ?? '',
+    beds: lead.beds?.toString() ?? '',
+    baths: lead.baths?.toString() ?? '',
+    sqft: lead.sqft?.toString() ?? '',
+    lotSize: lead.lotSize ?? '',
+    yearBuilt: lead.yearBuilt?.toString() ?? '',
+    auctionDate: lead.auctionDate ?? '',
+    condition: lead.condition ?? '',
+    motivation: lead.motivation ?? '',
+    arv: lead.arv?.toString() ?? '',
+    asIs: lead.asIs?.toString() ?? '',
+    estRepairs: lead.estRepairs?.toString() ?? '',
+    minOffer: lead.minOffer?.toString() ?? '',
+    maxOffer: lead.maxOffer?.toString() ?? '',
+    askingPrice: lead.askingPrice?.toString() ?? '',
+    finalPrice: lead.finalPrice?.toString() ?? '',
+    assignmentFee: lead.assignmentFee?.toString() ?? '',
+  });
+  const [repairs, setRepairs] = useState(lead.repairs ?? {});
+  const [comps, setComps] = useState<Array<Partial<Comp>>>(lead.comps ?? []);
+  const [saved, setSaved] = useState(false);
+
+  function set<K extends keyof typeof form>(key: K, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleSave() {
+    updateLead.mutate(
+      {
+        id: lead.id,
+        propType: form.propType || null,
+        beds: form.beds ? Number(form.beds) : null,
+        baths: form.baths ? Number(form.baths) : null,
+        sqft: form.sqft ? Number(form.sqft) : null,
+        lotSize: form.lotSize || null,
+        yearBuilt: form.yearBuilt ? Number(form.yearBuilt) : null,
+        auctionDate: form.auctionDate || null,
+        condition: form.condition || null,
+        motivation: form.motivation || null,
+        arv: form.arv ? Number(form.arv) : null,
+        asIs: form.asIs ? Number(form.asIs) : null,
+        estRepairs: form.estRepairs ? Number(form.estRepairs) : null,
+        minOffer: form.minOffer ? Number(form.minOffer) : null,
+        maxOffer: form.maxOffer ? Number(form.maxOffer) : null,
+        askingPrice: form.askingPrice ? Number(form.askingPrice) : null,
+        finalPrice: form.finalPrice ? Number(form.finalPrice) : null,
+        assignmentFee: form.assignmentFee ? Number(form.assignmentFee) : null,
+        repairs,
+      },
+      { onSuccess: () => flash() },
+    );
+  }
+
+  function flash() {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  function updateComp(i: number, key: keyof Comp, value: string) {
+    setComps((prev) => prev.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)));
+  }
+  function addComp() {
+    setComps((prev) => [
+      ...prev,
+      { kind: 'sold', address: '', price: null, saleDate: null, sqft: null, beds: null, baths: null, distance: null, notes: null },
+    ]);
+  }
+  function removeComp(i: number) {
+    setComps((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  function saveComps() {
+    upsertComps.mutate({
+      leadId: lead.id,
+      comps: comps.map((c) => ({
+        kind: (c.kind as 'sold' | 'listing') || 'sold',
+        address: c.address || null,
+        price: c.price ? Number(c.price) : null,
+        sale_date: c.saleDate || null,
+        sqft: c.sqft ? Number(c.sqft) : null,
+        beds: c.beds ? Number(c.beds) : null,
+        baths: c.baths ? Number(c.baths) : null,
+        distance: c.distance || null,
+        notes: c.notes || null,
+      })),
+    });
+  }
+
   return (
-    <div className="card">
-      <div className="flex items-center justify-between gap-3">
-        <CardHeader icon={Archive} title="Property Details" sub="quick snapshot" />
-        <button onClick={onViewFull} className="shrink-0 text-[12px] font-semibold text-primary hover:text-primary-hover">
-          View full →
-        </button>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-        {rows.map(([label, value]) => (
-          <div key={label}>
-            <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
-            <div className="mt-0.5 text-[13px] text-text">{value}</div>
+    <div className="space-y-5">
+      <div className="card">
+        <CardHeader icon={Archive} title="Property Details" sub="edit and save directly here" />
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <Field label="Property Type">
+            <input className="input" value={form.propType} onChange={(e) => set('propType', e.target.value)} />
+          </Field>
+          <Field label="Beds">
+            <input className="input" type="number" value={form.beds} onChange={(e) => set('beds', e.target.value)} />
+          </Field>
+          <Field label="Baths">
+            <input className="input" type="number" value={form.baths} onChange={(e) => set('baths', e.target.value)} />
+          </Field>
+          <Field label="Sqft">
+            <input className="input" type="number" value={form.sqft} onChange={(e) => set('sqft', e.target.value)} />
+          </Field>
+          <Field label="Lot Size">
+            <input className="input" value={form.lotSize} onChange={(e) => set('lotSize', e.target.value)} />
+          </Field>
+          <Field label="Year Built">
+            <input className="input" type="number" value={form.yearBuilt} onChange={(e) => set('yearBuilt', e.target.value)} />
+          </Field>
+          <Field label="Auction Date">
+            <input className="input" type="date" value={form.auctionDate} onChange={(e) => set('auctionDate', e.target.value)} />
+          </Field>
+          <Field label="Condition">
+            <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
+          </Field>
+          <div className="col-span-2">
+            <Field label="Motivation">
+              <input className="input" value={form.motivation} onChange={(e) => set('motivation', e.target.value)} />
+            </Field>
           </div>
-        ))}
-      </div>
-      {lead.motivation && (
-        <div className="mt-3 border-t border-border-2 pt-3">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">Motivation</div>
-          <div className="mt-0.5 text-[13px] text-text">{lead.motivation}</div>
         </div>
-      )}
+
+        <div className="mt-4">
+          <div className="label">Repairs needed</div>
+          <div className="flex flex-wrap gap-3">
+            {REPAIR_FLAGS.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-1.5 text-[13px] text-text-2">
+                <input
+                  type="checkbox"
+                  checked={!!repairs[key]}
+                  onChange={(e) => setRepairs((r) => ({ ...r, [key]: e.target.checked }))}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 border-t border-border-2 pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-text">Pricing</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="ARV">
+              <input className="input" type="number" value={form.arv} onChange={(e) => set('arv', e.target.value)} />
+            </Field>
+            <Field label="As-Is Value">
+              <input className="input" type="number" value={form.asIs} onChange={(e) => set('asIs', e.target.value)} />
+            </Field>
+            <Field label="Est. Repairs">
+              <input className="input" type="number" value={form.estRepairs} onChange={(e) => set('estRepairs', e.target.value)} />
+            </Field>
+            <Field label="Min Offer">
+              <input className="input" type="number" value={form.minOffer} onChange={(e) => set('minOffer', e.target.value)} />
+            </Field>
+            <Field label="Max Offer">
+              <input className="input" type="number" value={form.maxOffer} onChange={(e) => set('maxOffer', e.target.value)} />
+            </Field>
+            <Field label="Asking Price">
+              <input className="input" type="number" value={form.askingPrice} onChange={(e) => set('askingPrice', e.target.value)} />
+            </Field>
+            <Field label="Final Price">
+              <input className="input" type="number" value={form.finalPrice} onChange={(e) => set('finalPrice', e.target.value)} />
+            </Field>
+            <Field label="Assignment Fee">
+              <input className="input" type="number" value={form.assignmentFee} onChange={(e) => set('assignmentFee', e.target.value)} />
+            </Field>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3">
+          <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
+            Save property & pricing
+          </button>
+          {saved && <span className="text-[12px] text-success">✓ Saved</span>}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-text">Comps</h3>
+          <button className="btn !px-2 !py-1 text-[12px]" onClick={addComp}>
+            <Plus size={13} /> Add comp
+          </button>
+        </div>
+        {comps.length === 0 && <div className="text-[13px] text-text-3">No comps added yet.</div>}
+        <div className="space-y-2 overflow-x-auto">
+          {comps.map((c, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[76px_1fr_86px_112px_64px_50px_50px_86px_auto] items-center gap-1.5 rounded-md border border-border-2 bg-surface-3 p-2"
+            >
+              <select
+                className="input !py-1 text-[12px]"
+                value={c.kind ?? 'sold'}
+                onChange={(e) => updateComp(i, 'kind', e.target.value)}
+              >
+                <option value="sold">Sold</option>
+                <option value="listing">Listed</option>
+              </select>
+              <input
+                className="input !py-1 text-[12px]"
+                placeholder="Address"
+                value={c.address ?? ''}
+                onChange={(e) => updateComp(i, 'address', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
+                placeholder={c.kind === 'listing' ? 'List price' : 'Sale price'}
+                type="number"
+                value={c.price ?? ''}
+                onChange={(e) => updateComp(i, 'price', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
+                type="date"
+                value={c.saleDate ?? ''}
+                onChange={(e) => updateComp(i, 'saleDate', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
+                placeholder="Sqft"
+                type="number"
+                value={c.sqft ?? ''}
+                onChange={(e) => updateComp(i, 'sqft', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
+                placeholder="Bd"
+                type="number"
+                value={c.beds ?? ''}
+                onChange={(e) => updateComp(i, 'beds', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
+                placeholder="Ba"
+                type="number"
+                value={c.baths ?? ''}
+                onChange={(e) => updateComp(i, 'baths', e.target.value)}
+              />
+              <input
+                className="input !py-1 text-[12px]"
+                placeholder="Distance"
+                value={c.distance ?? ''}
+                onChange={(e) => updateComp(i, 'distance', e.target.value)}
+              />
+              <button className="flex items-center justify-center text-text-3 hover:text-danger" onClick={() => removeComp(i)}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+        {comps.length > 0 && (
+          <button className="btn btn-primary mt-3" onClick={saveComps} disabled={upsertComps.isPending}>
+            Save comps
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -622,7 +855,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
           <div className="space-y-5">
             <OverviewTab lead={lead} leadId={lead.id} />
-            <PropertySnapshotCard lead={lead} onViewFull={() => setTab('property')} />
+            <PropertyEditCard lead={lead} />
             <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
           </div>
           <div className="space-y-5">
@@ -631,7 +864,6 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           </div>
         </div>
       )}
-      {tab === 'property' && <PropertyTab lead={lead} />}
       {tab === 'packet' && <PacketTab lead={lead} />}
       {/* SMS is an admin-only feature — texting leads isn't part of a
           caller's job, which is manual cold calling only. */}
@@ -919,270 +1151,6 @@ const REPAIR_FLAGS: Array<{ key: keyof Lead['repairs']; label: string }> = [
   { key: 'flooring', label: 'Flooring' },
 ];
 
-function PropertyTab({ lead }: { lead: Lead }) {
-  const updateLead = useUpdateLead();
-  const upsertComps = useUpsertComps();
-  const [form, setForm] = useState({
-    propType: lead.propType ?? '',
-    beds: lead.beds?.toString() ?? '',
-    baths: lead.baths?.toString() ?? '',
-    sqft: lead.sqft?.toString() ?? '',
-    lotSize: lead.lotSize ?? '',
-    yearBuilt: lead.yearBuilt?.toString() ?? '',
-    auctionDate: lead.auctionDate ?? '',
-    condition: lead.condition ?? '',
-    motivation: lead.motivation ?? '',
-    arv: lead.arv?.toString() ?? '',
-    asIs: lead.asIs?.toString() ?? '',
-    estRepairs: lead.estRepairs?.toString() ?? '',
-    minOffer: lead.minOffer?.toString() ?? '',
-    maxOffer: lead.maxOffer?.toString() ?? '',
-    askingPrice: lead.askingPrice?.toString() ?? '',
-    finalPrice: lead.finalPrice?.toString() ?? '',
-    assignmentFee: lead.assignmentFee?.toString() ?? '',
-  });
-  const [repairs, setRepairs] = useState(lead.repairs ?? {});
-  const [comps, setComps] = useState<Array<Partial<Comp>>>(lead.comps ?? []);
-  const [saved, setSaved] = useState(false);
-
-  function set<K extends keyof typeof form>(key: K, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function handleSave() {
-    updateLead.mutate(
-      {
-        id: lead.id,
-        propType: form.propType || null,
-        beds: form.beds ? Number(form.beds) : null,
-        baths: form.baths ? Number(form.baths) : null,
-        sqft: form.sqft ? Number(form.sqft) : null,
-        lotSize: form.lotSize || null,
-        yearBuilt: form.yearBuilt ? Number(form.yearBuilt) : null,
-        auctionDate: form.auctionDate || null,
-        condition: form.condition || null,
-        motivation: form.motivation || null,
-        arv: form.arv ? Number(form.arv) : null,
-        asIs: form.asIs ? Number(form.asIs) : null,
-        estRepairs: form.estRepairs ? Number(form.estRepairs) : null,
-        minOffer: form.minOffer ? Number(form.minOffer) : null,
-        maxOffer: form.maxOffer ? Number(form.maxOffer) : null,
-        askingPrice: form.askingPrice ? Number(form.askingPrice) : null,
-        finalPrice: form.finalPrice ? Number(form.finalPrice) : null,
-        assignmentFee: form.assignmentFee ? Number(form.assignmentFee) : null,
-        repairs,
-      },
-      { onSuccess: () => flash() },
-    );
-  }
-
-  function flash() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  function updateComp(i: number, key: keyof Comp, value: string) {
-    setComps((prev) => prev.map((c, idx) => (idx === i ? { ...c, [key]: value } : c)));
-  }
-  function addComp() {
-    setComps((prev) => [
-      ...prev,
-      { kind: 'sold', address: '', price: null, saleDate: null, sqft: null, beds: null, baths: null, distance: null, notes: null },
-    ]);
-  }
-  function removeComp(i: number) {
-    setComps((prev) => prev.filter((_, idx) => idx !== i));
-  }
-  function saveComps() {
-    upsertComps.mutate({
-      leadId: lead.id,
-      comps: comps.map((c) => ({
-        kind: (c.kind as 'sold' | 'listing') || 'sold',
-        address: c.address || null,
-        price: c.price ? Number(c.price) : null,
-        sale_date: c.saleDate || null,
-        sqft: c.sqft ? Number(c.sqft) : null,
-        beds: c.beds ? Number(c.beds) : null,
-        baths: c.baths ? Number(c.baths) : null,
-        distance: c.distance || null,
-        notes: c.notes || null,
-      })),
-    });
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold text-text">Property</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Property Type">
-            <input className="input" value={form.propType} onChange={(e) => set('propType', e.target.value)} />
-          </Field>
-          <Field label="Beds">
-            <input className="input" type="number" value={form.beds} onChange={(e) => set('beds', e.target.value)} />
-          </Field>
-          <Field label="Baths">
-            <input className="input" type="number" value={form.baths} onChange={(e) => set('baths', e.target.value)} />
-          </Field>
-          <Field label="Sqft">
-            <input className="input" type="number" value={form.sqft} onChange={(e) => set('sqft', e.target.value)} />
-          </Field>
-          <Field label="Lot Size">
-            <input className="input" value={form.lotSize} onChange={(e) => set('lotSize', e.target.value)} />
-          </Field>
-          <Field label="Year Built">
-            <input className="input" type="number" value={form.yearBuilt} onChange={(e) => set('yearBuilt', e.target.value)} />
-          </Field>
-          <Field label="Auction Date">
-            <input className="input" type="date" value={form.auctionDate} onChange={(e) => set('auctionDate', e.target.value)} />
-          </Field>
-          <Field label="Condition">
-            <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
-          </Field>
-          <div className="col-span-2">
-            <Field label="Motivation">
-              <input className="input" value={form.motivation} onChange={(e) => set('motivation', e.target.value)} />
-            </Field>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <div className="label">Repairs needed</div>
-          <div className="flex flex-wrap gap-3">
-            {REPAIR_FLAGS.map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-1.5 text-[13px] text-text-2">
-                <input
-                  type="checkbox"
-                  checked={!!repairs[key]}
-                  onChange={(e) => setRepairs((r) => ({ ...r, [key]: e.target.checked }))}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold text-text">Pricing</h3>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="ARV">
-            <input className="input" type="number" value={form.arv} onChange={(e) => set('arv', e.target.value)} />
-          </Field>
-          <Field label="As-Is Value">
-            <input className="input" type="number" value={form.asIs} onChange={(e) => set('asIs', e.target.value)} />
-          </Field>
-          <Field label="Est. Repairs">
-            <input className="input" type="number" value={form.estRepairs} onChange={(e) => set('estRepairs', e.target.value)} />
-          </Field>
-          <Field label="Min Offer">
-            <input className="input" type="number" value={form.minOffer} onChange={(e) => set('minOffer', e.target.value)} />
-          </Field>
-          <Field label="Max Offer">
-            <input className="input" type="number" value={form.maxOffer} onChange={(e) => set('maxOffer', e.target.value)} />
-          </Field>
-          <Field label="Asking Price">
-            <input className="input" type="number" value={form.askingPrice} onChange={(e) => set('askingPrice', e.target.value)} />
-          </Field>
-          <Field label="Final Price">
-            <input className="input" type="number" value={form.finalPrice} onChange={(e) => set('finalPrice', e.target.value)} />
-          </Field>
-          <Field label="Assignment Fee">
-            <input className="input" type="number" value={form.assignmentFee} onChange={(e) => set('assignmentFee', e.target.value)} />
-          </Field>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
-          Save property & pricing
-        </button>
-        {saved && <span className="text-[12px] text-success">✓ Saved</span>}
-      </div>
-
-      <div className="card">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-text">Comps</h3>
-          <button className="btn !px-2 !py-1 text-[12px]" onClick={addComp}>
-            <Plus size={13} /> Add comp
-          </button>
-        </div>
-        {comps.length === 0 && <div className="text-[13px] text-text-3">No comps added yet.</div>}
-        <div className="space-y-2">
-          {comps.map((c, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-[76px_1fr_86px_112px_64px_50px_50px_86px_auto] items-center gap-1.5 rounded-md border border-border-2 bg-surface-3 p-2"
-            >
-              <select
-                className="input !py-1 text-[12px]"
-                value={c.kind ?? 'sold'}
-                onChange={(e) => updateComp(i, 'kind', e.target.value)}
-              >
-                <option value="sold">Sold</option>
-                <option value="listing">Listed</option>
-              </select>
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Address"
-                value={c.address ?? ''}
-                onChange={(e) => updateComp(i, 'address', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder={c.kind === 'listing' ? 'List price' : 'Sale price'}
-                type="number"
-                value={c.price ?? ''}
-                onChange={(e) => updateComp(i, 'price', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                type="date"
-                value={c.saleDate ?? ''}
-                onChange={(e) => updateComp(i, 'saleDate', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Sqft"
-                type="number"
-                value={c.sqft ?? ''}
-                onChange={(e) => updateComp(i, 'sqft', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Bd"
-                type="number"
-                value={c.beds ?? ''}
-                onChange={(e) => updateComp(i, 'beds', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Ba"
-                type="number"
-                value={c.baths ?? ''}
-                onChange={(e) => updateComp(i, 'baths', e.target.value)}
-              />
-              <input
-                className="input !py-1 text-[12px]"
-                placeholder="Distance"
-                value={c.distance ?? ''}
-                onChange={(e) => updateComp(i, 'distance', e.target.value)}
-              />
-              <button className="flex items-center justify-center text-text-3 hover:text-danger" onClick={() => removeComp(i)}>
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-        {comps.length > 0 && (
-          <button className="btn btn-primary mt-3" onClick={saveComps} disabled={upsertComps.isPending}>
-            Save comps
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function FrameworkTab({ lead }: { lead: Lead }) {
   const { data: tags = [] } = useTags();

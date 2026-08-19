@@ -19,6 +19,15 @@ export function formatPhone(raw: string | null | undefined): string {
   return `+1${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+/** Strict E.164 for the zoomphonecall:// deep link — same "last 10 digits,
+ *  prepend +1" normalization the Zoom SMS edge function already applies
+ *  server-side, done here client-side for the Kanban board's Call button. */
+export function toE164(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '').slice(-10);
+  return digits.length === 10 ? `+1${digits}` : null;
+}
+
 /** Add Lead defaults a blank first name to "—" so the address/phone fields
  * still line up positionally on import — fine in a form, but shown verbatim
  * in a compact list it reads as broken data ("— AARON ST DENNIS"). Strips

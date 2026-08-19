@@ -26,7 +26,7 @@ import { BulkSmsModal } from '@/components/sms/BulkSmsModal';
 import { useThreadMessageCounts } from '@/hooks/useLeadMessages';
 import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
-import { formatDate, formatPhone, localIsoDate } from '@/lib/utils';
+import { formatDate, formatPhone, localIsoDate, toE164 } from '@/lib/utils';
 import { isTouchScheduledToday, isTouchedToday, nextScheduledTouchDate, formatTouchDate } from '@/lib/followupSchedule';
 import { STAGE_ORDER, STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
 
@@ -37,11 +37,15 @@ const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 // stages that still need attention.
 const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'onhold', 'others'];
 // A closed deal earns a quiet color tint on its own card — brass for a
-// fully closed file, green while the contract is still in motion — the
-// same accent colors STAGE_CONFIG already uses for those stages.
+// fully closed file, green while the contract is still in motion, blue for
+// Qualified, light red for Dead/Declined — the same accent colors
+// STAGE_CONFIG already uses for those stages, just applied to the card
+// itself instead of only the column's dot/top border.
 const CARD_TINT: Partial<Record<LeadStage, { border: string; bg: string }>> = {
+  followup: { border: 'border-primary/30', bg: 'bg-primary-dim' },
   contract: { border: 'border-success/40', bg: 'bg-success-dim' },
   closed: { border: 'border-accent/40', bg: 'bg-accent-dim' },
+  dead_declined: { border: 'border-danger/30', bg: 'bg-danger-dim' },
 };
 // The one dark "spotlight" card per column — the strongest lead in that
 // stage, using the AI Lead Score already computed on the Lead Profile
@@ -232,20 +236,22 @@ function KanbanCardVisual({
           className="mt-0.5 h-3 w-3 shrink-0 cursor-pointer accent-primary"
         />
         <div {...dragProps} className={`min-w-0 flex-1 ${dragProps ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-          <div className="flex items-start justify-between gap-1">
-            <div className={`truncate font-medium ${spotlightOn ? 'text-white' : 'text-text'}`}>
-              {lead.firstName} {lead.lastName}
+          <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className={`truncate font-medium ${spotlightOn ? 'text-white' : 'text-text'}`}>
+                {lead.firstName} {lead.lastName}
+              </span>
+              {scoreColors && (
+                <span
+                  className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${scoreColors.bg} text-white`}
+                  title={`AI Lead Score: ${lead.aiScore} (${scoreColors.label})`}
+                >
+                  <Sparkles size={8} /> {lead.aiScore}
+                </span>
+              )}
             </div>
             <div className={`shrink-0 text-[10px] ${sx.sub3}`}>#{lead.leadNum}</div>
           </div>
-          {scoreColors && (
-            <div
-              className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${scoreColors.bg} text-white`}
-              title={`AI Lead Score: ${lead.aiScore} (${scoreColors.label})`}
-            >
-              <Sparkles size={9} /> {lead.aiScore}
-            </div>
-          )}
           <div className={`mt-1 flex items-center gap-1.5 ${sx.sub}`}>
             <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
             {messageCount > 0 && (
@@ -264,69 +270,71 @@ function KanbanCardVisual({
             </div>
           )}
           {lead.auctionDate && <AuctionCountdown auctionDate={lead.auctionDate} className="mt-0.5" />}
-          {lead.nextFollowUp &&
-            (() => {
-              // The touch-counter badge below only renders for the followup stage,
-              // so without this the date set on the lead profile is invisible here.
-              const todayStr = localIsoDate(new Date());
-              const overdue = lead.nextFollowUp < todayStr;
-              const isToday = lead.nextFollowUp === todayStr;
-              return (
-                <div
-                  className={`mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                    overdue
-                      ? 'bg-danger-dim text-danger'
-                      : isToday
-                        ? 'bg-warning-dim text-warning'
-                        : 'bg-surface-3 text-text-3'
-                  }`}
-                  title={`Next follow-up: ${formatDate(lead.nextFollowUp)}`}
-                >
-                  <CalendarClock size={9} />
-                  {overdue
-                    ? `Overdue · ${formatDate(lead.nextFollowUp)}`
-                    : isToday
-                      ? 'Follow up today'
-                      : formatDate(lead.nextFollowUp)}
-                </div>
-              );
-            })()}
-          {sharedFrom && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
-              <Share2 size={9} /> Shared by {sharedFrom}
-            </div>
-          )}
-          {lead.tagIds.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
+          {/* Every small status pill shares one wrapping row instead of each
+              stacking on its own full-width line — a card with a follow-up
+              date, a share badge, tags, and a touch counter used to run six
+              lines tall; here they just wrap. */}
+          {(lead.tagIds.length > 0 || lead.nextFollowUp || sharedFrom || lead.stage === 'followup') && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
               {lead.tagIds.slice(0, 2).map((tid) => {
                 const tag = tags.find((t) => t.id === tid);
                 return tag ? <TagPill key={tid} tag={tag} /> : null;
               })}
+              {lead.nextFollowUp &&
+                (() => {
+                  const todayStr = localIsoDate(new Date());
+                  const overdue = lead.nextFollowUp < todayStr;
+                  const isToday = lead.nextFollowUp === todayStr;
+                  return (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        overdue
+                          ? 'bg-danger-dim text-danger'
+                          : isToday
+                            ? 'bg-warning-dim text-warning'
+                            : 'bg-surface-3 text-text-3'
+                      }`}
+                      title={`Next follow-up: ${formatDate(lead.nextFollowUp)}`}
+                    >
+                      <CalendarClock size={9} />
+                      {overdue
+                        ? `Overdue · ${formatDate(lead.nextFollowUp)}`
+                        : isToday
+                          ? 'Follow up today'
+                          : formatDate(lead.nextFollowUp)}
+                    </span>
+                  );
+                })()}
+              {sharedFrom && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
+                  <Share2 size={9} /> Shared by {sharedFrom}
+                </span>
+              )}
+              {lead.stage === 'followup' &&
+                (() => {
+                  const todayStr = localIsoDate(new Date());
+                  const dueToday =
+                    isTouchScheduledToday(lead.followupStartDate, todayStr) &&
+                    !isTouchedToday(lead.touchDates, todayStr) &&
+                    lead.touchCount < 10;
+                  const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
+                  return (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        dueToday ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-text-3'
+                      }`}
+                    >
+                      <span>{lead.touchCount}/10 touches</span>
+                      {dueToday ? (
+                        <span>· due today</span>
+                      ) : nextDate ? (
+                        <span>· next {formatTouchDate(nextDate)}</span>
+                      ) : null}
+                    </span>
+                  );
+                })()}
             </div>
           )}
-          {lead.stage === 'followup' &&
-            (() => {
-              const todayStr = localIsoDate(new Date());
-              const dueToday =
-                isTouchScheduledToday(lead.followupStartDate, todayStr) &&
-                !isTouchedToday(lead.touchDates, todayStr) &&
-                lead.touchCount < 10;
-              const nextDate = nextScheduledTouchDate(lead.followupStartDate, lead.touchCount, todayStr);
-              return (
-                <div
-                  className={`mt-1 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                    dueToday ? 'bg-purple-900/40 text-purple-300' : 'bg-surface-3 text-text-3'
-                  }`}
-                >
-                  <span>{lead.touchCount}/10 touches</span>
-                  {dueToday ? (
-                    <span>· due today</span>
-                  ) : nextDate ? (
-                    <span>· next {formatTouchDate(nextDate)}</span>
-                  ) : null}
-                </div>
-              );
-            })()}
         </div>
       </div>
       <div className="mt-1.5 flex items-center justify-end">
@@ -503,7 +511,7 @@ const KanbanColumn = memo(function KanbanColumn({
   canSms: boolean;
   onToggleSelect: (id: string) => void;
   onToggleSelectMany: (ids: string[], select: boolean) => void;
-  onCall: (id: string) => void;
+  onCall: (id: string, phone: string) => void;
   onText: (id: string) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -571,7 +579,7 @@ const KanbanColumn = memo(function KanbanColumn({
               spotlight={spotlightIds.has(l.id)}
               canSms={canSms}
               onToggleSelect={() => onToggleSelect(l.id)}
-              onCall={() => onCall(l.id)}
+              onCall={() => onCall(l.id, l.phone)}
               onText={() => onText(l.id)}
               onOpen={() => onOpen(l.id)}
               onDelete={() => onDelete(l.id)}
@@ -817,10 +825,16 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     }
   }
 
-  const handleCall = useCallback((id: string) => {
+  const handleCall = useCallback((id: string, phone: string) => {
     addActivity.mutate({ leadId: id, type: 'call', body: 'Quick call logged from Kanban board' });
     setCalledId(id);
     setTimeout(() => setCalledId((prev) => (prev === id ? null : prev)), 1200);
+    // Hands off to the Zoom Workplace desktop app to actually place the
+    // call — Zoom's own documented deep link, not a generic tel: link, so
+    // it launches Zoom Phone specifically rather than whatever else the OS
+    // has registered for tel:.
+    const e164 = toE164(phone);
+    if (e164) window.location.href = `zoomphonecall://${e164}`;
   }, [addActivity]);
 
   const handleOpen = useCallback((id: string) => {
