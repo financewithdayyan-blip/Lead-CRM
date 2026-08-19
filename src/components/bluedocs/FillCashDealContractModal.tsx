@@ -18,7 +18,7 @@ const BLUEDOCS_SMS_SLOT = '2';
 // on the final PDF. "Buyer Full Name" appears twice on the document (the intro
 // sentence and the signature block), so one input backs both. If this template
 // is ever re-mapped in the field editor, these IDs need updating to match.
-const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
+export const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
 const FIELD_MAP = {
   sellerName: ['b2e3512b-b59f-4bd4-a6b0-bf4b5e3d4e62', '3b83cbd2-1ab1-4893-9be0-1df6427aed6c'],
   buyerName: ['3c839999-501a-4f5b-b96e-6d39b42ba852', 'b7ad40ae-f2bf-4389-b591-8c604c69349a'],
@@ -30,6 +30,13 @@ const FIELD_MAP = {
   closingDate: ['2395b34f-cd9c-4d69-89e3-4dcc19fdbec0'],
   governingState: ['f3760950-c478-4586-8a7e-84a3b7b3605c'],
 } as const;
+// The one field id needed outside this form: ContractInstanceRow's address
+// fallback matches by field ID rather than label, since a contract created
+// before this template's fields got their readable labels froze the OLD
+// generic label ("Text field") into its own template_fields_snapshot — a
+// label-text search would never match it even though the real address is
+// sitting right in that contract's fieldValues.
+export const CASH_DEAL_ADDRESS_FIELD_ID = FIELD_MAP.address[0];
 type FieldKey = keyof typeof FIELD_MAP;
 const CURRENCY_KEYS: FieldKey[] = ['purchasePrice', 'emdAmount'];
 

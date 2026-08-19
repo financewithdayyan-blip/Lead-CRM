@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Ban, Bell, Check, CheckCircle2, ChevronDown, Clock, Copy, Download, Eye, Loader2, MapPin, PartyPopper, Send, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
+import { CASH_DEAL_ADDRESS_FIELD_ID, CASH_DEAL_TEMPLATE_ID } from '@/components/bluedocs/FillCashDealContractModal';
 import { formatDateTime, formatPhone } from '@/lib/utils';
 
 const STATUS_BADGE: Record<ContractInstance['status'], { label: string; className: string; icon: typeof Send } | null> = {
@@ -36,6 +37,15 @@ const PARTY_STEP_STYLE: Record<
  * once it's actually been filled in by a signer. */
 function findAddress(instance: ContractInstance): string | null {
   if (instance.propertyAddress?.trim()) return instance.propertyAddress.trim();
+  // Known-by-ID fallback for Cash Deal specifically — field IDs are stable,
+  // but a contract's own template_fields_snapshot freezes whatever label
+  // that field had at creation time, so a contract sent before this
+  // template's fields got readable labels can never match the label-text
+  // search below even though its real address is right in fieldValues.
+  if (instance.templateId === CASH_DEAL_TEMPLATE_ID) {
+    const byId = instance.fieldValues[CASH_DEAL_ADDRESS_FIELD_ID]?.trim();
+    if (byId) return byId;
+  }
   const field = instance.templateFields.find((f) => f.type !== 'signature' && /address/i.test(f.label));
   const value = field ? instance.fieldValues[field.id] : null;
   return value?.trim() || null;
