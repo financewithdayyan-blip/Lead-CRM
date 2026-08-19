@@ -43,6 +43,18 @@ interface CardTheme {
   callBtn: string;
   textBtn: string;
   iconBtn: string;
+  // Small info pills (message count, "shared by") — their default
+  // `bg-info/15` is a near-transparent tint meant to sit on a white card;
+  // on a colored gradient it turns into an unreadable smudge, so themed
+  // cards get an opaque pill instead.
+  badge: string;
+  // The backdrop a tag pill sits on. Tags carry their own arbitrary
+  // pastel bg/text colors (per-tag, user-chosen) tuned to read on a white
+  // card — on a colored gradient a similarly-toned tag can nearly
+  // disappear (e.g. green-on-green), so themed cards give every tag a
+  // small white halo to guarantee contrast regardless of the tag's own
+  // color or the card's.
+  tagBackdrop: string;
 }
 
 // Gold-on-dark is the one recurring signature — the same "this button
@@ -52,6 +64,8 @@ interface CardTheme {
 const GOLD_CALL_BTN = 'bg-accent text-text hover:bg-accent-hover';
 const WHITE_TEXT_BTN = 'bg-white/10 text-white hover:bg-white/20';
 const WHITE_ICON_BTN = 'text-white/70 hover:bg-white/10 hover:text-white';
+const WHITE_BADGE = 'bg-white/25 text-white';
+const WHITE_TAG_BACKDROP = 'inline-flex rounded-full bg-white/90 p-0.5';
 
 const NAVY_THEME: CardTheme = {
   gradient: 'from-sidebar to-sidebar-2',
@@ -62,6 +76,8 @@ const NAVY_THEME: CardTheme = {
   callBtn: GOLD_CALL_BTN,
   textBtn: WHITE_TEXT_BTN,
   iconBtn: WHITE_ICON_BTN,
+  badge: WHITE_BADGE,
+  tagBackdrop: WHITE_TAG_BACKDROP,
 };
 
 // Every fully-colored card below shares the same shape — a gradient built
@@ -69,6 +85,20 @@ const NAVY_THEME: CardTheme = {
 // so the board reads as "here's what's happening with this lead" at a
 // glance instead of every stage past Qualified looking the same pale gray.
 const CARD_THEME: Partial<Record<LeadStage, CardTheme>> = {
+  // Cold Lead — the brand's own sky-blue primary, same pair used for
+  // Call/primary buttons everywhere else in the app.
+  new: {
+    gradient: 'from-primary to-primary-hover',
+    text: 'text-white',
+    sub: 'text-white/70',
+    sub3: 'text-white/50',
+    divider: 'border-white/10',
+    callBtn: GOLD_CALL_BTN,
+    textBtn: WHITE_TEXT_BTN,
+    iconBtn: WHITE_ICON_BTN,
+    badge: WHITE_BADGE,
+    tagBackdrop: WHITE_TAG_BACKDROP,
+  },
   // Qualified — every card, not just the best-scored one (see `themed` below).
   followup: NAVY_THEME,
   // Contract — a deal actively in motion.
@@ -81,6 +111,8 @@ const CARD_THEME: Partial<Record<LeadStage, CardTheme>> = {
     callBtn: GOLD_CALL_BTN,
     textBtn: WHITE_TEXT_BTN,
     iconBtn: WHITE_ICON_BTN,
+    badge: WHITE_BADGE,
+    tagBackdrop: WHITE_TAG_BACKDROP,
   },
   // Closed — the brass "closing-table" accent, sparingly used everywhere
   // else in the app, gets its one moment to be the whole card. Gold-on-gold
@@ -94,6 +126,8 @@ const CARD_THEME: Partial<Record<LeadStage, CardTheme>> = {
     callBtn: 'bg-sidebar text-white hover:bg-sidebar-2',
     textBtn: 'bg-text/10 text-text hover:bg-text/15',
     iconBtn: 'text-text/60 hover:bg-text/10 hover:text-text',
+    badge: 'bg-text/15 text-text',
+    tagBackdrop: 'inline-flex rounded-full bg-white/70 p-0.5',
   },
   // Dead/Declined — still visually recedes (see DIMMED_STAGES' opacity-70
   // below), but the card itself is a real, deliberate red rather than a
@@ -107,6 +141,8 @@ const CARD_THEME: Partial<Record<LeadStage, CardTheme>> = {
     callBtn: GOLD_CALL_BTN,
     textBtn: WHITE_TEXT_BTN,
     iconBtn: WHITE_ICON_BTN,
+    badge: WHITE_BADGE,
+    tagBackdrop: WHITE_TAG_BACKDROP,
   },
 };
 // The one dark "spotlight" card per column — the strongest lead in that
@@ -265,6 +301,8 @@ function KanbanCardVisual({
         callBtn: 'border border-primary/30 bg-primary-dim text-primary hover:bg-primary/20',
         textBtn: 'border border-border-2 bg-surface-3 text-text-2 hover:bg-surface-3/70',
         iconBtn: 'text-text-3 hover:bg-surface-3 hover:text-text-2',
+        badge: 'bg-info/15 text-info-text',
+        tagBackdrop: '',
       };
 
   return (
@@ -304,7 +342,7 @@ function KanbanCardVisual({
               <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
               {messageCount > 0 && (
                 <span
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-semibold text-info-text"
+                  className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${sx.badge}`}
                   title={`${messageCount} SMS message${messageCount === 1 ? '' : 's'} (sent + received)`}
                 >
                   <MessageSquare size={9} /> {messageCount}
@@ -363,7 +401,18 @@ function KanbanCardVisual({
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {lead.tagIds.slice(0, 2).map((tid) => {
                 const tag = tags.find((t) => t.id === tid);
-                return tag ? <TagPill key={tid} tag={tag} /> : null;
+                if (!tag) return null;
+                // A tag's own pastel colors are tuned for a white card and
+                // can wash out on a themed one (e.g. green-on-green) — the
+                // backdrop guarantees contrast without touching the tag's
+                // actual color.
+                return themed ? (
+                  <span key={tid} className={sx.tagBackdrop}>
+                    <TagPill tag={tag} />
+                  </span>
+                ) : (
+                  <TagPill key={tid} tag={tag} />
+                );
               })}
               {lead.nextFollowUp &&
                 (() => {
