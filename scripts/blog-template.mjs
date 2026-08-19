@@ -261,7 +261,10 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 .key-takeaways li:last-child{ margin-bottom:0; }
 
 /* BLOG — sidebar: sticky TOC + CTA card */
-.post-sidebar{ position:sticky; top:24px; display:flex; flex-direction:column; gap:20px; }
+/* top offset must clear the sticky site header (~62px tall, z-index:100) —
+   24px alone left the header covering the sidebar's top ~38px once both
+   were stuck. */
+.post-sidebar{ position:sticky; top:96px; display:flex; flex-direction:column; gap:20px; }
 .sidebar-card{ background:var(--white); border:1.5px solid var(--paper-line); border-radius:var(--radius-md); padding:22px; box-shadow:var(--shadow-card); }
 .sidebar-card-title{ font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--slate-dim); margin-bottom:14px; }
 .toc-list{ display:flex; flex-direction:column; }
