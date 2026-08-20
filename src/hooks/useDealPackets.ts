@@ -428,8 +428,23 @@ export function packetUrl(slug: string): string {
   return `${window.location.origin}/crm/deal/${slug}`;
 }
 
-export function packetImageUrl(storagePath: string): string {
-  return supabase.storage.from('packet-images').getPublicUrl(storagePath).data.publicUrl;
+/**
+ * Investors were waiting on multi-megabyte originals for thumbnails no
+ * bigger than a few hundred pixels — a packet with a dozen photos could take
+ * minutes on a phone connection. `size` asks Supabase Storage's on-the-fly
+ * image transform for a right-sized, modern-format (webp where supported)
+ * render instead of the raw upload; omit it only where the original is
+ * actually needed at full size. Transformed renders are cached at the edge
+ * after the first request, so this only costs anything once per size/photo.
+ */
+export function packetImageUrl(
+  storagePath: string,
+  size?: { width?: number; height?: number; quality?: number },
+): string {
+  return supabase.storage
+    .from('packet-images')
+    .getPublicUrl(storagePath, size ? { transform: { resize: 'cover', quality: 70, ...size } } : undefined)
+    .data.publicUrl;
 }
 
 export function packetVideoUrl(storagePath: string): string {

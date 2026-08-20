@@ -156,12 +156,13 @@ interface PacketPhoto {
 function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: number) => void }) {
   if (!images.length) return null;
 
-  const Tile = ({ img, index, className, overlay }: { img: PacketPhoto; index: number; className: string; overlay?: number }) => (
+  const Tile = ({ img, index, className, overlay, width }: { img: PacketPhoto; index: number; className: string; overlay?: number; width: number }) => (
     <button onClick={() => onOpen(index)} className={`group relative overflow-hidden rounded-xl border border-border ${className}`}>
       <img
-        src={packetImageUrl(img.storagePath)}
+        src={packetImageUrl(img.storagePath, { width, quality: 72 })}
         alt={img.caption ?? 'Property photo'}
         loading={index === 0 ? undefined : 'lazy'}
+        decoding="async"
         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
       />
       {overlay ? (
@@ -173,13 +174,13 @@ function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: nu
   );
 
   if (images.length === 1) {
-    return <Tile img={images[0]} index={0} className="block h-72 w-full sm:h-[420px]" />;
+    return <Tile img={images[0]} index={0} className="block h-72 w-full sm:h-[420px]" width={1200} />;
   }
 
   if (images.length === 2) {
     return (
       <div className="grid h-56 grid-cols-2 gap-2 sm:h-[420px]">
-        {images.map((img, i) => <Tile key={img.id} img={img} index={i} className="h-full" />)}
+        {images.map((img, i) => <Tile key={img.id} img={img} index={i} className="h-full" width={700} />)}
       </div>
     );
   }
@@ -192,13 +193,14 @@ function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: nu
 
   return (
     <div className={`grid grid-cols-2 gap-2 sm:h-[420px] sm:grid-rows-2 ${wide ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-      <Tile img={images[0]} index={0} className="col-span-2 h-56 sm:row-span-2 sm:h-full" />
+      <Tile img={images[0]} index={0} className="col-span-2 h-56 sm:row-span-2 sm:h-full" width={900} />
       {thumbs.map((img, i) => (
         <Tile
           key={img.id}
           img={img}
           index={i + 1}
           className="h-28 sm:h-full"
+          width={360}
           overlay={extra > 0 && i === thumbs.length - 1 ? extra : undefined}
         />
       ))}
@@ -880,9 +882,10 @@ export function PublicPacketPage() {
             )}
 
             <img
-              src={packetImageUrl(packet.images[lightboxIndex].storagePath)}
+              src={packetImageUrl(packet.images[lightboxIndex].storagePath, { width: 1920, quality: 82 })}
               alt={packet.images[lightboxIndex].caption ?? 'Property photo'}
               onClick={(e) => e.stopPropagation()}
+              decoding="async"
               className="max-h-full max-w-full rounded-lg object-contain"
             />
 
@@ -910,7 +913,13 @@ export function PublicPacketPage() {
                     i === lightboxIndex ? 'ring-2 ring-white' : 'opacity-50 hover:opacity-90'
                   }`}
                 >
-                  <img src={packetImageUrl(img.storagePath)} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={packetImageUrl(img.storagePath, { width: 128, quality: 60 })}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>
