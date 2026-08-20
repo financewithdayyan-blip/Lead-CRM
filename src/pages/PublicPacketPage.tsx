@@ -62,11 +62,17 @@ function CompTable({
   scores?: Record<string, CompScore>;
 }) {
   return (
+    // A long address squeezed into a shrinking column used to wrap across
+    // five or six lines on narrow screens while the numeric columns got
+    // crushed alongside it — min-w on the table keeps every column at a
+    // sane width instead, letting this scroll horizontally as one unit
+    // (the normal, expected mobile-table pattern) rather than each column
+    // fighting the others for space.
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-[12.5px]">
+      <table className="w-full min-w-[560px] text-left text-[12.5px]">
         <thead className="border-b-2 border-border-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">
           <tr>
-            <th className="pb-2.5 pr-3">Address</th>
+            <th className="w-[150px] pb-2.5 pr-3">Address</th>
             <th className="pb-2.5 pr-3 text-right">{priceLabel}</th>
             <th className="pb-2.5 pr-3 text-right">Bed</th>
             <th className="pb-2.5 pr-3 text-right">Bath</th>
@@ -78,7 +84,7 @@ function CompTable({
         <tbody>
           {rows.map((c) => (
             <tr key={c.id} className="border-b border-border last:border-b-0">
-              <td className="py-2.5 pr-3 font-medium text-text-2">{c.address || '—'}</td>
+              <td className="max-w-[150px] truncate py-2.5 pr-3 font-medium text-text-2" title={c.address ?? undefined}>{c.address || '—'}</td>
               <td className="py-2.5 pr-3 text-right font-mono font-semibold tabular-nums text-text">{money(c.salePrice)}</td>
               <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.beds ?? '—'}</td>
               <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.baths ?? '—'}</td>
@@ -834,11 +840,18 @@ export function PublicPacketPage() {
 
       {statItems.length > 0 && (
         <div className="relative z-[3] mx-auto -mt-14 max-w-5xl px-5 sm:-mt-16 sm:px-8">
-          <div className="flex divide-x divide-accent/20 rounded-[20px] border border-white/[0.14] bg-sidebar/60 py-5 shadow-[0_24px_48px_-20px_rgba(11,30,51,0.45)] backdrop-blur-md">
+          {/* Two columns on mobile — four flex-1 columns of "$1,234,567"-length
+              values refuse to shrink below their content width (flex/grid
+              items default to min-width:auto), which forced the whole page
+              wider than the viewport and dragged everything else off-screen
+              with it. Two per row leaves each cell roughly double the room,
+              and min-w-0 + truncate is the backstop for anything still too
+              long. Back to one row of four from sm: up, where there's space. */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 rounded-[20px] border border-white/[0.14] bg-sidebar/60 p-5 shadow-[0_24px_48px_-20px_rgba(11,30,51,0.45)] backdrop-blur-md sm:flex sm:gap-0 sm:divide-x sm:divide-accent/20 sm:py-5">
             {statItems.map((s) => (
-              <div key={s.label} className="flex-1 px-4 text-center sm:px-6 sm:text-left">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-[#8CA0B8]">{s.label}</div>
-                <div className={`mt-1 font-serif text-[19px] font-bold sm:text-[26px] ${s.valueClass}`}>{s.value}</div>
+              <div key={s.label} className="min-w-0 text-center sm:flex-1 sm:px-6 sm:text-left">
+                <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[#8CA0B8]">{s.label}</div>
+                <div className={`mt-1 truncate font-serif text-[19px] font-bold sm:text-[26px] ${s.valueClass}`}>{s.value}</div>
               </div>
             ))}
           </div>
