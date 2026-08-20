@@ -14,9 +14,20 @@
 // which failed every fresh bundle regardless of this function's own code.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
+import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+// Second delivery channel alongside Zoom SMS — see create-contract-instance's
+// own comment on this; same secrets, same reasoning (10DLC blocks SMS with
+// links, which is every message this function can send too).
+const SMTP_HOST = Deno.env.get('SMTP_HOST')!;
+const SMTP_PORT = Number(Deno.env.get('SMTP_PORT') ?? '465');
+const SMTP_USER = Deno.env.get('SMTP_USER')!;
+const SMTP_PASS = Deno.env.get('SMTP_PASS')!;
+const SMTP_FROM_EMAIL = Deno.env.get('SMTP_FROM_EMAIL')!;
+const SMTP_FROM_NAME = Deno.env.get('SMTP_FROM_NAME') ?? 'Bluebird Acquisition';
 
 const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
@@ -109,6 +120,101 @@ const NEXT_SIGNER_MESSAGE = (docName: string, address: string, link: string) =>
   `Hey, it's your turn to sign the ${docName} contract for your property\n${address}\n${link}\nSign it and let's start moving with it\nThanks,\nDayyan`;
 const COMPLETED_MESSAGE = (link: string) =>
   `Hey Congrats🎉🎉!\n\nOn signing the contract on your property\nyou can download the signed contract.\nJust click the link below\n\n${link}\n\nThanks for signing,\nDayyan`;
+
+// ── Email (duplicated from create-contract-instance, not shared — matches
+// this codebase's own established convention for the Zoom SMS helpers
+// above). Every call site wraps this in try/catch, same as sendBlueDocsSms —
+// a failed email must never fail the signer's own already-recorded
+// signature or cost another party their own notification. ──────────────────
+async function sendEmail(to: string, subject: string, html: string) {
+  const client = new SMTPClient({
+    connection: {
+      hostname: SMTP_HOST,
+      port: SMTP_PORT,
+      tls: true,
+      auth: { username: SMTP_USER, password: SMTP_PASS },
+    },
+  });
+  try {
+    await withTimeout(
+      client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, content: 'auto', html }),
+      'SMTP send',
+    );
+  } finally {
+    await client.close();
+  }
+}
+
+function emailShell(preheader: string, bodyHtml: string): string {
+  return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);">
+<tr><td style="background:#0B1E33;padding:24px 32px;">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="width:28px;height:28px;background:#1568A8;border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:28px;">&#9993;</td>
+<td style="padding-left:10px;font-size:15px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Bluebird <span style="font-weight:500;color:#8CA0B8;">Acquisition</span></td>
+</tr></table>
+</td></tr>
+<tr><td style="padding:32px;">${bodyHtml}</td></tr>
+<tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">This email was sent by Bluebird Acquisition regarding a real estate contract you're a party to. If the button above doesn't open, use the link at the bottom of this email.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function addressCallout(address: string): string {
+  return `<div style="margin:20px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">Property</div>
+<div style="margin-top:4px;font-size:14px;font-weight:600;color:#0B1E33;">${address}</div>
+</div>`;
+}
+
+function ctaButton(link: string, label: string, bg: string, color: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:${bg};border-radius:10px;">
+<a href="${link}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:${color};text-decoration:none;">${label}</a>
+</td></tr></table>`;
+}
+
+function fallbackLink(link: string): string {
+  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Or paste this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
+}
+
+/** Same shell create-contract-instance uses for the initial invite — this is
+ * the next-signer nudge, identical shape, just a different opening line. */
+function signRequestEmailHtml(opts: { opener: string; docName: string; address: string; link: string }): string {
+  const { opener, docName, address, link } = opts;
+  const body = `
+<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C9A24B;">Signature Requested</p>
+<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${opener}</h1>
+<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${docName} is ready for your signature. Review it and sign electronically — it only takes a couple of minutes.</p>
+${addressCallout(address)}
+${ctaButton(link, 'Review &amp; Sign Document', '#C9A24B', '#0B1E33')}
+<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Sign it and let's start moving with it.<br>Thanks,<br>Dayyan</p>
+${fallbackLink(link)}`;
+  return emailShell(`${docName} is ready for your signature`, body);
+}
+
+function signedCompleteEmailHtml(opts: { name: string; address: string; link: string }): string {
+  const { name, address, link } = opts;
+  const body = `
+<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#10b981;">Fully Executed</p>
+<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">&#127881; Congrats, ${name.split(' ')[0]} — it's signed!</h1>
+<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Every party has signed the contract for your property. You can download your fully executed copy below.</p>
+${addressCallout(address)}
+${ctaButton(link, 'Download Signed Contract', '#0B1E33', '#ffffff')}
+<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Thanks for signing,<br>Dayyan</p>
+${fallbackLink(link)}`;
+  return emailShell(`Your contract for ${address} has been fully signed`, body);
+}
 
 interface ContractField {
   id: string;
@@ -394,25 +500,45 @@ Deno.serve(async (req) => {
       // got unlocked by this signature — notify them. Wrapped so a Zoom
       // hiccup here never fails the signer's own already-recorded signature.
       const nextParty = updatedParties.filter((p) => p.status !== 'signed').sort((a, b) => a.sign_order - b.sign_order)[0];
-      if (nextParty?.phone) {
-        try {
-          const { data: nameRow } = await admin
-            .from('contract_instances')
-            .select('name, property_address')
-            .eq('id', party.contract_instance_id)
-            .single();
-          const link = `https://www.bluebirdacquisition.com/crm/sign/${nextParty.access_token}`;
-          await sendBlueDocsSms(
-            nextParty.phone,
-            NEXT_SIGNER_MESSAGE(nameRow?.name ?? 'a document', nameRow?.property_address ?? '', link),
-          );
+      if (nextParty?.send_sms || nextParty?.send_email) {
+        const { data: nameRow } = await admin
+          .from('contract_instances')
+          .select('name, property_address')
+          .eq('id', party.contract_instance_id)
+          .single();
+        const link = `https://www.bluebirdacquisition.com/crm/sign/${nextParty.access_token}`;
+        const docName = nameRow?.name ?? 'a document';
+        const address = nameRow?.property_address ?? '';
+        let sentAny = false;
+
+        if (nextParty.send_sms && nextParty.phone) {
+          try {
+            await sendBlueDocsSms(nextParty.phone, NEXT_SIGNER_MESSAGE(docName, address, link));
+            sentAny = true;
+          } catch (smsErr) {
+            console.error('Blue Docs next-signer SMS failed:', smsErr);
+          }
+        }
+        if (nextParty.send_email && nextParty.email) {
+          try {
+            const html = signRequestEmailHtml({
+              opener: `Hi ${nextParty.name.split(' ')[0]}, it's your turn to sign`,
+              docName,
+              address,
+              link,
+            });
+            await sendEmail(nextParty.email, `Your turn to sign — ${docName}`, html);
+            sentAny = true;
+          } catch (emailErr) {
+            console.error('Blue Docs next-signer email failed:', emailErr);
+          }
+        }
+        if (sentAny) {
           await admin.from('contract_audit_events').insert({
             contract_instance_id: party.contract_instance_id,
             party_id: nextParty.id,
             event_type: 'sent',
           });
-        } catch (smsErr) {
-          console.error('Blue Docs next-signer SMS failed:', smsErr);
         }
       }
       return json({ ok: true, allSigned: false });
@@ -631,12 +757,21 @@ Deno.serve(async (req) => {
     // right when someone finishes signing. Each send is wrapped individually
     // so one party's Zoom hiccup doesn't cost every other party their text.
     for (const p of updatedParties) {
-      if (!p.phone) continue;
-      try {
-        const partyLink = `https://www.bluebirdacquisition.com/crm/sign/${p.access_token}`;
-        await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(partyLink));
-      } catch (smsErr) {
-        console.error(`Blue Docs completion SMS failed for party ${p.id}:`, smsErr);
+      const partyLink = `https://www.bluebirdacquisition.com/crm/sign/${p.access_token}`;
+      if (p.send_sms && p.phone) {
+        try {
+          await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(partyLink));
+        } catch (smsErr) {
+          console.error(`Blue Docs completion SMS failed for party ${p.id}:`, smsErr);
+        }
+      }
+      if (p.send_email && p.email) {
+        try {
+          const html = signedCompleteEmailHtml({ name: p.name, address: instance.property_address ?? '', link: partyLink });
+          await sendEmail(p.email, `Contract signed — ${instance.property_address ?? 'your property'}`, html);
+        } catch (emailErr) {
+          console.error(`Blue Docs completion email failed for party ${p.id}:`, emailErr);
+        }
       }
     }
 

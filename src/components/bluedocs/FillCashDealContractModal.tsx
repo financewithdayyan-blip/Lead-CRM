@@ -53,6 +53,10 @@ function isValidPhone(raw: string): boolean {
   return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
 }
 
+function isValidEmail(raw: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
+}
+
 const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency' | 'date'; placeholder?: string }> = [
   { key: 'address', label: 'Property Address', type: 'text', placeholder: '123 Main St, Tampa, FL 33602' },
   { key: 'purchasePrice', label: 'Purchase Price', type: 'currency', placeholder: '410000' },
@@ -87,6 +91,9 @@ export function FillCashDealContractModal({
 
   const [sellerName, setSellerName] = useState('');
   const [sellerPhone, setSellerPhone] = useState('');
+  const [sellerEmail, setSellerEmail] = useState('');
+  const [sellerSendSms, setSellerSendSms] = useState(true);
+  const [sellerSendEmail, setSellerSendEmail] = useState(false);
   const [buyerName, setBuyerName] = useState('');
   const [values, setValues] = useState<Record<FieldKey, string>>({
     sellerName: '',
@@ -108,7 +115,11 @@ export function FillCashDealContractModal({
 
   const allFilled =
     sellerName.trim() && buyerName.trim() && FIELD_ROWS.every((r) => values[r.key].trim());
-  const canSubmit = !!buyerRole && allFilled && isValidPhone(sellerPhone) && isValidPhone(buyerPhone);
+  const sellerReady =
+    (sellerSendSms || sellerSendEmail) &&
+    (!sellerSendSms || isValidPhone(sellerPhone)) &&
+    (!sellerSendEmail || isValidEmail(sellerEmail));
+  const canSubmit = !!buyerRole && allFilled && sellerReady && isValidPhone(buyerPhone);
 
   async function handleSubmit() {
     if (!canSubmit || !buyerRole) return;
@@ -130,8 +141,14 @@ export function FillCashDealContractModal({
         propertyAddress: values.address.trim(),
         fieldValues,
         parties: [
-          { role: 'seller', name: sellerName.trim(), phone: sellerPhone.trim(), signOrder: 1 },
-          { role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), signOrder: 2 },
+          {
+            role: 'seller', name: sellerName.trim(), phone: sellerPhone.trim(), email: sellerEmail.trim(),
+            sendSms: sellerSendSms, sendEmail: sellerSendEmail, signOrder: 1,
+          },
+          {
+            role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), email: '',
+            sendSms: true, sendEmail: false, signOrder: 2,
+          },
         ],
       });
       const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
@@ -155,13 +172,35 @@ export function FillCashDealContractModal({
         </p>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <div className="col-span-2">
             <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Full Name</label>
             <input className="input" value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Phone</label>
-            <input className="input" inputMode="tel" value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} />
+            <input
+              className={`input ${sellerSendSms && !isValidPhone(sellerPhone) ? '!border-danger' : ''}`}
+              inputMode="tel"
+              value={sellerPhone}
+              onChange={(e) => setSellerPhone(e.target.value)}
+            />
+            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
+              <input type="checkbox" checked={sellerSendSms} onChange={(e) => setSellerSendSms(e.target.checked)} />
+              Send by text
+            </label>
+          </div>
+          <div>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Email</label>
+            <input
+              className={`input ${sellerSendEmail && !isValidEmail(sellerEmail) ? '!border-danger' : ''}`}
+              type="email"
+              value={sellerEmail}
+              onChange={(e) => setSellerEmail(e.target.value)}
+            />
+            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
+              <input type="checkbox" checked={sellerSendEmail} onChange={(e) => setSellerSendEmail(e.target.checked)} />
+              Send by email
+            </label>
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Full Name</label>

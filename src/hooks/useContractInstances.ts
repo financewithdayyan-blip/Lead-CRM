@@ -6,10 +6,16 @@ import type { ContractField, ContractType, PartyRole, PartyRoleDef } from './use
 export interface ContractParty {
   role: PartyRole;
   name: string;
-  /** Required — Blue Docs delivers exclusively over SMS (see
-   * create-contract-instance), and contract_signing_parties.email has never
-   * once been populated in production. */
+  /** Required only if sendSms is true — validated server-side too. */
   phone: string;
+  /** Required only if sendEmail is true — validated server-side too. */
+  email: string;
+  /** At least one of sendSms/sendEmail must be true — 10DLC carrier
+   * filtering blocks SMS containing a link (every message this system
+   * sends), which is why email exists as a second channel alongside SMS
+   * rather than a straight replacement. */
+  sendSms: boolean;
+  sendEmail: boolean;
   signOrder: number;
 }
 
@@ -38,6 +44,9 @@ export interface ContractInstance {
     role: PartyRole;
     name: string;
     phone: string | null;
+    email: string | null;
+    sendSms: boolean;
+    sendEmail: boolean;
     status: 'pending' | 'signed' | 'declined';
     accessToken: string;
     signOrder: number;
@@ -78,6 +87,9 @@ function fromRow(r: any): ContractInstance {
       role: p.role,
       name: p.name,
       phone: p.phone ?? null,
+      email: p.email ?? null,
+      sendSms: p.send_sms ?? true,
+      sendEmail: p.send_email ?? false,
       status: p.status,
       accessToken: p.access_token,
       signOrder: p.sign_order,
@@ -131,7 +143,10 @@ export function useGenerateContract() {
           name: input.name,
           propertyAddress: input.propertyAddress,
           fieldValues: input.fieldValues,
-          parties: input.parties.map((p) => ({ role: p.role, name: p.name, phone: p.phone, signOrder: p.signOrder })),
+          parties: input.parties.map((p) => ({
+            role: p.role, name: p.name, phone: p.phone, email: p.email,
+            sendSms: p.sendSms, sendEmail: p.sendEmail, signOrder: p.signOrder,
+          })),
         },
       });
       if (error) {

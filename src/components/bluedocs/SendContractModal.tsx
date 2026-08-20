@@ -9,6 +9,9 @@ interface PartyDraft {
   role: PartyRole;
   name: string;
   phone: string;
+  email: string;
+  sendSms: boolean;
+  sendEmail: boolean;
 }
 
 /** Same 10/11-digit check create-contract-instance applies server-side —
@@ -17,6 +20,21 @@ interface PartyDraft {
 function isValidPhone(raw: string): boolean {
   const digits = raw.replace(/[^0-9]/g, '');
   return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+}
+
+function isValidEmail(raw: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
+}
+
+/** A party is reachable if every delivery method it has checked actually
+ * has a valid value behind it, and at least one method is checked at all —
+ * 10DLC blocks SMS containing a link, which is why this isn't SMS-only
+ * anymore, but a party still needs to be reachable somehow. */
+function isPartyReady(p: PartyDraft): boolean {
+  if (!p.sendSms && !p.sendEmail) return false;
+  if (p.sendSms && !isValidPhone(p.phone)) return false;
+  if (p.sendEmail && !isValidEmail(p.email)) return false;
+  return true;
 }
 
 /**
@@ -44,20 +62,23 @@ export function SendContractModal({
   const [name, setName] = useState(template.name);
   const [propertyAddress, setPropertyAddress] = useState('');
   const [parties, setParties] = useState<PartyDraft[]>([
-    { key: 'buyer', role: 'buyer', name: '', phone: '' },
-    { key: 'seller', role: 'seller', name: '', phone: '' },
-    ...template.partyRoles.map((r) => ({ key: r.id, role: r.id, name: '', phone: '' })),
+    { key: 'buyer', role: 'buyer', name: '', phone: '', email: '', sendSms: true, sendEmail: false },
+    { key: 'seller', role: 'seller', name: '', phone: '', email: '', sendSms: true, sendEmail: false },
+    ...template.partyRoles.map((r) => ({ key: r.id, role: r.id, name: '', phone: '', email: '', sendSms: true, sendEmail: false })),
   ]);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = name.trim() && propertyAddress.trim() && parties.every((p) => p.name.trim() && isValidPhone(p.phone));
+  const canSubmit = name.trim() && propertyAddress.trim() && parties.every((p) => p.name.trim() && isPartyReady(p));
 
   function updateParty(key: string, patch: Partial<PartyDraft>) {
     setParties((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
   }
 
   function addParty() {
-    setParties((prev) => [...prev, { key: crypto.randomUUID(), role: 'other', name: '', phone: '' }]);
+    setParties((prev) => [
+      ...prev,
+      { key: crypto.randomUUID(), role: 'other', name: '', phone: '', email: '', sendSms: true, sendEmail: false },
+    ]);
   }
 
   function removeParty(key: string) {
@@ -83,7 +104,10 @@ export function SendContractModal({
         name: name.trim(),
         propertyAddress: propertyAddress.trim(),
         fieldValues: {},
-        parties: parties.map((p, i) => ({ role: p.role, name: p.name.trim(), phone: p.phone.trim(), signOrder: i + 1 })),
+        parties: parties.map((p, i) => ({
+          role: p.role, name: p.name.trim(), phone: p.phone.trim(), email: p.email.trim(),
+          sendSms: p.sendSms, sendEmail: p.sendEmail, signOrder: i + 1,
+        })),
       });
       const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
       onSent({
@@ -161,13 +185,43 @@ export function SendContractModal({
                     value={p.name}
                     onChange={(e) => updateParty(p.key, { name: e.target.value })}
                   />
-                  <input
-                    className="input"
-                    placeholder="Phone number"
-                    inputMode="tel"
-                    value={p.phone}
-                    onChange={(e) => updateParty(p.key, { phone: e.target.value })}
-                  />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      className={`input !py-1.5 ${p.sendSms && !isValidPhone(p.phone) ? '!border-danger' : ''}`}
+                      placeholder="Phone number"
+                      inputMode="tel"
+                      value={p.phone}
+                      onChange={(e) => updateParty(p.key, { phone: e.target.value })}
+                    />
+                    <input
+                      className={`input !py-1.5 ${p.sendEmail && !isValidEmail(p.email) ? '!border-danger' : ''}`}
+                      placeholder="Email address"
+                      type="email"
+                      value={p.email}
+                      onChange={(e) => updateParty(p.key, { email: e.target.value })}
+                    />
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 text-[12px] text-text-2">
+                      <input
+                        type="checkbox"
+                        checked={p.sendSms}
+                        onChange={(e) => updateParty(p.key, { sendSms: e.target.checked })}
+                      />
+                      Send by text
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[12px] text-text-2">
+                      <input
+                        type="checkbox"
+                        checked={p.sendEmail}
+                        onChange={(e) => updateParty(p.key, { sendEmail: e.target.checked })}
+                      />
+                      Send by email
+                    </label>
+                    {!isPartyReady(p) && (p.sendSms || p.sendEmail) && (
+                      <span className="text-[11px] text-danger">Needs a valid {p.sendSms && !isValidPhone(p.phone) ? 'phone number' : 'email address'}</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -176,8 +230,8 @@ export function SendContractModal({
 
         <p className="text-[12px] text-text-3">
           Parties sign in the order above — each one's link only unlocks once everyone before them is done.{' '}
-          {firstRoleLabel === 'Us' ? 'Our' : "The first signer's"} phone gets a text with their link the moment you send this; everyone
-          after them is texted automatically as their turn comes up.
+          {firstRoleLabel === 'Us' ? 'We get' : 'The first signer gets'} their link the moment you send this, by whichever
+          method(s) are checked; everyone after them is notified the same way automatically as their turn comes up.
         </p>
 
         <div className="flex justify-end gap-2">
