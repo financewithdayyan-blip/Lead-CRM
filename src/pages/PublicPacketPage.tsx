@@ -268,13 +268,21 @@ function Line({
 /** Verdict, equity as the centerpiece, and an itemised breakdown beneath it. */
 function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; arv: number | null; market: ComparableEstimate | null }) {
   const style = VERDICT_STYLE[analysis.verdict];
-  // Tracks headroom against the ceiling, the same measure the verdict uses, so
-  // the meter and the badge can never disagree. Full at 25% under max.
-  const fill =
-    analysis.mao != null && analysis.mao > 0 && analysis.headroom != null
-      ? Math.max(0, Math.min(100, (analysis.headroom / analysis.mao / 0.25) * 100))
-      : 0;
-  const equityColor = analysis.spread != null && analysis.spread < 0 ? 'text-rose-300' : 'text-emerald-300';
+  // Driven by the same margin the verdict badge is computed from — headroom
+  // against MAO is a different number and could show a near-empty "thin"
+  // looking meter on a deal the badge above it calls Strong. Scaled to a 30%
+  // margin ceiling (10 points past the "strong" threshold) so a strong deal
+  // reads as a mostly-full bar rather than pinned to the far edge.
+  const fill = analysis.margin != null ? Math.max(3, Math.min(100, (analysis.margin / 0.3) * 100)) : 0;
+  // Keeps the "You are here" label fully inside the track even when the fill
+  // is near either end, instead of letting its centred text clip against the
+  // card's rounded corner.
+  const labelPos = Math.max(8, Math.min(92, fill));
+  const tone = analysis.verdict === 'strong' ? 'emerald' : analysis.verdict === 'fair' ? 'amber' : 'rose';
+  const equityColor = tone === 'emerald' ? 'text-emerald-300' : tone === 'amber' ? 'text-amber-300' : 'text-rose-300';
+  const meterFillClass =
+    tone === 'emerald' ? 'from-emerald-400 to-emerald-300' : tone === 'amber' ? 'from-amber-400 to-amber-300' : 'from-rose-500 to-rose-400';
+  const meterLabelClass = tone === 'emerald' ? 'text-emerald-300' : tone === 'amber' ? 'text-amber-300' : 'text-rose-300';
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
@@ -293,16 +301,16 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
           <p className="mt-3 max-w-md text-[14px] font-medium leading-snug text-white">{analysis.notes[0]}</p>
         )}
 
-        {analysis.headroom != null && analysis.mao != null && (
+        {analysis.margin != null && (
           <div className="mt-5">
             <div className="relative h-2 rounded-full bg-white/[0.14]">
               <span
-                className="absolute -top-[19px] -translate-x-1/2 font-mono text-[10.5px] font-bold text-emerald-300"
-                style={{ left: `${fill}%` }}
+                className={`absolute -top-[19px] -translate-x-1/2 font-mono text-[10.5px] font-bold ${meterLabelClass}`}
+                style={{ left: `${labelPos}%` }}
               >
                 You are here
               </span>
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300" style={{ width: `${fill}%` }} />
+              <div className={`h-full rounded-full bg-gradient-to-r ${meterFillClass}`} style={{ width: `${fill}%` }} />
             </div>
             <div className="mt-1.5 flex justify-between text-[10px] text-[#7691AC]">
               <span>Thin margin</span>
