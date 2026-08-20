@@ -387,6 +387,12 @@ export interface PacketImage {
   caption: string | null;
 }
 
+export interface PacketVideo {
+  id: string;
+  storagePath: string;
+  caption: string | null;
+}
+
 export interface DealPacket {
   id: string;
   leadId: string;
@@ -435,6 +441,7 @@ export interface DealPacket {
   comps: PacketComp[];
   repairs: PacketRepair[];
   images: PacketImage[];
+  videos: PacketVideo[];
 }
 
 export interface PacketView {

@@ -9,7 +9,7 @@ import { analyzeDeal, compSetConfidence, estimateComparableArv, type CompScore, 
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
-import { packetImageUrl } from '@/hooks/useDealPackets';
+import { packetImageUrl, packetVideoUrl } from '@/hooks/useDealPackets';
 import { DEAL_TYPE_CONFIG } from '@/types/domain';
 
 const money = (n: number | null | undefined) =>
@@ -200,6 +200,31 @@ function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: nu
           index={i + 1}
           className="h-28 sm:h-full"
           overlay={extra > 0 && i === thumbs.length - 1 ? extra : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface PacketVideoClip {
+  id: string;
+  storagePath: string;
+  caption: string | null;
+}
+
+/** Walkthrough clips, below the photo mosaic — one per row so controls stay usable at any length. */
+function VideoGrid({ videos }: { videos: PacketVideoClip[] }) {
+  if (!videos.length) return null;
+  return (
+    <div className={`grid gap-2 ${videos.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+      {videos.map((v) => (
+        <video
+          key={v.id}
+          src={packetVideoUrl(v.storagePath)}
+          controls
+          playsInline
+          preload="metadata"
+          className="aspect-video w-full rounded-xl border border-border bg-black"
         />
       ))}
     </div>
@@ -554,8 +579,16 @@ export function PublicPacketPage() {
   // fixed constant, since which sections actually render varies per packet.
   const sections: { title: string; body: React.ReactNode }[] = [];
 
-  if (packet.images.length > 0) {
-    sections.push({ title: 'The Property', body: <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} /> });
+  if (packet.images.length > 0 || packet.videos.length > 0) {
+    sections.push({
+      title: 'The Property',
+      body: (
+        <div className="space-y-3">
+          <PhotoMosaic images={packet.images} onOpen={setLightboxIndex} />
+          <VideoGrid videos={packet.videos} />
+        </div>
+      ),
+    });
   }
 
   sections.push({ title: 'Deal Analysis', body: <DealAnalysisCard analysis={analysis} arv={adjustedArv} market={market} /> });

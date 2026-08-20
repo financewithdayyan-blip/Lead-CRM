@@ -9,10 +9,11 @@ import type {
   PacketImage,
   PacketRepair,
   PacketStatus,
+  PacketVideo,
   PacketView,
 } from '@/types/domain';
 
-const PACKET_SELECT = '*, packet_comps(*), packet_repairs(*), packet_images(*)';
+const PACKET_SELECT = '*, packet_comps(*), packet_repairs(*), packet_images(*), packet_videos(*)';
 
 // ── Mappers ─────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,9 @@ function dbToPacket(row: any): DealPacket {
     ),
     images: (row.packet_images ?? []).sort(bySort).map(
       (i: any): PacketImage => ({ id: i.id, storagePath: i.storage_path, caption: i.caption }),
+    ),
+    videos: (row.packet_videos ?? []).sort(bySort).map(
+      (v: any): PacketVideo => ({ id: v.id, storagePath: v.storage_path, caption: v.caption }),
     ),
   };
 }
@@ -428,6 +432,10 @@ export function packetImageUrl(storagePath: string): string {
   return supabase.storage.from('packet-images').getPublicUrl(storagePath).data.publicUrl;
 }
 
+export function packetVideoUrl(storagePath: string): string {
+  return supabase.storage.from('packet-videos').getPublicUrl(storagePath).data.publicUrl;
+}
+
 // ── Admin queries ───────────────────────────────────────────────────────────
 
 export function useLeadPackets(leadId: string | undefined) {
@@ -524,12 +532,14 @@ export function useSavePacket() {
       comps,
       repairs,
       images,
+      videos,
     }: {
       id: string;
       fields: PacketFields;
       comps?: Omit<PacketComp, 'id'>[];
       repairs?: Omit<PacketRepair, 'id'>[];
       images?: Omit<PacketImage, 'id'>[];
+      videos?: Omit<PacketVideo, 'id'>[];
     }) => {
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
       const map: Record<keyof PacketFields, string> = {
@@ -580,6 +590,18 @@ export function useSavePacket() {
           const { error: e } = await supabase.from('packet_images').insert(
             images.map((im, i) => ({
               packet_id: id, storage_path: im.storagePath, caption: im.caption, sort_order: i,
+            })),
+          );
+          if (e) throw e;
+        }
+      }
+
+      if (videos) {
+        await supabase.from('packet_videos').delete().eq('packet_id', id);
+        if (videos.length) {
+          const { error: e } = await supabase.from('packet_videos').insert(
+            videos.map((vi, i) => ({
+              packet_id: id, storage_path: vi.storagePath, caption: vi.caption, sort_order: i,
             })),
           );
           if (e) throw e;
@@ -674,6 +696,63 @@ export function useCopyLeadFileToPacket() {
       return { id: row.id, storagePath: row.storage_path, caption: row.caption };
     },
     onSuccess: (_img, { packetId }) => qc.invalidateQueries({ queryKey: ['deal_packet', packetId] }),
+  });
+}
+
+/** Same immediate-insert reasoning as useUploadPacketImage, for a fresh video upload. */
+export function useUploadPacketVideo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ packetId, file, sortOrder }: { packetId: string; file: File; sortOrder: number }): Promise<PacketVideo> => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
+      const path = `${packetId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('packet-videos').upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (error) throw error;
+      const { data, error: insertError } = await supabase
+        .from('packet_videos')
+        .insert({ packet_id: packetId, storage_path: path, caption: null, sort_order: sortOrder })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      return { id: data.id, storagePath: data.storage_path, caption: data.caption };
+    },
+    onSuccess: (_vid, { packetId }) => qc.invalidateQueries({ queryKey: ['deal_packet', packetId] }),
+  });
+}
+
+/**
+ * Same reasoning as useCopyLeadFileToPacket: a lead's uploaded video lives in
+ * the private lead-files bucket, so it has to be downloaded and re-uploaded
+ * into the public packet-videos bucket — there's no way for the public packet
+ * page to read a private object directly.
+ */
+export function useCopyLeadFileToPacketVideo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      { packetId, storagePath, fileName, sortOrder }: { packetId: string; storagePath: string; fileName: string; sortOrder: number },
+    ): Promise<PacketVideo> => {
+      const { data, error: downloadError } = await supabase.storage.from('lead-files').download(storagePath);
+      if (downloadError) throw downloadError;
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'mp4';
+      const path = `${packetId}/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('packet-videos').upload(path, data, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      const { data: row, error: insertError } = await supabase
+        .from('packet_videos')
+        .insert({ packet_id: packetId, storage_path: path, caption: null, sort_order: sortOrder })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      return { id: row.id, storagePath: row.storage_path, caption: row.caption };
+    },
+    onSuccess: (_vid, { packetId }) => qc.invalidateQueries({ queryKey: ['deal_packet', packetId] }),
   });
 }
 

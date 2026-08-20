@@ -50,6 +50,7 @@ export interface PublicPacket {
   comps: PublicPacketComp[];
   repairs: { id: string; item: string; cost: number }[];
   images: { id: string; storagePath: string; caption: string | null }[];
+  videos: { id: string; storagePath: string; caption: string | null }[];
 }
 
 export function usePublicPacket(slug: string | undefined) {

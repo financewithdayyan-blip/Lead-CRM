@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, FolderInput, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Check, Copy, FolderInput, Loader2, Plus, Trash2, Upload, Video, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import {
   analyzeDeal,
   compSetConfidence,
   estimateComparableArv,
   packetImageUrl,
+  packetVideoUrl,
   packetUrl,
   repairTotal,
   useCopyLeadFileToPacket,
+  useCopyLeadFileToPacketVideo,
   useSavePacket,
   useUploadPacketImage,
+  useUploadPacketVideo,
   usePacket,
 } from '@/hooks/useDealPackets';
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { geocodeAddress, geocodeAddresses } from '@/lib/geocode';
-import { isImageFile } from '@/lib/utils';
-import { DEAL_TYPE_CONFIG, type DealType, type Lead, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus } from '@/types/domain';
+import { isImageFile, isVideoFile } from '@/lib/utils';
+import { DEAL_TYPE_CONFIG, type DealType, type Lead, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus, type PacketVideo } from '@/types/domain';
 
 /** Parses a currency-ish input into a number, treating empty as "not set". */
 function num(v: string): number | null {
@@ -42,11 +45,18 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const savePacket = useSavePacket();
   const uploadImage = useUploadPacketImage();
   const copyLeadFile = useCopyLeadFileToPacket();
+  const uploadVideo = useUploadPacketVideo();
+  const copyLeadVideoFile = useCopyLeadFileToPacketVideo();
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoFileRef = useRef<HTMLInputElement>(null);
   const [showLeadFiles, setShowLeadFiles] = useState(false);
   const [importedLeadFileIds, setImportedLeadFileIds] = useState<Set<string>>(new Set());
   const [copyingFileIds, setCopyingFileIds] = useState<Set<string>>(new Set());
   const [importingAll, setImportingAll] = useState(false);
+  const [showLeadVideoFiles, setShowLeadVideoFiles] = useState(false);
+  const [importedLeadVideoFileIds, setImportedLeadVideoFileIds] = useState<Set<string>>(new Set());
+  const [copyingVideoFileIds, setCopyingVideoFileIds] = useState<Set<string>>(new Set());
+  const [importingAllVideos, setImportingAllVideos] = useState(false);
 
   const [status, setStatus] = useState<PacketStatus>('draft');
   const [ownerName, setOwnerName] = useState('');
@@ -72,9 +82,11 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [comps, setComps] = useState<Omit<PacketComp, 'id'>[]>([]);
   const [repairs, setRepairs] = useState<Omit<PacketRepair, 'id'>[]>([]);
   const [images, setImages] = useState<PacketImage[]>([]);
+  const [videos, setVideos] = useState<PacketVideo[]>([]);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [geoWarning, setGeoWarning] = useState<string | null>(null);
 
@@ -106,6 +118,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setComps(packet.comps.map(({ id: _id, ...c }) => c));
     setRepairs(packet.repairs.map(({ id: _id, ...r }) => r));
     setImages(packet.images);
+    setVideos(packet.videos);
   }, [packet?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const comparable = useMemo(
@@ -208,6 +221,61 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setImportingAll(false);
   }
 
+  async function handleVideoFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setError(null);
+    setUploadingVideo(true);
+    try {
+      let sortOrder = videos.length;
+      for (const file of Array.from(files)) {
+        const vid = await uploadVideo.mutateAsync({ packetId, file, sortOrder: sortOrder++ });
+        setVideos((prev) => [...prev, vid]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Video upload failed.');
+    } finally {
+      setUploadingVideo(false);
+      if (videoFileRef.current) videoFileRef.current.value = '';
+    }
+  }
+
+  const leadVideoFiles = useMemo(
+    () => (lead.files ?? []).filter((f) => isVideoFile(f.fileType, f.fileName)),
+    [lead.files],
+  );
+
+  async function handleImportLeadVideoFile(fileId: string, storagePath: string, fileName: string, sortOrder: number) {
+    setError(null);
+    setCopyingVideoFileIds((prev) => new Set(prev).add(fileId));
+    try {
+      const vid = await copyLeadVideoFile.mutateAsync({ packetId, storagePath, fileName, sortOrder });
+      setVideos((prev) => [...prev, vid]);
+      setImportedLeadVideoFileIds((prev) => new Set(prev).add(fileId));
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not copy that video into the packet.');
+      return false;
+    } finally {
+      setCopyingVideoFileIds((prev) => {
+        const next = new Set(prev);
+        next.delete(fileId);
+        return next;
+      });
+    }
+  }
+
+  async function handleImportAllLeadVideoFiles() {
+    const remaining = leadVideoFiles.filter((f) => !importedLeadVideoFileIds.has(f.id));
+    if (remaining.length === 0) return;
+    setImportingAllVideos(true);
+    let nextSortOrder = videos.length;
+    for (const f of remaining) {
+      const ok = await handleImportLeadVideoFile(f.id, f.storagePath, f.fileName, nextSortOrder);
+      if (ok) nextSortOrder++;
+    }
+    setImportingAllVideos(false);
+  }
+
   function handleImportLeadComps() {
     if (!lead.comps?.length) return;
     setComps((prev) => [
@@ -300,6 +368,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
         comps: geocoded,
         repairs,
         images,
+        videos,
       });
       if (nextStatus) setStatus(nextStatus);
       // Stays open when the map came out incomplete, so the warning above
@@ -458,6 +527,88 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                             type="button"
                             disabled={alreadyImported || copying}
                             onClick={() => handleImportLeadFile(f.id, f.storagePath, f.fileName, images.length)}
+                            className="flex items-center gap-1.5 rounded-md border border-border-2 bg-surface px-2 py-1 text-[12px] text-text-2 hover:border-primary hover:text-primary disabled:cursor-default disabled:opacity-50"
+                            title={f.fileName}
+                          >
+                            {copying ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : alreadyImported ? (
+                              <Check size={12} className="text-success" />
+                            ) : (
+                              <Plus size={12} />
+                            )}
+                            <span className="max-w-[140px] truncate">{f.fileName}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Section>
+
+          {/* ── Videos ──────────────────────────────────────────────────── */}
+          <Section title="Property video" hint="Shown publicly on the packet, below the photos. Uploads are immediate — removing a row unlinks it on save.">
+            <div className="flex flex-wrap gap-3">
+              {videos.map((vid, i) => (
+                <div key={vid.id} className="relative">
+                  <video src={packetVideoUrl(vid.storagePath)} muted
+                         className="h-24 w-32 rounded-md border border-border-2 bg-black object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="absolute -right-1.5 -top-1.5 rounded-full border border-border bg-surface p-0.5 text-danger shadow-card"
+                    title="Remove video"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => videoFileRef.current?.click()}
+                disabled={uploadingVideo}
+                className="flex h-24 w-32 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border-2 text-[12px] text-text-3 hover:border-primary hover:text-primary disabled:opacity-50"
+              >
+                {uploadingVideo ? <Loader2 size={16} className="animate-spin" /> : <Video size={16} />}
+                {uploadingVideo ? 'Uploading…' : 'Add video'}
+              </button>
+              <input ref={videoFileRef} type="file" accept="video/*" multiple hidden onChange={(e) => handleVideoFiles(e.target.files)} />
+            </div>
+
+            {leadVideoFiles.length > 0 && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLeadVideoFiles((p) => !p)}
+                  className="btn !px-2 !py-1 text-[12px]"
+                >
+                  <FolderInput size={13} /> {showLeadVideoFiles ? 'Hide' : 'Add from'} lead's uploaded videos ({leadVideoFiles.length})
+                </button>
+                {showLeadVideoFiles && (
+                  <div className="mt-2 rounded-md border border-border-2 bg-surface-3 p-2">
+                    {leadVideoFiles.some((f) => !importedLeadVideoFileIds.has(f.id)) && (
+                      <button
+                        type="button"
+                        disabled={importingAllVideos}
+                        onClick={handleImportAllLeadVideoFiles}
+                        className="btn btn-primary !px-2 !py-1 mb-2 text-[12px]"
+                      >
+                        {importingAllVideos ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                        {importingAllVideos ? 'Adding all…' : `Add all (${leadVideoFiles.filter((f) => !importedLeadVideoFileIds.has(f.id)).length})`}
+                      </button>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {leadVideoFiles.map((f) => {
+                        const alreadyImported = importedLeadVideoFileIds.has(f.id);
+                        const copying = copyingVideoFileIds.has(f.id);
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            disabled={alreadyImported || copying}
+                            onClick={() => handleImportLeadVideoFile(f.id, f.storagePath, f.fileName, videos.length)}
                             className="flex items-center gap-1.5 rounded-md border border-border-2 bg-surface px-2 py-1 text-[12px] text-text-2 hover:border-primary hover:text-primary disabled:cursor-default disabled:opacity-50"
                             title={f.fileName}
                           >

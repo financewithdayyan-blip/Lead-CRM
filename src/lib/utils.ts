@@ -12,6 +12,12 @@ export function isImageFile(fileType: string | null, fileName: string): boolean 
   return /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(fileName);
 }
 
+/** Same idea as isImageFile, for the video walkthroughs a lead file can also be. */
+export function isVideoFile(fileType: string | null, fileName: string): boolean {
+  if (fileType?.startsWith('video/')) return true;
+  return /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(fileName);
+}
+
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '').slice(-10);

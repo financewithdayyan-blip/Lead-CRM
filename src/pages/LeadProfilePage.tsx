@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Archive, ChevronDown, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User } from 'lucide-react';
+import { ArrowLeft, Archive, ChevronDown, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User, Video } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +16,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
-import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, localIsoDate } from '@/lib/utils';
+import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, isVideoFile, localIsoDate } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { nextScheduledTouchDate, formatTouchDate, isFollowupOverdue, isTouchScheduledToday, isTouchedToday } from '@/lib/followupSchedule';
 import { computeDaysToAuction, touchScheduleMode } from '@/lib/auctionTiers';
@@ -1134,7 +1134,11 @@ function FilesTab({ lead }: { lead: Lead }) {
   const [pasteHint, setPasteHint] = useState(false);
 
   const imageFiles = useMemo(() => files.filter((f) => isImageFile(f.fileType, f.fileName)), [files]);
-  const otherFiles = useMemo(() => files.filter((f) => !isImageFile(f.fileType, f.fileName)), [files]);
+  const videoFiles = useMemo(() => files.filter((f) => isVideoFile(f.fileType, f.fileName)), [files]);
+  const otherFiles = useMemo(
+    () => files.filter((f) => !isImageFile(f.fileType, f.fileName) && !isVideoFile(f.fileType, f.fileName)),
+    [files],
+  );
   const imagePaths = useMemo(() => imageFiles.map((f) => f.storagePath), [imageFiles]);
   const { data: imageUrls = {} } = useSignedFileUrls(imagePaths);
 
@@ -1187,7 +1191,7 @@ function FilesTab({ lead }: { lead: Lead }) {
             type="file"
             multiple
             className="hidden"
-            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             onChange={handleFileChange}
           />
         </label>
@@ -1239,6 +1243,30 @@ function FilesTab({ lead }: { lead: Lead }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {videoFiles.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {videoFiles.map((f) => (
+            <div key={f.id} className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-2.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <Video size={15} className="shrink-0 text-text-3" />
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-medium text-text">{f.fileName}</div>
+                  <div className="text-[11px] text-text-3">{formatDateTime(f.createdAt)}</div>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button className="text-text-3 hover:text-primary" onClick={() => handleView(f.storagePath)} title="Play">
+                  <ExternalLink size={14} />
+                </button>
+                <button className="text-text-3 hover:text-danger" onClick={() => deleteFile.mutate({ id: f.id, storagePath: f.storagePath, leadId: lead.id })} title="Delete">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
