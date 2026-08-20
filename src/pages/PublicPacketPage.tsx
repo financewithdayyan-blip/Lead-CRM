@@ -405,6 +405,11 @@ export function PublicPacketPage() {
 
   const [identity, setIdentity] = useState<ViewerIdentity | null>(() => (slug ? getViewerIdentity(slug) : null));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // The right-sized image transform (see packetImageUrl) renders on demand on
+  // a cache miss, which can take a couple of seconds — without this, the
+  // lightbox kept showing the *previous* photo's pixels with no indication
+  // anything was happening while the new one loaded, which read as frozen.
+  const [mainImageLoading, setMainImageLoading] = useState(false);
   const loggedRef = useRef(false);
 
   const gated = !!packet?.requireLeadCapture && !identity;
@@ -436,6 +441,21 @@ export function PublicPacketPage() {
       document.body.style.overflow = prevOverflow;
     };
   }, [lightboxIndex, imageCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (lightboxIndex !== null) setMainImageLoading(true);
+  }, [lightboxIndex]);
+
+  // Warms the transform cache for the photo on either side of whichever one
+  // is open, so the common case — stepping through with the arrows — only
+  // pays the render-on-miss cost once instead of on every step.
+  useEffect(() => {
+    if (lightboxIndex === null || !packet?.images.length || imageCount < 2) return;
+    for (const delta of [1, -1]) {
+      const neighbor = packet.images[(lightboxIndex + delta + imageCount) % imageCount];
+      if (neighbor) new Image().src = packetImageUrl(neighbor.storagePath, { width: 1920, quality: 82 });
+    }
+  }, [lightboxIndex, packet?.images, imageCount]);
 
   // One view per page load, and never before the capture gate is satisfied.
   useEffect(() => {
@@ -881,12 +901,18 @@ export function PublicPacketPage() {
               </button>
             )}
 
+            {mainImageLoading && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <Loader2 size={28} className="animate-spin text-white/70" />
+              </div>
+            )}
             <img
               src={packetImageUrl(packet.images[lightboxIndex].storagePath, { width: 1920, quality: 82 })}
               alt={packet.images[lightboxIndex].caption ?? 'Property photo'}
               onClick={(e) => e.stopPropagation()}
+              onLoad={() => setMainImageLoading(false)}
               decoding="async"
-              className="max-h-full max-w-full rounded-lg object-contain"
+              className={`max-h-full max-w-full rounded-lg object-contain transition-opacity duration-200 ${mainImageLoading ? 'opacity-30' : 'opacity-100'}`}
             />
 
             {packet.images.length > 1 && (
