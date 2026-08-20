@@ -919,13 +919,21 @@ export function PublicPacketPage() {
                 <Loader2 size={28} className="animate-spin text-white/70" />
               </div>
             )}
+            {/* max-h/w-full only ever shrinks an image, never grows it — a
+                photo smaller than the viewport (most real uploads are well
+                under 1920px) just sat small and centered with a lot of dead
+                space around it on a big screen. sm:h-full sm:w-full makes the
+                <img> box fill the available area on desktop so object-contain
+                scales the photo up to match; left at the shrink-only default
+                on mobile, where the viewport is usually narrower than the
+                photo anyway and this already looked right. */}
             <img
               src={packetImageUrl(packet.images[lightboxIndex].storagePath, { width: 1920, quality: 82 })}
               alt={packet.images[lightboxIndex].caption ?? 'Property photo'}
               onClick={(e) => e.stopPropagation()}
               onLoad={() => setMainImageLoading(false)}
               decoding="async"
-              className={`max-h-full max-w-full rounded-lg object-contain transition-opacity duration-200 ${mainImageLoading ? 'opacity-30' : 'opacity-100'}`}
+              className={`max-h-full max-w-full rounded-lg object-contain transition-opacity duration-200 sm:h-full sm:w-full ${mainImageLoading ? 'opacity-30' : 'opacity-100'}`}
             />
 
             {packet.images.length > 1 && (
