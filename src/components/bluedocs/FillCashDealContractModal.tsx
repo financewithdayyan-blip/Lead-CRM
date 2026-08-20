@@ -57,14 +57,24 @@ function isValidEmail(raw: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
 }
 
-const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency' | 'date'; placeholder?: string }> = [
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
+  'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
+  'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey',
+  'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
+  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah',
+  'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+];
+
+const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency' | 'date' | 'state'; placeholder?: string }> = [
   { key: 'address', label: 'Property Address', type: 'text', placeholder: '123 Main St, Tampa, FL 33602' },
   { key: 'purchasePrice', label: 'Purchase Price', type: 'currency', placeholder: '410000' },
   { key: 'emdAmount', label: 'Earnest Money Deposit', type: 'currency', placeholder: '1000' },
   { key: 'titleCompany', label: 'Title Company', type: 'text', placeholder: 'e.g. Bluebird Title Co.' },
   { key: 'inspectionPeriod', label: 'Inspection Period (days)', type: 'text', placeholder: 'e.g. 10' },
   { key: 'closingDate', label: 'Closing Date', type: 'date' },
-  { key: 'governingState', label: 'Governing State', type: 'text', placeholder: 'e.g. Florida' },
+  { key: 'governingState', label: 'Governing State', type: 'state', placeholder: 'Start typing a state…' },
 ];
 
 /**
@@ -231,6 +241,21 @@ export function FillCashDealContractModal({
                   onChange={(e) => setValue(row.key, e.target.value)}
                 />
               </div>
+            ) : row.type === 'state' ? (
+              <>
+                <input
+                  className="input"
+                  list="governing-state-suggestions"
+                  placeholder={row.placeholder}
+                  value={values[row.key]}
+                  onChange={(e) => setValue(row.key, e.target.value)}
+                />
+                <datalist id="governing-state-suggestions">
+                  {US_STATES.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </>
             ) : (
               <input
                 className="input"
