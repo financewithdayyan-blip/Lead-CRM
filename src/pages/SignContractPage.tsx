@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Download, FileSignature, FileText, Loader2 } from 'lucide-react';
+import { ChevronDown, Clock, Download, FileSignature, FileText, Loader2, X, ZoomIn } from 'lucide-react';
 import {
   usePublicSigningParty,
   useSigningPdfUrl,
@@ -14,7 +14,7 @@ import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
 import { formatCurrency } from '@/lib/currency';
 import { formatSignatureName, loadSignatureFont, renderTypedSignature, SIGNATURE_FONTS } from '@/lib/typedSignature';
-import { roleLabel } from '@/hooks/useDocTemplates';
+import { roleLabel, type ContractField, type PartyRole, type PartyRoleDef } from '@/hooks/useDocTemplates';
 
 const MAX_PAGE_WIDTH = 680;
 const PAGE_CONTAINER_MAX = 720;
@@ -35,6 +35,72 @@ function usePageWidth() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   return width;
+}
+
+/**
+ * The page is deliberately shrunk to fit a phone's width without forcing
+ * sideways scrolling (see usePageWidth above) — necessary so fields stay
+ * reachable, but it also means a dense contract's body text renders small
+ * enough to be hard to read on a phone. Rather than fighting that tradeoff
+ * in the main view, this opens the same page(s) in a full-screen, much
+ * wider, scroll-to-pan render — read-only (no editableValues/onEditableChange
+ * passed through, so ContractDocumentPage renders any of the signer's own
+ * unfilled fields as plain blanks rather than live inputs; filling still
+ * happens back in the normal view once this is closed).
+ */
+function ZoomedDocumentView({
+  pdf,
+  pageNums,
+  fields,
+  fieldValues,
+  signatures,
+  activeRole,
+  docType,
+  partyRoles,
+  onClose,
+}: {
+  pdf: pdfjsLib.PDFDocumentProxy;
+  pageNums: number[];
+  fields: ContractField[];
+  fieldValues: Record<string, string>;
+  signatures: Array<{ role: PartyRole; signatureDataUrl: string }>;
+  activeRole?: PartyRole;
+  docType?: 'loi' | 'contract';
+  partyRoles?: PartyRoleDef[];
+  onClose: () => void;
+}) {
+  const zoomWidth = Math.min(Math.max(window.innerWidth * 2.3, 900), 1100);
+  return (
+    <div className="fixed inset-0 z-50 overflow-auto bg-black/90" onClick={onClose}>
+      <div className="sticky top-0 z-10 flex justify-end bg-gradient-to-b from-black/70 to-transparent p-3">
+        <button
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+          onClick={onClose}
+          aria-label="Close zoomed view"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <div className="flex justify-center px-3 pb-10" onClick={(e) => e.stopPropagation()}>
+        <div>
+          {pageNums.map((n) => (
+            <ContractDocumentPage
+              key={n}
+              pdf={pdf}
+              pageNum={n}
+              pageWidth={zoomWidth}
+              fields={fields}
+              fieldValues={fieldValues}
+              signatures={signatures}
+              activeRole={activeRole}
+              docType={docType}
+              partyRoles={partyRoles}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** The circle and checkmark trace themselves in on mount (pathLength=1
@@ -132,6 +198,7 @@ export function SignContractPage() {
 
   const getFinalUrl = useSignedFinalDocUrl();
   const pageWidth = usePageWidth();
+  const [zoomOpen, setZoomOpen] = useState(false);
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [finalPdf, setFinalPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -305,11 +372,29 @@ export function SignContractPage() {
                 <Loader2 size={20} className="animate-spin text-text-3" />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                {finalPageNums.map((n) => (
-                  <ContractDocumentPage key={n} pdf={finalPdf} pageNum={n} pageWidth={pageWidth} fields={[]} fieldValues={{}} signatures={[]} />
-                ))}
-              </div>
+              <>
+                <button
+                  className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-primary hover:text-primary-hover"
+                  onClick={() => setZoomOpen(true)}
+                >
+                  <ZoomIn size={14} /> Tap to view full size
+                </button>
+                <div className="overflow-x-auto">
+                  {finalPageNums.map((n) => (
+                    <ContractDocumentPage key={n} pdf={finalPdf} pageNum={n} pageWidth={pageWidth} fields={[]} fieldValues={{}} signatures={[]} />
+                  ))}
+                </div>
+                {zoomOpen && (
+                  <ZoomedDocumentView
+                    pdf={finalPdf}
+                    pageNums={finalPageNums}
+                    fields={[]}
+                    fieldValues={{}}
+                    signatures={[]}
+                    onClose={() => setZoomOpen(false)}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
@@ -427,24 +512,45 @@ export function SignContractPage() {
             <Loader2 size={20} className="animate-spin text-text-3" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            {pageNums.map((n) => (
-              <ContractDocumentPage
-                key={n}
+          <>
+            <button
+              className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-primary hover:text-primary-hover"
+              onClick={() => setZoomOpen(true)}
+            >
+              <ZoomIn size={14} /> Hard to read? Tap to view full size
+            </button>
+            <div className="overflow-x-auto">
+              {pageNums.map((n) => (
+                <ContractDocumentPage
+                  key={n}
+                  pdf={pdf}
+                  pageNum={n}
+                  pageWidth={pageWidth}
+                  fields={party.templateFields}
+                  fieldValues={party.fieldValues}
+                  signatures={party.otherSignatures}
+                  activeRole={party.role}
+                  docType={party.templateType}
+                  partyRoles={party.templatePartyRoles}
+                  editableValues={fieldInputs}
+                  onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
+                />
+              ))}
+            </div>
+            {zoomOpen && (
+              <ZoomedDocumentView
                 pdf={pdf}
-                pageNum={n}
-                pageWidth={pageWidth}
+                pageNums={pageNums}
                 fields={party.templateFields}
                 fieldValues={party.fieldValues}
                 signatures={party.otherSignatures}
                 activeRole={party.role}
                 docType={party.templateType}
                 partyRoles={party.templatePartyRoles}
-                editableValues={fieldInputs}
-                onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
+                onClose={() => setZoomOpen(false)}
               />
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {needsSignature ? (
