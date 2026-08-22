@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { BuyerCondition, BuyerPropertyType, CashBuyer, DealType } from '@/types/domain';
+import { normalizeStateToCode } from '@/data/usGeo';
 import type { PacketSummary } from './useDealPackets';
 
 // A deal packet's propType is free text an admin typed ("Multi Family (
@@ -34,7 +35,9 @@ function fromRow(r: any): CashBuyer {
     phone: r.phone,
     email: r.email,
     facebookUrl: r.facebook_url,
-    markets: r.markets ?? [],
+    marketStates: r.market_states ?? [],
+    marketCounties: r.market_counties ?? [],
+    marketCities: r.markets ?? [],
     propertyTypes: (r.property_types ?? []) as BuyerPropertyType[],
     priceMin: r.price_min != null ? Number(r.price_min) : null,
     priceMax: r.price_max != null ? Number(r.price_max) : null,
@@ -65,7 +68,9 @@ export interface CashBuyerInput {
   phone: string | null;
   email: string | null;
   facebookUrl: string | null;
-  markets: string[];
+  marketStates: string[];
+  marketCounties: string[];
+  marketCities: string[];
   propertyTypes: BuyerPropertyType[];
   priceMin: number | null;
   priceMax: number | null;
@@ -83,7 +88,9 @@ function toDbRow(b: CashBuyerInput) {
     phone: b.phone,
     email: b.email,
     facebook_url: b.facebookUrl,
-    markets: b.markets,
+    market_states: b.marketStates,
+    market_counties: b.marketCounties,
+    markets: b.marketCities,
     property_types: b.propertyTypes,
     price_min: b.priceMin,
     price_max: b.priceMax,
@@ -141,11 +148,20 @@ export function useDeleteCashBuyer() {
 export function buyerMatchesPacket(buyer: CashBuyer, packet: PacketSummary): boolean {
   if (buyer.status !== 'active') return false;
 
-  if (buyer.markets.length > 0) {
+  // City and state are two ways of expressing the same "where do they buy"
+  // dimension, so they're OR'd against each other rather than both required
+  // — a buyer who set only a state ("anywhere in Georgia") shouldn't need a
+  // city match too, and one who set only cities shouldn't need a state hit.
+  // Counties aren't matched at all here: deal packets don't record a county.
+  if (buyer.marketCities.length > 0 || buyer.marketStates.length > 0) {
     const dealCity = (packet.city ?? '').trim().toLowerCase();
-    if (!dealCity) return false;
-    const inMarket = buyer.markets.some((m) => m.trim().toLowerCase() === dealCity);
-    if (!inMarket) return false;
+    const cityMatch = buyer.marketCities.length > 0 && !!dealCity && buyer.marketCities.some((m) => m.trim().toLowerCase() === dealCity);
+
+    const dealStateCode = normalizeStateToCode(packet.state);
+    const stateMatch =
+      buyer.marketStates.length > 0 && !!dealStateCode && buyer.marketStates.some((s) => normalizeStateToCode(s) === dealStateCode);
+
+    if (!cityMatch && !stateMatch) return false;
   }
 
   // Matched against ARV when it's there (the number that actually reflects

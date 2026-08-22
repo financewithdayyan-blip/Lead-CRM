@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Facebook } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { GeoMultiSelect } from '@/components/disposition/GeoMultiSelect';
 import { useCreateCashBuyer, useUpdateCashBuyer, type CashBuyerInput } from '@/hooks/useCashBuyers';
+import { US_STATE_NAMES, citiesForStates, countiesForStates } from '@/data/usGeo';
 import { externalHref, getErrorMessage } from '@/lib/utils';
 import {
   BUYER_CONDITION_LABELS,
@@ -30,7 +32,9 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
   const [phone, setPhone] = useState(buyer?.phone ?? '');
   const [email, setEmail] = useState(buyer?.email ?? '');
   const [facebookUrl, setFacebookUrl] = useState(buyer?.facebookUrl ?? '');
-  const [marketsText, setMarketsText] = useState(buyer?.markets.join(', ') ?? '');
+  const [marketStates, setMarketStates] = useState<string[]>(buyer?.marketStates ?? []);
+  const [marketCounties, setMarketCounties] = useState<string[]>(buyer?.marketCounties ?? []);
+  const [marketCities, setMarketCities] = useState<string[]>(buyer?.marketCities ?? []);
   const [propertyTypes, setPropertyTypes] = useState<BuyerPropertyType[]>(buyer?.propertyTypes ?? []);
   const [priceMin, setPriceMin] = useState(buyer?.priceMin?.toString() ?? '');
   const [priceMax, setPriceMax] = useState(buyer?.priceMax?.toString() ?? '');
@@ -45,6 +49,9 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
   const canSubmit = name.trim().length > 0;
   const pending = create.isPending || update.isPending;
 
+  const countyOptions = useMemo(() => countiesForStates(marketStates), [marketStates]);
+  const cityOptions = useMemo(() => citiesForStates(marketStates), [marketStates]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -54,7 +61,9 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
       phone: phone.trim() || null,
       email: email.trim() || null,
       facebookUrl: facebookUrl.trim() || null,
-      markets: marketsText.split(',').map((m) => m.trim()).filter(Boolean),
+      marketStates,
+      marketCounties,
+      marketCities,
       propertyTypes,
       priceMin: priceMin ? Number(priceMin) : null,
       priceMax: priceMax ? Number(priceMax) : null,
@@ -123,15 +132,39 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
           <p className="mt-1 text-[11px] text-text-3">Link to their profile or the group post so you can jump straight to DMing them.</p>
         </div>
 
-        <div>
-          <label className="label">Markets / cities they buy in</label>
-          <input
-            className="input"
-            placeholder="Tampa, Buffalo, Fayetteville"
-            value={marketsText}
-            onChange={(e) => setMarketsText(e.target.value)}
+        <div className="space-y-4 rounded-md border border-border-2 bg-surface-3 p-3">
+          <GeoMultiSelect
+            label="States they buy in"
+            placeholder="Type to search states…"
+            options={US_STATE_NAMES}
+            selected={marketStates}
+            onChange={(next) => {
+              setMarketStates(next);
+              // Dropping a state should drop any county/city picks that only made
+              // sense under it, so the two lists never disagree about coverage.
+              const stillValidCounties = countiesForStates(next);
+              const stillValidCities = citiesForStates(next);
+              setMarketCounties((prev) => prev.filter((c) => next.length === 0 || stillValidCounties.includes(c)));
+              setMarketCities((prev) => prev.filter((c) => next.length === 0 || stillValidCities.includes(c)));
+            }}
+            hint="Matches any deal in that state, even outside the cities below."
           />
-          <p className="mt-1 text-[11px] text-text-3">Comma-separated. Leave blank for no city restriction.</p>
+          <GeoMultiSelect
+            label="Counties (reference only)"
+            placeholder={marketStates.length > 0 ? 'Type to search counties…' : 'Type to search all US counties…'}
+            options={countyOptions}
+            selected={marketCounties}
+            onChange={setMarketCounties}
+            hint="Not used for automatic matching yet — just here so you can see a buyer's declared range."
+          />
+          <GeoMultiSelect
+            label="Cities they buy in"
+            placeholder={marketStates.length > 0 ? 'Type to search cities…' : 'Type to search all US cities…'}
+            options={cityOptions}
+            selected={marketCities}
+            onChange={setMarketCities}
+            hint="Leave blank for no city restriction. Not listed? Type it and hit Enter to add it anyway."
+          />
         </div>
 
         <div>

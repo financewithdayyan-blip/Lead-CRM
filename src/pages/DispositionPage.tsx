@@ -7,6 +7,14 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG, type CashBuyer } from '@/types/domain';
 import { externalHref, formatCurrency, formatPhone } from '@/lib/utils';
 
+function marketsLabel(buyer: CashBuyer): string {
+  const parts: string[] = [];
+  if (buyer.marketStates.length > 0) parts.push(buyer.marketStates.join(', '));
+  if (buyer.marketCounties.length > 0) parts.push(buyer.marketCounties.map((c) => `${c} County`).join(', '));
+  if (buyer.marketCities.length > 0) parts.push(buyer.marketCities.join(', '));
+  return parts.length > 0 ? parts.join(' · ') : 'Any market';
+}
+
 function priceRangeLabel(buyer: CashBuyer): string {
   if (buyer.priceMin == null && buyer.priceMax == null) return 'Any price';
   if (buyer.priceMin != null && buyer.priceMax != null) return `${formatCurrency(buyer.priceMin)} – ${formatCurrency(buyer.priceMax)}`;
@@ -34,7 +42,7 @@ export function DispositionPage() {
       if (statusFilter && b.status !== statusFilter) return false;
       if (selectedPacket && !buyerMatchesPacket(b, selectedPacket)) return false;
       if (q) {
-        const haystack = `${b.name} ${b.markets.join(' ')} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
+        const haystack = `${b.name} ${b.marketStates.join(' ')} ${b.marketCounties.join(' ')} ${b.marketCities.join(' ')} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -145,7 +153,7 @@ export function DispositionPage() {
                     </div>
                     <div className="text-[12px] text-text-3">{[b.phone ? formatPhone(b.phone) : null, b.email].filter(Boolean).join(' · ')}</div>
                   </td>
-                  <td className="px-3 py-2.5 text-text-2">{b.markets.length > 0 ? b.markets.join(', ') : 'Any market'}</td>
+                  <td className="px-3 py-2.5 text-text-2">{marketsLabel(b)}</td>
                   <td className="px-3 py-2.5 text-text-2">
                     {b.propertyTypes.length > 0 ? b.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
                   </td>

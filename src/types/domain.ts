@@ -493,7 +493,9 @@ export interface CashBuyer {
   phone: string | null;
   email: string | null;
   facebookUrl: string | null;
-  markets: string[];
+  marketStates: string[];
+  marketCounties: string[];
+  marketCities: string[];
   propertyTypes: BuyerPropertyType[];
   priceMin: number | null;
   priceMax: number | null;
