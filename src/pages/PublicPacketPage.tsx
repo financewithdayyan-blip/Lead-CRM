@@ -19,7 +19,12 @@ const money = (n: number | null | undefined) =>
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+      {/* min-h reserves room for a 2-line label — in a 3-column grid a
+          longer label ("Avg Sale Price") wraps while a shorter neighbor
+          ("Avg Sq Ft") doesn't, and without a shared minimum the values
+          below them landed at different heights and visually overlapped
+          on a narrow phone. */}
+      <div className="min-h-[27px] text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-text-3">{label}</div>
       <div className="mt-1 font-serif text-[19px] font-bold text-text">{value}</div>
     </div>
   );
@@ -332,8 +337,12 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
   const fill = analysis.margin != null ? Math.max(3, Math.min(100, (analysis.margin / 0.3) * 100)) : 0;
   // Keeps the "You are here" label fully inside the track even when the fill
   // is near either end, instead of letting its centred text clip against the
-  // card's rounded corner.
-  const labelPos = Math.max(8, Math.min(92, fill));
+  // card's rounded corner. 15-85 rather than 8-92 — on a narrow phone the
+  // label's own text is a meaningful fraction of the track's width, so a
+  // tighter clamp is what actually keeps both edges on-screen (paired with
+  // whitespace-nowrap below — this label wrapping to a second line at 92%
+  // was overlapping the "Thin margin / Strong margin" captions beneath it).
+  const labelPos = Math.max(15, Math.min(85, fill));
   const tone = analysis.verdict === 'strong' ? 'emerald' : analysis.verdict === 'fair' ? 'amber' : 'rose';
   const equityColor = tone === 'emerald' ? 'text-emerald-300' : tone === 'amber' ? 'text-amber-300' : 'text-rose-300';
   const meterFillClass =
@@ -361,7 +370,7 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
           <div className="mt-5">
             <div className="relative h-2 rounded-full bg-white/[0.14]">
               <span
-                className={`absolute -top-[19px] -translate-x-1/2 font-mono text-[10.5px] font-bold ${meterLabelClass}`}
+                className={`absolute -top-[19px] -translate-x-1/2 whitespace-nowrap font-mono text-[10.5px] font-bold ${meterLabelClass}`}
                 style={{ left: `${labelPos}%` }}
               >
                 You are here
@@ -778,7 +787,10 @@ export function PublicPacketPage() {
           </div>
 
           {market.method === 'per_sqft' ? (
-            <div className="mt-4 grid grid-cols-3 gap-4 border-t border-border pt-4">
+            // grid-cols-2 on mobile, not 3 — "Avg Sale Price" renders wide
+            // enough (e.g. "$276,167") that a third column on a narrow
+            // phone had no room left and visually ran into its neighbour.
+            <div className="mt-4 grid grid-cols-2 gap-4 gap-y-5 border-t border-border pt-4 sm:grid-cols-3">
               <Stat label="Avg sale price" value={money(market.avgSalePrice)} />
               <Stat label="Avg sq ft" value={market.avgSqft?.toLocaleString() ?? '—'} />
               <Stat label="Avg $/sq ft" value={market.avgPricePerSqft != null ? money(Math.round(market.avgPricePerSqft)) : '—'} />
