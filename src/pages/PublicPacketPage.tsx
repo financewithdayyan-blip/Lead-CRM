@@ -50,16 +50,28 @@ function matchTone(score: number) {
   return 'bg-danger-dim text-danger';
 }
 
+interface SubjectRow {
+  price: number | null;
+  beds: number | null;
+  baths: number | null;
+  sqft: number | null;
+}
+
 function CompTable({
   rows,
   priceLabel,
   dateLabel,
   scores,
+  subject,
 }: {
   rows: PublicPacketComp[];
   priceLabel: string;
   dateLabel: string;
   scores?: Record<string, CompScore>;
+  /** Pinned to the top of the table, visually distinct — lets an investor
+   * line up this property's own numbers against each comp column-by-column
+   * instead of holding them in their head while scrolling. */
+  subject?: SubjectRow;
 }) {
   return (
     // A long address squeezed into a shrinking column used to wrap across
@@ -82,6 +94,17 @@ function CompTable({
           </tr>
         </thead>
         <tbody>
+          {subject && (
+            <tr className="border-b-2 border-accent/40 bg-accent-dim">
+              <td className="max-w-[150px] py-2.5 pr-3 font-bold text-accent-hover">This Property</td>
+              <td className="py-2.5 pr-3 text-right font-mono font-bold tabular-nums text-text">{money(subject.price)}</td>
+              <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-text">{subject.beds ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-text">{subject.baths ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-text">{subject.sqft?.toLocaleString() ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right text-text-3">—</td>
+              {scores && <td className="py-2.5 text-right text-text-3">—</td>}
+            </tr>
+          )}
           {rows.map((c) => (
             <tr key={c.id} className="border-b border-border last:border-b-0">
               <td className="max-w-[150px] truncate py-2.5 pr-3 font-medium text-text-2" title={c.address ?? undefined}>{c.address || '—'}</td>
@@ -697,6 +720,13 @@ export function PublicPacketPage() {
   }
 
   if (listings.length > 0 || sold.length > 0) {
+    // Same subject numbers in both tables — whichever one an investor is
+    // actually looking at, the reference row is right there rather than
+    // making them hold this property's own numbers in their head while
+    // scanning down a list of comps.
+    const subjectRow: SubjectRow = {
+      price: packet.purchasePrice, beds: packet.beds, baths: packet.baths, sqft: packet.sqft,
+    };
     sections.push({
       title: 'Comparable Sales',
       body: (
@@ -704,13 +734,13 @@ export function PublicPacketPage() {
           {listings.length > 0 && (
             <Panel>
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Currently on the Market</div>
-              <div className="mt-2.5"><CompTable rows={listings} priceLabel="List Price" dateLabel="Listed" scores={confidence?.byId} /></div>
+              <div className="mt-2.5"><CompTable rows={listings} priceLabel="List Price" dateLabel="Listed" scores={confidence?.byId} subject={subjectRow} /></div>
             </Panel>
           )}
           {sold.length > 0 && (
             <Panel>
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Recently Sold</div>
-              <div className="mt-2.5"><CompTable rows={sold} priceLabel="Sale Price" dateLabel="Sold" scores={confidence?.byId} /></div>
+              <div className="mt-2.5"><CompTable rows={sold} priceLabel="Sale Price" dateLabel="Sold" scores={confidence?.byId} subject={subjectRow} /></div>
             </Panel>
           )}
         </div>
