@@ -33,6 +33,7 @@ function fromRow(r: any): CashBuyer {
     name: r.name,
     phone: r.phone,
     email: r.email,
+    facebookUrl: r.facebook_url,
     markets: r.markets ?? [],
     propertyTypes: (r.property_types ?? []) as BuyerPropertyType[],
     priceMin: r.price_min != null ? Number(r.price_min) : null,
@@ -63,6 +64,7 @@ export interface CashBuyerInput {
   name: string;
   phone: string | null;
   email: string | null;
+  facebookUrl: string | null;
   markets: string[];
   propertyTypes: BuyerPropertyType[];
   priceMin: number | null;
@@ -80,6 +82,7 @@ function toDbRow(b: CashBuyerInput) {
     name: b.name,
     phone: b.phone,
     email: b.email,
+    facebook_url: b.facebookUrl,
     markets: b.markets,
     property_types: b.propertyTypes,
     price_min: b.priceMin,

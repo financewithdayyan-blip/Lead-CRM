@@ -492,6 +492,7 @@ export interface CashBuyer {
   name: string;
   phone: string | null;
   email: string | null;
+  facebookUrl: string | null;
   markets: string[];
   propertyTypes: BuyerPropertyType[];
   priceMin: number | null;

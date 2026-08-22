@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Handshake, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Facebook, Handshake, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCashBuyers, useDeleteCashBuyer, buyerMatchesPacket } from '@/hooks/useCashBuyers';
 import { useAllDealPackets } from '@/hooks/useDealPackets';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG, type CashBuyer } from '@/types/domain';
-import { formatCurrency, formatPhone } from '@/lib/utils';
+import { externalHref, formatCurrency, formatPhone } from '@/lib/utils';
 
 function priceRangeLabel(buyer: CashBuyer): string {
   if (buyer.priceMin == null && buyer.priceMax == null) return 'Any price';
@@ -129,7 +129,20 @@ export function DispositionPage() {
               {filtered.map((b) => (
                 <tr key={b.id} className="hover:bg-surface-2">
                   <td className="px-3 py-2.5">
-                    <div className="font-medium text-text">{b.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-text">{b.name}</span>
+                      {b.facebookUrl && (
+                        <a
+                          href={externalHref(b.facebookUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open Facebook profile"
+                          className="text-[#1877F2] hover:opacity-70"
+                        >
+                          <Facebook size={14} />
+                        </a>
+                      )}
+                    </div>
                     <div className="text-[12px] text-text-3">{[b.phone ? formatPhone(b.phone) : null, b.email].filter(Boolean).join(' · ')}</div>
                   </td>
                   <td className="px-3 py-2.5 text-text-2">{b.markets.length > 0 ? b.markets.join(', ') : 'Any market'}</td>

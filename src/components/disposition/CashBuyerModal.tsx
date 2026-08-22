@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Facebook } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useCreateCashBuyer, useUpdateCashBuyer, type CashBuyerInput } from '@/hooks/useCashBuyers';
-import { getErrorMessage } from '@/lib/utils';
+import { externalHref, getErrorMessage } from '@/lib/utils';
 import {
   BUYER_CONDITION_LABELS,
   BUYER_PROPERTY_TYPE_LABELS,
@@ -28,6 +29,7 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
   const [name, setName] = useState(buyer?.name ?? '');
   const [phone, setPhone] = useState(buyer?.phone ?? '');
   const [email, setEmail] = useState(buyer?.email ?? '');
+  const [facebookUrl, setFacebookUrl] = useState(buyer?.facebookUrl ?? '');
   const [marketsText, setMarketsText] = useState(buyer?.markets.join(', ') ?? '');
   const [propertyTypes, setPropertyTypes] = useState<BuyerPropertyType[]>(buyer?.propertyTypes ?? []);
   const [priceMin, setPriceMin] = useState(buyer?.priceMin?.toString() ?? '');
@@ -51,6 +53,7 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
       name: name.trim(),
       phone: phone.trim() || null,
       email: email.trim() || null,
+      facebookUrl: facebookUrl.trim() || null,
       markets: marketsText.split(',').map((m) => m.trim()).filter(Boolean),
       propertyTypes,
       priceMin: priceMin ? Number(priceMin) : null,
@@ -95,6 +98,29 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
             <label className="label">Email</label>
             <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
+        </div>
+
+        <div>
+          <label className="label">Facebook profile</label>
+          <div className="flex gap-2">
+            <input
+              className="input flex-1"
+              placeholder="facebook.com/their.profile"
+              value={facebookUrl}
+              onChange={(e) => setFacebookUrl(e.target.value)}
+            />
+            <a
+              href={facebookUrl.trim() ? externalHref(facebookUrl.trim()) : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={!facebookUrl.trim()}
+              className={`btn !px-2.5 ${facebookUrl.trim() ? 'text-[#1877F2]' : 'pointer-events-none opacity-40'}`}
+              title="Open Facebook profile"
+            >
+              <Facebook size={16} />
+            </a>
+          </div>
+          <p className="mt-1 text-[11px] text-text-3">Link to their profile or the group post so you can jump straight to DMing them.</p>
         </div>
 
         <div>

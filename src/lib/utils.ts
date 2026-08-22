@@ -18,6 +18,12 @@ export function isVideoFile(fileType: string | null, fileName: string): boolean 
   return /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(fileName);
 }
 
+/** Admins often paste a bare "facebook.com/..." without a scheme — this makes
+ *  it a clickable href either way instead of a relative-path 404. */
+export function externalHref(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '').slice(-10);
