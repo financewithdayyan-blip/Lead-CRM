@@ -485,6 +485,54 @@ export function usePacket(packetId: string | undefined) {
   });
 }
 
+export interface PacketSummary {
+  id: string;
+  leadName: string | null;
+  propType: string | null;
+  city: string | null;
+  state: string | null;
+  beds: number | null;
+  baths: number | null;
+  purchasePrice: number | null;
+  arv: number | null;
+  dealTypes: DealType[];
+  status: PacketStatus;
+  createdAt: string;
+}
+
+/** Every packet across the whole team, for the Disposition page's "match
+ * against a deal" picker — deliberately a light select (no comps/repairs/
+ * images/videos joins PACKET_SELECT pulls in) since this only needs to
+ * render a dropdown and run the buy-box comparison, not the full builder. */
+export function useAllDealPackets() {
+  return useQuery({
+    queryKey: ['deal_packets', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('deal_packets')
+        .select('id, prop_type, city, state, beds, baths, purchase_price, arv, deal_types, status, created_at, leads(first_name, last_name)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data as any[]).map(
+        (r): PacketSummary => ({
+          id: r.id,
+          leadName: r.leads ? `${r.leads.first_name ?? ''} ${r.leads.last_name ?? ''}`.trim() || null : null,
+          propType: r.prop_type,
+          city: r.city,
+          state: r.state,
+          beds: r.beds,
+          baths: r.baths,
+          purchasePrice: r.purchase_price,
+          arv: r.arv,
+          dealTypes: (r.deal_types ?? []) as DealType[],
+          status: r.status as PacketStatus,
+          createdAt: r.created_at,
+        }),
+      );
+    },
+  });
+}
+
 /** Seeds a draft packet from the lead so the builder opens pre-filled. */
 export function useCreatePacket() {
   const { session } = useAuth();

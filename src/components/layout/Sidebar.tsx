@@ -9,6 +9,7 @@ import {
   History,
   Send,
   FileSignature,
+  Handshake,
   LogOut,
   Settings,
   Shield,
@@ -269,6 +270,7 @@ export function Sidebar() {
     ? [
         { to: '/bulk-sms', label: 'Bulk SMS', icon: Send },
         { to: '/blue-docs', label: 'Blue Docs', icon: FileSignature },
+        { to: '/disposition', label: 'Disposition', icon: Handshake },
       ]
     : [];
 

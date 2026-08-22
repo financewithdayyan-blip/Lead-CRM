@@ -464,3 +464,44 @@ export interface TeamInvite {
   createdAt: string;
   acceptedAt: string | null;
 }
+
+// ── Disposition — cash buyers ────────────────────────────────────────────────
+
+export type BuyerPropertyType = 'single_family' | 'multi_family' | 'townhome' | 'condo' | 'land' | 'mobile' | 'other';
+
+export const BUYER_PROPERTY_TYPE_LABELS: Record<BuyerPropertyType, string> = {
+  single_family: 'Single Family',
+  multi_family: 'Multi-Family',
+  townhome: 'Townhome',
+  condo: 'Condo',
+  land: 'Land',
+  mobile: 'Mobile / Manufactured',
+  other: 'Other',
+};
+
+export type BuyerCondition = 'fixer' | 'turnkey' | 'either';
+
+export const BUYER_CONDITION_LABELS: Record<BuyerCondition, string> = {
+  fixer: 'Fixer only',
+  turnkey: 'Turnkey only',
+  either: 'Either',
+};
+
+export interface CashBuyer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  markets: string[];
+  propertyTypes: BuyerPropertyType[];
+  priceMin: number | null;
+  priceMax: number | null;
+  minBeds: number | null;
+  minBaths: number | null;
+  condition: BuyerCondition | null;
+  dealTypes: DealType[];
+  notes: string | null;
+  status: 'active' | 'inactive';
+  createdAt: string;
+  updatedAt: string;
+}

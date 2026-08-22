@@ -31,6 +31,7 @@ const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
 const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
 const SignContractPage = lazy(() => import('@/pages/SignContractPage').then((m) => ({ default: m.SignContractPage })));
+const DispositionPage = lazy(() => import('@/pages/DispositionPage').then((m) => ({ default: m.DispositionPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +80,7 @@ export default function App() {
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />
                         <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                         <Route path="/blue-docs" element={<BlueDocsPage />} />
+                        <Route path="/disposition" element={<DispositionPage />} />
                         {/* Envelopes moved to a tab inside Blue Docs — this
                             only exists so an old bookmark/link still lands
                             somewhere real instead of a dead route. */}
