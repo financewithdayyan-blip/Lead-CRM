@@ -3,6 +3,12 @@ import { X } from 'lucide-react';
 
 const MAX_SUGGESTIONS = 40;
 
+// "Manchester, NH and Lawrence, MA" or "Dallas • Arlington • Grapevine" or a
+// paste of several cities separated by pins/arrows should become several
+// chips, not one giant string — split on the common separators instead of
+// swallowing the whole thing whenever there's no exact dropdown match.
+const SEPARATOR = /,|•|📍|→|\s+and\s+/gi;
+
 /** Search-as-you-type multi-select with removable chips, built for
  *  state/county/city pickers where the option list can run into the
  *  thousands (too many to ever render as a checkbox list or a native
@@ -61,6 +67,32 @@ export function GeoMultiSelect({
     setOpen(false);
   }
 
+  const rawSegments = useMemo(
+    () => query.split(SEPARATOR).map((s) => s.trim()).filter(Boolean),
+    [query],
+  );
+
+  function addRaw(raw: string) {
+    const segments = raw
+      .split(SEPARATOR)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (segments.length === 0) return;
+    const next = [...selected];
+    const seenLower = new Set(next.map((s) => s.toLowerCase()));
+    for (const seg of segments) {
+      if (seenLower.has(seg.toLowerCase())) continue;
+      const canonical = options.find((o) => o.toLowerCase() === seg.toLowerCase());
+      const value = canonical ?? seg;
+      next.push(value);
+      seenLower.add(value.toLowerCase());
+    }
+    onChange(next);
+    setQuery('');
+    setHighlight(0);
+    setOpen(false);
+  }
+
   function remove(value: string) {
     onChange(selected.filter((s) => s.toLowerCase() !== value.toLowerCase()));
   }
@@ -76,7 +108,7 @@ export function GeoMultiSelect({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (matches[highlight]) add(matches[highlight]);
-      else if (query.trim()) add(query);
+      else if (query.trim()) addRaw(query);
     } else if (e.key === 'Escape') {
       setOpen(false);
     } else if (e.key === 'Backspace' && !query && selected.length > 0) {
@@ -133,10 +165,10 @@ export function GeoMultiSelect({
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => add(query)}
+              onClick={() => addRaw(query)}
               className="block w-full px-3 py-1.5 text-left text-[13px] text-text-2 hover:bg-surface-3"
             >
-              Add "{query.trim()}"
+              {rawSegments.length > 1 ? `Add ${rawSegments.length} as separate entries: ${rawSegments.join(', ')}` : `Add "${rawSegments[0] ?? query.trim()}"`}
             </button>
           )}
         </div>
