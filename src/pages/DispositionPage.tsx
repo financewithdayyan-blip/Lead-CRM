@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Facebook, Handshake, List, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCashBuyers, useDeleteCashBuyer } from '@/hooks/useCashBuyers';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
@@ -133,7 +134,9 @@ export function DispositionPage() {
                 <tr key={b.id} className="hover:bg-surface-2">
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-text">{b.name}</span>
+                      <Link to={`/disposition/${b.id}`} className="font-medium text-text hover:text-primary hover:underline">
+                        {b.name}
+                      </Link>
                       {b.facebookUrl && (
                         <a
                           href={externalHref(b.facebookUrl)}

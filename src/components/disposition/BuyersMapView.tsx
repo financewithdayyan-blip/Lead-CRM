@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { GeoMultiSelect } from '@/components/disposition/GeoMultiSelect';
@@ -98,7 +99,7 @@ function buyerCardHtml(buyer: CashBuyer): string {
   const types = buyer.propertyTypes.length > 0 ? buyer.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type';
   const deals = buyer.dealTypes.length > 0 ? buyer.dealTypes.map((t) => DEAL_TYPE_CONFIG[t].label).join(', ') : 'Any structure';
   return `<div style="font:500 12px system-ui;padding:4px 0;border-top:1px solid #e5e7eb;margin-top:4px">
-      <div style="font-weight:700;font-size:13px;color:#111">${buyer.name}</div>
+      <a href="/crm/disposition/${buyer.id}" style="font-weight:700;font-size:13px;color:#2563eb;text-decoration:none">${buyer.name}</a>
       ${contact ? `<div style="color:#64748b;font-size:11px">${contact}</div>` : ''}
       <div style="color:#334155;font-size:11px;margin-top:2px">${types}</div>
       <div style="color:#334155;font-size:11px">${priceRangeLabel(buyer)} · ${deals}</div>
@@ -225,13 +226,13 @@ export function BuyersMapView({ buyers }: { buyers: CashBuyer[] }) {
       {searchedPoint && nearbyBuyers.length > 0 && (
         <div className="mt-4 space-y-2">
           {nearbyBuyers.map((b) => (
-            <div key={b.id} className="rounded-lg border border-border-2 p-3">
+            <Link key={b.id} to={`/disposition/${b.id}`} className="block rounded-lg border border-border-2 p-3 hover:border-primary/40 hover:bg-surface-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-text">{b.name}</span>
                 <span className="text-[12px] text-text-3">{priceRangeLabel(b)}</span>
               </div>
               <div className="text-[12px] text-text-3">{[b.phone ? formatPhone(b.phone) : null, b.email].filter(Boolean).join(' · ')}</div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
