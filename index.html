@@ -133,12 +133,12 @@
   --sky-deep:   #1568A8;
   --cobalt:     #1845C4;   /* logo wordmark blue */
   --brass:      #C9A24B;   /* closing-table accent: trust, cost-covered */
-  --brass-soft: #E4CD8C;
+  --brass-soft: #7B6F4C;
   --paper:      #F6F3EC;   /* warm off-white page background */
   --paper-dim:  #EDE8DB;
   --paper-line: #DCD5C2;
   --slate:      #57667A;   /* body text on paper */
-  --slate-dim:  #8693A1;
+  --slate-dim:  #6D7782;
   --white:      #FFFFFF;
   --red-flag:   #B5482F;   /* distress-doc stamp red, used sparingly */
 
@@ -1108,7 +1108,7 @@ section{ padding: 120px 0; position:relative; }
     inset 0 1px 0 rgba(255,255,255,0.25);
 }
 .promise-ic svg{ width:24px; height:24px; color:white; }
-.promise-item h4{
+.promise-item h3{
   font-family:var(--serif);
   font-size: 18px;
   font-weight:600;
@@ -1835,7 +1835,7 @@ footer{
       <span>(217) 408-2781</span>
     </a>
     <a href="/crm" class="header-login">Login</a>
-    <a href="/contact-us" class="header-cta">
+    <a href="/contact-us" class="header-cta" aria-label="Get Your Cash Offer">
       <span>Get Your Cash Offer</span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
@@ -1852,6 +1852,7 @@ footer{
     <a href="/crm">Login</a>
   </div>
 </header>
+<main>
 
 <!-- ============================================
      HERO
@@ -2047,22 +2048,22 @@ footer{
     <div class="promise-grid reveal">
       <div class="promise-item">
         <div class="promise-ic"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
-        <h4>Close in 30 Days</h4>
+        <h3>Close in 30 Days</h3>
         <p>From signed agreement to keys handed over — on a timeline that respects your deadline, not ours.</p>
       </div>
       <div class="promise-item">
         <div class="promise-ic"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 1v4M12 19v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M1 12h4M19 12h4M4.2 19.8L7 17M17 7l2.8-2.8"/><circle cx="12" cy="12" r="4"/></svg></div>
-        <h4>We Cover Closing Costs</h4>
+        <h3>We Cover Closing Costs</h3>
         <p>Title, escrow, standard closing fees — handled on our end so nothing comes out of your pocket.</p>
       </div>
       <div class="promise-item">
         <div class="promise-ic"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
-        <h4>Buy As-Is, Always</h4>
+        <h3>Buy As-Is, Always</h3>
         <p>Damage, code violations, deferred maintenance — sell exactly as the property stands today.</p>
       </div>
       <div class="promise-item">
         <div class="promise-ic"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg></div>
-        <h4>Non-Refundable EMD</h4>
+        <h3>Non-Refundable EMD</h3>
         <p>Our earnest money deposit is non-refundable once submitted — a real, binding commitment to close.</p>
       </div>
     </div>
@@ -2315,6 +2316,7 @@ footer{
 <!-- ============================================
      FOOTER
      ============================================ -->
+</main>
 <footer>
   <div class="container">
     <div class="footer-grid">

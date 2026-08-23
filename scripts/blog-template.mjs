@@ -46,7 +46,7 @@ const HEADER_HTML = `<header class="site-header">
       <span>(217) 408-2781</span>
     </a>
     <a href="/crm" class="header-login">Login</a>
-    <a href="/contact-us" class="header-cta">
+    <a href="/contact-us" class="header-cta" aria-label="Get Your Cash Offer">
       <span>Get Your Cash Offer</span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
@@ -92,9 +92,9 @@ const BASE_STYLES = `
 :root{
   --ink:#0B1E33; --ink-soft:#16314F;
   --sky:#1E8FD5; --sky-deep:#1568A8;
-  --brass:#C9A24B; --brass-soft:#E4CD8C;
+  --brass:#C9A24B; --brass-soft:#7B6F4C;
   --paper:#F6F3EC; --paper-dim:#EDE8DB; --paper-line:#DCD5C2;
-  --slate:#57667A; --slate-dim:#8693A1; --white:#FFFFFF;
+  --slate:#57667A; --slate-dim:#6D7782; --white:#FFFFFF;
   --serif:'Fraunces',Georgia,serif;
   --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
@@ -358,7 +358,7 @@ ${jsonLdBlocks.map((block) => `<script type="application/ld+json">\n${JSON.strin
 </head>
 <body>
 ${HEADER_HTML}
-${bodyHtml}
+<main>${bodyHtml}</main>
 ${FOOTER_HTML}
 </body>
 </html>

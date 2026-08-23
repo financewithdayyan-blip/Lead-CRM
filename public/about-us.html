@@ -32,9 +32,9 @@
 :root{
   --ink:#0B1E33; --ink-soft:#16314F;
   --sky:#1E8FD5; --sky-deep:#1568A8;
-  --brass:#C9A24B; --brass-soft:#E4CD8C;
+  --brass:#C9A24B; --brass-soft:#7B6F4C;
   --paper:#F6F3EC; --paper-dim:#EDE8DB; --paper-line:#DCD5C2;
-  --slate:#57667A; --slate-dim:#8693A1; --white:#FFFFFF;
+  --slate:#57667A; --slate-dim:#6D7782; --white:#FFFFFF;
   --serif:'Fraunces',Georgia,serif;
   --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --mono:'JetBrains Mono','SF Mono',Consolas,monospace;
@@ -142,7 +142,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;}
 }
 .value-card .vc-icon{width:36px;height:36px;border-radius:8px;background:rgba(30,143,213,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:14px;}
 .value-card .vc-icon svg{width:18px;height:18px;color:var(--sky);}
-.value-card h4{font-family:var(--sans);font-size:15px;font-weight:700;color:var(--ink);margin-bottom:8px;}
+.value-card h3{font-family:var(--sans);font-size:15px;font-weight:700;color:var(--ink);margin-bottom:8px;}
 .value-card p{font-size:13.5px;line-height:1.65;color:var(--slate);}
 
 /* PROCESS */
@@ -213,7 +213,7 @@ footer{
       <span>(217) 408-2781</span>
     </a>
     <a href="/crm" class="header-login">Login</a>
-    <a href="/contact-us" class="header-cta">
+    <a href="/contact-us" class="header-cta" aria-label="Get Your Cash Offer">
       <span>Get Your Cash Offer</span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
@@ -230,6 +230,7 @@ footer{
     <a href="/crm">Login</a>
   </div>
 </header>
+<main>
 
 <div class="about-hero">
   <div class="about-hero-inner">
@@ -270,22 +271,22 @@ footer{
       <div class="value-grid">
         <div class="value-card">
           <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
-          <h4>No Repairs</h4>
+          <h3>No Repairs</h3>
           <p>We buy in any condition — fire damage, foundation issues, full of belongings.</p>
         </div>
         <div class="value-card">
           <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-          <h4>Fast Close</h4>
+          <h3>Fast Close</h3>
           <p>As little as 30 days. No bank approval waiting, no appraisal contingencies.</p>
         </div>
         <div class="value-card">
           <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-          <h4>Zero Fees</h4>
+          <h3>Zero Fees</h3>
           <p>We cover all closing costs, title fees, and commissions. The offer is what you get.</p>
         </div>
         <div class="value-card">
           <div class="vc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-          <h4>Dedicated Team</h4>
+          <h3>Dedicated Team</h3>
           <p>Real people who specialize in complex, time-sensitive property situations.</p>
         </div>
       </div>
@@ -335,6 +336,7 @@ footer{
   </a>
 </div>
 
+</main>
 <footer>
   <span>© 2026 Bluebird Acquisition. All rights reserved.</span>
   <span class="footer-legal-links">
