@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { BuyerCondition, BuyerPropertyType, CashBuyer, DealType } from '@/types/domain';
-import { normalizeStateToCode } from '@/data/usGeo';
+import { citiesForStates, normalizeStateToCode, type SearchTarget } from '@/data/usGeo';
 import type { PacketSummary } from './useDealPackets';
 
 // A deal packet's propType is free text an admin typed ("Multi Family (
@@ -184,4 +184,27 @@ export function buyerMatchesPacket(buyer: CashBuyer, packet: PacketSummary): boo
   if (buyer.minBaths != null && packet.baths != null && packet.baths < buyer.minBaths) return false;
 
   return true;
+}
+
+/**
+ * Whether a buyer covers a searched city or state — the Disposition list's
+ * primary way to browse, since a buyer with a long buy box (several states,
+ * dozens of cities) is unreadable scanned row by row. Searching a STATE
+ * matches a buyer who declared that state broadly, or any buyer whose
+ * specific cities happen to fall inside it; searching a CITY matches a
+ * buyer who named it directly, or one who declared its whole state.
+ */
+export function buyerMatchesSearchTarget(buyer: CashBuyer, target: SearchTarget): boolean {
+  const stateMatch = (stateName: string) => buyer.marketStates.some((s) => normalizeStateToCode(s) === normalizeStateToCode(stateName));
+
+  if (target.kind === 'state') {
+    if (stateMatch(target.stateName)) return true;
+    if (buyer.marketCities.length === 0) return false;
+    const citiesInState = new Set(citiesForStates([target.stateName]).map((c) => c.toLowerCase()));
+    return buyer.marketCities.some((c) => citiesInState.has(c.trim().toLowerCase()));
+  }
+
+  const cityLower = target.cityName.trim().toLowerCase();
+  const cityMatch = buyer.marketCities.some((c) => c.trim().toLowerCase() === cityLower);
+  return cityMatch || stateMatch(target.stateName);
 }

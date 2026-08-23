@@ -1,22 +1,21 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Handshake, List, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useCashBuyers, useDeleteCashBuyer } from '@/hooks/useCashBuyers';
+import { Facebook, Handshake, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useCashBuyers, useDeleteCashBuyer, buyerMatchesSearchTarget } from '@/hooks/useCashBuyers';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
+import { GeoMultiSelect } from '@/components/disposition/GeoMultiSelect';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { US_STATE_NAMES, cityStateOptions, resolveSearchTarget } from '@/data/usGeo';
 import { BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG, type CashBuyer } from '@/types/domain';
 import { externalHref, formatCurrency, formatPhone } from '@/lib/utils';
 
-// Leaflet + the ~200KB city-coordinate dataset only load when someone
-// actually opens the Map tab, not on every Disposition page visit.
-const BuyersMapView = lazy(() => import('@/components/disposition/BuyersMapView').then((m) => ({ default: m.BuyersMapView })));
+const MAX_MARKET_ENTRIES = 3;
 
 function marketsLabel(buyer: CashBuyer): string {
-  const parts: string[] = [];
-  if (buyer.marketStates.length > 0) parts.push(buyer.marketStates.join(', '));
-  if (buyer.marketCounties.length > 0) parts.push(buyer.marketCounties.map((c) => `${c} County`).join(', '));
-  if (buyer.marketCities.length > 0) parts.push(buyer.marketCities.join(', '));
-  return parts.length > 0 ? parts.join(' · ') : 'Any market';
+  const entries = [...buyer.marketStates, ...buyer.marketCounties.map((c) => `${c} County`), ...buyer.marketCities];
+  if (entries.length === 0) return 'Any market';
+  if (entries.length <= MAX_MARKET_ENTRIES) return entries.join(', ');
+  return `${entries.slice(0, MAX_MARKET_ENTRIES).join(', ')} +${entries.length - MAX_MARKET_ENTRIES} more`;
 }
 
 function priceRangeLabel(buyer: CashBuyer): string {
@@ -30,24 +29,28 @@ export function DispositionPage() {
   const { data: buyers = [], isLoading, isError, error } = useCashBuyers();
   const deleteCashBuyer = useDeleteCashBuyer();
 
-  const [view, setView] = useState<'list' | 'map'>('map');
-  const [search, setSearch] = useState('');
+  const [locationSearch, setLocationSearch] = useState<string[]>([]);
+  const [nameSearch, setNameSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('active');
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<CashBuyer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CashBuyer | null>(null);
 
+  const locationOptions = useMemo(() => [...US_STATE_NAMES, ...cityStateOptions()], []);
+  const searchTarget = useMemo(() => (locationSearch[0] ? resolveSearchTarget(locationSearch[0]) : null), [locationSearch]);
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = nameSearch.trim().toLowerCase();
     return buyers.filter((b) => {
       if (statusFilter && b.status !== statusFilter) return false;
+      if (searchTarget && !buyerMatchesSearchTarget(b, searchTarget)) return false;
       if (q) {
-        const haystack = `${b.name} ${b.marketStates.join(' ')} ${b.marketCounties.join(' ')} ${b.marketCities.join(' ')} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
+        const haystack = `${b.name} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [buyers, search, statusFilter]);
+  }, [buyers, nameSearch, statusFilter, searchTarget]);
 
   return (
     <div>
@@ -66,41 +69,42 @@ export function DispositionPage() {
         </button>
       </div>
 
+      <div className="mb-4 rounded-lg border border-border-2 bg-surface-2 p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-full max-w-sm">
+            <GeoMultiSelect
+              label="Find buyers in a city or state"
+              placeholder="Type a city or state…"
+              options={locationOptions}
+              selected={locationSearch}
+              onChange={(next) => setLocationSearch(next.length > 0 ? [next[next.length - 1]] : [])}
+            />
+          </div>
+          {locationSearch[0] && (
+            <>
+              <p className="pb-2 text-[12px] text-text-3">
+                {filtered.length} buyer{filtered.length === 1 ? '' : 's'} cover{filtered.length === 1 ? 's' : ''} {locationSearch[0]}
+              </p>
+              <button className="mb-[3px] flex items-center gap-1 pb-2 text-[12px] text-text-3 hover:text-text" onClick={() => setLocationSearch([])}>
+                <X size={12} /> Clear
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="mb-4 flex flex-wrap gap-2">
-        {view === 'list' && (
-          <input
-            className="input max-w-xs flex-1"
-            placeholder="Search name, market, phone, email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        )}
+        <input
+          className="input max-w-xs flex-1"
+          placeholder="Or search by name, phone, email…"
+          value={nameSearch}
+          onChange={(e) => setNameSearch(e.target.value)}
+        />
         <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'active' | 'inactive' | '')}>
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
           <option value="">All statuses</option>
         </select>
-        <div className="ml-auto flex gap-1 rounded-lg border border-border-2 bg-surface-2 p-1">
-          <button
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-              view === 'list' ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text'
-            }`}
-            onClick={() => setView('list')}
-          >
-            <List size={14} /> List
-          </button>
-          <button
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
-              view === 'map' ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text'
-            }`}
-            onClick={() => {
-              setView('map');
-              setSearch('');
-            }}
-          >
-            <MapPin size={14} /> Map
-          </button>
-        </div>
       </div>
 
       {isLoading ? (
@@ -111,10 +115,6 @@ export function DispositionPage() {
         <div className="rounded-lg border border-dashed border-border-2 py-12 text-center text-sm text-text-3">
           {buyers.length === 0 ? 'No cash buyers yet — add your first one to start building the roster.' : 'No buyers match your search.'}
         </div>
-      ) : view === 'map' ? (
-        <Suspense fallback={<div className="py-12 text-center text-sm text-text-3">Loading map…</div>}>
-          <BuyersMapView buyers={filtered} />
-        </Suspense>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border-2">
           <table className="w-full text-left text-sm">
@@ -151,7 +151,7 @@ export function DispositionPage() {
                     </div>
                     <div className="text-[12px] text-text-3">{[b.phone ? formatPhone(b.phone) : null, b.email].filter(Boolean).join(' · ')}</div>
                   </td>
-                  <td className="px-3 py-2.5 text-text-2">{marketsLabel(b)}</td>
+                  <td className="max-w-[220px] px-3 py-2.5 text-text-2">{marketsLabel(b)}</td>
                   <td className="px-3 py-2.5 text-text-2">
                     {b.propertyTypes.length > 0 ? b.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
                   </td>
