@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react';
-import { Facebook, Handshake, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { Facebook, Handshake, List, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCashBuyers, useDeleteCashBuyer, buyerMatchesPacket } from '@/hooks/useCashBuyers';
 import { useAllDealPackets } from '@/hooks/useDealPackets';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG, type CashBuyer } from '@/types/domain';
 import { externalHref, formatCurrency, formatPhone } from '@/lib/utils';
+
+// Leaflet + the ~200KB city-coordinate dataset only load when someone
+// actually opens the Map tab, not on every Disposition page visit.
+const BuyersMapView = lazy(() => import('@/components/disposition/BuyersMapView').then((m) => ({ default: m.BuyersMapView })));
 
 function marketsLabel(buyer: CashBuyer): string {
   const parts: string[] = [];
@@ -27,6 +31,7 @@ export function DispositionPage() {
   const { data: packets = [] } = useAllDealPackets();
   const deleteCashBuyer = useDeleteCashBuyer();
 
+  const [view, setView] = useState<'list' | 'map'>('list');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('active');
   const [dealId, setDealId] = useState('');
@@ -105,6 +110,24 @@ export function DispositionPage() {
           <option value="inactive">Inactive only</option>
           <option value="">All statuses</option>
         </select>
+        <div className="ml-auto flex gap-1 rounded-lg border border-border-2 bg-surface-2 p-1">
+          <button
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              view === 'list' ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text'
+            }`}
+            onClick={() => setView('list')}
+          >
+            <List size={14} /> List
+          </button>
+          <button
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              view === 'map' ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text'
+            }`}
+            onClick={() => setView('map')}
+          >
+            <MapPin size={14} /> Map
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -119,6 +142,10 @@ export function DispositionPage() {
               ? 'No active buyers match this deal’s buy box.'
               : 'No buyers match your search.'}
         </div>
+      ) : view === 'map' ? (
+        <Suspense fallback={<div className="py-12 text-center text-sm text-text-3">Loading map…</div>}>
+          <BuyersMapView buyers={filtered} />
+        </Suspense>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border-2">
           <table className="w-full text-left text-sm">
