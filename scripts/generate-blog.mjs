@@ -377,6 +377,14 @@ ${relatedSection(related, coverUrl)}
       title: `${tag} — Blog | Bluebird Acquisition`,
       description: `Posts tagged "${tag}" from the Bluebird Acquisition blog.`,
       canonical: `${SITE_URL}/blog/tag/${tagSlug}`,
+      // These are thin, template-heavy archive pages — 14 of them, all
+      // sharing near-identical structure and only differing in which post
+      // links they list. Indexable but noindex'd: still crawled and still
+      // pass link equity through to the real posts (follow), just not
+      // competing with genuine content for a spot in Google's index. Found
+      // via Search Console's "Discovered — currently not indexed" bucket
+      // covering roughly the tag-page count of the site's not-indexed total.
+      robots: 'noindex, follow',
       bodyHtml: `
 <div class="blog-hero">
   <div class="blog-hero-inner">
@@ -398,7 +406,7 @@ ${relatedSection(related, coverUrl)}
   await pruneOrphans(TAG_DIR, new Set([...tagMap.keys()].map((t) => `${slugify(t)}.html`)));
 
   // ── sitemap.xml — fully regenerated every build, single source of truth ─
-  await writeSitemap(posts, [...tagMap.keys()]);
+  await writeSitemap(posts);
 
   console.log(`[generate-blog] Generated ${posts.length} post page(s) and ${tagMap.size} tag page(s).`);
 }
@@ -539,7 +547,7 @@ async function pruneOrphans(dir, keepFilenames, alwaysKeep = []) {
   }
 }
 
-async function writeSitemap(posts, tags) {
+async function writeSitemap(posts) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     ...STATIC_PAGES.map((p) => ({ loc: `${SITE_URL}${p.loc}`, lastmod: today, priority: p.priority })),
@@ -549,7 +557,9 @@ async function writeSitemap(posts, tags) {
       lastmod: (p.updated_at || p.published_at || today).slice(0, 10),
       priority: '0.6',
     })),
-    ...tags.map((t) => ({ loc: `${SITE_URL}/blog/tag/${slugify(t)}`, lastmod: today, priority: '0.4' })),
+    // Tag archive pages are deliberately left out — they're noindex'd (see
+    // where they're rendered above), and a sitemap should only ever list
+    // pages Google is being asked to index.
   ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

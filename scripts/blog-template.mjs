@@ -313,7 +313,7 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 }
 `;
 
-export function renderLayout({ title, description, canonical, ogImage, ogType = 'website', jsonLd, bodyHtml }) {
+export function renderLayout({ title, description, canonical, ogImage, ogType = 'website', jsonLd, bodyHtml, robots = 'index, follow' }) {
   const image = ogImage || DEFAULT_OG_IMAGE;
   // A single post or the listing page can carry more than one structured-data
   // block (BlogPosting + FAQPage + BreadcrumbList) — accepts either one
@@ -339,7 +339,7 @@ export function renderLayout({ title, description, canonical, ogImage, ogType = 
 <!-- Explicit, not just relying on the default-indexable absence of this
      tag — makes "is this page allowed to rank" unambiguous to any crawler
      inspecting the raw HTML, independent of robots.txt. -->
-<meta name="robots" content="index, follow">
+<meta name="robots" content="${robots}">
 <link rel="canonical" href="${canonical}">
 <meta property="og:type" content="${ogType}">
 <meta property="og:site_name" content="Bluebird Acquisition">
