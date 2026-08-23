@@ -70,6 +70,46 @@ export function useLeads(targetUserId?: string) {
   });
 }
 
+export interface ContractLeadSummary {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  finalPrice: number | null;
+  askingPrice: number | null;
+}
+
+/** Every lead currently in the Contract stage, across the whole team — feeds
+ *  Disposition's "assign a deal to this buyer" picker. Deliberately not
+ *  scoped to the caller's own leads like useLeads() is: an admin needs to
+ *  see every rep's contracted deals, not just their own (same reasoning as
+ *  useAllDealPackets in useDealPackets.ts). */
+export function useContractStageLeads() {
+  return useQuery({
+    queryKey: ['leads', 'contract_stage'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, first_name, last_name, address, city, state, final_price, asking_price')
+        .eq('stage', 'contract')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(
+        (r): ContractLeadSummary => ({
+          id: r.id,
+          name: `${r.first_name} ${r.last_name}`.trim(),
+          address: r.address,
+          city: r.city,
+          state: r.state,
+          finalPrice: r.final_price != null ? Number(r.final_price) : null,
+          askingPrice: r.asking_price != null ? Number(r.asking_price) : null,
+        }),
+      );
+    },
+  });
+}
+
 /** Call on hover to warm the cache before navigation. */
 export function prefetchLeads(qc: QueryClient, userId: string) {
   return qc.prefetchQuery({

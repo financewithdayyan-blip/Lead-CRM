@@ -1,13 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Home, Plus, Trash2 } from 'lucide-react';
 import { useBuyerDeals, useCreateBuyerDeal, useDeleteBuyerDeal, type BuyerDealInput } from '@/hooks/useBuyerDeals';
+import { useContractStageLeads } from '@/hooks/useLeads';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
+const MANUAL_ENTRY = '__manual__';
+
 function AddDealModal({ buyerId, onClose }: { buyerId: string; onClose: () => void }) {
   const create = useCreateBuyerDeal(buyerId);
+  const { data: contractLeads = [] } = useContractStageLeads();
+  const [leadChoice, setLeadChoice] = useState(MANUAL_ENTRY);
   const [propertyAddress, setPropertyAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
@@ -16,11 +22,24 @@ function AddDealModal({ buyerId, onClose }: { buyerId: string; onClose: () => vo
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const selectedLead = useMemo(() => contractLeads.find((l) => l.id === leadChoice), [contractLeads, leadChoice]);
+
+  function handlePickLead(id: string) {
+    setLeadChoice(id);
+    const lead = contractLeads.find((l) => l.id === id);
+    if (!lead) return;
+    setPropertyAddress(lead.address ?? '');
+    setCity(lead.city ?? '');
+    setState(lead.state ?? '');
+    setSalePrice(lead.finalPrice != null ? String(lead.finalPrice) : lead.askingPrice != null ? String(lead.askingPrice) : '');
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!propertyAddress.trim()) return;
     setError(null);
     const input: BuyerDealInput = {
+      leadId: selectedLead?.id ?? null,
       propertyAddress: propertyAddress.trim(),
       city: city.trim() || null,
       state: state.trim() || null,
@@ -40,6 +59,23 @@ function AddDealModal({ buyerId, onClose }: { buyerId: string; onClose: () => vo
     <Modal open onClose={onClose} title="Add Deal" width="sm">
       {error && <div className="mb-4 rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label">Assign a deal in contract</label>
+          <select className="input" value={leadChoice} onChange={(e) => handlePickLead(e.target.value)}>
+            <option value={MANUAL_ENTRY}>— Enter manually —</option>
+            {contractLeads.map((l) => (
+              <option key={l.id} value={l.id}>
+                {[l.name, l.address, l.city].filter(Boolean).join(' — ') || l.name}
+                {l.finalPrice != null ? ` (${formatCurrency(l.finalPrice)})` : ''}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-text-3">
+            {contractLeads.length === 0
+              ? 'No leads are currently in the Contract stage.'
+              : 'Picking one fills in the fields below from that deal — still editable before saving.'}
+          </p>
+        </div>
         <div>
           <label className="label">Property Address *</label>
           <input className="input" required value={propertyAddress} onChange={(e) => setPropertyAddress(e.target.value)} />
@@ -107,7 +143,14 @@ export function BuyerDealsSection({ buyerId }: { buyerId: string }) {
           {deals.map((d) => (
             <div key={d.id} className="flex items-start justify-between gap-3 rounded-md border border-border-2 p-3">
               <div className="min-w-0">
-                <div className="font-medium text-text">{d.propertyAddress}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-text">{d.propertyAddress}</span>
+                  {d.leadId && (
+                    <Link to={`/leads/${d.leadId}`} className="text-[11px] font-medium text-primary hover:underline">
+                      View Lead
+                    </Link>
+                  )}
+                </div>
                 <div className="text-[12px] text-text-3">
                   {[d.city, d.state].filter(Boolean).join(', ')}
                   {d.closedDate ? ` · Closed ${formatDate(d.closedDate)}` : ''}

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 export interface BuyerDeal {
   id: string;
   buyerId: string;
+  leadId: string | null;
   propertyAddress: string;
   city: string | null;
   state: string | null;
@@ -17,6 +18,7 @@ function fromRow(r: any): BuyerDeal {
   return {
     id: r.id,
     buyerId: r.buyer_id,
+    leadId: r.lead_id,
     propertyAddress: r.property_address,
     city: r.city,
     state: r.state,
@@ -44,6 +46,7 @@ export function useBuyerDeals(buyerId: string | undefined) {
 }
 
 export interface BuyerDealInput {
+  leadId: string | null;
   propertyAddress: string;
   city: string | null;
   state: string | null;
@@ -54,6 +57,7 @@ export interface BuyerDealInput {
 
 function toDbRow(d: BuyerDealInput) {
   return {
+    lead_id: d.leadId,
     property_address: d.propertyAddress,
     city: d.city,
     state: d.state,
