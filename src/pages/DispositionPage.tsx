@@ -66,12 +66,14 @@ export function DispositionPage() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <input
-          className="input max-w-xs flex-1"
-          placeholder="Search name, market, phone, email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        {view === 'list' && (
+          <input
+            className="input max-w-xs flex-1"
+            placeholder="Search name, market, phone, email…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
         <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'active' | 'inactive' | '')}>
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
@@ -90,7 +92,10 @@ export function DispositionPage() {
             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
               view === 'map' ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text'
             }`}
-            onClick={() => setView('map')}
+            onClick={() => {
+              setView('map');
+              setSearch('');
+            }}
           >
             <MapPin size={14} /> Map
           </button>
