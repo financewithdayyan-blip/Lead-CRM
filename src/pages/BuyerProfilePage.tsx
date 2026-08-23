@@ -91,9 +91,9 @@ export function BuyerProfilePage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Open Facebook profile"
-                  className="text-[#1877F2] hover:opacity-70"
+                  className="flex items-center gap-1.5 rounded-full bg-[#1877F2] px-3 py-1 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#166FE5]"
                 >
-                  <Facebook size={16} />
+                  <Facebook size={14} /> Facebook
                 </a>
               )}
             </div>

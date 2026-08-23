@@ -46,9 +46,9 @@ function BuyerCard({ buyer, onEdit, onDelete }: { buyer: CashBuyer; onEdit: () =
               rel="noopener noreferrer"
               title="Open Facebook profile"
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 text-[#1877F2] hover:opacity-70"
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#1877F2] text-white shadow-sm transition-colors hover:bg-[#166FE5]"
             >
-              <Facebook size={14} />
+              <Facebook size={11} />
             </a>
           )}
         </div>
