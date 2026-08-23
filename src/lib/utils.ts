@@ -24,6 +24,13 @@ export function externalHref(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
+/** Collapses the trivial formatting differences (scheme, www, trailing
+ *  slash, case) between two Facebook links that point at the same real
+ *  profile — used to catch duplicate cash-buyer entries. */
+export function normalizeFacebookUrl(url: string): string {
+  return url.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+}
+
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '').slice(-10);

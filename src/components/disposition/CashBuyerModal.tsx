@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Facebook } from 'lucide-react';
+import { Facebook, TriangleAlert } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { GeoMultiSelect } from '@/components/disposition/GeoMultiSelect';
-import { useCreateCashBuyer, useUpdateCashBuyer, type CashBuyerInput } from '@/hooks/useCashBuyers';
+import { useCashBuyers, useCreateCashBuyer, useUpdateCashBuyer, type CashBuyerInput } from '@/hooks/useCashBuyers';
 import { US_STATE_NAMES, citiesForStates, countiesForStates } from '@/data/usGeo';
-import { externalHref, getErrorMessage } from '@/lib/utils';
+import { externalHref, getErrorMessage, normalizeFacebookUrl } from '@/lib/utils';
 import {
   BUYER_CONDITION_LABELS,
   BUYER_PROPERTY_TYPE_LABELS,
@@ -26,6 +26,7 @@ function toggle<T>(list: T[], value: T): T[] {
 export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose: () => void }) {
   const create = useCreateCashBuyer();
   const update = useUpdateCashBuyer();
+  const { data: allBuyers = [] } = useCashBuyers();
   const isEdit = !!buyer;
 
   const [name, setName] = useState(buyer?.name ?? '');
@@ -46,11 +47,25 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
   const [status, setStatus] = useState<'active' | 'inactive'>(buyer?.status ?? 'active');
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = name.trim().length > 0;
   const pending = create.isPending || update.isPending;
 
   const countyOptions = useMemo(() => countiesForStates(marketStates), [marketStates]);
   const cityOptions = useMemo(() => citiesForStates(marketStates), [marketStates]);
+
+  // Duplicate-entry guard: a Facebook link matching another buyer is close
+  // to certain proof of the same real person (two different real profiles
+  // can't share a URL), so that one blocks saving outright. A name-only
+  // match was tried and dropped — two genuinely different buyers with the
+  // same name (buying in different markets) are common enough in practice
+  // that it produced real false positives.
+  const others = useMemo(() => allBuyers.filter((b) => b.id !== buyer?.id), [allBuyers, buyer?.id]);
+  const facebookDuplicate = useMemo(() => {
+    const norm = facebookUrl.trim() ? normalizeFacebookUrl(facebookUrl) : '';
+    if (!norm) return null;
+    return others.find((b) => b.facebookUrl && normalizeFacebookUrl(b.facebookUrl) === norm) ?? null;
+  }, [others, facebookUrl]);
+
+  const canSubmit = name.trim().length > 0 && !facebookDuplicate;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -108,6 +123,16 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
             <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
         </div>
+
+        {facebookDuplicate && (
+          <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[12px] text-danger">
+            <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+            <span>
+              This Facebook profile is already saved for <strong>{facebookDuplicate.name}</strong> — saving is disabled to avoid a duplicate.
+              Edit that buyer instead, or clear the Facebook link here if this is genuinely a different person.
+            </span>
+          </div>
+        )}
 
         <div>
           <label className="label">Facebook profile</label>
