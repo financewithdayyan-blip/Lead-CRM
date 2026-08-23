@@ -166,7 +166,7 @@ footer{ background:var(--ink); color:rgba(246,243,236,0.65); padding:36px 32px; 
 .blog-card-date{ font-family:var(--mono); font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--slate-dim); }
 .blog-empty{ text-align:center; padding:40px 20px; color:var(--slate-dim); font-size:15px; }
 
-.tag-chip{ display:inline-block; font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:0.04em; color:var(--sky-deep); background:rgba(30,143,213,0.1); padding:4px 10px; border-radius:100px; }
+.tag-chip{ display:inline-block; font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:0.04em; color:var(--sky-deep); background:rgba(30,143,213,0.1); padding:8px 12px; border-radius:100px; }
 a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 
 /* BLOG — search + tag filter toolbar (listing page) */
@@ -222,7 +222,7 @@ a.tag-chip:hover{ background:rgba(30,143,213,0.18); }
 .post-meta-dot{ opacity:0.5; }
 .post-views{ display:inline-flex; align-items:center; gap:5px; }
 .post-views svg{ opacity:0.7; }
-.post-like-btn{ display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; letter-spacing:0.06em; color:rgba(246,243,236,0.85); background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16); padding:5px 12px; border-radius:100px; transition:background 0.2s,border-color 0.2s,transform 0.15s; }
+.post-like-btn{ display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; letter-spacing:0.06em; color:rgba(246,243,236,0.85); background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16); padding:7px 12px; border-radius:100px; transition:background 0.2s,border-color 0.2s,transform 0.15s; }
 .post-like-btn:hover{ background:rgba(255,255,255,0.14); }
 .post-like-btn:active{ transform:scale(0.96); }
 .post-like-btn svg{ transition:fill 0.2s,stroke 0.2s; }
@@ -353,7 +353,8 @@ export function renderLayout({ title, description, canonical, ogImage, ogType = 
 <meta name="twitter:image" content="${image}">
 ${jsonLdBlocks.map((block) => `<script type="application/ld+json">\n${JSON.stringify(block, null, 2)}\n</script>\n`).join('')}<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional"></noscript>
 <style>${BASE_STYLES}</style>
 </head>
 <body>

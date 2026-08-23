@@ -162,7 +162,7 @@ async function main() {
 </div>
 ${
   post.cover_image_path
-    ? `<div class="post-cover"><img src="${image}" alt="${escapeHtml(post.title)}" fetchpriority="high"></div>`
+    ? `<div class="post-cover"><img src="${image}" alt="${escapeHtml(post.title)}" width="1200" height="675" fetchpriority="high"></div>`
     : ''
 }
 <div class="post-layout">
@@ -328,7 +328,7 @@ ${relatedSection(related, coverUrl)}
 
   function cardHtml(p){
     return '<a class="blog-card" href="/blog/' + p.slug + '">' +
-      (p.image ? '<img class="blog-card-thumb" src="' + p.image + '" alt="" loading="lazy">' : '') +
+      (p.image ? '<img class="blog-card-thumb" src="' + p.image + '" alt="" width="800" height="450" loading="lazy">' : '') +
       '<div class="blog-card-body"><div class="blog-card-date">' + p.date + '</div>' +
       '<h2>' + escapeHtml(p.title) + '</h2><p>' + escapeHtml(p.excerpt) + '</p>' +
       (p.tags.length ? '<div class="blog-card-tags">' + p.tags.map(function(t){ return '<span class="tag-chip">' + escapeHtml(t) + '</span>'; }).join(' ') + '</div>' : '') +
@@ -487,7 +487,7 @@ function featuredCard(post, coverUrl) {
   const description = post.excerpt || stripHtml(post.body_html, 200);
   const category = post.tags?.[0];
   return `<a class="featured-main" href="/blog/${post.slug}">
-  ${image ? `<img class="featured-main-thumb" src="${image}" alt="" fetchpriority="high">` : ''}
+  ${image ? `<img class="featured-main-thumb" src="${image}" alt="" width="800" height="450" fetchpriority="high">` : ''}
   <div class="featured-main-body">
     <div class="featured-meta">
       ${category ? `<span class="tag-chip">${escapeHtml(category)}</span>` : ''}
@@ -507,7 +507,7 @@ function secondaryCard(post, coverUrl) {
   const image = coverUrl(post.cover_image_path);
   const category = post.tags?.[0];
   return `<a class="featured-side-card" href="/blog/${post.slug}">
-  ${image ? `<img class="featured-side-thumb" src="${image}" alt="">` : ''}
+  ${image ? `<img class="featured-side-thumb" src="${image}" alt="" width="100" height="76">` : ''}
   <div class="featured-side-body">
     <div class="featured-meta">
       ${category ? `<span class="tag-chip">${escapeHtml(category)}</span>` : ''}
@@ -522,7 +522,7 @@ function blogCard(post, coverUrl) {
   const image = coverUrl(post.cover_image_path);
   const description = post.excerpt || stripHtml(post.body_html, 140);
   return `<a class="blog-card" href="/blog/${post.slug}">
-  ${image ? `<img class="blog-card-thumb" src="${image}" alt="" loading="lazy">` : ''}
+  ${image ? `<img class="blog-card-thumb" src="${image}" alt="" width="800" height="450" loading="lazy">` : ''}
   <div class="blog-card-body">
     <div class="blog-card-date">${formatDate(post.published_at)}</div>
     <h2>${escapeHtml(post.title)}</h2>
