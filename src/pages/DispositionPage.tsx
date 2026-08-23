@@ -1,7 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { Facebook, Handshake, List, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { useCashBuyers, useDeleteCashBuyer, buyerMatchesPacket } from '@/hooks/useCashBuyers';
-import { useAllDealPackets } from '@/hooks/useDealPackets';
+import { Facebook, Handshake, List, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCashBuyers, useDeleteCashBuyer } from '@/hooks/useCashBuyers';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG, type CashBuyer } from '@/types/domain';
@@ -28,31 +27,26 @@ function priceRangeLabel(buyer: CashBuyer): string {
 
 export function DispositionPage() {
   const { data: buyers = [], isLoading, isError, error } = useCashBuyers();
-  const { data: packets = [] } = useAllDealPackets();
   const deleteCashBuyer = useDeleteCashBuyer();
 
-  const [view, setView] = useState<'list' | 'map'>('list');
+  const [view, setView] = useState<'list' | 'map'>('map');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('active');
-  const [dealId, setDealId] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<CashBuyer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CashBuyer | null>(null);
-
-  const selectedPacket = useMemo(() => packets.find((p) => p.id === dealId) ?? null, [packets, dealId]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return buyers.filter((b) => {
       if (statusFilter && b.status !== statusFilter) return false;
-      if (selectedPacket && !buyerMatchesPacket(b, selectedPacket)) return false;
       if (q) {
         const haystack = `${b.name} ${b.marketStates.join(' ')} ${b.marketCounties.join(' ')} ${b.marketCities.join(' ')} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [buyers, search, statusFilter, selectedPacket]);
+  }, [buyers, search, statusFilter]);
 
   return (
     <div>
@@ -69,33 +63,6 @@ export function DispositionPage() {
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
           <Plus size={14} /> Add Buyer
         </button>
-      </div>
-
-      <div className="mb-4 rounded-lg border border-border-2 bg-surface-2 p-3">
-        <label className="label">Match against a deal</label>
-        <div className="flex flex-wrap items-center gap-2">
-          <select className="input max-w-md" value={dealId} onChange={(e) => setDealId(e.target.value)}>
-            <option value="">Show all buyers — no deal selected</option>
-            {packets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {[p.leadName, p.city, p.state].filter(Boolean).join(' · ') || 'Untitled deal'}
-                {p.purchasePrice != null ? ` — ${formatCurrency(p.purchasePrice)}` : ''}
-              </option>
-            ))}
-          </select>
-          {selectedPacket && (
-            <button className="btn !px-2 !py-1.5" onClick={() => setDealId('')} title="Clear">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-        {selectedPacket && (
-          <p className="mt-2 text-[12px] text-text-3">
-            Showing active buyers whose buy box matches this deal
-            {selectedPacket.city ? ` in ${selectedPacket.city}` : ''}
-            {selectedPacket.propType ? ` (${selectedPacket.propType})` : ''}.
-          </p>
-        )}
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -136,11 +103,7 @@ export function DispositionPage() {
         <div className="py-12 text-center text-sm text-danger">{(error as Error)?.message ?? 'Failed to load buyers.'}</div>
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border-2 py-12 text-center text-sm text-text-3">
-          {buyers.length === 0
-            ? 'No cash buyers yet — add your first one to start building the roster.'
-            : selectedPacket
-              ? 'No active buyers match this deal’s buy box.'
-              : 'No buyers match your search.'}
+          {buyers.length === 0 ? 'No cash buyers yet — add your first one to start building the roster.' : 'No buyers match your search.'}
         </div>
       ) : view === 'map' ? (
         <Suspense fallback={<div className="py-12 text-center text-sm text-text-3">Loading map…</div>}>
