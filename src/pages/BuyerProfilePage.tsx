@@ -6,8 +6,10 @@ import {
   DollarSign,
   Facebook,
   Handshake,
+  Home,
   Mail,
   MapPin,
+  MessageSquare,
   Pencil,
   Phone,
   StickyNote,
@@ -15,10 +17,19 @@ import {
 } from 'lucide-react';
 import { useCashBuyers, useDeleteCashBuyer } from '@/hooks/useCashBuyers';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
+import { BuyerSmsThread } from '@/components/disposition/BuyerSmsThread';
+import { BuyerDealsSection } from '@/components/disposition/BuyerDealsSection';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BUYER_CONDITION_LABELS, BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG } from '@/types/domain';
 import { externalHref, formatCurrency, formatDate, formatPhone } from '@/lib/utils';
+
+const TABS = [
+  ['overview', 'Overview', Building2],
+  ['messages', 'Messages', MessageSquare],
+  ['deals', 'Deals Bought', Home],
+] as const;
+type TabKey = (typeof TABS)[number][0];
 
 function Pill({ children }: { children: React.ReactNode }) {
   return <span className="rounded-full bg-surface-3 px-2.5 py-1 text-[12px] font-medium text-text-2">{children}</span>;
@@ -40,6 +51,7 @@ export function BuyerProfilePage() {
   const deleteCashBuyer = useDeleteCashBuyer();
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [tab, setTab] = useState<TabKey>('overview');
 
   const buyer = buyers.find((b) => b.id === id);
 
@@ -110,67 +122,90 @@ export function BuyerProfilePage() {
         </div>
       </div>
 
-      <div className="card mb-5">
-        <CardHeader icon={MapPin} title="Markets" tone="info" />
-        <div className="mt-3 space-y-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">States</div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {buyer.marketStates.length > 0 ? buyer.marketStates.map((s) => <Pill key={s}>{s}</Pill>) : <span className="text-sm text-text-3">Any state</span>}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Counties</div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {buyer.marketCounties.length > 0 ? (
-                buyer.marketCounties.map((c) => <Pill key={c}>{c} County</Pill>)
-              ) : (
-                <span className="text-sm text-text-3">None on file</span>
-              )}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Cities</div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {buyer.marketCities.length > 0 ? buyer.marketCities.map((c) => <Pill key={c}>{c}</Pill>) : <span className="text-sm text-text-3">Any city</span>}
-            </div>
-          </div>
-        </div>
+      <div className="mb-5 flex gap-1 border-b border-border">
+        {TABS.map(([key, label, Icon]) => (
+          <button
+            key={key}
+            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
+              tab === key ? 'border-primary text-primary' : 'border-transparent text-text-3 hover:text-text'
+            }`}
+            onClick={() => setTab(key)}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="card mb-5">
-        <CardHeader icon={Building2} title="Buy Box" tone="accent" />
-        <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <Field
-            label="Property Types"
-            value={buyer.propertyTypes.length > 0 ? buyer.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
-          />
-          <Field
-            label="Deal Structures"
-            value={buyer.dealTypes.length > 0 ? buyer.dealTypes.map((t) => DEAL_TYPE_CONFIG[t].label).join(', ') : 'Any structure'}
-          />
-          <Field label="Condition" value={buyer.condition ? BUYER_CONDITION_LABELS[buyer.condition] : 'No preference / not asked yet'} />
-          <Field label="Min Beds" value={buyer.minBeds ?? 'No minimum'} />
-          <Field label="Min Baths" value={buyer.minBaths ?? 'No minimum'} />
-        </div>
-        <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-lg font-semibold text-text">
-          <DollarSign size={18} className="text-success" />
-          {priceRange}
-        </div>
-      </div>
+      {tab === 'overview' && (
+        <>
+          <div className="card mb-5">
+            <CardHeader icon={MapPin} title="Markets" tone="info" />
+            <div className="mt-3 space-y-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">States</div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {buyer.marketStates.length > 0 ? buyer.marketStates.map((s) => <Pill key={s}>{s}</Pill>) : <span className="text-sm text-text-3">Any state</span>}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Counties</div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {buyer.marketCounties.length > 0 ? (
+                    buyer.marketCounties.map((c) => <Pill key={c}>{c} County</Pill>)
+                  ) : (
+                    <span className="text-sm text-text-3">None on file</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Cities</div>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {buyer.marketCities.length > 0 ? buyer.marketCities.map((c) => <Pill key={c}>{c}</Pill>) : <span className="text-sm text-text-3">Any city</span>}
+                </div>
+              </div>
+            </div>
+          </div>
 
-      {buyer.notes && (
-        <div className="card mb-5">
-          <CardHeader icon={StickyNote} title="Notes" tone="warning" />
-          <p className="mt-3 whitespace-pre-wrap text-sm text-text-2">{buyer.notes}</p>
-        </div>
+          <div className="card mb-5">
+            <CardHeader icon={Building2} title="Buy Box" tone="accent" />
+            <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <Field
+                label="Property Types"
+                value={buyer.propertyTypes.length > 0 ? buyer.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
+              />
+              <Field
+                label="Deal Structures"
+                value={buyer.dealTypes.length > 0 ? buyer.dealTypes.map((t) => DEAL_TYPE_CONFIG[t].label).join(', ') : 'Any structure'}
+              />
+              <Field label="Condition" value={buyer.condition ? BUYER_CONDITION_LABELS[buyer.condition] : 'No preference / not asked yet'} />
+              <Field label="Min Beds" value={buyer.minBeds ?? 'No minimum'} />
+              <Field label="Min Baths" value={buyer.minBaths ?? 'No minimum'} />
+            </div>
+            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-lg font-semibold text-text">
+              <DollarSign size={18} className="text-success" />
+              {priceRange}
+            </div>
+          </div>
+
+          {buyer.notes && (
+            <div className="card mb-5">
+              <CardHeader icon={StickyNote} title="Notes" tone="warning" />
+              <p className="mt-3 whitespace-pre-wrap text-sm text-text-2">{buyer.notes}</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 text-[12px] text-text-3">
+            <Handshake size={13} />
+            Added {formatDate(buyer.createdAt)}
+            {buyer.updatedAt !== buyer.createdAt ? ` · Updated ${formatDate(buyer.updatedAt)}` : ''}
+          </div>
+        </>
       )}
 
-      <div className="flex items-center gap-1.5 text-[12px] text-text-3">
-        <Handshake size={13} />
-        Added {formatDate(buyer.createdAt)}
-        {buyer.updatedAt !== buyer.createdAt ? ` · Updated ${formatDate(buyer.updatedAt)}` : ''}
-      </div>
+      {tab === 'messages' && <BuyerSmsThread buyer={buyer} />}
+
+      {tab === 'deals' && <BuyerDealsSection buyerId={buyer.id} />}
 
       {showEdit && <CashBuyerModal buyer={buyer} onClose={() => setShowEdit(false)} />}
       <ConfirmDialog

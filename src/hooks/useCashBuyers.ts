@@ -47,6 +47,8 @@ function fromRow(r: any): CashBuyer {
     dealTypes: (r.deal_types ?? []) as DealType[],
     notes: r.notes,
     status: r.status,
+    smsOptedOut: r.sms_opted_out ?? false,
+    assignedSmsNumber: r.assigned_sms_number,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

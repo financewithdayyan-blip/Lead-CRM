@@ -247,6 +247,26 @@ async function resolveLead(admin: ReturnType<typeof createClient>, fromNorm: str
   return addressMatches.length === 1 ? addressMatches[0] : candidates[0];
 }
 
+// ── Buyer resolution ─────────────────────────────────────────────────────
+
+/**
+ * Checked only after resolveLead finds nothing — a lead's own ongoing
+ * conversation is never redirected to a buyer match just because the same
+ * phone number happens to also be in the cash_buyers roster. Unlike leads,
+ * buyer phone numbers aren't expected to collide (a small, manually curated
+ * roster, not a bulk-imported list), so no disambiguation step is needed.
+ */
+async function resolveBuyer(admin: ReturnType<typeof createClient>, fromNorm: string) {
+  if (fromNorm.length !== 10) return undefined;
+  const { data } = await admin
+    .from('cash_buyers')
+    .select('id, assigned_sms_number')
+    .eq('phone_norm', fromNorm)
+    .limit(1)
+    .maybeSingle();
+  return data ?? undefined;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
@@ -403,6 +423,29 @@ Deno.serve(async (req) => {
       // gets fabricated for it and ai-reply never fires, since that's gated
       // entirely on a resolved lead below.
       if (await blueDocsSigningReplyOrUndefined()) return json({ ok: true, signingReply: true });
+
+      // Not a lead, not a Blue Docs signer — last check before giving up:
+      // a cash buyer texting back. No AI involvement here at all, just
+      // logging the reply into their own thread for an admin to read.
+      const buyer = await resolveBuyer(admin, fromNorm);
+      if (buyer) {
+        if (isHardStopKeyword(body) || isDeclinePhrase(body)) {
+          await admin.from('cash_buyers').update({ sms_opted_out: true }).eq('id', buyer.id);
+        }
+        await admin.from('buyer_messages').insert({
+          buyer_id: buyer.id,
+          direction: 'inbound',
+          body,
+          from_phone: fromRaw,
+          to_phone: toRaw,
+          zoom_message_id: zoomMessageId ?? null,
+        });
+        const inboundKey = keyForSentFrom(toRaw);
+        if (inboundKey && (buyer as { assigned_sms_number?: string | null }).assigned_sms_number !== inboundKey) {
+          await admin.from('cash_buyers').update({ assigned_sms_number: inboundKey }).eq('id', buyer.id);
+        }
+        return json({ ok: true, buyerMatched: true });
+      }
     }
     if (lead) {
       await admin.from('inbound_messages').update({ lead_id: lead.id }).eq('id', inserted.id);

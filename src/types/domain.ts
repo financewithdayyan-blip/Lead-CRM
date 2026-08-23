@@ -505,6 +505,8 @@ export interface CashBuyer {
   dealTypes: DealType[];
   notes: string | null;
   status: 'active' | 'inactive';
+  smsOptedOut: boolean;
+  assignedSmsNumber: string | null;
   createdAt: string;
   updatedAt: string;
 }
