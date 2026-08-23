@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Facebook, Handshake, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { useCashBuyers, useDeleteCashBuyer, buyerMatchesSearchTarget } from '@/hooks/useCashBuyers';
+import { useNavigate } from 'react-router-dom';
+import { Facebook, Handshake, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCashBuyers, useDeleteCashBuyer } from '@/hooks/useCashBuyers';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
-import { GeoMultiSelect } from '@/components/disposition/GeoMultiSelect';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { US_STATE_NAMES, cityStateOptions, resolveSearchTarget } from '@/data/usGeo';
 import { BUYER_PROPERTY_TYPE_LABELS, DEAL_TYPE_CONFIG, type CashBuyer } from '@/types/domain';
 import { externalHref, formatCurrency, formatPhone } from '@/lib/utils';
 
@@ -25,32 +23,104 @@ function priceRangeLabel(buyer: CashBuyer): string {
   return `Up to ${formatCurrency(buyer.priceMax)}`;
 }
 
+function BuyerCard({ buyer, onEdit, onDelete }: { buyer: CashBuyer; onEdit: () => void; onDelete: () => void }) {
+  const navigate = useNavigate();
+  return (
+    <div
+      onClick={() => navigate(`/disposition/${buyer.id}`)}
+      className="card card-hover !p-4 cursor-pointer transition-transform hover:-translate-y-0.5"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-semibold text-text">{buyer.name}</span>
+          {buyer.facebookUrl && (
+            <a
+              href={externalHref(buyer.facebookUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open Facebook profile"
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 text-[#1877F2] hover:opacity-70"
+            >
+              <Facebook size={14} />
+            </a>
+          )}
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            buyer.status === 'active' ? 'bg-success-dim text-success' : 'bg-surface-3 text-text-3'
+          }`}
+        >
+          {buyer.status === 'active' ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+
+      <div className="mt-1 truncate text-[12px] text-text-3">
+        {[buyer.phone ? formatPhone(buyer.phone) : null, buyer.email].filter(Boolean).join(' · ') || 'No contact info'}
+      </div>
+
+      <div className="mt-3 border-t border-border-2 pt-3 text-[12px]">
+        <div className="text-text-2">{marketsLabel(buyer)}</div>
+        <div className="mt-1 text-text-3">
+          {buyer.propertyTypes.length > 0 ? buyer.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-2 pt-3">
+        <div>
+          <div className="text-sm font-semibold text-text">{priceRangeLabel(buyer)}</div>
+          <div className="text-[11px] text-text-3">
+            {buyer.dealTypes.length > 0 ? buyer.dealTypes.map((t) => DEAL_TYPE_CONFIG[t].label).join(', ') : 'Any structure'}
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <button
+            className="btn !p-1.5"
+            title="Edit"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            className="btn !p-1.5"
+            title="Delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DispositionPage() {
   const { data: buyers = [], isLoading, isError, error } = useCashBuyers();
   const deleteCashBuyer = useDeleteCashBuyer();
 
-  const [locationSearch, setLocationSearch] = useState<string[]>([]);
   const [nameSearch, setNameSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('active');
   const [showAdd, setShowAdd] = useState(false);
   const [editTarget, setEditTarget] = useState<CashBuyer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CashBuyer | null>(null);
 
-  const locationOptions = useMemo(() => [...US_STATE_NAMES, ...cityStateOptions()], []);
-  const searchTarget = useMemo(() => (locationSearch[0] ? resolveSearchTarget(locationSearch[0]) : null), [locationSearch]);
-
   const filtered = useMemo(() => {
     const q = nameSearch.trim().toLowerCase();
     return buyers.filter((b) => {
       if (statusFilter && b.status !== statusFilter) return false;
-      if (searchTarget && !buyerMatchesSearchTarget(b, searchTarget)) return false;
       if (q) {
-        const haystack = `${b.name} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
+        const haystack = `${b.name} ${b.marketStates.join(' ')} ${b.marketCounties.join(' ')} ${b.marketCities.join(' ')} ${b.phone ?? ''} ${b.email ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [buyers, nameSearch, statusFilter, searchTarget]);
+  }, [buyers, nameSearch, statusFilter]);
 
   return (
     <div>
@@ -69,34 +139,10 @@ export function DispositionPage() {
         </button>
       </div>
 
-      <div className="mb-4 rounded-lg border border-border-2 bg-surface-2 p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-full max-w-sm">
-            <GeoMultiSelect
-              label="Find buyers in a city or state"
-              placeholder="Type a city or state…"
-              options={locationOptions}
-              selected={locationSearch}
-              onChange={(next) => setLocationSearch(next.length > 0 ? [next[next.length - 1]] : [])}
-            />
-          </div>
-          {locationSearch[0] && (
-            <>
-              <p className="pb-2 text-[12px] text-text-3">
-                {filtered.length} buyer{filtered.length === 1 ? '' : 's'} cover{filtered.length === 1 ? 's' : ''} {locationSearch[0]}
-              </p>
-              <button className="mb-[3px] flex items-center gap-1 pb-2 text-[12px] text-text-3 hover:text-text" onClick={() => setLocationSearch([])}>
-                <X size={12} /> Clear
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
       <div className="mb-4 flex flex-wrap gap-2">
         <input
           className="input max-w-xs flex-1"
-          placeholder="Or search by name, phone, email…"
+          placeholder="Search name, market, phone, email…"
           value={nameSearch}
           onChange={(e) => setNameSearch(e.target.value)}
         />
@@ -116,72 +162,10 @@ export function DispositionPage() {
           {buyers.length === 0 ? 'No cash buyers yet — add your first one to start building the roster.' : 'No buyers match your search.'}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border-2">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border-2 bg-surface-2 text-[11px] uppercase tracking-wide text-text-3">
-              <tr>
-                <th className="px-3 py-2.5 font-semibold">Buyer</th>
-                <th className="px-3 py-2.5 font-semibold">Markets</th>
-                <th className="px-3 py-2.5 font-semibold">Property Types</th>
-                <th className="px-3 py-2.5 font-semibold">Price Range</th>
-                <th className="px-3 py-2.5 font-semibold">Deal Types</th>
-                <th className="px-3 py-2.5 font-semibold">Status</th>
-                <th className="px-3 py-2.5" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-2">
-              {filtered.map((b) => (
-                <tr key={b.id} className="hover:bg-surface-2">
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <Link to={`/disposition/${b.id}`} className="font-medium text-text hover:text-primary hover:underline">
-                        {b.name}
-                      </Link>
-                      {b.facebookUrl && (
-                        <a
-                          href={externalHref(b.facebookUrl)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Open Facebook profile"
-                          className="text-[#1877F2] hover:opacity-70"
-                        >
-                          <Facebook size={14} />
-                        </a>
-                      )}
-                    </div>
-                    <div className="text-[12px] text-text-3">{[b.phone ? formatPhone(b.phone) : null, b.email].filter(Boolean).join(' · ')}</div>
-                  </td>
-                  <td className="max-w-[220px] px-3 py-2.5 text-text-2">{marketsLabel(b)}</td>
-                  <td className="px-3 py-2.5 text-text-2">
-                    {b.propertyTypes.length > 0 ? b.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
-                  </td>
-                  <td className="px-3 py-2.5 text-text-2">{priceRangeLabel(b)}</td>
-                  <td className="px-3 py-2.5 text-text-2">
-                    {b.dealTypes.length > 0 ? b.dealTypes.map((t) => DEAL_TYPE_CONFIG[t].label).join(', ') : 'Any structure'}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        b.status === 'active' ? 'bg-success-dim text-success' : 'bg-surface-3 text-text-3'
-                      }`}
-                    >
-                      {b.status === 'active' ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex justify-end gap-1">
-                      <button className="btn !p-1.5" title="Edit" onClick={() => setEditTarget(b)}>
-                        <Pencil size={13} />
-                      </button>
-                      <button className="btn !p-1.5" title="Delete" onClick={() => setDeleteTarget(b)}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.map((b) => (
+            <BuyerCard key={b.id} buyer={b} onEdit={() => setEditTarget(b)} onDelete={() => setDeleteTarget(b)} />
+          ))}
         </div>
       )}
 

@@ -54,32 +54,3 @@ export function countiesForStates(stateNames: string[]): string[] {
   for (const code of codes) for (const county of data.countiesByState[code] ?? []) set.add(county);
   return [...set].sort((a, b) => a.localeCompare(b));
 }
-
-const CODE_TO_NAME = new Map(data.states.map((s) => [s.code, s.name]));
-
-/** "City, ST" labels for the Disposition search box, so typing "Philadelphia"
- *  unambiguously picks one state's Philadelphia rather than matching a bare
- *  city name that exists in several states. State names are searchable
- *  as-is (no state has a comma in it, so there's no format collision). */
-export function cityStateOptions(): string[] {
-  const out: string[] = [];
-  for (const code of Object.keys(data.citiesByState)) {
-    for (const city of data.citiesByState[code]) out.push(`${city}, ${code}`);
-  }
-  return out.sort((a, b) => a.localeCompare(b));
-}
-
-export type SearchTarget = { kind: 'state'; stateName: string } | { kind: 'city'; cityName: string; stateName: string };
-
-/** Parses a selection from the combined state-name + "City, ST" option list
- *  built by `cityStateOptions()` plus `US_STATE_NAMES` back into a
- *  structured target the buyer-matching logic can use. */
-export function resolveSearchTarget(label: string): SearchTarget | null {
-  if (NAME_TO_CODE.has(label.toLowerCase())) return { kind: 'state', stateName: label };
-  const idx = label.lastIndexOf(', ');
-  if (idx === -1) return null;
-  const cityName = label.slice(0, idx);
-  const code = label.slice(idx + 2);
-  const stateName = CODE_TO_NAME.get(code);
-  return stateName ? { kind: 'city', cityName, stateName } : null;
-}
