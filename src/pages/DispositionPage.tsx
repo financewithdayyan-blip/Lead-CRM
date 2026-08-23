@@ -9,11 +9,17 @@ import { externalHref, formatCurrency, formatPhone } from '@/lib/utils';
 
 const MAX_MARKET_ENTRIES = 3;
 
-function marketsLabel(buyer: CashBuyer): string {
-  const entries = [...buyer.marketStates, ...buyer.marketCounties.map((c) => `${c} County`), ...buyer.marketCities];
-  if (entries.length === 0) return 'Any market';
+/** Cities/counties only — states render separately (see statesLabel) so the
+ *  two never run together into one hard-to-parse line. */
+function citiesLabel(buyer: CashBuyer): string {
+  const entries = [...buyer.marketCounties.map((c) => `${c} County`), ...buyer.marketCities];
+  if (entries.length === 0) return 'Any city';
   if (entries.length <= MAX_MARKET_ENTRIES) return entries.join(', ');
   return `${entries.slice(0, MAX_MARKET_ENTRIES).join(', ')} +${entries.length - MAX_MARKET_ENTRIES} more`;
+}
+
+function statesLabel(buyer: CashBuyer): string {
+  return buyer.marketStates.length > 0 ? buyer.marketStates.join(', ') : 'Any state';
 }
 
 function priceRangeLabel(buyer: CashBuyer): string {
@@ -60,8 +66,9 @@ function BuyerCard({ buyer, onEdit, onDelete }: { buyer: CashBuyer; onEdit: () =
       </div>
 
       <div className="mt-3 border-t border-border-2 pt-3 text-[12px]">
-        <div className="text-text-2">{marketsLabel(buyer)}</div>
-        <div className="mt-1 text-text-3">
+        <div className="text-text-2">{citiesLabel(buyer)}</div>
+        <div className="mt-0.5 font-bold text-text">{statesLabel(buyer)}</div>
+        <div className="mt-1.5 text-text-3">
           {buyer.propertyTypes.length > 0 ? buyer.propertyTypes.map((t) => BUYER_PROPERTY_TYPE_LABELS[t]).join(', ') : 'Any type'}
         </div>
       </div>
