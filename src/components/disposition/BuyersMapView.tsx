@@ -206,7 +206,7 @@ export function BuyersMapView({ buyers }: { buyers: CashBuyer[] }) {
         )}
       </div>
 
-      <div ref={containerRef} className="h-[480px] w-full rounded-xl border border-border-2" />
+      <div ref={containerRef} className="isolate h-[480px] w-full rounded-xl border border-border-2" />
 
       <div className="mt-2 flex flex-wrap items-center gap-4 text-[12px] text-text-2">
         <span className="flex items-center gap-1.5">

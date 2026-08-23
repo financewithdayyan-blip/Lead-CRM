@@ -154,7 +154,7 @@ export function PacketMap({
 
   return (
     <div>
-      <div ref={containerRef} className="h-72 w-full rounded-xl border border-border" />
+      <div ref={containerRef} className="isolate h-72 w-full rounded-xl border border-border" />
       <div className="mt-2 flex flex-wrap items-center gap-4 text-[12px] text-text-2">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.listing }} />
