@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
   const { data: eligible, error: leadsErr } = await admin
     .from('leads')
     .select(
-      'id, user_id, first_name, address, city, state, phone, stage, next_reminder_at, notes, scheduled_callback_at, awaiting_owner_info, lead_tags(tags(name))',
+      'id, user_id, first_name, address, city, state, phone, stage, next_reminder_at, notes, scheduled_callback_at, awaiting_owner_info, assigned_sms_number, lead_tags(tags(name))',
     )
     .in('stage', ['replied', 'initial_contact'])
     .eq('opted_out', false)
@@ -316,11 +316,34 @@ Call draft_reminder with your result.`;
         continue;
       }
 
-      const latestInbound = (inbound ?? [])[inbound!.length - 1];
-      const toPhoneDigits = (latestInbound?.to_phone ?? '').replace(/[^0-9]/g, '').slice(-10);
-      const [, from] =
-        Object.entries(NUMBERS).find(([, n]) => n.phone.replace(/[^0-9]/g, '').slice(-10) === toPhoneDigits) ??
-        Object.entries(NUMBERS)[0];
+      // Same pinned-number rule send-sms uses for a single lead: reuse
+      // whichever number this lead is already pinned to (assigned_sms_number)
+      // so a reminder always lands in the same Zoom thread as everything
+      // before it. Only falls back to guessing from the lead's last inbound
+      // to_phone — and finally to slot 1 — when the lead has no pin yet
+      // (e.g. never replied since a number swap set a new pin elsewhere).
+      const pinnedKey = lead.assigned_sms_number as string | null | undefined;
+      const pinnedNumber = pinnedKey ? NUMBERS[pinnedKey] : undefined;
+      let fromKey: string;
+      let from: { phone: string; email: string };
+      if (pinnedKey && pinnedNumber?.phone && pinnedNumber.email) {
+        fromKey = pinnedKey;
+        from = pinnedNumber;
+      } else {
+        const latestInbound = (inbound ?? [])[inbound!.length - 1];
+        const toPhoneDigits = (latestInbound?.to_phone ?? '').replace(/[^0-9]/g, '').slice(-10);
+        const [matchedKey, matched] =
+          Object.entries(NUMBERS).find(([, n]) => n.phone.replace(/[^0-9]/g, '').slice(-10) === toPhoneDigits) ??
+          Object.entries(NUMBERS)[0];
+        fromKey = matchedKey;
+        from = matched;
+      }
+      // Keep the pin fresh so the NEXT send (from any path — manual reply,
+      // ai-reply, another reminder) reuses this exact number too, instead of
+      // re-guessing every time a lead had no pin yet.
+      if (lead.assigned_sms_number !== fromKey) {
+        await admin.from('leads').update({ assigned_sms_number: fromKey }).eq('id', lead.id);
+      }
       const toPhone = toE164(lead.phone ?? '');
       const phoneNorm = toPhone.replace(/[^0-9]/g, '').slice(-10);
 
