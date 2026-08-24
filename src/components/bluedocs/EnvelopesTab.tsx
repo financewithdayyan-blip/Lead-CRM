@@ -11,10 +11,9 @@ import {
 } from '@/hooks/useContractInstances';
 import { useSignedTemplateUrl } from '@/hooks/useDocTemplates';
 
-type StatusFilter = 'all' | ContractInstance['status'];
+type StatusFilter = ContractInstance['status'];
 
 const STATUS_TABS: Array<{ key: StatusFilter; label: string }> = [
-  { key: 'all', label: 'All' },
   { key: 'sent', label: 'Sent' },
   { key: 'partial', label: 'Partially signed' },
   { key: 'signed', label: 'Completed' },
@@ -37,14 +36,14 @@ export function EnvelopesTab() {
   const voidInstance = useVoidContractInstance();
   const getSignedUrl = useSignedTemplateUrl();
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('sent');
   const [search, setSearch] = useState('');
   const [previewTarget, setPreviewTarget] = useState<ContractInstance | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<string | null>(null);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: instances.length };
+    const c: Record<string, number> = {};
     for (const i of instances) c[i.status] = (c[i.status] ?? 0) + 1;
     return c;
   }, [instances]);
@@ -52,7 +51,7 @@ export function EnvelopesTab() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return instances.filter((c) => {
-      if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+      if (c.status !== statusFilter) return false;
       if (!q) return true;
       return c.name.toLowerCase().includes(q) || c.parties.some((p) => p.name.toLowerCase().includes(q));
     });
