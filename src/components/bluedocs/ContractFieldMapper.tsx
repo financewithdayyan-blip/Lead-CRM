@@ -443,12 +443,6 @@ export function ContractFieldMapper({
                     boxShadow: selectedId === f.id ? `0 0 0 2px ${roleColor(f.role)}` : undefined,
                   }}
                 >
-                  <span
-                    className="pointer-events-none absolute -top-[15px] left-0 whitespace-nowrap rounded-t px-1.5 py-[1px] text-[8.5px] font-bold uppercase tracking-wide text-white"
-                    style={{ background: roleColor(f.role) }}
-                  >
-                    {roleLabel(f.role, template.type, partyRoles)}
-                  </span>
                   <span className="pointer-events-none block truncate px-1 text-[9px] font-semibold" style={{ color: roleColor(f.role) }}>
                     {f.label}
                   </span>
