@@ -10,8 +10,9 @@ import {
   type ContractInstance,
 } from '@/hooks/useContractInstances';
 import { useSignedTemplateUrl } from '@/hooks/useDocTemplates';
+import { bucketFor, findPendingParty, type ContractBucket } from '@/lib/contractBoard';
 
-type Bucket = 'draft' | 'sent' | 'yourTurn' | 'completed';
+type Bucket = ContractBucket;
 
 const COLUMNS: Array<{ key: Bucket; label: string; dot: string }> = [
   { key: 'draft', label: 'Draft', dot: 'bg-text-3' },
@@ -19,36 +20,6 @@ const COLUMNS: Array<{ key: Bucket; label: string; dot: string }> = [
   { key: 'yourTurn', label: 'Your Turn', dot: 'bg-warning' },
   { key: 'completed', label: 'Completed', dot: 'bg-success' },
 ];
-
-/** The one party who can actually act right now on a given envelope —
- * signing is strictly sequential, so at most one party is ever both
- * pending and unlocked. Mirrors ContractInstanceRow's own Remind-button
- * rule; needed here too since both bucketing and the "Your Turn" Sign-now
- * link depend on knowing who that is. */
-function findPendingParty(instance: ContractInstance) {
-  const ordered = [...instance.parties].sort((a, b) => a.signOrder - b.signOrder);
-  return ordered.find(
-    (p) => p.status === 'pending' && !ordered.some((other) => other.signOrder < p.signOrder && other.status !== 'signed'),
-  );
-}
-
-/** "Your Turn" means the next unlocked signer is our own side of the deal —
- * the built-in 'buyer' role, or any extra role the template itself labels
- * "Buyer" (Cash Deal's second, countersigning slot — see the Blue Docs
- * contract-flow plan). Every other in-flight envelope (waiting on the
- * seller or an outside party) is "Sent"; declined/voided/expired ones land
- * there too, still flagged by their own red badge, since the flow stalled
- * rather than actually completing. */
-function bucketFor(instance: ContractInstance): Bucket {
-  if (instance.status === 'draft') return 'draft';
-  if (instance.status === 'signed') return 'completed';
-  const pending = findPendingParty(instance);
-  if (!pending) return 'sent';
-  const isUs =
-    pending.role === 'buyer' ||
-    instance.templatePartyRoles.find((r) => r.id === pending.role)?.label.trim().toLowerCase() === 'buyer';
-  return isUs ? 'yourTurn' : 'sent';
-}
 
 /**
  * Every generated contract across every template, laid out as a board —
