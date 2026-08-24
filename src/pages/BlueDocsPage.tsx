@@ -5,9 +5,15 @@ import { Modal } from '@/components/ui/Modal';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
 import { FillCashDealContractModal, isCashDealTemplate } from '@/components/bluedocs/FillCashDealContractModal';
-import { ContractsTable } from '@/components/bluedocs/ContractsTable';
+import { TemplateCategoryCard } from '@/components/bluedocs/TemplateCategoryCard';
 import { EnvelopesTab } from '@/components/bluedocs/EnvelopesTab';
-import { useDeleteDocTemplate, useSignedTemplateUrl, type DocTemplate } from '@/hooks/useDocTemplates';
+import {
+  useDocTemplates,
+  useDeleteDocTemplate,
+  useSignedTemplateUrl,
+  PURCHASE_CONTRACT_TYPES,
+  type DocTemplate,
+} from '@/hooks/useDocTemplates';
 
 function SigningLinkRow({ label, url }: { label: string; url: string }) {
   const [copied, setCopied] = useState(false);
@@ -131,14 +137,44 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
 }
 
 // ─── Contract Templates tab ─────────────────────────────────────────────────
-// One row per document template, grouped Purchase Contracts / Others, each
-// row's status reflecting its most-recently-sent envelope (if any).
+// Every purchase-contract deal type (Cash, Novation, Subject-To, Seller
+// Finance) lives together under one card — the admin picks the type at
+// upload time instead of each type getting its own slot. Anything else
+// (a JV agreement, a listing/marketing agreement, etc.) collects in Others.
 function ContractTemplatesTab() {
+  const { data: templates = [] } = useDocTemplates('contract');
   const flow = useDocFlow();
 
   return (
-    <div>
-      <ContractsTable onOpenMapper={flow.openMapper} onSend={flow.setSendTarget} />
+    <div className="space-y-5">
+      <TemplateCategoryCard
+        label="Purchase Contracts"
+        docType="contract"
+        typeOptions={PURCHASE_CONTRACT_TYPES}
+        // Deal-type order (Cash, Novation, Subject-To, Seller Finance) rather
+        // than upload recency — Cash Deal is the one actually in daily use
+        // and should always lead the list, not whichever was (re)uploaded
+        // most recently.
+        items={templates
+          .filter((t) => t.contractType !== null)
+          .sort(
+            (a, b) =>
+              PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === a.contractType) -
+              PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === b.contractType),
+          )}
+        onOpenMapper={flow.openMapper}
+        onSend={flow.setSendTarget}
+        onDeleteTarget={flow.setDeleteTarget}
+      />
+      <TemplateCategoryCard
+        label="Others"
+        docType="contract"
+        items={templates.filter((t) => t.contractType === null)}
+        multi
+        onOpenMapper={flow.openMapper}
+        onSend={flow.setSendTarget}
+        onDeleteTarget={flow.setDeleteTarget}
+      />
       <DocFlowModals flow={flow} />
     </div>
   );
