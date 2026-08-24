@@ -270,70 +270,23 @@ export function ContractFieldMapper({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg">
-      {/* ── Top bar — name, field palette, role palette, and the two exits
-          (Cancel/Save) all live here so nothing requires scrolling to reach. */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-4 py-2.5 shadow-sm">
-        <input
-          className="input !w-52 shrink-0"
-          placeholder="Template name (e.g. PSA Cash)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <div className="h-6 w-px shrink-0 bg-border-2" />
-        {FIELD_TYPE_BUTTONS.map(({ type, label, icon: Icon }) => (
-          <button
-            key={type}
-            className={`btn !px-2.5 !py-1.5 text-[12px] ${placingType === type ? 'btn-primary' : ''}`}
-            onClick={() => setPlacingType(placingType === type ? null : type)}
-          >
-            <Icon size={13} /> {label}
-          </button>
-        ))}
-        <div className="h-6 w-px shrink-0 bg-border-2" />
-        <span className="shrink-0 text-[12px] text-text-3">Placing as:</span>
-        {roles.map((r) => (
-          <span key={r} className="group relative inline-flex items-center">
-            <button
-              className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${placingRole === r ? 'text-white' : 'bg-surface-3 text-text-2'}`}
-              style={placingRole === r ? { background: roleColor(r) } : undefined}
-              onClick={() => setPlacingRole(r)}
-            >
-              {roleLabel(r, template.type, partyRoles)}
-            </button>
-            {r !== 'seller' && r !== 'buyer' && !fields.some((f) => f.role === r) && (
-              <button className="ml-0.5 text-text-3 hover:text-danger" title="Remove this signee" onClick={() => removeRole(r)}>
-                <X size={11} />
-              </button>
-            )}
-          </span>
-        ))}
-        {addingRole ? (
-          <span className="inline-flex items-center gap-1">
-            <input
-              autoFocus
-              className="input !w-32 !py-1 text-[12px]"
-              placeholder="e.g. Witness"
-              value={newRoleLabel}
-              onChange={(e) => setNewRoleLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmAddRole();
-                if (e.key === 'Escape') setAddingRole(false);
-              }}
-            />
-            <button className="btn !p-1.5" disabled={!newRoleLabel.trim()} onClick={confirmAddRole}>
-              <Check size={12} />
-            </button>
-            <button className="btn !p-1.5" onClick={() => setAddingRole(false)}>
-              <X size={12} />
-            </button>
-          </span>
-        ) : (
-          <button className="btn !px-2 !py-1 text-[11px]" onClick={() => setAddingRole(true)}>
-            <Plus size={12} /> Add Signee
-          </button>
-        )}
-
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+      {/* ── Top bar — just the name, step context, and the two exits
+          (Cancel/Save). Field types and roles now live in the left sidebar
+          so this stays a single uncluttered row. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-white px-4 py-2.5 shadow-sm">
+        <div className="min-w-0 flex-1">
+          <input
+            className="input !w-64 !text-[13px] !font-semibold"
+            placeholder="Template name (e.g. PSA Cash)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="mt-0.5 text-[11px] text-text-3">
+            {fields.length} field{fields.length === 1 ? '' : 's'} placed
+            {placingType && <span className="font-medium text-primary"> · click the document to place a {FIELD_DEFAULTS[placingType].label}</span>}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <button className="btn !px-3 !py-1.5 text-[13px]" onClick={onClose}>
             Cancel
           </button>
@@ -344,10 +297,76 @@ export function ContractFieldMapper({
         </div>
       </div>
 
-      {/* ── Main workspace — canvas on the left (its own toolbar for page nav
-          and zoom), field list on the right. Both scroll independently so a
-          long document and a long field list never fight over one scrollbar. */}
+      {/* ── Main workspace — a left sidebar (field-type palette + signee
+          roles), the document canvas in the middle, and the selected-field /
+          full field list on the right. All three scroll independently. */}
       <div className="flex min-h-0 flex-1">
+        <div className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-border bg-white">
+          <div className="border-b border-border-2 p-3">
+            <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">Drag a field</div>
+            <div className="space-y-1">
+              {FIELD_TYPE_BUTTONS.map(({ type, label, icon: Icon }) => (
+                <button
+                  key={type}
+                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12.5px] font-medium transition-colors ${
+                    placingType === type ? 'bg-primary text-white' : 'text-text-2 hover:bg-surface-3'
+                  }`}
+                  onClick={() => setPlacingType(placingType === type ? null : type)}
+                >
+                  <Icon size={14} className="shrink-0" /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3">
+            <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">Assign new fields to</div>
+            <div className="flex flex-wrap gap-1.5">
+              {roles.map((r) => (
+                <span key={r} className="group relative inline-flex items-center">
+                  <button
+                    className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${placingRole === r ? 'text-white' : 'bg-surface-3 text-text-2'}`}
+                    style={placingRole === r ? { background: roleColor(r) } : undefined}
+                    onClick={() => setPlacingRole(r)}
+                  >
+                    {roleLabel(r, template.type, partyRoles)}
+                  </button>
+                  {r !== 'seller' && r !== 'buyer' && !fields.some((f) => f.role === r) && (
+                    <button className="ml-0.5 text-text-3 hover:text-danger" title="Remove this signee" onClick={() => removeRole(r)}>
+                      <X size={11} />
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            {addingRole ? (
+              <div className="mt-1.5 flex items-center gap-1">
+                <input
+                  autoFocus
+                  className="input !py-1 text-[12px]"
+                  placeholder="e.g. Witness"
+                  value={newRoleLabel}
+                  onChange={(e) => setNewRoleLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') confirmAddRole();
+                    if (e.key === 'Escape') setAddingRole(false);
+                  }}
+                />
+                <button className="btn !p-1.5" disabled={!newRoleLabel.trim()} onClick={confirmAddRole}>
+                  <Check size={12} />
+                </button>
+                <button className="btn !p-1.5" onClick={() => setAddingRole(false)}>
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <button className="btn mt-1.5 w-full !px-2 !py-1 text-[11px]" onClick={() => setAddingRole(true)}>
+                <Plus size={12} /> Add Signee
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-white px-4 py-2">
             <div className="flex items-center gap-1.5">
@@ -424,6 +443,12 @@ export function ContractFieldMapper({
                     boxShadow: selectedId === f.id ? `0 0 0 2px ${roleColor(f.role)}` : undefined,
                   }}
                 >
+                  <span
+                    className="pointer-events-none absolute -top-[15px] left-0 whitespace-nowrap rounded-t px-1.5 py-[1px] text-[8.5px] font-bold uppercase tracking-wide text-white"
+                    style={{ background: roleColor(f.role) }}
+                  >
+                    {roleLabel(f.role, template.type, partyRoles)}
+                  </span>
                   <span className="pointer-events-none block truncate px-1 text-[9px] font-semibold" style={{ color: roleColor(f.role) }}>
                     {f.label}
                   </span>
@@ -440,7 +465,7 @@ export function ContractFieldMapper({
 
         <div className="flex w-72 shrink-0 flex-col border-l border-border bg-white">
           <div className="border-b border-border p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Selected field</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Field settings</div>
             {!selected ? (
               <p className="mt-2 text-[12px] text-text-3">
                 Click a field on the document to edit it, or pick a field type above and click the document to add one.
