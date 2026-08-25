@@ -31,8 +31,14 @@ Steps, in this exact order:
 3. CONDITION — cover these one at a time, in order:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
-   - Any major repairs needed — HVAC, electrical, plumbing, etc.
+   - Any major repairs needed, in general.
+   - HVAC.
+   - Electrical — updated, or still older/original wiring.
+   - Plumbing — PVC or iron cast.
    - How old the roof is.
+   - The foundation — any cracks or settling.
+   - Any leaks or water damage, anywhere in the house.
+   - Any mold they know of.
 4. TIMELINE — ask if there's a timeline they're looking to close within.
 5. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
 6. DECISION — ask if anyone else is involved in making the decision, like a spouse, co-owner, or other family member.

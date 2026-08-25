@@ -129,8 +129,12 @@ export interface ScriptAnswers {
   condition_rating?: string;
   condition_issues?: string;
   condition_hvac?: string;
+  condition_electrical?: string;
   condition_plumbing?: string;
   condition_roof?: string;
+  condition_foundation?: string;
+  condition_leaks?: string;
+  condition_mold?: string;
   // Timeline
   timeline?: string;
   // Price

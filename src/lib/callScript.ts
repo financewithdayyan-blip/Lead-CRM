@@ -37,8 +37,12 @@ const STEPS_BEFORE_MORTGAGE: ScriptStepDef[] = [
       { key: 'condition_rating', prompt: 'What would you rate it out of 10 if you were in my shoes?' },
       { key: 'condition_issues', prompt: 'Any major issues that I should know about?' },
       { key: 'condition_hvac', prompt: 'What about HVAC?' },
+      { key: 'condition_electrical', prompt: 'What about the electrical, is it updated or still older wiring?' },
       { key: 'condition_plumbing', prompt: 'Is Plumbing PVC or Iron Cast?' },
       { key: 'condition_roof', prompt: 'How old is the Roof?' },
+      { key: 'condition_foundation', prompt: 'Any issues with the foundation, cracks or settling?' },
+      { key: 'condition_leaks', prompt: 'Any leaks or water damage anywhere in the house?' },
+      { key: 'condition_mold', prompt: 'Any mold that you know of?' },
     ],
   },
   {

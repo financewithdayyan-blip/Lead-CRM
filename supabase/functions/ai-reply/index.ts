@@ -208,8 +208,14 @@ Steps, in this exact order:
 3. CONDITION — cover these one at a time, in order:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
-   - Any major repairs needed — HVAC, electrical, plumbing, etc.
+   - Any major repairs needed, in general.
+   - HVAC.
+   - Electrical — updated, or still older/original wiring.
+   - Plumbing — PVC or iron cast.
    - How old the roof is.
+   - The foundation — any cracks or settling.
+   - Any leaks or water damage, anywhere in the house.
+   - Any mold they know of.
 4. TIMELINE — ask if there's a timeline they're looking to close within.
 5. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
 6. DECISION — ask if anyone else is involved in making the decision, like a spouse, co-owner, or other family member.
@@ -699,7 +705,7 @@ Deno.serve(async (req) => {
                   summary: {
                     type: 'string',
                     description:
-                      "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (motivation, condition, price, timeline, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
+                      "Only meaningful when fully_qualified is true — empty string otherwise. A concise, factual, labeled recap (motivation, condition, timeline, price, mortgage details if applicable, ownership status) of what the seller actually said, for a human reading it later without rereading the whole thread. Never invent or infer anything not actually said.",
                   },
                   confirmed_first_name: {
                     type: 'string',
@@ -736,10 +742,14 @@ Deno.serve(async (req) => {
                       motivation_reason: { type: 'string', description: "Their stated motivation for selling." },
                       condition_general: { type: 'string', description: 'General condition of the property as they described it.' },
                       condition_rating: { type: 'string', description: 'Their self-rating out of 10.' },
-                      condition_issues: { type: 'string', description: 'Catch-all for issues that are NOT HVAC, plumbing, or roof — electrical, foundation, windows/doors, mold, pests, etc. belong here, never in condition_hvac.' },
+                      condition_issues: { type: 'string', description: 'Catch-all for issues that are NOT HVAC, electrical, plumbing, roof, foundation, leaks, or mold — windows/doors, pests, etc. belong here, never in condition_hvac.' },
                       condition_hvac: { type: 'string', description: 'What they said about HVAC/heating/AC specifically — never electrical or plumbing.' },
+                      condition_electrical: { type: 'string', description: 'What they said about the electrical system — updated vs older/original wiring, panel issues, etc. — never HVAC or plumbing.' },
                       condition_plumbing: { type: 'string', description: 'What they said about plumbing specifically (PVC vs iron cast, etc).' },
                       condition_roof: { type: 'string', description: 'How old they said the roof is.' },
+                      condition_foundation: { type: 'string', description: 'What they said about the foundation — cracks, settling, or other structural issues.' },
+                      condition_leaks: { type: 'string', description: 'Any leaks or water damage they mentioned, and where.' },
+                      condition_mold: { type: 'string', description: 'Whether they mentioned any mold, and where if so.' },
                       timeline: { type: 'string', description: 'When they said they want to close.' },
                       price_asking: { type: 'string', description: 'The number they said they are hoping to get.' },
                       price_reasoning: { type: 'string', description: 'How they said they arrived at that number.' },
