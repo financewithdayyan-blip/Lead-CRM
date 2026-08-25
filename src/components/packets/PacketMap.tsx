@@ -66,7 +66,7 @@ export function PacketMap({
   useEffect(() => {
     if (!containerRef.current || (!pins.length && !center)) return;
 
-    const map = L.map(containerRef.current, { scrollWheelZoom: false });
+    const map = L.map(containerRef.current, { scrollWheelZoom: false, zoomControl: false });
     mapRef.current = map;
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
