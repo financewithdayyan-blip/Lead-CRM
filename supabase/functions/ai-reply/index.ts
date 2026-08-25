@@ -205,7 +205,7 @@ const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversatio
 Steps, in this exact order:
 1. OWNER CONFIRMATION — confirm you're speaking with the owner, or someone who can speak for them (see the standing rules on non-owners and wrong numbers). This step is quick, not a checkpoint to linger on: the moment it's established, move straight into MOTIVATION on that same reply or the next one. Once confirmed, it is done — never re-ask it or circle back to it later in the conversation, no matter what else comes up.
 2. MOTIVATION — ask why they're looking to sell, or what's going on with the property. A brief, natural answer is enough — don't push for more than they volunteer, and don't turn it into an interrogation.
-3. CONDITION — cover these one at a time, in order:
+3. CONDITION — cover these one at a time, in order. Ask about exactly ONE of the items below per message, then wait for their answer before the next one — never combine two or more into the same message, and never list several in one sentence with commas (e.g. "what about the roof, HVAC, and plumbing" breaks this rule exactly as much as covering them in separate paragraphs of the same text would):
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
    - Any major repairs needed, in general.
@@ -219,7 +219,7 @@ Steps, in this exact order:
 4. TIMELINE — ask if there's a timeline they're looking to close within.
 5. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
 6. DECISION — ask if anyone else is involved in making the decision, like a spouse, co-owner, or other family member.
-7. PHOTOS — ask for interior photos so the current condition can actually be seen.
+7. PHOTOS — ask for interior photos so the current condition can actually be seen. If they say they can't do it themselves (out of state, no access, etc.), ask once whether someone local — an ex, a neighbor, a property manager, a tenant, anyone nearby — could walk through and send some instead. If that's not possible either, don't keep pushing for it: this step is done, move straight to CALLBACK — a human will sort out getting eyes on the property another way.
 8. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
 A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The DECISION step is asked in its place in the sequence but doesn't block fully_qualified either — record the answer if they give one, but move on if they don't. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
@@ -263,7 +263,7 @@ WHAT YOU ACTUALLY KNOW ABOUT THIS LEAD:
 This lead already answered every qualification question — motivation, condition, price, timeline, and mortgage or back taxes if applicable. Two things are still outstanding, in order: interior photos of the property, then a specific day and time to call them and go over the offer. Never ask about motivation, condition, price, timeline, mortgage, or taxes again — all of that is already settled, and re-asking will only confuse them.
 
 Read their message and the conversation so far, then reply naturally, the way a real person texts:
-- If photos haven't come in yet (not in this message, not earlier in the conversation): respond naturally to whatever they actually said — a delay, a question, chit-chat. Don't ask for a callback time yet, that comes after photos.
+- If photos haven't come in yet (not in this message, not earlier in the conversation): respond naturally to whatever they actually said — a delay, a question, chit-chat. Don't ask for a callback time yet, that comes after photos. If they say they can't get the photos themselves (out of state, no access, etc.) and you haven't already suggested this: ask once whether someone local — an ex, a neighbor, a property manager, a tenant, anyone nearby — could walk through and send some instead. If that's also not possible, or you already asked and they said no, stop pushing for photos — move straight into asking for a callback time instead, same as if photos had arrived.
 - Once photos are in (this message or already in the conversation) and they have NOT yet given a real day/time to call about the offer: if this message is what just delivered the photos, thank them briefly, then ask what's a good time to call them to go over the offer. If photos already came in earlier and you haven't asked yet, ask now. If you already asked and they're just chatting, respond naturally and don't re-ask.
 - Once they actually give a specific day and time to call about the offer: fill in scheduled_callback_at and scheduled_callback_note — an ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY'S DATE above. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank. This is not done just by asking — only fill these in once they've actually given a real answer.
 - If they're declining or asking not to be contacted again, in any phrasing: reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Set hard_decline false only if the decline is clearly and specifically about the price/offer amount and nothing else; true for every other kind of decline, including if unsure.
@@ -946,9 +946,11 @@ Deno.serve(async (req) => {
         meta: { direction: 'outbound', from: from.phone, to: toE164Phone, aiGenerated: true },
       });
 
-      // A short human-feeling gap between parts of the same reply, and
-      // enough separation that the carrier won't reorder them on delivery.
-      if (i < replyParts.length - 1) await sleep(1500);
+      // A human-feeling gap between parts of the same reply — scaled by
+      // length so a longer message reads as having actually been typed,
+      // not just fired off back to back like a bot. 1.5s flat wasn't
+      // enough; a real person pauses several seconds between separate texts.
+      if (i < replyParts.length - 1) await sleep(Math.min(2500 + part.length * 35, 7000));
     }
   } catch (e) {
     if (triggerMessageId) {
