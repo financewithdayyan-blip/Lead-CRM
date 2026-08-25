@@ -691,6 +691,26 @@ export function useDeletePacket() {
   });
 }
 
+/** Emails an active packet's link to an investor — see supabase/functions/send-packet-email.
+ * The server re-reads the packet's own fields (property type, area, deal
+ * structure) rather than trusting anything from the client, so this call only
+ * ever needs the packet id, the recipient, and an optional personal note. */
+export function useSendPacketEmail() {
+  return useMutation({
+    mutationFn: async ({ packetId, email, note }: { packetId: string; email: string; note?: string }) => {
+      const { data, error } = await supabase.functions.invoke('send-packet-email', {
+        body: { packetId, email, note },
+      });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+  });
+}
+
 /**
  * Uploads to the public packet-images bucket AND creates the packet_images
  * row right away, rather than waiting for the packet's own Save — the

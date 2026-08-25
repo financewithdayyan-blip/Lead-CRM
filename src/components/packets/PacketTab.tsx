@@ -1,11 +1,81 @@
 import { useState } from 'react';
-import { Check, Copy, ExternalLink, FileText, Plus, Trash2 } from 'lucide-react';
+import { Check, Copy, ExternalLink, FileText, Loader2, Mail, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
 import { DealPacketBuilder } from './DealPacketBuilder';
 import { PacketAnalytics } from './PacketAnalytics';
-import { packetUrl, useCreatePacket, useDeletePacket, useLeadPackets } from '@/hooks/useDealPackets';
+import { packetUrl, useCreatePacket, useDeletePacket, useLeadPackets, useSendPacketEmail } from '@/hooks/useDealPackets';
 import { formatDate } from '@/lib/utils';
 import type { DealPacket, Lead, PacketStatus } from '@/types/domain';
+
+export function EmailPacketModal({ packet, onClose }: { packet: DealPacket; onClose: () => void }) {
+  const [email, setEmail] = useState('');
+  const [note, setNote] = useState('');
+  const [sent, setSent] = useState(false);
+  const sendEmail = useSendPacketEmail();
+
+  function handleSend() {
+    sendEmail.mutate(
+      { packetId: packet.id, email: email.trim(), note: note.trim() || undefined },
+      { onSuccess: () => setSent(true) },
+    );
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Email this packet" width="sm">
+      {sent ? (
+        <div className="py-2 text-center">
+          <div className="mb-3 flex justify-center text-success">
+            <Check size={28} />
+          </div>
+          <p className="text-[13px] text-text-2">Sent to {email.trim()}.</p>
+          <button className="btn btn-primary mt-4" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Investor's email</label>
+            <input
+              type="email"
+              autoFocus
+              className="input"
+              placeholder="investor@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Personal note (optional)</label>
+            <textarea
+              className="input min-h-[70px] resize-none"
+              placeholder="Thought you'd be interested in this one..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+          {sendEmail.isError && (
+            <p className="text-[12px] text-danger">{(sendEmail.error as Error).message}</p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={!email.trim() || sendEmail.isPending}
+              onClick={handleSend}
+            >
+              {sendEmail.isPending ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+              {sendEmail.isPending ? 'Sending…' : 'Send'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 const STATUS_STYLE: Record<PacketStatus, string> = {
   draft: 'bg-surface-3 text-text-3',
@@ -13,7 +83,17 @@ const STATUS_STYLE: Record<PacketStatus, string> = {
   archived: 'bg-warning-dim text-warning',
 };
 
-function PacketRow({ packet, onOpen, onDelete }: { packet: DealPacket; onOpen: () => void; onDelete: () => void }) {
+function PacketRow({
+  packet,
+  onOpen,
+  onDelete,
+  onEmail,
+}: {
+  packet: DealPacket;
+  onOpen: () => void;
+  onDelete: () => void;
+  onEmail: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const url = packetUrl(packet.slug);
 
@@ -51,6 +131,9 @@ function PacketRow({ packet, onOpen, onDelete }: { packet: DealPacket; onOpen: (
             <a href={url} target="_blank" rel="noopener noreferrer" className="btn !px-2 !py-1 text-[12px]" title="Open public packet">
               <ExternalLink size={13} />
             </a>
+            <button onClick={onEmail} className="btn !px-2.5 !py-1 text-[12px]" title="Email this packet to an investor">
+              <Mail size={13} /> Email
+            </button>
           </>
         )}
         <button onClick={onOpen} className="btn !px-2.5 !py-1 text-[12px]">Edit</button>
@@ -68,6 +151,7 @@ export function PacketTab({ lead }: { lead: Lead }) {
   const deletePacket = useDeletePacket();
   const [openId, setOpenId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [emailTarget, setEmailTarget] = useState<DealPacket | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate() {
@@ -113,7 +197,12 @@ export function PacketTab({ lead }: { lead: Lead }) {
         <div className="space-y-2">
           {packets.map((p) => (
             <div key={p.id}>
-              <PacketRow packet={p} onOpen={() => setOpenId(p.id)} onDelete={() => setDeleteTarget(p.id)} />
+              <PacketRow
+                packet={p}
+                onOpen={() => setOpenId(p.id)}
+                onDelete={() => setDeleteTarget(p.id)}
+                onEmail={() => setEmailTarget(p)}
+              />
               {p.status !== 'draft' && <PacketAnalytics packetId={p.id} />}
             </div>
           ))}
@@ -121,6 +210,7 @@ export function PacketTab({ lead }: { lead: Lead }) {
       )}
 
       {openId && <DealPacketBuilder packetId={openId} lead={lead} onClose={() => setOpenId(null)} />}
+      {emailTarget && <EmailPacketModal packet={emailTarget} onClose={() => setEmailTarget(null)} />}
 
       <ConfirmDialog
         open={!!deleteTarget}

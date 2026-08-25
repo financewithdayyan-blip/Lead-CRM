@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, FolderInput, Loader2, Plus, Trash2, Upload, Video, X } from 'lucide-react';
+import { Check, Copy, FolderInput, Loader2, Mail, Plus, Trash2, Upload, Video, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { EmailPacketModal } from './PacketTab';
 import {
   analyzeDeal,
   compSetConfidence,
@@ -84,6 +85,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [images, setImages] = useState<PacketImage[]>([]);
   const [videos, setVideos] = useState<PacketVideo[]>([]);
   const [copied, setCopied] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -392,6 +394,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const saving = savePacket.isPending;
 
   return (
+    <>
     <Modal open onClose={onClose} title="Deal Packet" width="xl">
       {isLoading || !packet ? (
         <div className="flex items-center gap-2 py-10 text-[13px] text-text-3">
@@ -418,6 +421,9 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                   </code>
                   <button type="button" onClick={copyLink} className="btn !px-2 !py-1 text-[12px]">
                     {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+                  </button>
+                  <button type="button" onClick={() => setShowEmail(true)} className="btn !px-2.5 !py-1 text-[12px]">
+                    <Mail size={13} /> Email
                   </button>
                 </div>
               ) : (
@@ -897,5 +903,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
         </div>
       )}
     </Modal>
+    {showEmail && packet && <EmailPacketModal packet={packet} onClose={() => setShowEmail(false)} />}
+    </>
   );
 }

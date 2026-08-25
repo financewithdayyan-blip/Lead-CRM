@@ -70,3 +70,6 @@ verify_jwt = true
 
 [functions.send-buyer-sms]
 verify_jwt = true
+
+[functions.send-packet-email]
+verify_jwt = true
