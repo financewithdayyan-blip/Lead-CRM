@@ -210,16 +210,17 @@ Steps, in this exact order:
    - What they'd rate it, out of 10.
    - Any major repairs needed — HVAC, electrical, plumbing, etc.
    - How old the roof is.
-4. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
-5. TIMELINE — ask if there's a timeline they're looking to close within.
-6. PHOTOS — ask for interior photos so the current condition can actually be seen.
-7. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
+4. TIMELINE — ask if there's a timeline they're looking to close within.
+5. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
+6. DECISION — ask if anyone else is involved in making the decision, like a spouse, co-owner, or other family member.
+7. PHOTOS — ask for interior photos so the current condition can actually be seen.
+8. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
-A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
+A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The DECISION step is asked in its place in the sequence but doesn't block fully_qualified either — record the answer if they give one, but move on if they don't. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
 
 const LIEN_ADDENDUM = `
 
-This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after TIMELINE and before PHOTOS — the fixed order for this tag is CONDITION, PRICE, TIMELINE, MORTGAGE, PHOTOS, CALLBACK: ask their monthly payment, total remaining balance owed, and interest rate, then ask them to email a copy of their mortgage statement to dayyan@bluebirdacquisition.com. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline — don't hold fully_qualified back waiting for the statement document itself to actually arrive, once you've asked for it that part is done.
+This lead is in foreclosure, lis pendens, or auction proceedings. Insert a MORTGAGE step immediately after PRICE and before DECISION — the fixed order for this tag is CONDITION, TIMELINE, PRICE, MORTGAGE, DECISION, PHOTOS, CALLBACK: ask their monthly payment, total remaining balance owed, and interest rate, then ask them to email a copy of their mortgage statement to dayyan@bluebirdacquisition.com. Do not ask how far behind they are on payments. This mortgage step is also required for fully_qualified on this tag, alongside motivation, condition, price and timeline — don't hold fully_qualified back waiting for the statement document itself to actually arrive, once you've asked for it that part is done.
 
 If they mention "a plan": ask whether it involves an attorney postponing the auction. If so, explain that a postponement only delays the auction — it doesn't resolve the underlying situation.`;
 
@@ -238,7 +239,7 @@ const TAX_TAG_NAMES = ['tax delinquent'];
 // tag framework overrides entirely) so the requirement survives regardless.
 const CALLBACK_ADDENDUM = `
 
-CALLBACK STEP — required for every lead regardless of anything else above: after motivation, condition, price, timeline (and mortgage, if this is a lien-adjacent lead) are established and you've asked for interior photos, ask one more thing before the interview counts as complete: what's a good time to call them back tomorrow. This is not done just by asking — wait for them to actually name a real day and time. Only once they do can fully_qualified be true (assuming everything else required is also already established). When they give you a time, fill in scheduled_callback_at and scheduled_callback_note on the same turn.`;
+CALLBACK STEP — required for every lead regardless of anything else above: after motivation, condition, timeline, price (and mortgage, if this is a lien-adjacent lead) are established, the decision question has been asked, and you've asked for interior photos, ask one more thing before the interview counts as complete: what's a good time to call them back tomorrow. This is not done just by asking — wait for them to actually name a real day and time. Only once they do can fully_qualified be true (assuming everything else required is also already established). When they give you a time, fill in scheduled_callback_at and scheduled_callback_note on the same turn.`;
 
 // ── Photo-wait mode — a lead sitting in Partial Qualified (initial_contact).
 // Everything the regular framework asks for is already answered; the only
