@@ -1,0 +1,72 @@
+# Pins each Edge Function's verify_jwt setting so a plain `supabase functions
+# deploy <name>` (no flag) can never silently reset it to the CLI's default
+# (true) on redeploy. This bit us for real: ai-reply was manually set to
+# verify_jwt=false at some point (its only caller, sms-webhook, authenticates
+# with a custom x-internal-secret header, not a Supabase JWT — Supabase's own
+# gateway rejects it with a 401 before our code even runs otherwise), and a
+# routine redeploy with no config.toml on record silently flipped it back to
+# true. Every call from sms-webhook then failed a platform-level auth check
+# invisibly — sms-webhook's fire-and-forget call swallows any error with no
+# logging, so no lead got an AI reply for ~18 hours before this was caught.
+#
+# false = called only via a custom secret header or by another edge function/
+#         pg_cron with its own auth, never via a real Supabase session JWT.
+# true  = called from the authenticated frontend via supabase.functions.invoke(),
+#         which attaches the signed-in user's JWT automatically.
+
+[functions.sms-webhook]
+verify_jwt = false
+
+[functions.ai-reply]
+verify_jwt = false
+
+[functions.submit-signature]
+verify_jwt = false
+
+[functions.signing-pdf-url]
+verify_jwt = false
+
+[functions.log-signing-view]
+verify_jwt = false
+
+[functions.ai-reply-review]
+verify_jwt = false
+
+[functions.bulk-sms-dispatcher]
+verify_jwt = false
+
+[functions.trigger-blog-deploy]
+verify_jwt = false
+
+[functions.decline-signature]
+verify_jwt = false
+
+[functions.record-consent]
+verify_jwt = false
+
+[functions.contract-reminder-sweep]
+verify_jwt = false
+
+[functions.invite-user]
+verify_jwt = true
+
+[functions.score-lead]
+verify_jwt = true
+
+[functions.send-sms]
+verify_jwt = true
+
+[functions.sms-backfill]
+verify_jwt = true
+
+[functions.send-reminders]
+verify_jwt = true
+
+[functions.create-contract-instance]
+verify_jwt = true
+
+[functions.send-contract-reminder]
+verify_jwt = true
+
+[functions.send-buyer-sms]
+verify_jwt = true
