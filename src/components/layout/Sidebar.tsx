@@ -95,7 +95,7 @@ function ViewingPullUp({ viewingId }: { viewingId?: string }) {
   return (
     <div ref={containerRef} className="relative px-3 pb-2">
       {open && (
-        <div className="absolute bottom-full left-3 right-3 mb-2 max-h-64 overflow-y-auto rounded-md border border-sidebar-border bg-sidebar-2 p-1.5 shadow-popover">
+        <div className="absolute z-50 bottom-full left-3 right-3 mb-2 max-h-64 overflow-y-auto rounded-md border border-sidebar-border bg-sidebar-2 p-1.5 shadow-popover">
           <button
             onClick={() => select(null)}
             className={cn(
@@ -176,7 +176,7 @@ function SidebarFooterProfile({ collapsed }: { collapsed: boolean }) {
       {open && (
         <div
           className={cn(
-            'absolute bottom-full mb-2 rounded-md border border-sidebar-border bg-sidebar-2 p-1.5 shadow-popover',
+            'absolute z-50 bottom-full mb-2 rounded-md border border-sidebar-border bg-sidebar-2 p-1.5 shadow-popover',
             collapsed ? 'left-2 w-48' : 'left-3 right-3',
           )}
         >
