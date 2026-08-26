@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
 import { FillCashDealContractModal, isCashDealTemplate } from '@/components/bluedocs/FillCashDealContractModal';
+import { FillNovationContractModal, isNovationTemplate } from '@/components/bluedocs/FillNovationContractModal';
 import { TemplateCategoryCard } from '@/components/bluedocs/TemplateCategoryCard';
 import { EnvelopesTab } from '@/components/bluedocs/EnvelopesTab';
 import {
@@ -91,7 +92,18 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
         />
       )}
 
-      {flow.sendTarget && !isCashDealTemplate(flow.sendTarget.id) && (
+      {flow.sendTarget && isNovationTemplate(flow.sendTarget.id) && (
+        <FillNovationContractModal
+          template={flow.sendTarget}
+          onClose={() => flow.setSendTarget(null)}
+          onSent={(l) => {
+            flow.setSendTarget(null);
+            flow.setFirstSignerLink(l);
+          }}
+        />
+      )}
+
+      {flow.sendTarget && !isCashDealTemplate(flow.sendTarget.id) && !isNovationTemplate(flow.sendTarget.id) && (
         <SendContractModal
           template={flow.sendTarget}
           onClose={() => flow.setSendTarget(null)}
