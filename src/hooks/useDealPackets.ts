@@ -5,6 +5,7 @@ import type {
   DealPacket,
   DealType,
   Lead,
+  PacketComment,
   PacketComp,
   PacketImage,
   PacketRepair,
@@ -84,6 +85,18 @@ function dbToView(row: any): PacketView {
     viewerEmail: row.viewer_email,
     viewerPhone: row.viewer_phone,
     userAgent: row.user_agent,
+    createdAt: row.created_at,
+  };
+}
+
+function dbToComment(row: any): PacketComment {
+  return {
+    id: row.id,
+    packetId: row.packet_id,
+    viewerToken: row.viewer_token,
+    viewerName: row.viewer_name,
+    viewerEmail: row.viewer_email,
+    body: row.body,
     createdAt: row.created_at,
   };
 }
@@ -852,6 +865,24 @@ export function usePacketViews(packetId: string | undefined) {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data.map(dbToView);
+    },
+    enabled: !!packetId,
+  });
+}
+
+/** Private notes an investor left on this packet — visible only here, never
+ * to other investors (see packet_comments_select's RLS in 0110). */
+export function usePacketComments(packetId: string | undefined) {
+  return useQuery({
+    queryKey: ['packet_comments', packetId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('packet_comments')
+        .select('*')
+        .eq('packet_id', packetId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map(dbToComment);
     },
     enabled: !!packetId,
   });

@@ -4,6 +4,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { DealPacketBuilder } from './DealPacketBuilder';
 import { PacketAnalytics } from './PacketAnalytics';
+import { PacketComments } from './PacketComments';
 import { packetUrl, useCreatePacket, useDeletePacket, useLeadPackets, useSendPacketEmail } from '@/hooks/useDealPackets';
 import { formatDate } from '@/lib/utils';
 import type { DealPacket, Lead, PacketStatus } from '@/types/domain';
@@ -204,6 +205,7 @@ export function PacketTab({ lead }: { lead: Lead }) {
                 onEmail={() => setEmailTarget(p)}
               />
               {p.status !== 'draft' && <PacketAnalytics packetId={p.id} />}
+              {p.status !== 'draft' && <PacketComments packetId={p.id} />}
             </div>
           ))}
         </div>

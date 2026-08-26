@@ -99,3 +99,19 @@ export function useLogPacketView() {
   });
 }
 
+/** A private note to the packet owner — never shown to other investors. */
+export function useAddPacketComment() {
+  return useMutation({
+    mutationFn: async ({ slug, body, identity }: { slug: string; body: string; identity?: ViewerIdentity | null }) => {
+      const { error } = await supabase.rpc('add_packet_comment', {
+        p_slug: slug,
+        p_body: body,
+        p_viewer_token: getViewerToken(),
+        p_viewer_name: identity?.name ?? null,
+        p_viewer_email: identity?.email ?? null,
+      });
+      if (error) throw error;
+    },
+  });
+}
+

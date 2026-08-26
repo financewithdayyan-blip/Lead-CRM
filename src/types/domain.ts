@@ -459,6 +459,18 @@ export interface PacketView {
   createdAt: string;
 }
 
+/** Private feedback from an investor viewing a packet — visible only to the
+ * packet's owner, never to other investors. */
+export interface PacketComment {
+  id: string;
+  packetId: string;
+  viewerToken: string;
+  viewerName: string | null;
+  viewerEmail: string | null;
+  body: string;
+  createdAt: string;
+}
+
 export interface TeamInvite {
   id: string;
   ownerId: string;

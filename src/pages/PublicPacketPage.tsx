@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Send, X } from 'lucide-react';
-import { useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
+import { useAddPacketComment, useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
 const PacketMap = lazy(() => import('@/components/packets/PacketMap').then((m) => ({ default: m.PacketMap })));
@@ -46,6 +46,56 @@ function SectionHead({ num, title }: { num: number; title: string }) {
 /** Plain white section container — the numbering above it carries the title now. */
 function Panel({ children }: { children: React.ReactNode }) {
   return <section className="rounded-2xl border border-border bg-surface p-6 shadow-card">{children}</section>;
+}
+
+/** A private note to whoever owns this packet — never shown to other
+ * investors viewing the same link, only to the owner in the CRM. */
+function CommentBox({ slug, identity }: { slug: string; identity: ViewerIdentity | null }) {
+  const [name, setName] = useState(identity?.name ?? '');
+  const [body, setBody] = useState('');
+  const [sent, setSent] = useState(false);
+  const addComment = useAddPacketComment();
+
+  function handleSend() {
+    if (!body.trim()) return;
+    addComment.mutate(
+      { slug, body: body.trim(), identity: { name: name.trim(), email: identity?.email } },
+      { onSuccess: () => setSent(true) },
+    );
+  }
+
+  return (
+    <Panel>
+      {sent ? (
+        <div className="flex items-center gap-2 text-[14px] font-medium text-success">
+          <Check size={16} /> Sent — thanks for the note.
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-[13.5px] text-text-2">Have a question or note about this deal? Only I'll see it.</p>
+          <input
+            className="input mb-2"
+            placeholder="Your name (optional)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <textarea
+            className="input min-h-[90px] resize-none"
+            placeholder="Leave a comment..."
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          {addComment.isError && <p className="mt-1.5 text-[12px] text-danger">Something went wrong — try again.</p>}
+          <div className="mt-3 flex justify-end">
+            <button className="btn btn-primary" disabled={!body.trim() || addComment.isPending} onClick={handleSend}>
+              {addComment.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              {addComment.isPending ? 'Sending…' : 'Send'}
+            </button>
+          </div>
+        </>
+      )}
+    </Panel>
+  );
 }
 
 /** Shared by the listings and sold tables — same columns, different labels. */
@@ -831,6 +881,8 @@ export function PublicPacketPage() {
       ),
     });
   }
+
+  sections.push({ title: 'Questions or Notes', body: <CommentBox slug={packet.slug} identity={identity} /> });
 
   return (
     <div className="min-h-screen bg-surface-2 pb-16">
