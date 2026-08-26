@@ -39,6 +39,14 @@ export const CASH_DEAL_ADDRESS_FIELD_ID = FIELD_MAP.address[0];
 type FieldKey = keyof typeof FIELD_MAP;
 const CURRENCY_KEYS: FieldKey[] = ['purchasePrice', 'emdAmount'];
 
+// A co-owner's signature — added to the blank space below the seller's
+// existing signature block on page 3, since this document only ever printed
+// one "Seller" signature line. There's no second printed name/date line to
+// go with it, so a co-seller only ever needs to provide their signature —
+// their name still goes into the single combined Seller Full Name field
+// above, typed by whoever fills this form (e.g. "Jane Doe and John Doe").
+const CO_SELLER_ROLE = 'seller_2';
+
 // The template's one extra role — Dayyan's own final signature, kept distinct
 // from the built-in 'buyer' role (which now only ever gets pre-filled values,
 // never a live signing turn) so he signs last without re-typing anything
@@ -103,6 +111,12 @@ export function FillCashDealContractModal({
   const [sellerEmail, setSellerEmail] = useState('');
   const [sellerSendSms, setSellerSendSms] = useState(true);
   const [sellerSendEmail, setSellerSendEmail] = useState(false);
+  const [ownerCount, setOwnerCount] = useState<1 | 2>(1);
+  const [coSellerName, setCoSellerName] = useState('');
+  const [coSellerPhone, setCoSellerPhone] = useState('');
+  const [coSellerEmail, setCoSellerEmail] = useState('');
+  const [coSellerSendSms, setCoSellerSendSms] = useState(true);
+  const [coSellerSendEmail, setCoSellerSendEmail] = useState(false);
   const [buyerName, setBuyerName] = useState('');
   const [buyerPhone, setBuyerPhone] = useState(defaultBuyerPhone);
   const [buyerEmail, setBuyerEmail] = useState('');
@@ -139,11 +153,17 @@ export function FillCashDealContractModal({
     (sellerSendSms || sellerSendEmail) &&
     (!sellerSendSms || isValidPhone(sellerPhone)) &&
     (!sellerSendEmail || isValidEmail(sellerEmail));
+  const coSellerReady =
+    ownerCount === 1 ||
+    (coSellerName.trim() &&
+      (coSellerSendSms || coSellerSendEmail) &&
+      (!coSellerSendSms || isValidPhone(coSellerPhone)) &&
+      (!coSellerSendEmail || isValidEmail(coSellerEmail)));
   const buyerReady =
     (buyerSendSms || buyerSendEmail) &&
     (!buyerSendSms || isValidPhone(buyerPhone)) &&
     (!buyerSendEmail || isValidEmail(buyerEmail));
-  const canSubmit = !!buyerRole && allFilled && sellerReady && buyerReady;
+  const canSubmit = !!buyerRole && allFilled && sellerReady && !!coSellerReady && buyerReady;
 
   async function handleSubmit() {
     if (!canSubmit || !buyerRole) return;
@@ -159,21 +179,31 @@ export function FillCashDealContractModal({
       stamp('buyerName', buyerName.trim());
       for (const row of FIELD_ROWS) stamp(row.key, values[row.key].trim());
 
+      const parties = [
+        {
+          role: 'seller', name: sellerName.trim(), phone: sellerPhone.trim(), email: sellerEmail.trim(),
+          sendSms: sellerSendSms, sendEmail: sellerSendEmail, signOrder: 1,
+        },
+        ...(ownerCount === 2
+          ? [
+              {
+                role: CO_SELLER_ROLE, name: coSellerName.trim(), phone: coSellerPhone.trim(), email: coSellerEmail.trim(),
+                sendSms: coSellerSendSms, sendEmail: coSellerSendEmail, signOrder: 2,
+              },
+            ]
+          : []),
+        {
+          role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), email: buyerEmail.trim(),
+          sendSms: buyerSendSms, sendEmail: buyerSendEmail, signOrder: ownerCount === 2 ? 3 : 2,
+        },
+      ];
+
       const { parties: created } = await generate.mutateAsync({
         templateId: template.id,
         name: template.name,
         propertyAddress: values.address.trim(),
         fieldValues,
-        parties: [
-          {
-            role: 'seller', name: sellerName.trim(), phone: sellerPhone.trim(), email: sellerEmail.trim(),
-            sendSms: sellerSendSms, sendEmail: sellerSendEmail, signOrder: 1,
-          },
-          {
-            role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), email: buyerEmail.trim(),
-            sendSms: buyerSendSms, sendEmail: buyerSendEmail, signOrder: 2,
-          },
-        ],
+        parties,
       });
       const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
       onSent({
@@ -199,6 +229,7 @@ export function FillCashDealContractModal({
           <div className="col-span-2">
             <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Full Name</label>
             <input className="input" value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
+            <p className="mt-1 text-[11px] text-text-3">If there are 2 owners, put both names here — e.g. "Jane Doe and John Doe".</p>
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Phone</label>
@@ -226,6 +257,51 @@ export function FillCashDealContractModal({
               Send by email
             </label>
           </div>
+
+          <div className="col-span-2">
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Number of Owners</label>
+            <select className="input" value={ownerCount} onChange={(e) => setOwnerCount(Number(e.target.value) === 2 ? 2 : 1)}>
+              <option value={1}>1 — just the Seller</option>
+              <option value={2}>2 — Seller has a co-owner</option>
+            </select>
+          </div>
+
+          {ownerCount === 2 && (
+            <>
+              <div className="col-span-2">
+                <label className="mb-1 block text-[12px] font-medium text-text-2">Co-Owner Full Name</label>
+                <input className="input" value={coSellerName} onChange={(e) => setCoSellerName(e.target.value)} />
+                <p className="mt-1 text-[11px] text-text-3">They'll get their own signing link and sign separately, right after the Seller.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-[12px] font-medium text-text-2">Co-Owner Phone</label>
+                <input
+                  className={`input ${coSellerSendSms && !isValidPhone(coSellerPhone) ? '!border-danger' : ''}`}
+                  inputMode="tel"
+                  value={coSellerPhone}
+                  onChange={(e) => setCoSellerPhone(e.target.value)}
+                />
+                <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
+                  <input type="checkbox" checked={coSellerSendSms} onChange={(e) => setCoSellerSendSms(e.target.checked)} />
+                  Send by text
+                </label>
+              </div>
+              <div>
+                <label className="mb-1 block text-[12px] font-medium text-text-2">Co-Owner Email</label>
+                <input
+                  className={`input ${coSellerSendEmail && !isValidEmail(coSellerEmail) ? '!border-danger' : ''}`}
+                  type="email"
+                  value={coSellerEmail}
+                  onChange={(e) => setCoSellerEmail(e.target.value)}
+                />
+                <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
+                  <input type="checkbox" checked={coSellerSendEmail} onChange={(e) => setCoSellerSendEmail(e.target.checked)} />
+                  Send by email
+                </label>
+              </div>
+            </>
+          )}
+
           <div className="col-span-2">
             <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Full Name</label>
             <input className="input" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
