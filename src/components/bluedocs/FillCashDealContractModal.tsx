@@ -1,16 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useGenerateContract } from '@/hooks/useContractInstances';
 import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatCurrency } from '@/lib/currency';
-import { formatPhone } from '@/lib/utils';
 import type { DocTemplate } from '@/hooks/useDocTemplates';
 
 // Blue Docs always sends/receives from slot 2 — see BLUEDOCS_NUMBER in
-// create-contract-instance/submit-signature (ZOOM_FROM_NUMBER_2). The
-// buyer's printed contact number on the PSA should always be this same
-// number, not a separately typed one that could drift out of sync with it.
+// create-contract-instance/submit-signature (ZOOM_FROM_NUMBER_2). Used only
+// as the default starting value for the buyer's phone below — editable from
+// there, since the buyer party isn't always reachable at the Blue Docs line.
 const BLUEDOCS_SMS_SLOT = '2';
 
 // The Cash Deal PSA's own field IDs, captured off its live `doc_templates.fields`
@@ -97,7 +96,7 @@ export function FillCashDealContractModal({
   const generate = useGenerateContract();
   const buyerRole = template.partyRoles[0]?.id;
   const { data: numberLabels } = useSmsNumberLabels();
-  const buyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
+  const defaultBuyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
 
   const [sellerName, setSellerName] = useState('');
   const [sellerPhone, setSellerPhone] = useState('');
@@ -105,6 +104,10 @@ export function FillCashDealContractModal({
   const [sellerSendSms, setSellerSendSms] = useState(true);
   const [sellerSendEmail, setSellerSendEmail] = useState(false);
   const [buyerName, setBuyerName] = useState('');
+  const [buyerPhone, setBuyerPhone] = useState(defaultBuyerPhone);
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [buyerSendSms, setBuyerSendSms] = useState(true);
+  const [buyerSendEmail, setBuyerSendEmail] = useState(false);
   const [values, setValues] = useState<Record<FieldKey, string>>({
     sellerName: '',
     buyerName: '',
@@ -119,6 +122,13 @@ export function FillCashDealContractModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Seeds the buyer phone from the Blue Docs number once it loads, but only
+  // if the field is still untouched — a user typing their own number before
+  // this resolves should never be silently overwritten.
+  useEffect(() => {
+    if (defaultBuyerPhone && !buyerPhone) setBuyerPhone(defaultBuyerPhone);
+  }, [defaultBuyerPhone]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function setValue(key: FieldKey, v: string) {
     setValues((prev) => ({ ...prev, [key]: v }));
   }
@@ -129,7 +139,11 @@ export function FillCashDealContractModal({
     (sellerSendSms || sellerSendEmail) &&
     (!sellerSendSms || isValidPhone(sellerPhone)) &&
     (!sellerSendEmail || isValidEmail(sellerEmail));
-  const canSubmit = !!buyerRole && allFilled && sellerReady && isValidPhone(buyerPhone);
+  const buyerReady =
+    (buyerSendSms || buyerSendEmail) &&
+    (!buyerSendSms || isValidPhone(buyerPhone)) &&
+    (!buyerSendEmail || isValidEmail(buyerEmail));
+  const canSubmit = !!buyerRole && allFilled && sellerReady && buyerReady;
 
   async function handleSubmit() {
     if (!canSubmit || !buyerRole) return;
@@ -156,8 +170,8 @@ export function FillCashDealContractModal({
             sendSms: sellerSendSms, sendEmail: sellerSendEmail, signOrder: 1,
           },
           {
-            role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), email: '',
-            sendSms: true, sendEmail: false, signOrder: 2,
+            role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), email: buyerEmail.trim(),
+            sendSms: buyerSendSms, sendEmail: buyerSendEmail, signOrder: 2,
           },
         ],
       });
@@ -177,7 +191,7 @@ export function FillCashDealContractModal({
     <Modal open onClose={onClose} title="Fill Contract Details" width="md">
       <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         <p className="text-[12px] text-text-3">
-          Fill in the deal terms below — this goes straight to the Seller to sign. Once they sign, you'll get a text
+          Fill in the deal terms below — this goes straight to the Seller to sign. Once they sign, you'll be notified
           to sign last.
         </p>
 
@@ -212,18 +226,35 @@ export function FillCashDealContractModal({
               Send by email
             </label>
           </div>
-          <div>
+          <div className="col-span-2">
             <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Full Name</label>
             <input className="input" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
           </div>
           <div>
             <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Phone</label>
-            {buyerPhone ? (
-              <div className="input flex items-center !bg-surface-3 text-text-2">{formatPhone(buyerPhone)}</div>
-            ) : (
-              <div className="input flex items-center !bg-danger-dim text-danger">Blue Docs number not configured</div>
-            )}
-            <p className="mt-1 text-[11px] text-text-3">Always matches the number Blue Docs sends and receives from — not editable here.</p>
+            <input
+              className={`input ${buyerSendSms && !isValidPhone(buyerPhone) ? '!border-danger' : ''}`}
+              inputMode="tel"
+              value={buyerPhone}
+              onChange={(e) => setBuyerPhone(e.target.value)}
+            />
+            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
+              <input type="checkbox" checked={buyerSendSms} onChange={(e) => setBuyerSendSms(e.target.checked)} />
+              Send by text
+            </label>
+          </div>
+          <div>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Email</label>
+            <input
+              className={`input ${buyerSendEmail && !isValidEmail(buyerEmail) ? '!border-danger' : ''}`}
+              type="email"
+              value={buyerEmail}
+              onChange={(e) => setBuyerEmail(e.target.value)}
+            />
+            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
+              <input type="checkbox" checked={buyerSendEmail} onChange={(e) => setBuyerSendEmail(e.target.checked)} />
+              Send by email
+            </label>
           </div>
         </div>
 
