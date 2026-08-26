@@ -36,7 +36,7 @@ import {
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
-import { useSendLog, useInboundMessages } from '@/hooks/useSmsStats';
+import { useSendLog, useInboundMessages, useSmsDeliveryLog } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
 import { formatPhone, localIsoDate } from '@/lib/utils';
@@ -51,6 +51,9 @@ import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVeloci
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
+);
+const SmsPerformanceChart = lazy(() =>
+  import('@/components/dashboard/SmsPerformanceChart').then((m) => ({ default: m.SmsPerformanceChart })),
 );
 const PipelineFunnel = lazy(() =>
   import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
@@ -227,6 +230,7 @@ export function DashboardView({
   const { data: tags = [] } = useTags(userId);
   const { data: sendLog = [] } = useSendLog(showSmsStats);
   const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
+  const { data: smsDeliveryLog = [] } = useSmsDeliveryLog(showSmsStats);
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: marketingSpend = [] } = useMarketingSpend();
   const { data: orgLeads = [] } = useOrgLeads(showSmsStats);
@@ -498,6 +502,40 @@ export function DashboardView({
     });
     return days;
   }, [sendLog, inboundMessages, leads, calls, qualifiedPlusIds, trendDayCount]);
+
+  // Delivery rate = delivered / sent, reply rate = replies / delivered —
+  // Zoom's own definitions (confirmed against a real Zoom report: 108
+  // delivered of 264 sent, 8 replies, "reply rate 7.41%" = 8/108, not 8/264).
+  // smsDeliveryLog only covers the sync job's lookback window, so a day with
+  // no synced data renders as a gap (null) rather than a misleading 0%.
+  const smsPerformanceTrend = useMemo(() => {
+    const days: Array<{ iso: string; label: string; sent: number; delivered: number; replies: number }> = [];
+    const today = new Date();
+    for (let i = trendDayCount - 1; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      days.push({ iso: localIsoDate(d), label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }), sent: 0, delivered: 0, replies: 0 });
+    }
+    const byIso = new Map(days.map((d) => [d.iso, d]));
+    smsDeliveryLog.forEach((r) => {
+      const day = byIso.get(localIsoDate(new Date(r.occurredAt)));
+      if (!day) return;
+      if (r.direction === 'Out') {
+        day.sent++;
+        if (r.deliveryStatus === 'delivered') day.delivered++;
+      } else {
+        day.replies++;
+      }
+    });
+    return days.map((d) => ({
+      iso: d.iso,
+      label: d.label,
+      sent: d.sent,
+      delivered: d.delivered,
+      replies: d.replies,
+      deliveryRate: d.sent > 0 ? (d.delivered / d.sent) * 100 : null,
+      replyRate: d.delivered > 0 ? (d.replies / d.delivered) * 100 : null,
+    }));
+  }, [smsDeliveryLog, trendDayCount]);
 
   // Caller-facing counterpart to activityTrend — driven by call outcomes
   // instead of SMS activity, since callers never see SMS data at all.
@@ -924,6 +962,21 @@ export function DashboardView({
                   <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3">
                       <PipelineActivityChart data={activityTrend} />
+                    </div>
+                  </Suspense>
+                </div>
+              )}
+
+              {showSmsStats && (
+                <div className="card chart-layer">
+                  <CardHeader
+                    icon={TrendingUp}
+                    title="SMS Delivery & Reply Rate"
+                    sub={`Real delivery status synced from Zoom · ${rangeLabel} · delivery rate = delivered/sent, reply rate = replies/delivered`}
+                  />
+                  <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3">
+                      <SmsPerformanceChart data={smsPerformanceTrend} />
                     </div>
                   </Suspense>
                 </div>

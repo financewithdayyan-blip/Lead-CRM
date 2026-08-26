@@ -34,6 +34,35 @@ export function useSendLog(enabled: boolean) {
   });
 }
 
+export interface SmsDeliveryRow {
+  id: string;
+  direction: 'Out' | 'In';
+  deliveryStatus: string | null;
+  occurredAt: string;
+}
+
+/**
+ * Real per-message delivery status synced in from Zoom (see
+ * supabase/functions/sync-sms-delivery-stats — Zoom's own aggregate SMS
+ * report endpoint needs a scope this app doesn't have, so this reconstructs
+ * the same delivery-rate/reply-rate numbers from message-level data instead).
+ * Admin-only RLS, same as send_log/inbound_messages above. Only covers the
+ * sync job's lookback window (a few days), not full history.
+ */
+export function useSmsDeliveryLog(enabled: boolean) {
+  return useQuery({
+    queryKey: ['sms_delivery_log_all'],
+    queryFn: async () => {
+      const rows = await fetchAllPages<{ id: string; direction: 'Out' | 'In'; delivery_status: string | null; occurred_at: string }>(
+        (from, to) =>
+          supabase.from('sms_delivery_log').select('id, direction, delivery_status, occurred_at').order('occurred_at', { ascending: true }).range(from, to),
+      );
+      return rows.map((r): SmsDeliveryRow => ({ id: r.id, direction: r.direction, deliveryStatus: r.delivery_status, occurredAt: r.occurred_at }));
+    },
+    enabled,
+  });
+}
+
 export interface InboundRow {
   id: string;
   isReaction: boolean;
