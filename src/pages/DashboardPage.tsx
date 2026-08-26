@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   Bot,
   CalendarCheck,
   CalendarClock,
@@ -12,7 +13,6 @@ import {
   FileSignature,
   Flame,
   Gauge,
-  Hash,
   Medal,
   Megaphone,
   MessageSquare,
@@ -39,7 +39,7 @@ import { useTags } from '@/hooks/useTags';
 import { useSendLog, useInboundMessages, useSmsDeliveryLog } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
-import { formatPhone, localIsoDate } from '@/lib/utils';
+import { localIsoDate } from '@/lib/utils';
 import { ScheduledCallsCard } from '@/components/dashboard/ScheduledCallsCard';
 import { TasksCard } from '@/components/dashboard/TasksCard';
 import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
@@ -60,6 +60,9 @@ const PipelineFunnel = lazy(() =>
 );
 const CallProgressChart = lazy(() =>
   import('@/components/dashboard/CallProgressChart').then((m) => ({ default: m.CallProgressChart })),
+);
+const PipelineBreakdownChart = lazy(() =>
+  import('@/components/dashboard/PipelineBreakdownChart').then((m) => ({ default: m.PipelineBreakdownChart })),
 );
 
 // A lead currently sitting in one of these stages has, by definition, been
@@ -376,12 +379,6 @@ export function DashboardView({
 
     const sentToday = sendLog.filter((r) => localIsoDate(new Date(r.createdAt)) === localIsoDate(new Date())).length;
 
-    const byNumber = new Map<string, number>();
-    sendLogInRange.forEach((r) => byNumber.set(r.sentFrom, (byNumber.get(r.sentFrom) ?? 0) + 1));
-    const numberCounts = Array.from(byNumber.entries())
-      .map(([phone, count]) => ({ phone, label: formatPhone(phone), count }))
-      .sort((a, b) => b.count - a.count);
-
     // ── Closing efficiency (calling-quality detail, all-time so the ratios
     // stay meaningful against the all-time contract count) ────────────────
     const callsToQualifiedAllTime = calls.filter((a) => qualifiedPlusIds.has(a.leadId)).length;
@@ -446,7 +443,6 @@ export function DashboardView({
       callsToQualified,
       callsOffProcess,
       aiRepliesSent,
-      numberCounts,
       callsPerContract,
       pickupRatio,
       voicemailRate,
@@ -661,9 +657,7 @@ export function DashboardView({
     return { cols, monthLabels, max, activeDays, currentStreak, bestStreak, thisWeekActive, thisWeekTotal: dayOfWeek + 1 };
   }, [activities]);
 
-  const maxStage = Math.max(...Object.values(stats.stageCounts), 1);
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
-  const maxNumber = Math.max(...stats.numberCounts.map((x) => x.count), 1);
 
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === dateRange)?.label ?? '';
   const followupLeadsCount = leads.filter((l) => l.stage === 'followup').length;
@@ -1010,64 +1004,41 @@ export function DashboardView({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-                <div className="card">
-                  <CardHeader icon={Hash} title="Pipeline Breakdown" />
-                  <div className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-surface-3">
-                    {STAGE_ORDER.filter((s) => stats.stageCounts[s] > 0).map((s) => (
-                      <div
-                        key={s}
-                        style={{ width: `${(stats.stageCounts[s] / Math.max(stats.total, 1)) * 100}%`, background: STAGE_CONFIG[s].color }}
-                        title={`${STAGE_CONFIG[s].label}: ${stats.stageCounts[s]}`}
-                      />
-                    ))}
-                  </div>
+              <div className="card chart-layer">
+                <CardHeader
+                  icon={BarChart3}
+                  title="Pipeline Breakdown"
+                  sub={`${stats.total.toLocaleString()} leads across every stage, ranked largest first`}
+                />
+                <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                   <div className="mt-3">
-                    {STAGE_ORDER.map((s) => (
-                      <BarRow key={s} label={STAGE_CONFIG[s].label} count={stats.stageCounts[s]} max={maxStage} color={STAGE_CONFIG[s].color} />
-                    ))}
+                    <PipelineBreakdownChart
+                      data={STAGE_ORDER.map((s) => ({
+                        key: s,
+                        label: STAGE_CONFIG[s].label,
+                        count: stats.stageCounts[s],
+                        color: STAGE_CONFIG[s].color,
+                      }))}
+                      total={stats.total}
+                    />
                   </div>
-                </div>
-                {showSmsStats ? (
-                  <div className="card">
-                    <CardHeader icon={Phone} title="Sent By Number" tone="info" />
-                    <div className="mt-2">
-                      {stats.numberCounts.length === 0 ? (
-                        <div className="text-[13px] text-text-3">No sends in this range.</div>
-                      ) : (
-                        stats.numberCounts.map((n) => <BarRow key={n.phone} label={n.label} count={n.count} max={maxNumber} color="#0891b2" />)
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="card">
-                    <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
-                    <div className="mt-2">
-                      {stats.tagCounts.length === 0 && <div className="text-[13px] text-text-3">No tagged leads yet.</div>}
+                </Suspense>
+              </div>
+
+              <div className="card">
+                <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
+                <div className="mt-2">
+                  {stats.tagCounts.length === 0 ? (
+                    <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+                  ) : (
+                    <div className={showSmsStats ? 'grid grid-cols-1 gap-x-6 sm:grid-cols-2' : undefined}>
                       {stats.tagCounts.map(({ tag, count }) => (
                         <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {showSmsStats && (
-                <div className="card">
-                  <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
-                  <div className="mt-2">
-                    {stats.tagCounts.length === 0 ? (
-                      <div className="text-[13px] text-text-3">No tagged leads yet.</div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
-                        {stats.tagCounts.map(({ tag, count }) => (
-                          <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
