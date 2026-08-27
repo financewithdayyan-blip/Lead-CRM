@@ -64,6 +64,9 @@ const CallProgressChart = lazy(() =>
 const PipelineBreakdownChart = lazy(() =>
   import('@/components/dashboard/PipelineBreakdownChart').then((m) => ({ default: m.PipelineBreakdownChart })),
 );
+const RevenueInPipelineChart = lazy(() =>
+  import('@/components/dashboard/RevenueInPipelineChart').then((m) => ({ default: m.RevenueInPipelineChart })),
+);
 
 // A lead currently sitting in one of these stages has, by definition, been
 // qualified — either the AI got there via the framework, or a human moved it
@@ -502,6 +505,70 @@ export function DashboardView({
     });
     return days;
   }, [sendLog, inboundMessages, leads, calls, qualifiedPlusIds, trendDayCount]);
+
+  // "Revenue in pipeline" = total assignment fee across every lead
+  // currently Under Contract — but "currently" only tells you today's
+  // number, and the point of a trend chart is the days before today too.
+  // Reconstructed from each lead's real stage_change history (same source
+  // useSalesKpis' computeDealVelocity uses) rather than just projecting
+  // today's contract-stage total backward across the whole window: a lead
+  // that has since moved to In Title/Closed, or fallen through to Dead,
+  // still correctly counts on the days it really was under contract, and
+  // correctly stops counting once it left. Only leads with an assignment
+  // fee actually entered contribute anything.
+  const revenueInPipelineTrend = useMemo(() => {
+    const transitionsByLead = new Map<string, Array<{ at: number; to: string }>>();
+    for (const a of activities) {
+      if (a.type !== 'stage_change') continue;
+      const to = (a.meta as { to?: string })?.to;
+      if (!to) continue;
+      const arr = transitionsByLead.get(a.leadId) ?? [];
+      arr.push({ at: new Date(a.createdAt).getTime(), to });
+      transitionsByLead.set(a.leadId, arr);
+    }
+    for (const arr of transitionsByLead.values()) arr.sort((a, b) => a.at - b.at);
+
+    const everUnderContractIds = new Set<string>();
+    for (const [leadId, arr] of transitionsByLead) {
+      if (arr.some((t) => t.to === 'contract')) everUnderContractIds.add(leadId);
+    }
+    // useActivityFeed only covers this year — a lead that reached Contract
+    // before that with no activity since would otherwise vanish from this
+    // chart entirely, including from today's own total. Falls back to
+    // "currently Under Contract" so at least the present-day number (and
+    // every day within this window, since we have no real entry date to
+    // place it more precisely) stays correct.
+    const relevantLeads = leads.filter(
+      (l) => (everUnderContractIds.has(l.id) || l.stage === 'contract') && l.assignmentFee,
+    );
+
+    function stageAsOf(leadId: string, atMs: number): string {
+      const arr = transitionsByLead.get(leadId);
+      if (!arr) return relevantLeads.some((l) => l.id === leadId && l.stage === 'contract') ? 'contract' : 'new';
+      let stage = 'new';
+      for (const t of arr) {
+        if (t.at > atMs) break;
+        stage = t.to;
+      }
+      return stage;
+    }
+
+    const days: Array<{ iso: string; label: string; revenue: number }> = [];
+    const today = new Date();
+    for (let i = trendDayCount - 1; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i, 23, 59, 59, 999);
+      const revenue = relevantLeads.reduce(
+        (sum, l) => sum + (stageAsOf(l.id, d.getTime()) === 'contract' ? l.assignmentFee ?? 0 : 0),
+        0,
+      );
+      days.push({
+        iso: localIsoDate(d),
+        label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
+        revenue,
+      });
+    }
+    return days;
+  }, [leads, activities, trendDayCount]);
 
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
   // Zoom's own definitions (confirmed against a real Zoom report: 108
@@ -960,6 +1027,22 @@ export function DashboardView({
                   <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3">
                       <PipelineActivityChart data={activityTrend} />
+                    </div>
+                  </Suspense>
+                </div>
+              )}
+
+              {showSmsStats && (
+                <div className="card chart-layer">
+                  <CardHeader
+                    icon={DollarSign}
+                    title="Revenue in Pipeline"
+                    tone="accent"
+                    sub={`Assignment fee across leads Under Contract · ${rangeLabel}`}
+                  />
+                  <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3">
+                      <RevenueInPipelineChart data={revenueInPipelineTrend} />
                     </div>
                   </Suspense>
                 </div>

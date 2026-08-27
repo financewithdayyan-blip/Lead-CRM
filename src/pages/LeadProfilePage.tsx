@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Archive, ChevronDown, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User, Video } from 'lucide-react';
+import { ArrowLeft, Archive, ChevronDown, DollarSign, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User, Video } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -333,6 +333,53 @@ function QuickFactsCard({ lead }: { lead: Lead }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The wholesale fee actually earned on this deal — distinct from the Deal
+ * Packet's own assignment fee (a per-packet number used to compute an
+ * investor-facing price), this one is tied straight to the lead itself so it
+ * can feed real reporting once a deal is done. Only meaningful once a lead
+ * is actually under contract, which is also the only stage the Revenue in
+ * Pipeline dashboard chart counts it toward. */
+function AssignmentFeeCard({ lead }: { lead: Lead }) {
+  const updateLead = useUpdateLead();
+  const [value, setValue] = useState(lead.assignmentFee?.toString() ?? '');
+  const [saved, setSaved] = useState(false);
+
+  function handleSave() {
+    updateLead.mutate(
+      { id: lead.id, assignmentFee: value.trim() ? Number(value) : null },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2000);
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="card">
+      <CardHeader icon={DollarSign} title="Closing Assignment Fee" tone="accent" />
+      <p className="mt-1 text-[11px] text-text-3">Counts toward Revenue in Pipeline while this lead is Under Contract.</p>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">$</span>
+          <input
+            className="input pl-6"
+            inputMode="decimal"
+            placeholder="0"
+            value={value}
+            onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ''))}
+          />
+        </div>
+        <button className="btn btn-primary !px-3" onClick={handleSave} disabled={updateLead.isPending}>
+          Save
+        </button>
+      </div>
+      {saved && <span className="mt-1.5 block text-[12px] text-success">✓ Saved</span>}
     </div>
   );
 }
@@ -675,6 +722,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           </div>
           <div className="space-y-5">
             <QuickFactsCard lead={lead} />
+            <AssignmentFeeCard lead={lead} />
             <FrameworkSnapshotCard lead={lead} />
           </div>
         </div>
