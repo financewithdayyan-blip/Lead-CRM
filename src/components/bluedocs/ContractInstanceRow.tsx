@@ -17,16 +17,22 @@ const STATUS_BADGE: Record<ContractInstance['status'], { label: string; classNam
 
 /** One color language per step-in-the-signing-chain state — deliberately its
  * own palette (not this app's success/warning/danger tokens), since these
- * describe a party's position in a sequential flow, not a pass/fail outcome. */
+ * describe a party's position in a sequential flow, not a pass/fail outcome.
+ * `card` stays a fixed light pastel regardless of app theme (same idea as
+ * the "Deal closed" banner below), so `text`/`subtext` are fixed dark colors
+ * too, not the theme-aware text-text/text-text-3 tokens — those flip to
+ * near-white in dark mode, which is illegible against a background that
+ * never does. `declined` is the one exception: bg-danger-dim IS a theme
+ * token that correctly darkens, so text-text/text-text-3 stay correct there. */
 const PARTY_STEP_STYLE: Record<
   'signed' | 'viewed' | 'sent' | 'waiting' | 'declined',
-  { badge: string; card: string; pill: string; label: string }
+  { badge: string; card: string; pill: string; label: string; text: string; subtext: string }
 > = {
-  signed: { badge: 'bg-amber-400 text-white', card: 'border-amber-200 bg-amber-50', pill: 'bg-amber-100 text-amber-700', label: 'Signed' },
-  viewed: { badge: 'bg-cyan-500 text-white', card: 'border-cyan-200 bg-cyan-50', pill: 'bg-cyan-100 text-cyan-700', label: 'Viewed' },
-  sent: { badge: 'bg-blue-500 text-white', card: 'border-blue-200 bg-blue-50', pill: 'bg-blue-100 text-blue-700', label: 'Sent' },
-  waiting: { badge: 'bg-violet-300 text-white', card: 'border-violet-200 bg-violet-50', pill: 'bg-violet-100 text-violet-700', label: 'Waiting' },
-  declined: { badge: 'bg-danger text-white', card: 'border-danger/25 bg-danger-dim', pill: 'bg-danger-dim text-danger', label: 'Declined' },
+  signed: { badge: 'bg-amber-400 text-white', card: 'border-amber-200 bg-amber-50', pill: 'bg-amber-100 text-amber-700', label: 'Signed', text: 'text-amber-900', subtext: 'text-amber-700/80' },
+  viewed: { badge: 'bg-cyan-500 text-white', card: 'border-cyan-200 bg-cyan-50', pill: 'bg-cyan-100 text-cyan-700', label: 'Viewed', text: 'text-cyan-900', subtext: 'text-cyan-700/80' },
+  sent: { badge: 'bg-blue-500 text-white', card: 'border-blue-200 bg-blue-50', pill: 'bg-blue-100 text-blue-700', label: 'Sent', text: 'text-blue-900', subtext: 'text-blue-700/80' },
+  waiting: { badge: 'bg-violet-300 text-white', card: 'border-violet-200 bg-violet-50', pill: 'bg-violet-100 text-violet-700', label: 'Waiting', text: 'text-violet-900', subtext: 'text-violet-700/80' },
+  declined: { badge: 'bg-danger text-white', card: 'border-danger/25 bg-danger-dim', pill: 'bg-danger-dim text-danger', label: 'Declined', text: 'text-text', subtext: 'text-text-3' },
 };
 
 /** Every generated instance is named after its template ("Letter Of Intent to
@@ -242,14 +248,14 @@ export function ContractInstanceRow({
               <div className={`mb-2 flex-1 min-w-0 rounded-lg border px-3 py-2 ${style.card}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-[13px] font-semibold text-text">{displayName}</div>
-                    {p.phone && <div className="truncate text-[11px] text-text-3">{formatPhone(p.phone)}</div>}
+                    <div className={`truncate text-[13px] font-semibold ${style.text}`}>{displayName}</div>
+                    {p.phone && <div className={`truncate text-[11px] ${style.subtext}`}>{formatPhone(p.phone)}</div>}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.pill}`}>{style.label}</span>
                     {canCopyLink && (
                       <button
-                        className="text-text-3 hover:text-text"
+                        className="text-slate-500 hover:text-slate-800"
                         title="Copy their signing link"
                         onClick={() => copyPartyLink(p.id, p.accessToken)}
                       >
@@ -258,7 +264,7 @@ export function ContractInstanceRow({
                     )}
                   </div>
                 </div>
-                {at && <div className="mt-1 text-[10px] text-text-3">{formatDateTime(at)}</div>}
+                {at && <div className={`mt-1 text-[10px] ${style.subtext}`}>{formatDateTime(at)}</div>}
               </div>
             </div>
           );
