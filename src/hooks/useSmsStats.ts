@@ -39,25 +39,72 @@ export interface SmsDeliveryRow {
   direction: 'Out' | 'In';
   deliveryStatus: string | null;
   occurredAt: string;
+  /** Whichever side isn't one of our own Zoom numbers — a lead's number for
+   * outreach, but also a cash buyer's number when it's disposition traffic,
+   * since send-buyer-sms shares the exact same NUMBERS map as send-sms.
+   * Lets the dashboard filter buyer conversations out before computing
+   * delivery/reply rates. Raw digits as Zoom returns them, not normalized. */
+  counterpartyNumber: string | null;
 }
 
 /**
- * Real per-message delivery status synced in from Zoom (see
- * supabase/functions/sync-sms-delivery-stats — Zoom's own aggregate SMS
- * report endpoint needs a scope this app doesn't have, so this reconstructs
- * the same delivery-rate/reply-rate numbers from message-level data instead).
- * Admin-only RLS, same as send_log/inbound_messages above. Only covers the
- * sync job's lookback window (a few days), not full history.
+ * Real per-message delivery status synced in from Zoom's SMS charges report
+ * (see supabase/functions/sync-sms-delivery-stats). Admin-only RLS, same as
+ * send_log/inbound_messages above. Only covers the sync job's lookback
+ * window, not full history.
  */
 export function useSmsDeliveryLog(enabled: boolean) {
   return useQuery({
     queryKey: ['sms_delivery_log_all'],
     queryFn: async () => {
-      const rows = await fetchAllPages<{ id: string; direction: 'Out' | 'In'; delivery_status: string | null; occurred_at: string }>(
-        (from, to) =>
-          supabase.from('sms_delivery_log').select('id, direction, delivery_status, occurred_at').order('occurred_at', { ascending: true }).range(from, to),
+      const rows = await fetchAllPages<{
+        id: string;
+        direction: 'Out' | 'In';
+        delivery_status: string | null;
+        occurred_at: string;
+        counterparty_number: string | null;
+      }>((from, to) =>
+        supabase
+          .from('sms_delivery_log')
+          .select('id, direction, delivery_status, occurred_at, counterparty_number')
+          .order('occurred_at', { ascending: true })
+          .range(from, to),
       );
-      return rows.map((r): SmsDeliveryRow => ({ id: r.id, direction: r.direction, deliveryStatus: r.delivery_status, occurredAt: r.occurred_at }));
+      return rows.map(
+        (r): SmsDeliveryRow => ({
+          id: r.id,
+          direction: r.direction,
+          deliveryStatus: r.delivery_status,
+          occurredAt: r.occurred_at,
+          counterpartyNumber: r.counterparty_number,
+        }),
+      );
+    },
+    enabled,
+  });
+}
+
+/**
+ * Just cash buyers' phone numbers, normalized to last-10-digits — for
+ * filtering buyer traffic out of the SMS Delivery & Reply Rate chart.
+ * Buyer conversations (send-buyer-sms) ride the exact same shared Zoom
+ * numbers as lead outreach, so Zoom's own message-level data has no way to
+ * tell them apart except by counterparty phone number. Lives here rather
+ * than in useCashBuyers.ts — that file pulls in usGeo's county/state data
+ * (a genuinely heavy chunk) for its other exports, which the Dashboard has
+ * no other reason to load just to read phone numbers.
+ */
+export function useCashBuyerPhones(enabled: boolean) {
+  return useQuery({
+    queryKey: ['cash_buyer_phones'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('cash_buyers').select('phone').not('phone', 'is', null);
+      if (error) throw error;
+      return new Set(
+        (data as { phone: string | null }[])
+          .map((r) => r.phone?.replace(/[^0-9]/g, '').slice(-10))
+          .filter((p): p is string => !!p && p.length === 10),
+      );
     },
     enabled,
   });

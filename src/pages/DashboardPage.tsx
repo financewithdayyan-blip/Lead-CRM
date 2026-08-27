@@ -35,7 +35,7 @@ import {
 import { useLeads } from '@/hooks/useLeads';
 import { useActivityFeed } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
-import { useSendLog, useInboundMessages, useSmsDeliveryLog } from '@/hooks/useSmsStats';
+import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
@@ -240,6 +240,7 @@ export function DashboardView({
   const { data: sendLog = [] } = useSendLog(showSmsStats);
   const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
   const { data: smsDeliveryLog = [] } = useSmsDeliveryLog(showSmsStats);
+  const { data: buyerPhones = new Set<string>() } = useCashBuyerPhones(showSmsStats);
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: marketingSpend = [] } = useMarketingSpend();
   const { data: orgLeads = [] } = useOrgLeads(showSmsStats);
@@ -570,18 +571,16 @@ export function DashboardView({
   }, [leads, activities, trendDayCount]);
 
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
-  // Zoom's own definitions (confirmed against a real Zoom report: 108
-  // delivered of 264 sent, 8 replies, "reply rate 7.41%" = 8/108, not 8/264).
-  // "sent" and "replies" come from send_log/inbound_messages — the real,
-  // immediate ledgers (a send lands the instant it happens; a reply arrives
-  // by webhook) — not from smsDeliveryLog, which only reflects whatever the
-  // 3-hourly Zoom sync has caught up to so far. A day right after a big
-  // bulk send used to show a small, fully-"delivered" number straight from
-  // that lagging sync (e.g. 115/115 = 100% right after actually sending
-  // ~300) — sourcing "sent" here instead means today's delivery rate now
-  // honestly reads as still catching up until the next sync runs, rather
-  // than falsely looking complete. "delivered" still has to come from
-  // smsDeliveryLog — Zoom's own sync is the only place that status exists.
+  // Zoom's own definitions, matched against Zoom's own "SMS Campaign" usage
+  // report (Reports > Usage Reports > Phone Numbers > SMS Campaign). Every
+  // count here now comes from one source — smsDeliveryLog, synced from
+  // Zoom's real per-message sms_charges report — instead of blending in
+  // send_log/inbound_messages, because those don't distinguish lead
+  // outreach from cash-buyer conversations (send-buyer-sms rides the exact
+  // same shared Zoom numbers as send-sms) and mixing sources across
+  // different day-bucketing meant delivered could even exceed sent on some
+  // days. counterpartyBuyerPhones strips buyer traffic out before anything
+  // is counted, the same exclusion Zoom's own campaign-scoped report makes.
   const smsPerformanceTrend = useMemo(() => {
     const days: Array<{ iso: string; label: string; sent: number; delivered: number; replies: number }> = [];
     const today = new Date();
@@ -590,19 +589,17 @@ export function DashboardView({
       days.push({ iso: localIsoDate(d), label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }), sent: 0, delivered: 0, replies: 0 });
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
-    sendLog.forEach((r) => {
-      const day = byIso.get(localIsoDate(new Date(r.createdAt)));
-      if (day) day.sent++;
-    });
-    inboundMessages.forEach((m) => {
-      if (m.isReaction) return;
-      const day = byIso.get(localIsoDate(new Date(m.receivedAt)));
-      if (day) day.replies++;
-    });
     smsDeliveryLog.forEach((r) => {
-      if (r.direction !== 'Out' || r.deliveryStatus !== 'delivered') return;
+      const counterparty = r.counterpartyNumber?.replace(/[^0-9]/g, '').slice(-10);
+      if (counterparty && buyerPhones.has(counterparty)) return;
       const day = byIso.get(localIsoDate(new Date(r.occurredAt)));
-      if (day) day.delivered++;
+      if (!day) return;
+      if (r.direction === 'Out') {
+        day.sent++;
+        if (r.deliveryStatus === 'delivered') day.delivered++;
+      } else {
+        day.replies++;
+      }
     });
     return days.map((d) => ({
       iso: d.iso,
@@ -613,7 +610,7 @@ export function DashboardView({
       deliveryRate: d.sent > 0 ? (d.delivered / d.sent) * 100 : null,
       replyRate: d.delivered > 0 ? (d.replies / d.delivered) * 100 : null,
     }));
-  }, [sendLog, inboundMessages, smsDeliveryLog, trendDayCount]);
+  }, [smsDeliveryLog, buyerPhones, trendDayCount]);
 
   // Caller-facing counterpart to activityTrend — driven by call outcomes
   // instead of SMS activity, since callers never see SMS data at all.
@@ -1054,7 +1051,7 @@ export function DashboardView({
                   <CardHeader
                     icon={TrendingUp}
                     title="SMS Delivery & Reply Rate"
-                    sub={`Real delivery status synced from Zoom · ${rangeLabel} · delivery rate = delivered/sent, reply rate = replies/delivered`}
+                    sub={`Real delivery status synced from Zoom, buyer conversations excluded · ${rangeLabel}`}
                   />
                   <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3">

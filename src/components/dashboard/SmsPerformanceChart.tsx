@@ -43,11 +43,7 @@ export function SmsPerformanceChart({ data }: { data: SmsPerformancePoint[] }) {
             color: ct.textFill,
           }}
           itemStyle={{ padding: '1px 0' }}
-          formatter={(value: number, name: string, item: any) => {
-            const { sent, delivered, replies } = item.payload as SmsPerformancePoint;
-            if (name === 'Delivery Rate') return [`${value.toFixed(1)}% (${delivered}/${sent})`, name];
-            return [`${value.toFixed(1)}% (${replies}/${delivered})`, name];
-          }}
+          formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name]}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
         <Line
