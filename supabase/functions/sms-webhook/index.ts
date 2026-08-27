@@ -177,12 +177,17 @@ function isDeclinePhrase(body: string): boolean {
 }
 
 /**
- * Curated profanity word list rather than a broad wildcard, so "fork",
- * "funk", "stuck", "duck" and "truck" can never match. Word-boundary anchored.
- * Unlike the decline phrases, hostility doesn't need end-anchoring — there is
- * no benign reading of directing profanity at a cold-outreach text.
+ * Directed at the reader, not just present anywhere in the message — a real
+ * seller texted a substantive, on-topic reply that happened to include
+ * "...needs a lil work.....fuck that   2219....bad deal...", venting about
+ * an unrelated property, and got silently auto-declined by a bare word-
+ * boundary match on "fuck" with no read on where it was pointed. Curated
+ * word list (so "fork"/"funk"/"stuck"/"duck"/"truck" can never match) plus
+ * a following target ("you"/"u"/"off"/"yourself") is what actually
+ * distinguishes hostility aimed at us from profanity used elsewhere in an
+ * otherwise engaged reply.
  */
-const PROFANITY_PATTERN = /\b(fuck|f\*ck|f\*\*k|fck|fuk)\b/i;
+const PROFANITY_PATTERN = /\b(fuck|f\*ck|f\*\*k|fck|fuk)\s*(you|u|off|yourself)\b/i;
 
 function isProfanity(body: string): boolean {
   return PROFANITY_PATTERN.test(body);
