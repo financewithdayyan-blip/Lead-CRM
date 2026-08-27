@@ -573,8 +573,16 @@ export function DashboardView({
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
   // Zoom's own definitions (confirmed against a real Zoom report: 108
   // delivered of 264 sent, 8 replies, "reply rate 7.41%" = 8/108, not 8/264).
-  // smsDeliveryLog only covers the sync job's lookback window, so a day with
-  // no synced data renders as a gap (null) rather than a misleading 0%.
+  // "sent" and "replies" come from send_log/inbound_messages — the real,
+  // immediate ledgers (a send lands the instant it happens; a reply arrives
+  // by webhook) — not from smsDeliveryLog, which only reflects whatever the
+  // 3-hourly Zoom sync has caught up to so far. A day right after a big
+  // bulk send used to show a small, fully-"delivered" number straight from
+  // that lagging sync (e.g. 115/115 = 100% right after actually sending
+  // ~300) — sourcing "sent" here instead means today's delivery rate now
+  // honestly reads as still catching up until the next sync runs, rather
+  // than falsely looking complete. "delivered" still has to come from
+  // smsDeliveryLog — Zoom's own sync is the only place that status exists.
   const smsPerformanceTrend = useMemo(() => {
     const days: Array<{ iso: string; label: string; sent: number; delivered: number; replies: number }> = [];
     const today = new Date();
@@ -583,15 +591,19 @@ export function DashboardView({
       days.push({ iso: localIsoDate(d), label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }), sent: 0, delivered: 0, replies: 0 });
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
+    sendLog.forEach((r) => {
+      const day = byIso.get(localIsoDate(new Date(r.createdAt)));
+      if (day) day.sent++;
+    });
+    inboundMessages.forEach((m) => {
+      if (m.isReaction) return;
+      const day = byIso.get(localIsoDate(new Date(m.receivedAt)));
+      if (day) day.replies++;
+    });
     smsDeliveryLog.forEach((r) => {
+      if (r.direction !== 'Out' || r.deliveryStatus !== 'delivered') return;
       const day = byIso.get(localIsoDate(new Date(r.occurredAt)));
-      if (!day) return;
-      if (r.direction === 'Out') {
-        day.sent++;
-        if (r.deliveryStatus === 'delivered') day.delivered++;
-      } else {
-        day.replies++;
-      }
+      if (day) day.delivered++;
     });
     return days.map((d) => ({
       iso: d.iso,
@@ -602,7 +614,7 @@ export function DashboardView({
       deliveryRate: d.sent > 0 ? (d.delivered / d.sent) * 100 : null,
       replyRate: d.delivered > 0 ? (d.replies / d.delivered) * 100 : null,
     }));
-  }, [smsDeliveryLog, trendDayCount]);
+  }, [sendLog, inboundMessages, smsDeliveryLog, trendDayCount]);
 
   // Caller-facing counterpart to activityTrend — driven by call outcomes
   // instead of SMS activity, since callers never see SMS data at all.
