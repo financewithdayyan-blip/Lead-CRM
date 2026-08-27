@@ -50,12 +50,25 @@ export function useAddActivity() {
         .from('lead_activities')
         .insert({ lead_id: leadId, user_id: session!.user.id, type, body, meta });
       if (error) throw error;
+
+      // A call happening at all is what a scheduled Next Follow-Up date was
+      // actually asking for — whether it's a full CallSessionPage session or
+      // a quick call logged straight from a Kanban card, clearing it here
+      // covers every call-logging path through this one shared mutation,
+      // instead of leaving a lead reading "Overdue" after it was just acted on.
+      if (type === 'call') {
+        await supabase.from('leads').update({ next_follow_up: null }).eq('id', leadId);
+      }
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
       qc.invalidateQueries({ queryKey: ['today_calls'] });
       qc.invalidateQueries({ queryKey: ['activity_feed'] });
       qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
+      if (vars.type === 'call') {
+        qc.invalidateQueries({ queryKey: ['leads'] });
+        qc.invalidateQueries({ queryKey: ['lead', vars.leadId] });
+      }
     },
   });
 }
