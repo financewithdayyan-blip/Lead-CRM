@@ -2,7 +2,6 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity,
-  AlertTriangle,
   BarChart3,
   Bot,
   CalendarCheck,
@@ -927,16 +926,6 @@ export function DashboardView({
             )}
           </div>
 
-          {showSmsStats && stats.callsOffProcess > 0 && (
-            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[13px] text-warning">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-              <div>
-                {stats.callsOffProcess} call{stats.callsOffProcess !== 1 ? 's were' : ' was'} logged against a lead
-                that isn't currently Qualified or further along — calling is meant to happen only after SMS
-                qualification now.
-              </div>
-            </div>
-          )}
 
           {showSmsStats && (
             <div>
