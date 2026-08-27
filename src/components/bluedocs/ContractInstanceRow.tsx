@@ -179,7 +179,9 @@ export function ContractInstanceRow({
           {pendingParty && (
             <button
               className="btn !px-2 !py-1 text-[11px]"
-              title={`Text ${pendingParty.name} a friendly reminder to sign`}
+              title={`Send ${pendingParty.name} a friendly reminder to sign, by ${
+                pendingParty.sendSms && pendingParty.sendEmail ? 'text and email' : pendingParty.sendEmail ? 'email' : 'text'
+              }`}
               disabled={sendReminder.isPending}
               onClick={handleRemind}
             >
