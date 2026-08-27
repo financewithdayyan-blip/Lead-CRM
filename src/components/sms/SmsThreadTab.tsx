@@ -78,15 +78,24 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   // The picker only matters, and only shows, before that first send exists.
   const pinnedNumber = lead.assignedSmsNumber as SmsNumberKey | null;
 
-  async function handleSend() {
+  function handleSend() {
     if (!message.trim()) return;
+    const text = message.trim();
+    // Clears immediately rather than waiting on the round trip — the message
+    // itself already appears in the thread right away too (useSendManualReply's
+    // own optimistic update), so there's nothing left to visibly wait on
+    // unless the send actually fails, in which case the draft comes back.
+    setMessage('');
     setError(null);
-    try {
-      await sendReply.mutateAsync({ leadId: lead.id, body: message.trim(), fromKey: pinnedNumber ?? fromKey });
-      setMessage('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Send failed.');
-    }
+    sendReply.mutate(
+      { leadId: lead.id, body: text, fromKey: pinnedNumber ?? fromKey },
+      {
+        onError: (e) => {
+          setError(e instanceof Error ? e.message : 'Send failed.');
+          setMessage(text);
+        },
+      },
+    );
   }
 
   return (

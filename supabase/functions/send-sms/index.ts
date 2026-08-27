@@ -267,6 +267,7 @@ Deno.serve(async (req) => {
       perMessageDelayMs = 400,
       dailyLimits = {},
       jobId: jobIdIn,
+      isManualReply = false,
     } = body as {
       leadIds: string[];
       templatesByTag: Record<string, string>;
@@ -277,6 +278,12 @@ Deno.serve(async (req) => {
        * Missing or <= 0 for a key means unlimited for that number. */
       dailyLimits?: Record<string, number>;
       jobId?: string;
+      /** A human replying by hand from the lead's own SMS Thread, not bulk
+       * cold outreach — folds useSendManualReply's own follow-up "pause AI
+       * on this lead" write into the same parallel batch as send_log/
+       * lead_activities below, instead of a second full round trip the
+       * client used to make only after this function had already returned. */
+      isManualReply?: boolean;
     };
     jobId = jobIdIn;
 
@@ -586,6 +593,10 @@ Deno.serve(async (req) => {
           const leadUpdates: Record<string, unknown> = {};
           if (lead.stage === 'new') leadUpdates.stage = 'contacted';
           if (lead.assigned_sms_number !== key) leadUpdates.assigned_sms_number = key;
+          if (isManualReply) {
+            leadUpdates.ai_reply_paused = true;
+            leadUpdates.photo_wait_ai_active = false;
+          }
 
           // These three writes are independent of each other, so they run
           // together rather than one-after-another — the send_log row is

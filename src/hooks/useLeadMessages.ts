@@ -126,34 +126,51 @@ export function useThreadMessageCounts(enabled: boolean) {
  * A human sending one message from the thread view. Routed through the same
  * send-sms function as bulk — same sending-window rule, same send_log entry —
  * because the spec draws the exemption only around AI auto-replies, not
- * manual sends in general.
+ * manual sends in general. isManualReply: true tells send-sms to also pause
+ * AI on this lead (photo_wait_ai_active: false silences ai-reply's photo-
+ * wait mode specifically) as part of its own parallel write batch — folded
+ * in server-side so this doesn't cost a second full round trip after the
+ * function has already returned, on top of everything a bulk send already
+ * does (Zoom auth, Zoom user lookup, the actual send).
  *
- * Also pauses AI on this lead. Phase 4 doesn't exist yet, but setting the flag
- * now means a thread a human has already touched by hand is correctly marked
- * hands-off the moment auto-reply does exist, with no separate migration.
+ * The message appears in the thread the instant Send is clicked (onMutate),
+ * not after that whole round trip resolves — rolled back on failure,
+ * reconciled with the real row (real id, real timestamp) once the network
+ * catches up.
  */
 export function useSendManualReply() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ leadId, body, fromKey }: { leadId: string; body: string; fromKey: SmsNumberKey }) => {
       const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey },
+        body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey, isManualReply: true },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);
         throw new Error(errBody?.error || error.message);
       }
       if ((data as any)?.error) throw new Error((data as any).error);
-
-      // photo_wait_ai_active: false is what actually silences ai-reply's
-      // photo-wait mode for a Partial Qualified lead — a human just took
-      // this conversation over by hand, same as ai_reply_paused means for
-      // every other stage.
-      await supabase.from('leads').update({ ai_reply_paused: true, photo_wait_ai_active: false }).eq('id', leadId);
-
       return data;
     },
-    onSuccess: (_d, { leadId }) => {
+    onMutate: async ({ leadId, body }) => {
+      await qc.cancelQueries({ queryKey: ['lead_thread', leadId] });
+      const previous = qc.getQueryData<ThreadMessage[]>(['lead_thread', leadId]);
+      const optimistic: ThreadMessage = {
+        id: `optimistic:${Date.now()}`,
+        direction: 'outbound',
+        body,
+        at: new Date().toISOString(),
+        hasAttachments: false,
+        attachments: [],
+        isReaction: false,
+      };
+      qc.setQueryData<ThreadMessage[]>(['lead_thread', leadId], (old) => [...(old ?? []), optimistic]);
+      return { previous };
+    },
+    onError: (_err, { leadId }, context) => {
+      if (context?.previous) qc.setQueryData(['lead_thread', leadId], context.previous);
+    },
+    onSettled: (_d, _e, { leadId }) => {
       qc.invalidateQueries({ queryKey: ['lead_thread', leadId] });
       qc.invalidateQueries({ queryKey: ['leads'] });
     },
