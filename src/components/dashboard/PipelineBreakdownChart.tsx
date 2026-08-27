@@ -1,4 +1,5 @@
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartTheme } from '@/hooks/useChartTheme';
 
 export interface PipelineBreakdownPoint {
   key: string;
@@ -42,6 +43,7 @@ function BreakdownTooltip({ active, payload }: { active?: boolean; payload?: Arr
  * pipeline has ever put a lead in, largest first, not just the active
  * funnel (see PipelineFunnel for that narrower "Contacted onward" view). */
 export function PipelineBreakdownChart({ data, total }: { data: PipelineBreakdownPoint[]; total: number }) {
+  const ct = useChartTheme();
   const rows: ChartRow[] = data
     .filter((d) => d.count > 0)
     .map((d) => ({ ...d, sqrt: Math.sqrt(d.count), pct: total > 0 ? (d.count / total) * 100 : 0 }))
@@ -58,7 +60,7 @@ export function PipelineBreakdownChart({ data, total }: { data: PipelineBreakdow
         <YAxis
           type="category"
           dataKey="label"
-          stroke="#8693A1"
+          stroke={ct.axisStroke}
           fontSize={11.5}
           tickLine={false}
           axisLine={false}
@@ -73,7 +75,7 @@ export function PipelineBreakdownChart({ data, total }: { data: PipelineBreakdow
             dataKey="count"
             position="right"
             formatter={(v: number) => v.toLocaleString()}
-            style={{ fontSize: 11.5, fontWeight: 600, fill: '#0B1E33' }}
+            style={{ fontSize: 11.5, fontWeight: 600, fill: ct.textFill }}
             className="tabular-nums"
           />
         </Bar>

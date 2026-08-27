@@ -30,7 +30,7 @@ function MoreMenu({ onDownload, onDelete }: { onDownload: () => void; onDelete: 
         More <ChevronDown size={12} />
       </button>
       {open && (
-        <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border border-border bg-white py-1 shadow-popover">
+        <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border border-border bg-surface py-1 shadow-popover">
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3"
             onClick={() => {

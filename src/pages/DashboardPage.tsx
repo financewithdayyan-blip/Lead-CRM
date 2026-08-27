@@ -142,7 +142,11 @@ function StatCard({
    * real dashboard products use instead of treating every KPI equally. */
   hero?: boolean;
 }) {
-  const c = color ?? '#0B1E33';
+  // Every real call site passes an explicit color; this fallback only
+  // exists so a future one that doesn't still gets a color with real
+  // contrast against both a light card and a dark one, instead of a
+  // near-black navy that would vanish on a dark background.
+  const c = color ?? '#1568A8';
   if (hero) {
     return (
       <div

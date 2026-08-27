@@ -2,6 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Every semantic Tailwind color (bg-surface, text-text-2, border-border, …
+   see tailwind.config.ts) resolves through one of these — light values here,
+   dark overrides under .dark below. Stored as "r g b" (no commas, no #) so
+   Tailwind's rgb(var(...) / <alpha-value>) opacity trick works. Toggling the
+   `dark` class on <html> (see ThemeContext + the anti-flash inline script in
+   crm/index.html) is the entire dark-mode mechanism — nothing per-component. */
+:root {
+  --color-bg: 248 250 252;
+  --color-surface: 255 255 255;
+  --color-surface-2: 248 250 252;
+  --color-surface-3: 241 245 249;
+  --color-border: 226 232 240;
+  --color-border-2: 203 213 225;
+  --color-text: 11 30 51;
+  --color-text-2: 69 86 107;
+  --color-text-3: 134 147 161;
+  --color-primary: 21 104 168;
+  --color-primary-dim: 234 243 251;
+  --color-primary-hover: 14 74 122;
+  --color-primary-text: 14 74 122;
+  --color-accent: 201 162 75;
+  --color-accent-dim: 250 245 232;
+  --color-accent-hover: 179 137 58;
+  --color-info: 8 145 178;
+  --color-info-dim: 240 253 255;
+  --color-info-text: 14 116 144;
+  --color-success: 16 185 129;
+  --color-success-dim: 236 253 245;
+  --color-warning: 245 158 11;
+  --color-warning-dim: 255 251 235;
+  --color-danger: 239 68 68;
+  --color-danger-dim: 254 242 242;
+  --color-scrollbar-thumb: 195 205 216;
+  --color-scrollbar-thumb-hover: 140 160 184;
+}
+
+/* Public, non-authenticated pages (the signing page, an investor's deal
+   packet) are a document/paper metaphor shown to people who never see the
+   dark-mode toggle — a stranger's OS-level dark preference shouldn't be able
+   to reach in and re-theme a page they didn't choose. Same variable set as
+   :root, but set on a wrapper div around just those routes (see
+   ForceLightTheme in App.tsx) — custom properties resolve from the nearest
+   ancestor that defines them, so this wins for everything inside it
+   regardless of an outer .dark on <html>, with no specificity fight involved. */
+.theme-force-light {
+  --color-bg: 248 250 252;
+  --color-surface: 255 255 255;
+  --color-surface-2: 248 250 252;
+  --color-surface-3: 241 245 249;
+  --color-border: 226 232 240;
+  --color-border-2: 203 213 225;
+  --color-text: 11 30 51;
+  --color-text-2: 69 86 107;
+  --color-text-3: 134 147 161;
+  --color-primary: 21 104 168;
+  --color-primary-dim: 234 243 251;
+  --color-primary-hover: 14 74 122;
+  --color-primary-text: 14 74 122;
+  --color-accent: 201 162 75;
+  --color-accent-dim: 250 245 232;
+  --color-accent-hover: 179 137 58;
+  --color-info: 8 145 178;
+  --color-info-dim: 240 253 255;
+  --color-info-text: 14 116 144;
+  --color-success: 16 185 129;
+  --color-success-dim: 236 253 245;
+  --color-warning: 245 158 11;
+  --color-warning-dim: 255 251 235;
+  --color-danger: 239 68 68;
+  --color-danger-dim: 254 242 242;
+  --color-scrollbar-thumb: 195 205 216;
+  --color-scrollbar-thumb-hover: 140 160 184;
+  background: rgb(var(--color-bg));
+  color: rgb(var(--color-text));
+}
+
+.dark {
+  --color-bg: 10 20 32;
+  --color-surface: 17 29 46;
+  --color-surface-2: 13 23 37;
+  --color-surface-3: 26 41 65;
+  --color-border: 36 51 74;
+  --color-border-2: 52 69 95;
+  --color-text: 238 242 247;
+  --color-text-2: 183 195 211;
+  --color-text-3: 128 144 166;
+  --color-primary: 58 143 214;
+  --color-primary-dim: 19 37 56;
+  --color-primary-hover: 90 163 224;
+  --color-primary-text: 111 178 232;
+  --color-accent: 217 181 104;
+  --color-accent-dim: 42 35 19;
+  --color-accent-hover: 232 201 136;
+  --color-info: 34 184 221;
+  --color-info-dim: 13 37 48;
+  --color-info-text: 95 211 238;
+  --color-success: 52 211 153;
+  --color-success-dim: 15 42 32;
+  --color-warning: 251 191 36;
+  --color-warning-dim: 43 32 8;
+  --color-danger: 248 113 113;
+  --color-danger-dim: 46 21 22;
+  --color-scrollbar-thumb: 52 69 95;
+  --color-scrollbar-thumb-hover: 82 103 133;
+}
+
 html,
 body,
 #root {
@@ -9,10 +115,11 @@ body,
 }
 
 body {
-  background: #f8fafc;
-  color: #0B1E33;
+  background: rgb(var(--color-bg));
+  color: rgb(var(--color-text));
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 * {
@@ -27,11 +134,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c3cdd8;
+  background: rgb(var(--color-scrollbar-thumb));
   border-radius: 20px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #8CA0B8;
+  background: rgb(var(--color-scrollbar-thumb-hover));
 }
 
 /* Scrolls normally, just without the visible bar — for compact in-card lists
@@ -101,7 +208,7 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed;
   }
   /* Was done ad hoc with `!py-1 !text-[12px]`-style overrides at every call
      site — a real class now instead, same sizing every time it's used. */
@@ -123,7 +230,7 @@ body {
     @apply hover:shadow-card-hover;
   }
   .input {
-    @apply w-full rounded-md border border-border bg-white px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-3 focus:border-primary focus:ring-1 focus:ring-primary/30;
+    @apply w-full rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-text outline-none transition-colors placeholder:text-text-3 focus:border-primary focus:ring-1 focus:ring-primary/30;
   }
   .label {
     @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-text-3;

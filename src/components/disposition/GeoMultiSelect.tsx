@@ -148,7 +148,7 @@ export function GeoMultiSelect({
       />
       {hint && <p className="mt-1 text-[11px] text-text-3">{hint}</p>}
       {open && query.trim() && (
-        <div className="absolute left-0 right-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-md border border-border bg-white py-1 shadow-popover">
+        <div className="absolute left-0 right-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-md border border-border bg-surface py-1 shadow-popover">
           {matches.length > 0 ? (
             matches.map((m, i) => (
               <button

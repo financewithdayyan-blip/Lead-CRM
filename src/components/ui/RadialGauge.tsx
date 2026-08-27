@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 /** Circular progress ring for a single percentage — the donut/radial-gauge
  * pattern used across most modern dashboard products for one headline rate,
@@ -25,6 +26,8 @@ export function RadialGauge({
   sub?: string;
   centered?: boolean;
 }) {
+  const { theme } = useTheme();
+  const hatchColor = theme === 'dark' ? '#34455f' : '#cbd5e1';
   const clamped = Math.max(0, Math.min(100, pct));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -44,7 +47,7 @@ export function RadialGauge({
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <pattern id={patternId} width="4" height="4" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-            <line x1="0" y1="0" x2="0" y2="4" stroke="#cbd5e1" strokeWidth="1.5" />
+            <line x1="0" y1="0" x2="0" y2="4" stroke={hatchColor} strokeWidth="1.5" />
           </pattern>
         </defs>
         <circle cx={center} cy={center} r={radius} fill="none" stroke={`url(#${patternId})`} strokeWidth={strokeWidth} />

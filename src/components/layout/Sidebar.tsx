@@ -11,8 +11,10 @@ import {
   FileSignature,
   Handshake,
   LogOut,
+  Moon,
   Settings,
   Shield,
+  Sun,
   Eye,
   PanelLeftClose,
   PanelLeftOpen,
@@ -22,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { cn, initials } from '@/lib/utils';
 
 const COLLAPSE_KEY = 'sidebar_collapsed';
@@ -151,6 +154,7 @@ function SidebarFooterProfile({ collapsed }: { collapsed: boolean }) {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
   const { unreadCount } = useNotificationsContext();
+  const { theme, toggleTheme } = useTheme();
   const [first, last] = (profile?.fullName ?? '').split(' ');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -200,6 +204,26 @@ function SidebarFooterProfile({ collapsed }: { collapsed: boolean }) {
             className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive"
           >
             <Settings size={14} /> Settings
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-sidebar-text hover:bg-sidebar hover:text-sidebar-textActive"
+          >
+            {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
+            Dark Mode
+            <span
+              className={cn(
+                'ml-auto flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
+                theme === 'dark' ? 'bg-primary' : 'bg-sidebar',
+              )}
+            >
+              <span
+                className={cn(
+                  'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
+                  theme === 'dark' ? 'translate-x-3.5' : 'translate-x-0.5',
+                )}
+              />
+            </span>
           </button>
           <button
             onClick={() => signOut()}

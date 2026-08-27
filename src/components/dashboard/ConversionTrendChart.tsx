@@ -1,4 +1,5 @@
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartTheme } from '@/hooks/useChartTheme';
 
 export interface ConversionTrendPoint {
   month: string;
@@ -13,12 +14,13 @@ export interface ConversionTrendPoint {
 // forcing them onto one. Its own lazy chunk, same reasoning as the other
 // dashboard charts (recharts is the heaviest dependency in the app).
 export function ConversionTrendChart({ data }: { data: ConversionTrendPoint[] }) {
+  const ct = useChartTheme();
   return (
     <ResponsiveContainer width="100%" height={240}>
       <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid stroke="#e2e8f0" vertical={false} />
-        <XAxis dataKey="month" stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} />
-        <YAxis yAxisId="leads" stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
+        <CartesianGrid stroke={ct.gridStroke} vertical={false} />
+        <XAxis dataKey="month" stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} />
+        <YAxis yAxisId="leads" stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
         <YAxis
           yAxisId="pct"
           orientation="right"
@@ -30,14 +32,15 @@ export function ConversionTrendChart({ data }: { data: ConversionTrendPoint[] })
           tickFormatter={(v) => `${v}%`}
         />
         <Tooltip
-          cursor={{ fill: '#f1f5f9' }}
+          cursor={{ fill: ct.gridStroke }}
           contentStyle={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: ct.tooltipBg,
+            border: `1px solid ${ct.tooltipBorder}`,
             borderRadius: 10,
             fontSize: 12,
             boxShadow: '0 10px 25px -8px rgba(11,30,51,0.25)',
             padding: '8px 12px',
+            color: ct.textFill,
           }}
           formatter={(value, name) => (name === 'Conversion Rate' ? [`${value}%`, name] : [value, name])}
         />

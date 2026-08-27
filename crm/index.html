@@ -11,6 +11,18 @@
          either way, so there's nothing to actually show if indexed, but
          this keeps a /crm URL from ever occupying a search result. -->
     <meta name="robots" content="noindex, nofollow" />
+    <!-- Sets the dark class before anything paints, from the same source
+         ThemeContext reads on mount — without this the page would flash
+         light-mode white for a frame every time a dark-mode user loads it. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://ggfpvrdxqopippzqkojr.supabase.co" />
     <link rel="preconnect" href="https://ggfpvrdxqopippzqkojr.supabase.co" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

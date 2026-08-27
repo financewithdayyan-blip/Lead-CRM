@@ -1,25 +1,44 @@
 import type { Config } from 'tailwindcss';
 
+// Every semantic color below reads from a CSS custom property (see
+// src/index.css's :root / .dark blocks) instead of a literal hex, so dark
+// mode is a matter of swapping the variables' values — every component
+// already built against these tokens (bg-surface, text-text-2, border-border,
+// etc.) gets it for free, no per-component dark: variant needed. Vars are
+// stored as space-separated "r g b" triples (not hex) so Tailwind's opacity
+// modifiers (bg-primary/30, ring-primary/30) still work via rgb(var(...) / a).
+function withOpacity(varName: string) {
+  return `rgb(var(${varName}) / <alpha-value>)`;
+}
+
 export default {
+  darkMode: 'class',
   content: ['./crm/index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        bg: '#f8fafc',
-        surface: { DEFAULT: '#ffffff', 2: '#f8fafc', 3: '#f1f5f9' },
-        border: { DEFAULT: '#e2e8f0', 2: '#cbd5e1' },
-        text: { DEFAULT: '#0B1E33', 2: '#45566B', 3: '#8693A1' },
+        bg: withOpacity('--color-bg'),
+        surface: { DEFAULT: withOpacity('--color-surface'), 2: withOpacity('--color-surface-2'), 3: withOpacity('--color-surface-3') },
+        border: { DEFAULT: withOpacity('--color-border'), 2: withOpacity('--color-border-2') },
+        text: { DEFAULT: withOpacity('--color-text'), 2: withOpacity('--color-text-2'), 3: withOpacity('--color-text-3') },
         // Brand sky-deep — Bluebird's own "logo bird blue," not a generic indigo.
-        primary: { DEFAULT: '#1568A8', dim: '#eaf3fb', hover: '#0e4a7a', text: '#0e4a7a' },
+        primary: {
+          DEFAULT: withOpacity('--color-primary'),
+          dim: withOpacity('--color-primary-dim'),
+          hover: withOpacity('--color-primary-hover'),
+          text: withOpacity('--color-primary-text'),
+        },
         // Brand brass — "closing-table accent: trust, cost-covered." Used
         // sparingly (premium emphasis, the Closed pipeline stage), never as
         // a primary action color.
-        accent: { DEFAULT: '#C9A24B', dim: '#faf5e8', hover: '#b3893a' },
-        info: { DEFAULT: '#0891b2', dim: '#f0fdff', text: '#0e7490' },
-        success: { DEFAULT: '#10b981', dim: '#ecfdf5' },
-        warning: { DEFAULT: '#f59e0b', dim: '#fffbeb' },
-        danger: { DEFAULT: '#ef4444', dim: '#fef2f2' },
+        accent: { DEFAULT: withOpacity('--color-accent'), dim: withOpacity('--color-accent-dim'), hover: withOpacity('--color-accent-hover') },
+        info: { DEFAULT: withOpacity('--color-info'), dim: withOpacity('--color-info-dim'), text: withOpacity('--color-info-text') },
+        success: { DEFAULT: withOpacity('--color-success'), dim: withOpacity('--color-success-dim') },
+        warning: { DEFAULT: withOpacity('--color-warning'), dim: withOpacity('--color-warning-dim') },
+        danger: { DEFAULT: withOpacity('--color-danger'), dim: withOpacity('--color-danger-dim') },
         // Brand navy — same shell the marketing site uses for its header.
+        // Deliberately NOT theme-driven — it's already dark, so it reads
+        // correctly as the same brand shell in both light and dark mode.
         sidebar: { DEFAULT: '#0B1E33', 2: '#132A45', border: '#132A45', text: '#8CA0B8', textActive: '#ffffff' },
       },
       fontFamily: {

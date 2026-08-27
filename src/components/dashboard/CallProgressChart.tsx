@@ -1,4 +1,5 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useChartTheme } from '@/hooks/useChartTheme';
 
 interface CallTrendPoint {
   iso: string;
@@ -14,21 +15,23 @@ interface CallTrendPoint {
 // actual lines rather than filled areas, and driven by call outcomes instead
 // of SMS activity since callers never see SMS data.
 export function CallProgressChart({ data }: { data: CallTrendPoint[] }) {
+  const ct = useChartTheme();
   return (
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid stroke="#e2e8f0" vertical={false} />
-        <XAxis dataKey="label" stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} />
-        <YAxis stroke="#8693A1" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+        <CartesianGrid stroke={ct.gridStroke} vertical={false} />
+        <XAxis dataKey="label" stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} />
+        <YAxis stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
         <Tooltip
-          cursor={{ stroke: '#8693A1', strokeWidth: 1, strokeDasharray: '4 4' }}
+          cursor={{ stroke: ct.axisStroke, strokeWidth: 1, strokeDasharray: '4 4' }}
           contentStyle={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: ct.tooltipBg,
+            border: `1px solid ${ct.tooltipBorder}`,
             borderRadius: 10,
             fontSize: 12,
             boxShadow: '0 10px 25px -8px rgba(11,30,51,0.25)',
             padding: '8px 12px',
+            color: ct.textFill,
           }}
           itemStyle={{ padding: '1px 0' }}
         />

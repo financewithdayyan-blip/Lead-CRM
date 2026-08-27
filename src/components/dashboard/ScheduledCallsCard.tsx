@@ -136,7 +136,7 @@ export function ScheduledCallsCard({ leads }: { leads: Lead[] }) {
                     {sellerTime && <span className="text-[10px] text-text-3">Seller's time: {sellerTime}</span>}
                   </div>
                   <button
-                    className="flex shrink-0 items-center gap-1 rounded-md border border-border-2 bg-white px-2 py-1 text-[11px] font-medium text-text-2 hover:border-success hover:text-success"
+                    className="flex shrink-0 items-center gap-1 rounded-md border border-border-2 bg-surface px-2 py-1 text-[11px] font-medium text-text-2 hover:border-success hover:text-success"
                     onClick={() => setCompleting(lead)}
                     title="Mark this call completed"
                   >

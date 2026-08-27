@@ -1,10 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SpeedInsights } from "@vercel/speed-insights/react"
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
 import { AttendanceProvider } from '@/contexts/AttendanceContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 
@@ -49,9 +50,18 @@ function RouteFallback() {
   return <div className="flex h-screen items-center justify-center text-text-3">Loading…</div>;
 }
 
+/** Pins a route to light mode regardless of the admin's dark-mode
+ * preference — for pages shown to people outside the CRM (a seller signing,
+ * an investor viewing a deal packet) who never see the toggle and shouldn't
+ * have their own OS dark-mode setting silently re-theme a document. */
+function ForceLightTheme({ children }: { children: ReactNode }) {
+  return <div className="theme-force-light min-h-screen">{children}</div>;
+}
+
 export default function App() {
   return (
     <div>
+    <ThemeProvider>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AttendanceProvider>
@@ -63,8 +73,8 @@ export default function App() {
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/accept-invite" element={<AcceptInvitePage />} />
                   {/* Public — investors reach this with no account and no session. */}
-                  <Route path="/deal/:slug" element={<PublicPacketPage />} />
-                  <Route path="/sign/:token" element={<SignContractPage />} />
+                  <Route path="/deal/:slug" element={<ForceLightTheme><PublicPacketPage /></ForceLightTheme>} />
+                  <Route path="/sign/:token" element={<ForceLightTheme><SignContractPage /></ForceLightTheme>} />
                   <Route element={<ProtectedRoute />}>
                     <Route path="/session" element={<CallSessionPage />} />
                     <Route element={<AppShell />}>
@@ -103,6 +113,7 @@ export default function App() {
         </AttendanceProvider>
       </AuthProvider>
     </QueryClientProvider>
+    </ThemeProvider>
     <SpeedInsights />
     </div>
   );

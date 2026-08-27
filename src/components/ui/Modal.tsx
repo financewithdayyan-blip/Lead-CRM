@@ -25,7 +25,7 @@ export function Modal({ open, onClose, title, children, width = 'md' }: ModalPro
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onMouseDown={onClose}>
       <div
-        className={cn('max-h-[90vh] w-full overflow-y-auto rounded-lg border border-border bg-white shadow-popover', widthClass[width])}
+        className={cn('max-h-[90vh] w-full overflow-y-auto rounded-lg border border-border bg-surface shadow-popover', widthClass[width])}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {title && (
