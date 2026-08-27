@@ -34,6 +34,9 @@ const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 // faded cards) rather than removed, so a full pipeline doesn't bury the
 // stages that still need attention.
 const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'onhold', 'others'];
+// Cold Lead / Contacted are pre-outreach stages — nothing to call or text
+// about yet, so the Call/Text row is hidden on cards in these columns.
+const NO_CONTACT_STAGES: LeadStage[] = ['new', 'contacted'];
 interface CardTheme {
   gradient: string;
   text: string;
@@ -448,7 +451,7 @@ function KanbanCardVisual({
           )}
         </div>
       </div>
-      {(!viewOnly || canSms) && lead.phone && (
+      {(!viewOnly || canSms) && lead.phone && !NO_CONTACT_STAGES.includes(lead.stage) && (
         <div className={`mt-1 flex gap-1 border-t pt-1 ${sx.divider}`}>
           {!viewOnly && (
             <button
