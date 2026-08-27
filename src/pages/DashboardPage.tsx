@@ -931,7 +931,7 @@ export function DashboardView({
               <SectionLabel>Today</SectionLabel>
               <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
                 <ScheduledCallsCard leads={leads} />
-                <TasksCard userId={userId} leads={leads} />
+                <TasksCard userId={userId} />
               </div>
             </div>
           )}

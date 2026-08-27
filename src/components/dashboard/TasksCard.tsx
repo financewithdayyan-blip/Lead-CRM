@@ -1,148 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Calculator, ChevronDown, ChevronRight, ListChecks, MessageSquare, PhoneCall, RotateCw } from 'lucide-react';
+import { ListChecks } from 'lucide-react';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
-import { useFollowupLeads, useNoPacketLeads, useSmsCampaignRanToday } from '@/hooks/useDashboardTaskSummary';
-import { formatDate, formatPhone, leadDisplayName, localIsoDate } from '@/lib/utils';
-import { STAGE_CONFIG, type Lead, type LeadStage } from '@/types/domain';
+import { formatDate, localIsoDate } from '@/lib/utils';
 
-/** "3d ago" / "Today" / "Never contacted" — how stale a lead's last touch
- * is, which is the whole point of the Do Followups list (who's gone
- * quietest the longest, not who's alphabetically first). */
-function lastTouchLabel(iso: string | null): string {
-  if (!iso) return 'Never contacted';
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return '1 day ago';
-  return `${days} days ago`;
-}
-
-/** One lead row inside an expanded task category — name (falling back to
- * phone when the name is blank/placeholder), with optional stage and
- * staleness context. Shared shape across all three lead-backed categories
- * instead of a bare text link each. */
-function TaskLeadRow({
-  id,
-  firstName,
-  lastName,
-  phone,
-  stage,
-  staleness,
-}: {
-  id: string;
-  firstName: string;
-  lastName: string;
-  phone?: string | null;
-  stage?: LeadStage;
-  staleness?: string;
-}) {
-  const name = leadDisplayName(firstName, lastName);
-  const stageCfg = stage ? STAGE_CONFIG[stage] : null;
-  return (
-    <Link
-      to={`/leads/${id}`}
-      className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface px-2.5 py-1.5 text-[12px] hover:border-primary/50"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-text">{name ?? (phone ? formatPhone(phone) : 'Unnamed lead')}</div>
-        {name && phone && <div className="truncate text-[11px] text-text-3">{formatPhone(phone)}</div>}
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {staleness && (
-          <span
-            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-              staleness === 'Never contacted' ? 'bg-danger-dim text-danger' : 'bg-surface-3 text-text-3'
-            }`}
-          >
-            {staleness}
-          </span>
-        )}
-        {stageCfg && (
-          <span
-            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-            style={{ backgroundColor: `${stageCfg.color}1f`, color: stageCfg.color }}
-          >
-            {stageCfg.label}
-          </span>
-        )}
-      </div>
-    </Link>
-  );
-}
-
-/** One of the four daily, aggregate rows — a count and an expandable list of
- * the actual leads behind it, rather than a flat row per lead. */
-function TaskCategory({
-  icon: Icon,
-  label,
-  count,
-  emptyLabel,
-  children,
-}: {
-  icon: typeof ListChecks;
-  label: string;
-  count: number;
-  emptyLabel: string;
-  children?: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const hasItems = count > 0 && !!children;
-
-  return (
-    <div className="rounded-md border border-border-2 bg-surface-3">
-      <button
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-        onClick={() => hasItems && setOpen((o) => !o)}
-        disabled={!hasItems}
-      >
-        <span className="flex items-center gap-2 text-[13px] text-text">
-          <Icon size={14} className="shrink-0 text-text-3" />
-          {label}
-        </span>
-        <span className="flex shrink-0 items-center gap-1">
-          <span
-            className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-              count > 0 ? 'bg-warning-dim text-warning' : 'bg-surface-2 text-text-3'
-            }`}
-          >
-            {count}
-          </span>
-          {hasItems && (open ? <ChevronDown size={13} className="text-text-3" /> : <ChevronRight size={13} className="text-text-3" />)}
-        </span>
-      </button>
-      {count === 0 && <p className="px-3 pb-2 text-[12px] text-text-3">{emptyLabel}</p>}
-      {open && hasItems && (
-        <div className="max-h-72 space-y-1 overflow-y-auto border-t border-border-2 px-2.5 py-2">{children}</div>
-      )}
-    </div>
-  );
-}
-
-/** Four daily, purpose-level items instead of a flat, ever-growing list of
- * one row per lead: run today's SMS campaign, catch up on stalled leads,
- * work today's scheduled calls, and run numbers on qualified leads nobody's
- * gotten to yet. Each count is computed fresh from live lead/business state
- * (see useDashboardTaskSummary and 0080_daily_task_summary.sql) rather than
- * a task row someone has to remember to create and clear — a stalled lead
- * drops off "Do followups" the moment any activity happens on it, no manual
- * bookkeeping required. Hand-added tasks (from a lead's own page) still show
- * below as their own flat list, since those are genuinely one-off, not the
- * systemic pile-up this replaced. */
-export function TasksCard({ userId, leads }: { userId: string; leads: Lead[] }) {
+/** Only ever shows tasks added by hand from a lead's own Tasks tab — no
+ * automatic "stalled lead" or "no deal packet" heuristics guessing at what
+ * needs attention. Those tried to be smart and just added noise; a real
+ * task list is whatever was actually put on it. */
+export function TasksCard({ userId }: { userId: string }) {
   const { data: tasks = [] } = useTasks(userId);
   const toggleTask = useToggleTask();
-  const { data: followupLeads = [] } = useFollowupLeads();
-  const { data: noPacketLeads = [] } = useNoPacketLeads();
-  const { data: campaignRanToday } = useSmsCampaignRanToday();
   const todayStr = localIsoDate(new Date());
 
-  const scheduledCalls = useMemo(() => leads.filter((l) => !!l.scheduledCallbackAt), [leads]);
-
-  const manualOpen = useMemo(
-    () =>
-      tasks
-        .filter((t) => !t.completed && !t.autoCreated)
-        .sort((a, b) => (a.dueDate ?? '9999-99-99').localeCompare(b.dueDate ?? '9999-99-99')),
+  const open = useMemo(
+    () => tasks.filter((t) => !t.completed).sort((a, b) => (a.dueDate ?? '9999-99-99').localeCompare(b.dueDate ?? '9999-99-99')),
     [tasks],
   );
 
@@ -154,64 +26,11 @@ export function TasksCard({ userId, leads }: { userId: string; leads: Lead[] }) 
         </h3>
       </div>
 
-      <div className="space-y-1.5">
-        <TaskCategory
-          icon={MessageSquare}
-          label="Run today's SMS campaign"
-          count={campaignRanToday ? 0 : 1}
-          emptyLabel="Sent today"
-        >
-          <Link to="/kanban" className="text-[12px] text-primary hover:underline">
-            Go select leads and send →
-          </Link>
-        </TaskCategory>
-
-        <TaskCategory
-          icon={RotateCw}
-          label="Do followups"
-          count={followupLeads.length}
-          emptyLabel="Nothing's gone quiet — every active lead has recent activity."
-        >
-          {followupLeads.map((l) => (
-            <TaskLeadRow
-              key={l.id}
-              id={l.id}
-              firstName={l.firstName}
-              lastName={l.lastName}
-              phone={l.phone}
-              stage={l.stage as LeadStage}
-              staleness={lastTouchLabel(l.lastActivityAt)}
-            />
-          ))}
-        </TaskCategory>
-
-        <TaskCategory
-          icon={PhoneCall}
-          label="Do scheduled calls"
-          count={scheduledCalls.length}
-          emptyLabel="Nothing scheduled — see Scheduled Calls below once one comes in."
-        >
-          {scheduledCalls.map((l) => (
-            <TaskLeadRow key={l.id} id={l.id} firstName={l.firstName} lastName={l.lastName} phone={l.phone} stage={l.stage} />
-          ))}
-        </TaskCategory>
-
-        <TaskCategory
-          icon={Calculator}
-          label="Run numbers for qualified leads"
-          count={noPacketLeads.length}
-          emptyLabel="Every qualified lead already has a deal packet."
-        >
-          {noPacketLeads.map((l) => (
-            <TaskLeadRow key={l.id} id={l.id} firstName={l.firstName} lastName={l.lastName} phone={l.phone} />
-          ))}
-        </TaskCategory>
-      </div>
-
-      {manualOpen.length > 0 && (
-        <div className="mt-3 space-y-1.5 border-t border-border-2 pt-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Added by hand</div>
-          {manualOpen.map((t) => {
+      {open.length === 0 ? (
+        <p className="text-[12px] text-text-3">No tasks yet — add one from a lead's Tasks tab.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {open.map((t) => {
             const overdue = !!t.dueDate && t.dueDate < todayStr;
             const isToday = t.dueDate === todayStr;
             return (
