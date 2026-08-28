@@ -76,10 +76,10 @@ interface CalendarItem {
   completed?: boolean;
 }
 
-const KIND_STYLE: Record<CalendarItem['kind'], { dot: string; label: string }> = {
-  call: { dot: 'bg-primary', label: 'Call' },
-  followup: { dot: 'bg-accent', label: 'Follow-up' },
-  task: { dot: 'bg-info', label: 'Task' },
+const KIND_STYLE: Record<CalendarItem['kind'], { dot: string; label: string; pill: string }> = {
+  call: { dot: 'bg-primary', label: 'Call Scheduled', pill: 'bg-primary/15 text-primary' },
+  followup: { dot: 'bg-accent', label: 'Follow-up', pill: 'bg-accent/15 text-accent' },
+  task: { dot: 'bg-info', label: 'Task', pill: 'bg-info/15 text-info' },
 };
 
 function CalendarItemRow({
@@ -138,6 +138,92 @@ function CalendarItemRow({
   );
 }
 
+/** One row inside the day popup — same actions as the compact card row, but
+ * with the item's type spelled out as a pill (Task / Follow-up / Call
+ * Scheduled) instead of leaving it to a small color-coded dot. */
+function DayDetailRow({
+  item,
+  onToggleTask,
+  onCompleteCall,
+}: {
+  item: CalendarItem;
+  onToggleTask: (id: string, completed: boolean) => void;
+  onCompleteCall: (lead: Lead) => void;
+}) {
+  const style = KIND_STYLE[item.kind];
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-border-2 bg-surface-3 px-3 py-2.5">
+      {item.kind === 'task' && item.taskId && (
+        <button
+          onClick={() => onToggleTask(item.taskId!, !item.completed)}
+          className="shrink-0 text-text-3 hover:text-success"
+          title={item.completed ? 'Mark incomplete' : 'Mark complete'}
+        >
+          {item.completed ? <CheckSquare size={17} /> : <Square size={17} />}
+        </button>
+      )}
+      {item.kind === 'call' && item.lead && (
+        <button
+          onClick={() => onCompleteCall(item.lead!)}
+          className="shrink-0 text-text-3 hover:text-success"
+          title="Mark this call completed"
+        >
+          <Circle size={17} />
+        </button>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${style.pill}`}>{style.label}</span>
+          {item.overdue && <span className="shrink-0 rounded-full bg-danger-dim px-1.5 py-0.5 text-[10px] font-semibold text-danger">Overdue</span>}
+        </div>
+        {item.href ? (
+          <Link to={item.href} className={`mt-0.5 block truncate text-[13px] font-medium hover:underline ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>
+            {item.title}
+          </Link>
+        ) : (
+          <div className={`mt-0.5 truncate text-[13px] font-medium ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>{item.title}</div>
+        )}
+        {item.sub && <div className="mt-0.5 truncate text-[11px] text-text-3">"{item.sub}"</div>}
+      </div>
+      <span className="shrink-0 text-[12px] font-medium text-text-2">{item.time ? formatClockTime(item.time) : 'All day'}</span>
+    </div>
+  );
+}
+
+/** Opened by clicking a day's header — everything due that day, clearly
+ * labeled by type, without leaving the dashboard the way clicking straight
+ * through to a lead does. */
+function DayDetailModal({
+  day,
+  items,
+  onClose,
+  onToggleTask,
+  onCompleteCall,
+}: {
+  day: { iso: string; weekday: string; month: string; dayNum: number; isToday: boolean };
+  items: CalendarItem[];
+  onClose: () => void;
+  onToggleTask: (id: string, completed: boolean) => void;
+  onCompleteCall: (lead: Lead) => void;
+}) {
+  const fullDate = new Date(`${day.iso}T00:00:00`);
+  const title = fullDate.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+
+  return (
+    <Modal open onClose={onClose} title={day.isToday ? `Today — ${title}` : title} width="sm">
+      {items.length === 0 ? (
+        <p className="text-[13px] text-text-3">Nothing due this day.</p>
+      ) : (
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+          {items.map((item) => (
+            <DayDetailRow key={item.id} item={item} onToggleTask={onToggleTask} onCompleteCall={onCompleteCall} />
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /** Replaces the old side-by-side Scheduled Calls + Tasks cards with one
  * Google-Calendar-style horizontal strip — 14 days, each showing whatever's
  * actually due that day: a real callback time (from the AI's own
@@ -149,6 +235,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
   const { data: tasks = [] } = useTasks(userId);
   const toggleTask = useToggleTask();
   const [completingCall, setCompletingCall] = useState<Lead | null>(null);
+  const [openDayIso, setOpenDayIso] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const todayIso = localIsoDate(new Date());
@@ -265,20 +352,42 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
           return (
             <div
               key={d.iso}
-              className={`shrink-0 rounded-lg border ${d.isToday ? 'border-primary/50 bg-primary/5' : 'border-border-2 bg-surface-3'}`}
+              className={`shrink-0 rounded-lg border ${
+                d.isToday ? 'border-primary bg-primary/10 ring-1 ring-primary/40' : 'border-border-2 bg-surface-3'
+              }`}
               style={{ width: DAY_COLUMN_WIDTH, scrollSnapAlign: 'start' }}
             >
-              <div className={`flex items-center justify-between border-b px-2.5 py-1.5 ${d.isToday ? 'border-primary/30' : 'border-border-2'}`}>
-                <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">{d.isToday ? 'Today' : d.weekday}</div>
-                  <div className={`text-[14px] font-bold ${d.isToday ? 'text-primary' : 'text-text'}`}>
-                    {d.month} {d.dayNum}
+              <button
+                onClick={() => setOpenDayIso(d.iso)}
+                className={`flex w-full items-center justify-between border-b px-2.5 py-1.5 text-left transition-colors ${
+                  d.isToday ? 'border-primary/30 hover:bg-primary/10' : 'border-border-2 hover:bg-surface-2'
+                }`}
+                title="View everything due this day"
+              >
+                <div className="flex items-center gap-2">
+                  {d.isToday ? (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-white shadow-[0_0_0_3px] shadow-primary/20">
+                      {d.dayNum}
+                    </span>
+                  ) : null}
+                  <div>
+                    <div className={`text-[10px] font-semibold uppercase tracking-wide ${d.isToday ? 'text-primary' : 'text-text-3'}`}>
+                      {d.isToday ? 'Today' : d.weekday}
+                    </div>
+                    {!d.isToday && <div className="text-[14px] font-bold text-text">{d.month} {d.dayNum}</div>}
+                    {d.isToday && <div className="text-[11px] font-medium text-primary/80">{d.month}</div>}
                   </div>
                 </div>
                 {items.length > 0 && (
-                  <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-text-3">{items.length}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                      d.isToday ? 'bg-primary text-white' : 'bg-surface-2 text-text-3'
+                    }`}
+                  >
+                    {items.length}
+                  </span>
                 )}
-              </div>
+              </button>
               <div className="max-h-[280px] min-h-[60px] space-y-1 overflow-y-auto p-1.5">
                 {items.length === 0 && <div className="px-1 py-3 text-center text-[11px] text-text-3">—</div>}
                 {items.map((item) => (
@@ -296,6 +405,19 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
       </div>
 
       {completingCall && <MarkCallCompleteModal lead={completingCall} onClose={() => setCompletingCall(null)} />}
+
+      {openDayIso && (
+        <DayDetailModal
+          day={days.find((d) => d.iso === openDayIso)!}
+          items={itemsByDay.get(openDayIso) ?? []}
+          onClose={() => setOpenDayIso(null)}
+          onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
+          onCompleteCall={(lead) => {
+            setOpenDayIso(null);
+            setCompletingCall(lead);
+          }}
+        />
+      )}
     </div>
   );
 }
