@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, X as XIcon } from 'lucide-react';
+import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
@@ -72,6 +72,26 @@ const WHITE_TAG_BACKDROP = 'inline-flex rounded-full bg-white/90 p-0.5';
 
 const NAVY_THEME: CardTheme = {
   gradient: 'from-sidebar to-sidebar-2',
+  text: 'text-white',
+  sub: 'text-white/70',
+  sub3: 'text-white/50',
+  divider: 'border-white/10',
+  callBtn: GOLD_CALL_BTN,
+  textBtn: WHITE_TEXT_BTN,
+  iconBtn: WHITE_ICON_BTN,
+  badge: WHITE_BADGE,
+  tagBackdrop: WHITE_TAG_BACKDROP,
+};
+
+// The AI-score spotlight card's own look — deliberately NOT NAVY_THEME.
+// Qualified (followup) already owns that exact navy look on every one of
+// its cards, so a spotlighted lead sitting in some other stage (Partial
+// Qualified, Negotiation, ...) borrowing it was indistinguishable from an
+// actual Qualified-stage card — a lead looked like it had jumped stages
+// when it hadn't. Violet reads as "AI pick" without impersonating any real
+// stage's own card color (see CARD_THEME below).
+const SPOTLIGHT_THEME: CardTheme = {
+  gradient: 'from-violet-600 to-indigo-800',
   text: 'text-white',
   sub: 'text-white/70',
   sub3: 'text-white/50',
@@ -289,10 +309,10 @@ function KanbanCardVisual({
 
   const dimmed = DIMMED_STAGES.includes(lead.stage);
   // A stage in CARD_THEME gets its theme on every card; anywhere else, only
-  // the single AI-score spotlight lead (if any) borrows the navy look —
+  // the single AI-score spotlight lead (if any) gets its own distinct look —
   // either way, nothing higher-priority (an in-progress multi-select, a
   // shared-lead badge) is already claiming the card's background.
-  const theme = CARD_THEME[lead.stage] ?? (spotlight ? NAVY_THEME : null);
+  const theme = CARD_THEME[lead.stage] ?? (spotlight ? SPOTLIGHT_THEME : null);
   const themed = !!theme && !selected && !sharedFrom;
 
   const sx = themed
@@ -337,6 +357,18 @@ function KanbanCardVisual({
               <span className={`truncate font-medium ${themed ? theme!.text : 'text-text'}`}>
                 {lead.firstName} {lead.lastName}
               </span>
+              {/* Only ever shown on the borrowed-theme spotlight card (never
+                  on a real CARD_THEME stage) — spells out WHY this one card
+                  looks different from its column neighbors, rather than
+                  leaving it to look like an unexplained stage mismatch. */}
+              {spotlight && themed && lead.aiScore !== null && (
+                <span
+                  className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${sx.badge}`}
+                  title={`AI Lead Score ${lead.aiScore}/100 — the strongest lead in this column`}
+                >
+                  <Sparkles size={9} /> {lead.aiScore}
+                </span>
+              )}
             </div>
             <div className={`shrink-0 text-[10px] ${sx.sub3}`}>#{lead.leadNum}</div>
           </div>
