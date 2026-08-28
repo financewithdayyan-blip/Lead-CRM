@@ -1,6 +1,23 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Send, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  DoorOpen,
+  Droplets,
+  Fan,
+  Grid3x3,
+  Home,
+  Layers,
+  Loader2,
+  Lock,
+  MapPin,
+  Send,
+  X,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAddPacketComment, useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
@@ -10,7 +27,7 @@ import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
 import { packetImageUrl, packetVideoUrl } from '@/hooks/useDealPackets';
-import { CONDITION_SYSTEM_LABELS, CONDITION_SYSTEMS, DEAL_TYPE_CONFIG, type ConditionRating } from '@/types/domain';
+import { CONDITION_SYSTEM_LABELS, CONDITION_SYSTEMS, DEAL_TYPE_CONFIG, type ConditionRating, type ConditionSystem } from '@/types/domain';
 
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -19,6 +36,16 @@ const CONDITION_RATING_STYLE: Record<ConditionRating, { label: string; className
   good: { label: 'Good', className: 'border-success/40 bg-success-dim text-success' },
   fair: { label: 'Fair', className: 'border-warning/40 bg-warning-dim text-warning' },
   poor: { label: 'Poor', className: 'border-danger/40 bg-danger-dim text-danger' },
+};
+
+const CONDITION_SYSTEM_ICON: Record<ConditionSystem, LucideIcon> = {
+  electrical: Zap,
+  roof: Home,
+  hvac: Fan,
+  plumbing: Droplets,
+  foundation: Layers,
+  windowsDoors: DoorOpen,
+  flooring: Grid3x3,
 };
 
 /** Big serif figure used for both the property-detail grid and the comp breakdown. */
@@ -874,9 +901,13 @@ export function PublicPacketPage() {
             {ratedSystems.map((system) => {
               const rating = packet.conditionRatings[system]!;
               const style = CONDITION_RATING_STYLE[rating];
+              const Icon = CONDITION_SYSTEM_ICON[system];
               return (
                 <div key={system} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2.5">
-                  <span className="text-[12.5px] font-medium text-text-2">{CONDITION_SYSTEM_LABELS[system]}</span>
+                  <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-text-2">
+                    <Icon size={14} className="shrink-0 text-text-3" />
+                    {CONDITION_SYSTEM_LABELS[system]}
+                  </span>
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${style.className}`}>
                     {style.label}
                   </span>

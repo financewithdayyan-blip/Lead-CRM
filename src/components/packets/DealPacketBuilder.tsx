@@ -1,5 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, FolderInput, Loader2, Mail, Plus, Trash2, Upload, Video, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  DoorOpen,
+  Droplets,
+  Fan,
+  FolderInput,
+  Grid3x3,
+  Home,
+  Layers,
+  Loader2,
+  Mail,
+  Plus,
+  Trash2,
+  Upload,
+  Video,
+  X,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { EmailPacketModal } from './PacketTab';
 import {
@@ -26,6 +45,7 @@ import {
   DEAL_TYPE_CONFIG,
   type ConditionRating,
   type ConditionRatings,
+  type ConditionSystem,
   type DealType,
   type Lead,
   type PacketComp,
@@ -34,6 +54,16 @@ import {
   type PacketStatus,
   type PacketVideo,
 } from '@/types/domain';
+
+const CONDITION_SYSTEM_ICON: Record<ConditionSystem, LucideIcon> = {
+  electrical: Zap,
+  roof: Home,
+  hvac: Fan,
+  plumbing: Droplets,
+  foundation: Layers,
+  windowsDoors: DoorOpen,
+  flooring: Grid3x3,
+};
 
 /** Parses a currency-ish input into a number, treating empty as "not set". */
 function num(v: string): number | null {
@@ -815,9 +845,13 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
             <div className="grid gap-2 sm:grid-cols-2">
               {CONDITION_SYSTEMS.map((system) => {
                 const current = conditionRatings[system];
+                const Icon = CONDITION_SYSTEM_ICON[system];
                 return (
                   <div key={system} className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                    <span className="text-[13px] font-medium text-text">{CONDITION_SYSTEM_LABELS[system]}</span>
+                    <span className="flex items-center gap-1.5 text-[13px] font-medium text-text">
+                      <Icon size={14} className="shrink-0 text-text-3" />
+                      {CONDITION_SYSTEM_LABELS[system]}
+                    </span>
                     <div className="flex shrink-0 gap-1">
                       {(['good', 'fair', 'poor'] as ConditionRating[]).map((rating) => {
                         const active = current === rating;
