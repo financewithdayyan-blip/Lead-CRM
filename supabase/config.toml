@@ -47,6 +47,9 @@ verify_jwt = false
 [functions.contract-reminder-sweep]
 verify_jwt = false
 
+[functions.auto-score-leads]
+verify_jwt = false
+
 [functions.invite-user]
 verify_jwt = true
 
