@@ -28,6 +28,12 @@ const FIELD_MAP = {
   inspectionPeriod: ['260c07b8-994a-471b-a872-e3f87d274c9a'],
   closingDate: ['2395b34f-cd9c-4d69-89e3-4dcc19fdbec0'],
   governingState: ['f3760950-c478-4586-8a7e-84a3b7b3605c'],
+  // Section 12 of the PSA. The template used to print a static "N/A" here —
+  // the base PDF was redacted and this field added over that blank space so
+  // it's a real input instead: left blank by default, filled in with an
+  // actual clause when there is one, or typed as "N/A" by hand when there
+  // isn't (never auto-filled — that's a deliberate call, not an oversight).
+  specialProvisions: ['e049a020-d544-485e-94fc-815db5fd7215'],
 } as const;
 // The one field id needed outside this form: ContractInstanceRow's address
 // fallback matches by field ID rather than label, since a contract created
@@ -132,6 +138,7 @@ export function FillCashDealContractModal({
     inspectionPeriod: '',
     closingDate: '',
     governingState: '',
+    specialProvisions: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +185,7 @@ export function FillCashDealContractModal({
       stamp('sellerName', sellerName.trim());
       stamp('buyerName', buyerName.trim());
       for (const row of FIELD_ROWS) stamp(row.key, values[row.key].trim());
+      stamp('specialProvisions', values.specialProvisions.trim());
 
       const parties = [
         {
@@ -374,6 +382,16 @@ export function FillCashDealContractModal({
             )}
           </div>
         ))}
+
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-text-2">Special Provisions</label>
+          <textarea
+            className="input min-h-[72px] resize-y"
+            placeholder="Leave blank, or type N/A yourself if there's no special provision for this deal"
+            value={values.specialProvisions}
+            onChange={(e) => setValue('specialProvisions', e.target.value)}
+          />
+        </div>
 
         {error && <p className="text-[12px] text-danger">{error}</p>}
 
