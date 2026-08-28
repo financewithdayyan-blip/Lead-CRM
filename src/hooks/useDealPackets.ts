@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
+  ConditionRatings,
   DealPacket,
   DealType,
   Lead,
@@ -50,6 +51,7 @@ function dbToPacket(row: any): DealPacket {
     requireLeadCapture: row.require_lead_capture ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    conditionRatings: (row.condition_ratings ?? {}) as ConditionRatings,
     comps: (row.packet_comps ?? []).sort(bySort).map(
       (c: any): PacketComp => ({
         id: c.id,
@@ -590,7 +592,7 @@ type PacketFields = Partial<
     | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'subjectLat' | 'subjectLng'
     | 'purchasePrice' | 'closingCost' | 'arv'
     | 'arvIsManual' | 'assignmentFee' | 'showAssignmentFee' | 'dealTypes'
-    | 'narrative' | 'requireLeadCapture'
+    | 'narrative' | 'requireLeadCapture' | 'conditionRatings'
   >
 >;
 
@@ -626,6 +628,7 @@ export function useSavePacket() {
         purchasePrice: 'purchase_price', closingCost: 'closing_cost', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
         showAssignmentFee: 'show_assignment_fee', dealTypes: 'deal_types',
         narrative: 'narrative', requireLeadCapture: 'require_lead_capture',
+        conditionRatings: 'condition_ratings',
       };
       for (const [k, v] of Object.entries(fields)) {
         const col = map[k as keyof PacketFields];

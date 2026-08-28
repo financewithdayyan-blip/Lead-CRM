@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { getViewerToken, type ViewerIdentity } from '@/lib/viewerToken';
-import type { DealType } from '@/types/domain';
+import type { ConditionRatings, DealType } from '@/types/domain';
 
 /**
  * Everything here talks to security-definer RPCs rather than tables. Anonymous
@@ -47,6 +47,7 @@ export interface PublicPacket {
   // around the subject without ever pinning or exposing its exact location.
   subjectLat: number | null;
   subjectLng: number | null;
+  conditionRatings: ConditionRatings;
   comps: PublicPacketComp[];
   repairs: { id: string; item: string; cost: number }[];
   images: { id: string; storagePath: string; caption: string | null }[];

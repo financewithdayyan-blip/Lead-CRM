@@ -20,7 +20,20 @@ import {
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { geocodeAddress, geocodeAddresses } from '@/lib/geocode';
 import { isImageFile, isVideoFile } from '@/lib/utils';
-import { DEAL_TYPE_CONFIG, type DealType, type Lead, type PacketComp, type PacketImage, type PacketRepair, type PacketStatus, type PacketVideo } from '@/types/domain';
+import {
+  CONDITION_SYSTEM_LABELS,
+  CONDITION_SYSTEMS,
+  DEAL_TYPE_CONFIG,
+  type ConditionRating,
+  type ConditionRatings,
+  type DealType,
+  type Lead,
+  type PacketComp,
+  type PacketImage,
+  type PacketRepair,
+  type PacketStatus,
+  type PacketVideo,
+} from '@/types/domain';
 
 /** Parses a currency-ish input into a number, treating empty as "not set". */
 function num(v: string): number | null {
@@ -82,6 +95,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [requireLeadCapture, setRequireLeadCapture] = useState(false);
   const [comps, setComps] = useState<Omit<PacketComp, 'id'>[]>([]);
   const [repairs, setRepairs] = useState<Omit<PacketRepair, 'id'>[]>([]);
+  const [conditionRatings, setConditionRatings] = useState<ConditionRatings>({});
   const [images, setImages] = useState<PacketImage[]>([]);
   const [videos, setVideos] = useState<PacketVideo[]>([]);
   const [copied, setCopied] = useState(false);
@@ -119,6 +133,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setRequireLeadCapture(packet.requireLeadCapture);
     setComps(packet.comps.map(({ id: _id, ...c }) => c));
     setRepairs(packet.repairs.map(({ id: _id, ...r }) => r));
+    setConditionRatings(packet.conditionRatings ?? {});
     setImages(packet.images);
     setVideos(packet.videos);
   }, [packet?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -366,6 +381,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           dealTypes,
           narrative: narrative || null,
           requireLeadCapture,
+          conditionRatings,
         },
         comps: geocoded,
         repairs,
@@ -791,6 +807,50 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                   Total: <strong className="text-text">{money(totalRepairs)}</strong>
                 </div>
               </div>
+            </div>
+          </Section>
+
+          {/* ── Property condition ──────────────────────────────────────── */}
+          <Section title="Property condition" hint="Rate each major system — shown to investors alongside the repair estimate. Click a selected rating again to clear it.">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {CONDITION_SYSTEMS.map((system) => {
+                const current = conditionRatings[system];
+                return (
+                  <div key={system} className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
+                    <span className="text-[13px] font-medium text-text">{CONDITION_SYSTEM_LABELS[system]}</span>
+                    <div className="flex shrink-0 gap-1">
+                      {(['good', 'fair', 'poor'] as ConditionRating[]).map((rating) => {
+                        const active = current === rating;
+                        const activeClass =
+                          rating === 'good'
+                            ? 'border-success bg-success-dim text-success'
+                            : rating === 'fair'
+                              ? 'border-warning bg-warning-dim text-warning'
+                              : 'border-danger bg-danger-dim text-danger';
+                        return (
+                          <button
+                            key={rating}
+                            type="button"
+                            onClick={() =>
+                              setConditionRatings((prev) => {
+                                const next = { ...prev };
+                                if (active) delete next[system];
+                                else next[system] = rating;
+                                return next;
+                              })
+                            }
+                            className={`rounded-md border px-2 py-1 text-[11.5px] font-semibold capitalize transition-colors ${
+                              active ? activeClass : 'border-border-2 bg-surface text-text-3 hover:text-text-2'
+                            }`}
+                          >
+                            {rating}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Section>
 

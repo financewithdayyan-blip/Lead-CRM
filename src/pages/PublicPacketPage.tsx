@@ -10,10 +10,16 @@ import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
 import { packetImageUrl, packetVideoUrl } from '@/hooks/useDealPackets';
-import { DEAL_TYPE_CONFIG } from '@/types/domain';
+import { CONDITION_SYSTEM_LABELS, CONDITION_SYSTEMS, DEAL_TYPE_CONFIG, type ConditionRating } from '@/types/domain';
 
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+const CONDITION_RATING_STYLE: Record<ConditionRating, { label: string; className: string }> = {
+  good: { label: 'Good', className: 'border-success/40 bg-success-dim text-success' },
+  fair: { label: 'Fair', className: 'border-warning/40 bg-warning-dim text-warning' },
+  poor: { label: 'Poor', className: 'border-danger/40 bg-danger-dim text-danger' },
+};
 
 /** Big serif figure used for both the property-detail grid and the comp breakdown. */
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
@@ -853,6 +859,31 @@ export function PublicPacketPage() {
           )}
 
           {confidence && <ConfidenceBlock confidence={confidence} />}
+        </Panel>
+      ),
+    });
+  }
+
+  const ratedSystems = CONDITION_SYSTEMS.filter((s) => packet.conditionRatings?.[s]);
+  if (ratedSystems.length > 0) {
+    sections.push({
+      title: 'Property Condition',
+      body: (
+        <Panel>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {ratedSystems.map((system) => {
+              const rating = packet.conditionRatings[system]!;
+              const style = CONDITION_RATING_STYLE[rating];
+              return (
+                <div key={system} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2.5">
+                  <span className="text-[12.5px] font-medium text-text-2">{CONDITION_SYSTEM_LABELS[system]}</span>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${style.className}`}>
+                    {style.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </Panel>
       ),
     });

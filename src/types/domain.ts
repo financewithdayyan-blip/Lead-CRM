@@ -363,6 +363,27 @@ export const DEAL_TYPE_CONFIG: Record<DealType, { label: string; description: st
   },
 };
 
+/** The major systems a Deal Packet's Property Condition section rates,
+ * each Good / Fair / Poor — separate from a lead's RepairFlags (a plain
+ * needs-repair checklist), this is an investor-facing condition summary. */
+export type ConditionSystem = 'electrical' | 'roof' | 'hvac' | 'plumbing' | 'foundation' | 'windowsDoors' | 'flooring';
+export type ConditionRating = 'good' | 'fair' | 'poor';
+export type ConditionRatings = Partial<Record<ConditionSystem, ConditionRating>>;
+
+export const CONDITION_SYSTEMS: ConditionSystem[] = [
+  'electrical', 'roof', 'hvac', 'plumbing', 'foundation', 'windowsDoors', 'flooring',
+];
+
+export const CONDITION_SYSTEM_LABELS: Record<ConditionSystem, string> = {
+  electrical: 'Electrical',
+  roof: 'Roof',
+  hvac: 'HVAC',
+  plumbing: 'Plumbing',
+  foundation: 'Foundation',
+  windowsDoors: 'Windows & Doors',
+  flooring: 'Flooring',
+};
+
 export type CompKind = 'sold' | 'listing';
 
 export interface PacketComp {
@@ -441,6 +462,8 @@ export interface DealPacket {
 
   createdAt: string;
   updatedAt: string;
+
+  conditionRatings: ConditionRatings;
 
   comps: PacketComp[];
   repairs: PacketRepair[];
