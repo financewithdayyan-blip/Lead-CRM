@@ -1,7 +1,6 @@
 import { daysUntil } from './utils';
 
 export type AuctionTier = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | 'CRITICAL' | 'PAST';
-export type TouchScheduleMode = 'standard' | 'daily' | 'deadline';
 
 /** Tailwind classes per tier — drives all badge colors across the app. */
 export const TIER_CONFIG: Record<
@@ -24,20 +23,6 @@ export function getAuctionTier(daysRemaining: number): AuctionTier {
   if (daysRemaining <= 14) return 'HIGH';
   if (daysRemaining <= 30) return 'MEDIUM';
   return 'LOW';
-}
-
-/**
- * Touch-schedule override for followup leads with an auction date.
- *
- *  standard  — 17+ days out  → standard [1,2,3,6,7,8,11,12,16,17] schedule
- *  daily     — 10–16 days    → call every day (no gap days), still needs 10 touches
- *  deadline  — < 10 days     → call every day, 10-touch minimum is waived
- */
-export function touchScheduleMode(daysToAuction: number | null): TouchScheduleMode {
-  if (daysToAuction === null) return 'standard';
-  if (daysToAuction < 10)    return 'deadline';
-  if (daysToAuction <= 16)   return 'daily';
-  return 'standard';
 }
 
 /** Convenience wrapper — computes days to auction from an ISO date string. */

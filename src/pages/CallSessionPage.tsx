@@ -39,14 +39,7 @@ import { TagPill } from '@/components/ui/TagPill';
 import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
 import { STAGE_CONFIG, type Lead, type LeadStage, type RepairFlags } from '@/types/domain';
 import { callerDisplayName, daysUntil, formatPhone, initials, localIsoDate } from '@/lib/utils';
-import {
-  isTouchedToday,
-  isTouchDueTodayAuctionAware,
-  nextScheduledTouchDate,
-  formatTouchDate,
-  isFollowupOverdue,
-} from '@/lib/followupSchedule';
-import { computeDaysToAuction, getAuctionTier, touchScheduleMode, TIER_CONFIG } from '@/lib/auctionTiers';
+import { computeDaysToAuction, getAuctionTier, TIER_CONFIG } from '@/lib/auctionTiers';
 
 const REPAIR_OPTIONS: Array<{ key: keyof RepairFlags; label: string }> = [
   { key: 'plumbing', label: 'Plumbing' },
@@ -455,31 +448,12 @@ export function CallSessionPage() {
     if (!currentLead || !outcome) return;
     const chosen = OUTCOMES.find((o) => o.key === outcome);
 
-    // Log one touch per calendar day.
-    // Touches count for followup-stage leads in any session, AND for any lead
-    // in the follow-up session (inFollowUpMode) — callers make deliberate follow-up
-    // attempts in that session regardless of the lead's current stage.
-    const todayStr = localIsoDate(new Date());
-    const isFollowupStage = currentLead.stage === 'followup';
-    const alreadyTouchedToday = isTouchedToday(currentLead.touchDates, todayStr);
-    const daysToAuction = computeDaysToAuction(currentLead.auctionDate);
-    const schedMode = touchScheduleMode(daysToAuction);
-    // In deadline mode (<10 days to auction) the 10-touch cap is waived
-    const touchCapReached = schedMode !== 'deadline' && currentLead.touchCount >= 10;
-    const shouldLogTouch = (isFollowupStage || inFollowUpMode) && !alreadyTouchedToday && !touchCapReached;
-    const newTouchCount = shouldLogTouch ? currentLead.touchCount + 1 : currentLead.touchCount;
-    const newTouchDates = shouldLogTouch ? [...currentLead.touchDates, todayStr] : currentLead.touchDates;
-    // Auto-move to dead_declined at touch 10 only for followup-stage leads in standard/daily mode
-    const touchesComplete = isFollowupStage && schedMode !== 'deadline' && shouldLogTouch && newTouchCount >= 10;
-    const finalStage = touchesComplete ? 'dead_declined' : (chosen?.stage ?? currentLead.stage);
-
     updateLead.mutate({
       id: currentLead.id,
-      stage: finalStage,
+      stage: chosen?.stage ?? currentLead.stage,
       repairs,
       propertyRating,
       notes: notes.trim() || null,
-      ...(shouldLogTouch ? { touchCount: newTouchCount, touchDates: newTouchDates } : {}),
     });
     addActivity.mutate({
       leadId: currentLead.id,
@@ -616,21 +590,7 @@ export function CallSessionPage() {
   const callerName = callerDisplayName(profile?.fullName, session?.user.email);
   const isFollowUpLead = currentLead.stage === 'initial_contact' || currentLead.stage === 'followup';
 
-  // Touch schedule info for the current followup lead
-  const todayStrForRender = localIsoDate(new Date());
   const leadDaysToAuction = computeDaysToAuction(currentLead.auctionDate);
-  const leadSchedMode = touchScheduleMode(leadDaysToAuction);
-  const touchDueToday =
-    currentLead.stage === 'followup' &&
-    isTouchDueTodayAuctionAware(
-      currentLead.touchDates,
-      currentLead.followupStartDate,
-      currentLead.touchCount,
-      leadDaysToAuction,
-      todayStrForRender,
-    );
-  const nextTouchDate = nextScheduledTouchDate(currentLead.followupStartDate, currentLead.touchCount, todayStrForRender);
-  const followupOverdue = isFollowupOverdue(currentLead.followupStartDate, currentLead.touchCount, todayStrForRender);
   const leadAuctionTier = leadDaysToAuction !== null ? getAuctionTier(leadDaysToAuction) : null;
   const hasOffer = currentLead.minOffer != null || currentLead.maxOffer != null;
 
@@ -699,46 +659,6 @@ export function CallSessionPage() {
                   ? 'AUCTION TODAY'
                   : `Auction in ${leadDaysToAuction}d · ${leadAuctionTier}`}
               </span>
-              {leadSchedMode === 'deadline' && (
-                <span className="ml-auto rounded-full bg-red-900/50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-red-300">
-                  Call daily
-                </span>
-              )}
-              {leadSchedMode === 'daily' && (
-                <span className="ml-auto rounded-full bg-orange-900/50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-orange-300">
-                  No gaps
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Touch progress for followup-stage leads */}
-          {currentLead.stage === 'followup' && (
-            <div className={`mt-4 rounded-xl border p-3 ${followupOverdue ? 'border-red-800/60 bg-red-950/20' : touchDueToday ? 'border-purple-800/60 bg-purple-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
-              <div className={`mb-2 text-[10px] font-semibold uppercase tracking-wide ${followupOverdue ? 'text-red-400' : touchDueToday ? 'text-purple-300' : 'text-slate-500'}`}>
-                {followupOverdue ? 'Follow-Up Overdue' : touchDueToday ? `Touch ${currentLead.touchCount + 1} Due Today` : 'Follow-Up Touch'}
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex-1">
-                  <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-800">
-                    <div
-                      className="rounded-full bg-purple-500 transition-all"
-                      style={{ width: `${(currentLead.touchCount / 10) * 100}%` }}
-                    />
-                  </div>
-                </div>
-                <span className="shrink-0 text-[12px] font-semibold text-slate-200">
-                  {currentLead.touchCount}/10
-                </span>
-              </div>
-              {nextTouchDate && nextTouchDate !== todayStrForRender && (
-                <div className="mt-1.5 text-[11px] text-slate-500">
-                  Next touch: <span className="text-slate-300">{formatTouchDate(nextTouchDate)}</span>
-                </div>
-              )}
-              {followupOverdue && (
-                <div className="mt-1 text-[11px] text-red-400">Past schedule window — flag for review</div>
-              )}
             </div>
           )}
 

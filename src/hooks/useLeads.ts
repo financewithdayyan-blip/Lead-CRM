@@ -264,20 +264,6 @@ export function useDeleteLeads() {
   });
 }
 
-export function useOverrideFollowupEarlyExit() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (leadId: string) => {
-      const { error } = await supabase.rpc('override_followup_early_exit', { p_lead_id: leadId });
-      if (error) throw error;
-    },
-    onSuccess: (_data, leadId) => {
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['lead', leadId] });
-    },
-  });
-}
-
 export function useUpsertComps() {
   const qc = useQueryClient();
   return useMutation({

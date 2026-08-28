@@ -200,10 +200,6 @@ export interface Lead {
   aiScore: number | null;
   aiScoreReasoning: string | null;
   aiScoredAt: string | null;
-  followupStartDate: string | null;
-  touchCount: number;
-  touchDates: string[];
-  earlyExitOverride: boolean;
   auctionTier: AuctionTier | null;
   lastAlertDate: string | null;
   /** Set by a STOP/DNC request or a decline. Excludes the lead from all future bulk sends. */

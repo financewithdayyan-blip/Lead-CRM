@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const { data: lead, error: leadError } = await callerClient
       .from('leads')
       .select(
-        'id, first_name, last_name, address, city, state, zip, prop_type, beds, baths, sqft, year_built, lot_size, condition, arv, as_is, asking_price, min_offer, max_offer, est_repairs, motivation, notes, stage, property_rating, touch_count, script_answers, auction_date, auction_tier, lead_tags(tags(name))',
+        'id, first_name, last_name, address, city, state, zip, prop_type, beds, baths, sqft, year_built, lot_size, condition, arv, as_is, asking_price, min_offer, max_offer, est_repairs, motivation, notes, stage, property_rating, script_answers, auction_date, auction_tier, lead_tags(tags(name))',
       )
       .eq('id', leadId)
       .single();
@@ -227,7 +227,6 @@ Deno.serve(async (req) => {
       lead.property_rating ? `Caller's property rating: ${lead.property_rating}/10` : null,
       lead.auction_date ? `Auction date: ${lead.auction_date}${lead.auction_tier ? ` (tier: ${lead.auction_tier})` : ''}` : null,
       `Pipeline stage: ${lead.stage}`,
-      typeof lead.touch_count === 'number' ? `Touch count: ${lead.touch_count}` : null,
       tagNames.length ? `Tags: ${tagNames.join(', ')}` : null,
     ].filter((l): l is string => !!l);
 
