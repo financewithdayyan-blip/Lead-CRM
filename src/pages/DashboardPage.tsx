@@ -48,6 +48,15 @@ import { useTeamMembers } from '@/hooks/useTeam';
 import { useMarketingSpend } from '@/hooks/useMarketingSpend';
 import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVelocity } from '@/hooks/useSalesKpis';
 
+type SmsRangeKey = '1d' | '7d' | '30d' | '90d' | 'all';
+const SMS_RANGE_OPTIONS: { key: SmsRangeKey; label: string }[] = [
+  { key: '1d', label: '1D' },
+  { key: '7d', label: '7D' },
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
+  { key: 'all', label: 'Lifetime' },
+];
+
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
 );
@@ -249,6 +258,12 @@ export function DashboardView({
   const [dateRange, setDateRange] = useState<DateRange>('30d');
   const cutoff = useMemo(() => rangeCutoff(dateRange), [dateRange]);
   const inRange = (iso: string) => !cutoff || new Date(iso) >= cutoff;
+
+  // The SMS Delivery & Reply Rate card gets its own timeline, independent of
+  // the page-wide control above — Zoom's own report is checked at whatever
+  // window someone actually wants (a single bad day, this week, this
+  // quarter), not locked to the same range as every other card.
+  const [smsRange, setSmsRange] = useState<SmsRangeKey>('7d');
 
   const calls = useMemo(() => activities.filter((a) => a.type === 'call'), [activities]);
 
@@ -587,8 +602,8 @@ export function DashboardView({
   const smsCampaignStats = useMemo(() => {
     const now = new Date();
     let cutoff: Date | null;
-    switch (dateRange) {
-      case 'today':
+    switch (smsRange) {
+      case '1d':
         cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         break;
       case '7d':
@@ -625,7 +640,7 @@ export function DashboardView({
       deliveryRate: sent > 0 ? (delivered / sent) * 100 : null,
       replyRate: delivered > 0 ? (replies / delivered) * 100 : null,
     };
-  }, [smsDeliveryLog, buyerPhones, dateRange]);
+  }, [smsDeliveryLog, buyerPhones, smsRange]);
 
   // Caller-facing counterpart to activityTrend — driven by call outcomes
   // instead of SMS activity, since callers never see SMS data at all.
@@ -1063,11 +1078,26 @@ export function DashboardView({
 
               {showSmsStats && (
                 <div className="card">
-                  <CardHeader
-                    icon={TrendingUp}
-                    title="SMS Delivery & Reply Rate"
-                    sub={`Real delivery status synced from Zoom, buyer conversations excluded · ${rangeLabel}`}
-                  />
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <CardHeader
+                      icon={TrendingUp}
+                      title="SMS Delivery & Reply Rate"
+                      sub="Real delivery status synced from Zoom, buyer conversations excluded"
+                    />
+                    <div className="flex shrink-0 gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
+                      {SMS_RANGE_OPTIONS.map((r) => (
+                        <button
+                          key={r.key}
+                          onClick={() => setSmsRange(r.key)}
+                          className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                            smsRange === r.key ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text-2'
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="mt-3 overflow-x-auto">
                     <table className="w-full min-w-[560px] border-collapse text-left">
                       <thead>
