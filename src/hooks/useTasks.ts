@@ -57,16 +57,18 @@ export function useCreateTask() {
       leadId,
       title,
       dueDate,
+      dueTime,
       userId,
     }: {
       leadId: string | null;
       title: string;
       dueDate: string | null;
+      dueTime?: string | null;
       userId?: string;
     }) => {
       const { error } = await supabase
         .from('tasks')
-        .insert({ user_id: userId ?? session!.user.id, lead_id: leadId, title, due_date: dueDate });
+        .insert({ user_id: userId ?? session!.user.id, lead_id: leadId, title, due_date: dueDate, due_time: dueTime || null });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),

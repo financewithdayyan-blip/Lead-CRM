@@ -192,6 +192,9 @@ export interface Lead {
   scriptAnswers: ScriptAnswers;
   notes: string | null;
   nextFollowUp: string | null;
+  /** "HH:MM" 24h, optional — an unset time means Next Follow-Up is an
+   *  all-day item, same as Google Calendar's own all-day events. */
+  nextFollowUpTime: string | null;
   createdAt: string;
   updatedAt: string;
   tagIds: string[];
@@ -273,6 +276,8 @@ export interface Task {
   leadId: string | null;
   title: string;
   dueDate: string | null;
+  /** "HH:MM" 24h, optional — unset means an all-day task on dueDate. */
+  dueTime: string | null;
   completed: boolean;
   createdAt: string;
   /** Created by the AI or the qualified-stage trigger rather than typed in by

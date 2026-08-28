@@ -16,7 +16,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
-import { daysUntil, formatPhone, formatDate, formatDateTime, isImageFile, isVideoFile, localIsoDate } from '@/lib/utils';
+import { daysUntil, formatPhone, formatDate, formatDateTime, formatClockTime, isImageFile, isVideoFile, localIsoDate } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
 import { PacketTab } from '@/components/packets/PacketTab';
@@ -727,6 +727,7 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
     zip: lead.zip ?? '',
     source: lead.source ?? '',
     nextFollowUp: lead.nextFollowUp ?? '',
+    nextFollowUpTime: lead.nextFollowUpTime ?? '',
   });
   const [saved, setSaved] = useState(false);
 
@@ -743,6 +744,7 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
       zip: lead.zip ?? '',
       source: lead.source ?? '',
       nextFollowUp: lead.nextFollowUp ?? '',
+      nextFollowUpTime: lead.nextFollowUpTime ?? '',
     });
   }, [lead.id]);
 
@@ -765,6 +767,7 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
         zip: form.zip || null,
         source: form.source || null,
         nextFollowUp: form.nextFollowUp || null,
+        nextFollowUpTime: form.nextFollowUp ? form.nextFollowUpTime || null : null,
       },
       { onSuccess: () => flash() },
     );
@@ -812,7 +815,18 @@ function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
           <input className="input" value={form.zip} onChange={(e) => set('zip', e.target.value)} />
         </Field>
         <Field label="Next Follow-Up">
-          <input className="input" type="date" value={form.nextFollowUp} onChange={(e) => set('nextFollowUp', e.target.value)} />
+          <div className="flex gap-1.5">
+            <input className="input" type="date" value={form.nextFollowUp} onChange={(e) => set('nextFollowUp', e.target.value)} />
+            {form.nextFollowUp && (
+              <input
+                className="input !w-auto"
+                type="time"
+                value={form.nextFollowUpTime}
+                onChange={(e) => set('nextFollowUpTime', e.target.value)}
+                title="Optional time — leave blank for an all-day follow-up"
+              />
+            )}
+          </div>
         </Field>
       </div>
       <div className="mt-4 flex items-center gap-3">
@@ -1035,12 +1049,13 @@ function TasksTab({ leadId, ownerId }: { leadId: string; ownerId: string }) {
   const deleteTask = useDeleteTask();
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [dueTime, setDueTime] = useState('');
 
   function handleAdd() {
     if (!title.trim()) return;
     createTask.mutate(
-      { leadId, title: title.trim(), dueDate: dueDate || null, userId: ownerId },
-      { onSuccess: () => { setTitle(''); setDueDate(''); } },
+      { leadId, title: title.trim(), dueDate: dueDate || null, dueTime: dueDate ? dueTime || null : null, userId: ownerId },
+      { onSuccess: () => { setTitle(''); setDueDate(''); setDueTime(''); } },
     );
   }
 
@@ -1056,6 +1071,9 @@ function TasksTab({ leadId, ownerId }: { leadId: string; ownerId: string }) {
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
         />
         <input className="input !w-auto" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        {dueDate && (
+          <input className="input !w-auto" type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} title="Optional time — leave blank for an all-day task" />
+        )}
         <button className="btn btn-primary" onClick={handleAdd} disabled={createTask.isPending}>
           <Plus size={14} /> Add
         </button>
@@ -1070,7 +1088,11 @@ function TasksTab({ leadId, ownerId }: { leadId: string; ownerId: string }) {
               <span className={`text-[13px] ${t.completed ? 'text-text-3 line-through' : 'text-text'}`}>{t.title}</span>
             </label>
             <div className="flex items-center gap-2">
-              {t.dueDate && <span className="text-[11px] text-text-3">{formatDate(t.dueDate)}</span>}
+              {t.dueDate && (
+                <span className="text-[11px] text-text-3">
+                  {formatDate(t.dueDate)}{t.dueTime ? ` · ${formatClockTime(t.dueTime)}` : ''}
+                </span>
+              )}
               <button className="text-text-3 hover:text-danger" onClick={() => deleteTask.mutate(t.id)}>
                 <Trash2 size={13} />
               </button>

@@ -39,8 +39,7 @@ import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones }
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
-import { ScheduledCallsCard } from '@/components/dashboard/ScheduledCallsCard';
-import { TasksCard } from '@/components/dashboard/TasksCard';
+import { CalendarStrip } from '@/components/dashboard/CalendarStrip';
 import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
@@ -956,11 +955,8 @@ export function DashboardView({
 
           {showSmsStats && (
             <div>
-              <SectionLabel>Today</SectionLabel>
-              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-                <ScheduledCallsCard leads={leads} />
-                <TasksCard userId={userId} leads={leads} />
-              </div>
+              <SectionLabel>Calendar</SectionLabel>
+              <CalendarStrip userId={userId} leads={leads} />
             </div>
           )}
 

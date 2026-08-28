@@ -97,6 +97,21 @@ export function formatTime(iso: string | null | undefined): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+/** Formats a bare "HH:MM" wall-clock string (a task's due_time, a lead's
+ *  next_follow_up_time — no timezone, never converted) as "2:30 PM". Plain
+ *  string math rather than `new Date("HH:MM")`, which parses inconsistently
+ *  across browsers since it isn't a real ISO datetime. */
+export function formatClockTime(hhmm: string | null | undefined): string | null {
+  if (!hhmm) return null;
+  const [hStr, mStr] = hhmm.split(':');
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 /** Renders a duration in seconds as "3h 24m", "45m", or "<1m". */
 export function formatDuration(totalSeconds: number): string {
   if (totalSeconds < 60) return '<1m';
