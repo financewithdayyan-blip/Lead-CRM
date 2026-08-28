@@ -51,9 +51,6 @@ import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVeloci
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
 );
-const SmsPerformanceChart = lazy(() =>
-  import('@/components/dashboard/SmsPerformanceChart').then((m) => ({ default: m.SmsPerformanceChart })),
-);
 const PipelineFunnel = lazy(() =>
   import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
 );
@@ -573,44 +570,62 @@ export function DashboardView({
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
   // Zoom's own definitions, matched against Zoom's own "SMS Campaign" usage
   // report (Reports > Usage Reports > Phone Numbers > SMS Campaign). Every
-  // count here now comes from one source — smsDeliveryLog, synced from
-  // Zoom's real per-message sms_charges report — instead of blending in
-  // send_log/inbound_messages, because those don't distinguish lead
-  // outreach from cash-buyer conversations (send-buyer-sms rides the exact
-  // same shared Zoom numbers as send-sms) and mixing sources across
-  // different day-bucketing meant delivered could even exceed sent on some
-  // days. counterpartyBuyerPhones strips buyer traffic out before anything
-  // is counted, the same exclusion Zoom's own campaign-scoped report makes.
-  const smsPerformanceTrend = useMemo(() => {
-    const days: Array<{ iso: string; label: string; sent: number; delivered: number; replies: number }> = [];
-    const today = new Date();
-    for (let i = trendDayCount - 1; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-      days.push({ iso: localIsoDate(d), label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }), sent: 0, delivered: 0, replies: 0 });
+  // One aggregate total for the whole selected range — not a day-by-day
+  // trend — matching Zoom's own "SMS Campaigns" usage report, which is
+  // itself one summary row per range, not a daily chart. Counts come from
+  // smsDeliveryLog, synced from Zoom's real per-message sms_charges report,
+  // with buyer conversations stripped out first (send-buyer-sms rides the
+  // exact same shared Zoom numbers as send-sms, so without this a cash-buyer
+  // thread would inflate "replies").
+  //
+  // The cutoff below is deliberately in UTC, not the browser's local time —
+  // Zoom's own report windows ("From ... To ...") are UTC. Bucketing "Today"
+  // in Pakistan time (5 hours ahead) pulled in a different, incomplete slice
+  // of the day and produced numbers nowhere close to Zoom's own report
+  // (confirmed by matching Zoom's exact totals — 366 sent / 156 delivered /
+  // 1 reply / 42.62% / 0.64% — once the boundary switched to UTC).
+  const smsCampaignStats = useMemo(() => {
+    const now = new Date();
+    let cutoff: Date | null;
+    switch (dateRange) {
+      case 'today':
+        cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        break;
+      case '7d':
+        cutoff = new Date(now.getTime() - 7 * 86_400_000);
+        break;
+      case '30d':
+        cutoff = new Date(now.getTime() - 30 * 86_400_000);
+        break;
+      case '90d':
+        cutoff = new Date(now.getTime() - 90 * 86_400_000);
+        break;
+      case 'all':
+        cutoff = null;
+        break;
     }
-    const byIso = new Map(days.map((d) => [d.iso, d]));
+    let sent = 0;
+    let delivered = 0;
+    let replies = 0;
     smsDeliveryLog.forEach((r) => {
       const counterparty = r.counterpartyNumber?.replace(/[^0-9]/g, '').slice(-10);
       if (counterparty && buyerPhones.has(counterparty)) return;
-      const day = byIso.get(localIsoDate(new Date(r.occurredAt)));
-      if (!day) return;
+      if (cutoff && new Date(r.occurredAt) < cutoff) return;
       if (r.direction === 'Out') {
-        day.sent++;
-        if (r.deliveryStatus === 'delivered') day.delivered++;
+        sent++;
+        if (r.deliveryStatus === 'delivered') delivered++;
       } else {
-        day.replies++;
+        replies++;
       }
     });
-    return days.map((d) => ({
-      iso: d.iso,
-      label: d.label,
-      sent: d.sent,
-      delivered: d.delivered,
-      replies: d.replies,
-      deliveryRate: d.sent > 0 ? (d.delivered / d.sent) * 100 : null,
-      replyRate: d.delivered > 0 ? (d.replies / d.delivered) * 100 : null,
-    }));
-  }, [smsDeliveryLog, buyerPhones, trendDayCount]);
+    return {
+      sent,
+      delivered,
+      replies,
+      deliveryRate: sent > 0 ? (delivered / sent) * 100 : null,
+      replyRate: delivered > 0 ? (replies / delivered) * 100 : null,
+    };
+  }, [smsDeliveryLog, buyerPhones, dateRange]);
 
   // Caller-facing counterpart to activityTrend — driven by call outcomes
   // instead of SMS activity, since callers never see SMS data at all.
@@ -1047,17 +1062,39 @@ export function DashboardView({
               )}
 
               {showSmsStats && (
-                <div className="card chart-layer">
+                <div className="card">
                   <CardHeader
                     icon={TrendingUp}
                     title="SMS Delivery & Reply Rate"
                     sub={`Real delivery status synced from Zoom, buyer conversations excluded · ${rangeLabel}`}
                   />
-                  <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                    <div className="mt-3">
-                      <SmsPerformanceChart data={smsPerformanceTrend} />
-                    </div>
-                  </Suspense>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full min-w-[560px] border-collapse text-left">
+                      <thead>
+                        <tr className="border-b border-border-2">
+                          {['Campaign', 'Total sent', 'Total delivered', 'Total replies', 'Delivery rate', 'Reply rate'].map((h) => (
+                            <th key={h} className="whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[13px] font-medium text-text">Solution Campaign</td>
+                          <td className="px-3 py-2.5 font-mono text-[13px] tabular-nums text-text">{smsCampaignStats.sent.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 font-mono text-[13px] tabular-nums text-text">{smsCampaignStats.delivered.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 font-mono text-[13px] tabular-nums text-text">{smsCampaignStats.replies.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 font-mono text-[13px] font-semibold tabular-nums text-primary">
+                            {smsCampaignStats.deliveryRate !== null ? `${smsCampaignStats.deliveryRate.toFixed(2)}%` : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-[13px] font-semibold tabular-nums text-primary">
+                            {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(2)}%` : '—'}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
