@@ -472,7 +472,7 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
         <div className="px-7 py-5">
           <div className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">Buyer's cost</div>
           <dl>
-            <Line label="Asking price" value={analysis.askingPrice} />
+            <Line label="Sale price" value={analysis.askingPrice} />
             <Line label="Repairs" value={analysis.repairs} sign="+" />
             {analysis.closingCost != null && (
               <Line label="Closing costs" value={analysis.closingCost} sign="+" hint="paid by buyer" />
@@ -669,7 +669,7 @@ export function PublicPacketPage() {
   // actually filled in, floated in the hero's glass stat strip in that order.
   const statItems = useMemo(() => {
     const items: { label: string; value: string; valueClass: string }[] = [];
-    if (packet?.purchasePrice != null) items.push({ label: 'Purchase Price', value: money(packet.purchasePrice), valueClass: 'text-white' });
+    if (packet?.purchasePrice != null) items.push({ label: 'Sale Price', value: money(packet.purchasePrice), valueClass: 'text-white' });
     if (adjustedArv != null) items.push({ label: 'ARV', value: money(adjustedArv), valueClass: 'text-sky-300' });
     if (repairTotalValue > 0) items.push({ label: 'Est. Repairs', value: money(repairTotalValue), valueClass: 'text-white' });
     if (analysis.spread != null) {
