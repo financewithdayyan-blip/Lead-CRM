@@ -83,26 +83,6 @@ const NAVY_THEME: CardTheme = {
   tagBackdrop: WHITE_TAG_BACKDROP,
 };
 
-// The AI-score spotlight card's own look — deliberately NOT NAVY_THEME.
-// Qualified (followup) already owns that exact navy look on every one of
-// its cards, so a spotlighted lead sitting in some other stage (Partial
-// Qualified, Negotiation, ...) borrowing it was indistinguishable from an
-// actual Qualified-stage card — a lead looked like it had jumped stages
-// when it hadn't. Violet reads as "AI pick" without impersonating any real
-// stage's own card color (see CARD_THEME below).
-const SPOTLIGHT_THEME: CardTheme = {
-  gradient: 'from-violet-600 to-indigo-800',
-  text: 'text-white',
-  sub: 'text-white/70',
-  sub3: 'text-white/50',
-  divider: 'border-white/10',
-  callBtn: GOLD_CALL_BTN,
-  textBtn: WHITE_TEXT_BTN,
-  iconBtn: WHITE_ICON_BTN,
-  badge: WHITE_BADGE,
-  tagBackdrop: WHITE_TAG_BACKDROP,
-};
-
 // Every fully-colored card below shares the same shape — a gradient built
 // from that stage's own STAGE_CONFIG color, not an arbitrary new palette —
 // so the board reads as "here's what's happening with this lead" at a
@@ -308,11 +288,12 @@ function KanbanCardVisual({
   }
 
   const dimmed = DIMMED_STAGES.includes(lead.stage);
-  // A stage in CARD_THEME gets its theme on every card; anywhere else, only
-  // the single AI-score spotlight lead (if any) gets its own distinct look —
-  // either way, nothing higher-priority (an in-progress multi-select, a
-  // shared-lead badge) is already claiming the card's background.
-  const theme = CARD_THEME[lead.stage] ?? (spotlight ? SPOTLIGHT_THEME : null);
+  // A stage in CARD_THEME gets its theme on every card; every other card
+  // stays plain regardless of spotlight — recoloring the spotlighted card
+  // (tried once, reverted) made it indistinguishable from an actual
+  // Qualified-stage card at a glance. The AI score badge below is what
+  // marks it now, not the card's own background.
+  const theme = CARD_THEME[lead.stage] ?? null;
   const themed = !!theme && !selected && !sharedFrom;
 
   const sx = themed
@@ -357,11 +338,9 @@ function KanbanCardVisual({
               <span className={`truncate font-medium ${themed ? theme!.text : 'text-text'}`}>
                 {lead.firstName} {lead.lastName}
               </span>
-              {/* Only ever shown on the borrowed-theme spotlight card (never
-                  on a real CARD_THEME stage) — spells out WHY this one card
-                  looks different from its column neighbors, rather than
-                  leaving it to look like an unexplained stage mismatch. */}
-              {spotlight && themed && lead.aiScore !== null && (
+              {/* The only marker on the spotlighted card now — no card-color
+                  change, just this badge naming the actual score. */}
+              {spotlight && lead.aiScore !== null && (
                 <span
                   className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${sx.badge}`}
                   title={`AI Lead Score ${lead.aiScore}/100 — the strongest lead in this column`}
