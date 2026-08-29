@@ -40,8 +40,13 @@ async function queryLayer(layer: number, fips: string, names: string[]): Promise
     outFields: 'BASENAME',
     f: 'geojson',
     outSR: '4326',
-    geometryPrecision: '3',
-    maxAllowableOffset: '0.002',
+    geometryPrecision: '4',
+    // A small village can be just a couple miles across — the 0.002 offset
+    // used for zip codes (much bigger polygons) was coarse enough to
+    // collapse a place that size into degenerate, self-intersecting rings,
+    // which is exactly what produced a single city rendering as a fill
+    // covering the entire map. Finer offset, still small/fast per request.
+    maxAllowableOffset: '0.0004',
   })}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`TIGERweb places layer ${layer} returned ${res.status}`);

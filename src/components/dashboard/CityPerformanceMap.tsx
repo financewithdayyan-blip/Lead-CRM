@@ -61,6 +61,28 @@ const STATE_STROKE = '#1f3a57';
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
+// A single city's projected footprint should never come close to spanning
+// the whole national canvas — a defensive cap against degenerate geometry.
+// Simplifying a small village's boundary too aggressively (or a bad ring
+// from the source data) can produce a self-intersecting/inverted shape that
+// SVG's fill rule then paints as covering nearly the entire viewBox instead
+// of the tiny real place it's supposed to be — caught here by bounding-box
+// size rather than trusting every path blindly; a rejected boundary falls
+// back to the plain circle marker.
+const MAX_CITY_PATH_SPAN = 200;
+
+function sanePathFor(pathGen: ReturnType<typeof geoPath>, geometry: PlaceGeometry): string | null {
+  const d = pathGen(geometry as any);
+  if (!d) return null;
+  const bounds = pathGen.bounds(geometry as any);
+  const [[x0, y0], [x1, y1]] = bounds;
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+  if (w > MAX_CITY_PATH_SPAN || h > MAX_CITY_PATH_SPAN) return null;
+  return d;
+}
+
 /**
  * A stylized, self-contained US map (state outlines drawn from a bundled
  * TopoJSON via d3-geo's Albers USA projection — the projection that insets
@@ -166,7 +188,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
         const point = project(geo.lng, geo.lat);
         if (!point) return null;
         const boundary = placeBoundaries.get(placeGeoKey(stat.city, stat.state));
-        const d = boundary ? pathGen(boundary as any) : null;
+        const d = boundary ? sanePathFor(pathGen, boundary) : null;
         return { stat, x: point[0], y: point[1], r: radiusFor(stat.total), d };
       })
       .filter((p): p is { stat: CityStat; x: number; y: number; r: number; d: string | null } => p !== null)
