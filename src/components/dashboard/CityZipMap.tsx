@@ -31,6 +31,7 @@ function popupHtml(z: ZipStat) {
      </div>
      <div style="color:#64748b;font-size:12px;line-height:1.5">
        ${z.total} contacted<br/>
+       ${z.contracts} contracts (${pct(z.contractRate)})<br/>
        ${z.qualified} qualified (${pct(z.qualifyRate)})<br/>
        ${z.replied} replied (${pct(z.replyRate)})
      </div>

@@ -367,8 +367,8 @@ export function DashboardView({
     return { totalSpend, tagged, total: leads.length, taggedPct: leads.length > 0 ? (tagged / leads.length) * 100 : 0 };
   }, [marketingSpend, leads]);
 
-  // ── Marketing: which states/cities/zips are actually converting — qualify
-  // rate and reply rate at all three levels, so spend/outreach can be
+  // ── Marketing: which states/cities/zips are actually converting — scored
+  // by real deal outcomes, not raw reply chatter, so spend/outreach can be
   // pointed at what's already working instead of split evenly across
   // everywhere leads happen to come from. Scoped to contacted-or-beyond
   // leads only (stage !== 'new') — with ~4k cold, never-approached leads
@@ -376,30 +376,56 @@ export function DashboardView({
   // actually reached out to," not diluted by leads nobody has touched yet.
   //
   // Three nested levels for the map's click-to-drill-down (state -> its
-  // cities -> a city's zips): a STATE's own total/qualified/replied count
-  // every contacted lead in it regardless of city size, so it's never
+  // cities -> a city's zips): a STATE's own total/qualified/contracts/replied
+  // count every contacted lead in it regardless of city size, so it's never
   // artificially low just because most of its leads sit in small cities.
   // Cities and zips both apply a MIN_LEADS=3 floor before getting their own
   // tier — a single lucky/unlucky lead would otherwise swing one to a 100%
   // or 0% rate and dominate a tier it doesn't really belong in — and drop
-  // out of their parent's list entirely below that floor. Tiers at every
-  // level are relative (top/middle/bottom third *within that level*, e.g.
-  // a zip ranked against its own city's other zips, not nationally) rather
-  // than fixed thresholds, since what counts as "good" varies by business.
+  // out of their parent's list entirely below that floor. States need a much
+  // higher floor (MIN_STATE_LEADS=300): a state with 30 contacts and 1 reply
+  // was showing up as "best market" purely because its tiny sample produced
+  // a noisy rate, not because it's actually performing — anything under 300
+  // contacted leads isn't a real market yet and is dropped from the map
+  // entirely (renders neutral, unclickable) rather than tiered against
+  // states doing real volume. Tiers at every level are relative (top/middle/
+  // bottom third *within that level*, e.g. a zip ranked against its own
+  // city's other zips, not nationally) rather than fixed thresholds, since
+  // what counts as "good" varies by business.
+  //
+  // Score weights actual deal progress, not just engagement: contracts (the
+  // real outcome) count most, the full qualified funnel (partial-qualified
+  // through closed — everyone who progressed past a reply) counts next, and
+  // raw reply rate — the earliest and noisiest signal — counts least. A
+  // market that closes contracts always outranks one that merely replies
+  // well but never converts.
   const stateStats = useMemo(() => {
     const MIN_LEADS = 3;
+    const MIN_STATE_LEADS = 300;
     if (!showSmsStats) return [];
 
     const repliedLeadIds = new Set(inboundMessages.filter((m) => !m.isReaction && m.leadId).map((m) => m.leadId as string));
 
+    const MAP_QUALIFIED_STAGES: LeadStage[] = ['initial_contact', 'followup', 'negotiation', 'contract', 'in_title', 'closed'];
+    const MAP_CONTRACT_STAGES: LeadStage[] = ['contract', 'in_title', 'closed'];
+
     interface Bucket {
       total: number;
       qualified: number;
+      contracts: number;
       leadIds: string[];
     }
     const byCity = new Map<
       string,
-      { city: string; state: string; total: number; qualified: number; leadIds: string[]; zipGroups: Map<string, Bucket> }
+      {
+        city: string;
+        state: string;
+        total: number;
+        qualified: number;
+        contracts: number;
+        leadIds: string[];
+        zipGroups: Map<string, Bucket>;
+      }
     >();
     // Independent of byCity's own MIN_LEADS floor below — a state's total
     // must reflect every contacted lead in it, not just the ones that
@@ -413,22 +439,25 @@ export function DashboardView({
       const key = `${cityKey}|${stateKey}`;
       let entry = byCity.get(key);
       if (!entry) {
-        entry = { city: l.city.trim(), state: stateKey, total: 0, qualified: 0, leadIds: [], zipGroups: new Map() };
+        entry = { city: l.city.trim(), state: stateKey, total: 0, qualified: 0, contracts: 0, leadIds: [], zipGroups: new Map() };
         byCity.set(key, entry);
       }
-      const isQualified = QUALIFIED_PLUS_STAGES.includes(l.stage);
+      const isQualified = MAP_QUALIFIED_STAGES.includes(l.stage);
+      const isContract = MAP_CONTRACT_STAGES.includes(l.stage);
       entry.total++;
       entry.leadIds.push(l.id);
       if (isQualified) entry.qualified++;
+      if (isContract) entry.contracts++;
 
       let stateEntry = byState.get(stateKey);
       if (!stateEntry) {
-        stateEntry = { total: 0, qualified: 0, leadIds: [] };
+        stateEntry = { total: 0, qualified: 0, contracts: 0, leadIds: [] };
         byState.set(stateKey, stateEntry);
       }
       stateEntry.total++;
       stateEntry.leadIds.push(l.id);
       if (isQualified) stateEntry.qualified++;
+      if (isContract) stateEntry.contracts++;
 
       // Zip is often stored as ZIP+4 ("33610-6838") — normalized to the
       // base 5 digits so both halves of a split zip+4 code count together.
@@ -436,13 +465,24 @@ export function DashboardView({
       if (zip5) {
         let zg = entry.zipGroups.get(zip5);
         if (!zg) {
-          zg = { total: 0, qualified: 0, leadIds: [] };
+          zg = { total: 0, qualified: 0, contracts: 0, leadIds: [] };
           entry.zipGroups.set(zip5, zg);
         }
         zg.total++;
         zg.leadIds.push(l.id);
         if (isQualified) zg.qualified++;
+        if (isContract) zg.contracts++;
       }
+    }
+
+    // Contracts weighted above the qualified funnel, which is weighted
+    // above raw reply rate — see the doc comment above this memo.
+    function scoreOf(total: number, qualified: number, contracts: number, replied: number): number {
+      if (total === 0) return 0;
+      const contractRate = contracts / total;
+      const qualifyRate = qualified / total;
+      const replyRate = replied / total;
+      return contractRate * 0.5 + qualifyRate * 0.3 + replyRate * 0.2;
     }
 
     // Ranks a set of {score}-carrying rows into relative thirds — top third
@@ -465,12 +505,14 @@ export function DashboardView({
         const replied = e.leadIds.filter((id) => repliedLeadIds.has(id)).length;
         const qualifyRate = e.total > 0 ? e.qualified / e.total : 0;
         const replyRate = e.total > 0 ? replied / e.total : 0;
+        const contractRate = e.total > 0 ? e.contracts / e.total : 0;
 
         const zipRows = Array.from(e.zipGroups.entries())
           .map(([zip5, zg]) => {
             const zReplied = zg.leadIds.filter((id) => repliedLeadIds.has(id)).length;
             const zQualifyRate = zg.total > 0 ? zg.qualified / zg.total : 0;
             const zReplyRate = zg.total > 0 ? zReplied / zg.total : 0;
+            const zContractRate = zg.total > 0 ? zg.contracts / zg.total : 0;
             return {
               zip5,
               city: e.city,
@@ -478,9 +520,11 @@ export function DashboardView({
               total: zg.total,
               qualified: zg.qualified,
               qualifyRate: zQualifyRate,
+              contracts: zg.contracts,
+              contractRate: zContractRate,
               replied: zReplied,
               replyRate: zReplyRate,
-              score: (zQualifyRate + zReplyRate) / 2,
+              score: scoreOf(zg.total, zg.qualified, zg.contracts, zReplied),
             };
           })
           .filter((z) => z.total >= MIN_LEADS);
@@ -495,9 +539,11 @@ export function DashboardView({
           total: e.total,
           qualified: e.qualified,
           qualifyRate,
+          contracts: e.contracts,
+          contractRate,
           replied,
           replyRate,
-          score: (qualifyRate + replyRate) / 2,
+          score: scoreOf(e.total, e.qualified, e.contracts, replied),
           zips,
         };
       })
@@ -506,22 +552,27 @@ export function DashboardView({
     const cityTiers = tierRank(cityRows);
     const citiesWithTier = cityRows.map((c) => ({ ...c, tier: cityTiers.get(c)! }));
 
-    const stateRows = Array.from(byState.entries()).map(([stateKey, e]) => {
-      const replied = e.leadIds.filter((id) => repliedLeadIds.has(id)).length;
-      const qualifyRate = e.total > 0 ? e.qualified / e.total : 0;
-      const replyRate = e.total > 0 ? replied / e.total : 0;
-      return {
-        stateKey,
-        state: stateKey,
-        total: e.total,
-        qualified: e.qualified,
-        qualifyRate,
-        replied,
-        replyRate,
-        score: (qualifyRate + replyRate) / 2,
-        cities: citiesWithTier.filter((c) => c.stateKey === stateKey),
-      };
-    });
+    const stateRows = Array.from(byState.entries())
+      .map(([stateKey, e]) => {
+        const replied = e.leadIds.filter((id) => repliedLeadIds.has(id)).length;
+        const qualifyRate = e.total > 0 ? e.qualified / e.total : 0;
+        const replyRate = e.total > 0 ? replied / e.total : 0;
+        const contractRate = e.total > 0 ? e.contracts / e.total : 0;
+        return {
+          stateKey,
+          state: stateKey,
+          total: e.total,
+          qualified: e.qualified,
+          qualifyRate,
+          contracts: e.contracts,
+          contractRate,
+          replied,
+          replyRate,
+          score: scoreOf(e.total, e.qualified, e.contracts, replied),
+          cities: citiesWithTier.filter((c) => c.stateKey === stateKey),
+        };
+      })
+      .filter((s) => s.total >= MIN_STATE_LEADS);
     const stateTiers = tierRank(stateRows);
     return stateRows.map((s) => ({ ...s, tier: stateTiers.get(s)! }));
   }, [leads, inboundMessages, showSmsStats]);
@@ -1402,7 +1453,7 @@ export function DashboardView({
                 <CardHeader
                   icon={MapIcon}
                   title="City Performance"
-                  sub="Among leads actually contacted (cold, never-approached leads excluded) — click a state, then a city, to drill down to zip codes"
+                  sub="States with 300+ contacted leads, scored by contracts + qualified leads + replies — click a state, then a city, to drill down to zip codes"
                   tone="accent"
                 />
                 <Suspense fallback={<div className="mt-3 flex h-96 items-center justify-center text-[13px] text-text-3">Loading map…</div>}>

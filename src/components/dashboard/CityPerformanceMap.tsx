@@ -19,6 +19,8 @@ export interface ZipStat {
   total: number;
   qualified: number;
   qualifyRate: number;
+  contracts: number;
+  contractRate: number;
   replied: number;
   replyRate: number;
   score: number;
@@ -33,6 +35,8 @@ export interface CityStat {
   total: number;
   qualified: number;
   qualifyRate: number;
+  contracts: number;
+  contractRate: number;
   replied: number;
   replyRate: number;
   score: number;
@@ -46,6 +50,8 @@ export interface StateStat {
   total: number;
   qualified: number;
   qualifyRate: number;
+  contracts: number;
+  contractRate: number;
   replied: number;
   replyRate: number;
   score: number;
@@ -103,6 +109,8 @@ interface HoverInfo {
   total: number;
   qualified: number;
   qualifyRate: number;
+  contracts: number;
+  contractRate: number;
   replied: number;
   replyRate: number;
   x: number;
@@ -416,6 +424,7 @@ export function CityPerformanceMap({ states }: { states: StateStat[] }) {
           </div>
           <div className="mt-1 space-y-0.5 text-slate-300">
             <div>{hover.total} contacted</div>
+            <div>{hover.contracts} contracts ({pct(hover.contractRate)})</div>
             <div>{hover.qualified} qualified ({pct(hover.qualifyRate)})</div>
             <div>{hover.replied} replied ({pct(hover.replyRate)})</div>
           </div>
