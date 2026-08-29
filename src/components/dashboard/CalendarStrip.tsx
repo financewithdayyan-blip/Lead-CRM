@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Check, CheckSquare, ChevronLeft, ChevronRight, Circle, ListChecks, Loader2, PhoneCall, Square } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Check, CheckSquare, ChevronLeft, ChevronRight, Circle, ListChecks, Loader2, MessageSquare, PhoneCall, Square } from 'lucide-react';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useAddActivity } from '@/hooks/useActivities';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { Modal } from '@/components/ui/Modal';
-import { formatPhone, formatClockTime, leadDisplayName, localIsoDate } from '@/lib/utils';
+import { formatPhone, formatClockTime, leadDisplayName, localIsoDate, toE164 } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
 const DAYS_VISIBLE_STEP = 3; // how many day-columns the arrows scroll by
@@ -84,52 +84,79 @@ const KIND_STYLE: Record<CalendarItem['kind'], { dot: string; label: string; pil
 
 /** One row inside the day popup — same actions as the compact card row, but
  * with the item's type spelled out as a pill (Task / Follow-up / Call
- * Scheduled) instead of leaving it to a small color-coded dot. */
+ * Scheduled) instead of leaving it to a small color-coded dot. A call or
+ * follow-up with a real lead attached also gets Call/Text quick actions —
+ * same handoff Kanban's own card buttons use (Zoom's deep link for the
+ * call, the lead's SMS tab for text) — so acting on it doesn't require
+ * leaving the popup to open the lead first. */
 function DayDetailRow({
   item,
   onToggleTask,
   onCompleteCall,
+  onCall,
+  onText,
 }: {
   item: CalendarItem;
   onToggleTask: (id: string, completed: boolean) => void;
   onCompleteCall: (lead: Lead) => void;
+  onCall: (lead: Lead) => void;
+  onText: (lead: Lead) => void;
 }) {
   const style = KIND_STYLE[item.kind];
+  const showQuickActions = (item.kind === 'call' || item.kind === 'followup') && !!item.lead;
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-border-2 bg-surface-3 px-3 py-2.5">
-      {item.kind === 'task' && item.taskId && (
-        <button
-          onClick={() => onToggleTask(item.taskId!, !item.completed)}
-          className="shrink-0 text-text-3 hover:text-success"
-          title={item.completed ? 'Mark incomplete' : 'Mark complete'}
-        >
-          {item.completed ? <CheckSquare size={17} /> : <Square size={17} />}
-        </button>
-      )}
-      {item.kind === 'call' && item.lead && (
-        <button
-          onClick={() => onCompleteCall(item.lead!)}
-          className="shrink-0 text-text-3 hover:text-success"
-          title="Mark this call completed"
-        >
-          <Circle size={17} />
-        </button>
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${style.pill}`}>{style.label}</span>
-          {item.overdue && <span className="shrink-0 rounded-full bg-danger-dim px-1.5 py-0.5 text-[10px] font-semibold text-danger">Overdue</span>}
-        </div>
-        {item.href ? (
-          <Link to={item.href} className={`mt-0.5 block truncate text-[13px] font-medium hover:underline ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>
-            {item.title}
-          </Link>
-        ) : (
-          <div className={`mt-0.5 truncate text-[13px] font-medium ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>{item.title}</div>
+    <div className="rounded-lg border border-border-2 bg-surface-3 px-3 py-2.5">
+      <div className="flex items-center gap-2.5">
+        {item.kind === 'task' && item.taskId && (
+          <button
+            onClick={() => onToggleTask(item.taskId!, !item.completed)}
+            className="shrink-0 text-text-3 hover:text-success"
+            title={item.completed ? 'Mark incomplete' : 'Mark complete'}
+          >
+            {item.completed ? <CheckSquare size={17} /> : <Square size={17} />}
+          </button>
         )}
-        {item.sub && <div className="mt-0.5 truncate text-[11px] text-text-3">"{item.sub}"</div>}
+        {item.kind === 'call' && item.lead && (
+          <button
+            onClick={() => onCompleteCall(item.lead!)}
+            className="shrink-0 text-text-3 hover:text-success"
+            title="Mark this call completed"
+          >
+            <Circle size={17} />
+          </button>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${style.pill}`}>{style.label}</span>
+            {item.overdue && <span className="shrink-0 rounded-full bg-danger-dim px-1.5 py-0.5 text-[10px] font-semibold text-danger">Overdue</span>}
+          </div>
+          {item.href ? (
+            <Link to={item.href} className={`mt-0.5 block truncate text-[13px] font-medium hover:underline ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>
+              {item.title}
+            </Link>
+          ) : (
+            <div className={`mt-0.5 truncate text-[13px] font-medium ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>{item.title}</div>
+          )}
+          {item.sub && <div className="mt-0.5 truncate text-[11px] text-text-3">"{item.sub}"</div>}
+        </div>
+        <span className="shrink-0 text-[12px] font-medium text-text-2">{item.time ? formatClockTime(item.time) : 'All day'}</span>
       </div>
-      <span className="shrink-0 text-[12px] font-medium text-text-2">{item.time ? formatClockTime(item.time) : 'All day'}</span>
+      {showQuickActions && (
+        <div className="mt-2 flex gap-1.5">
+          <button
+            onClick={() => onCall(item.lead!)}
+            className="flex flex-1 items-center justify-center gap-1 rounded-md bg-success/15 py-1.5 text-[11.5px] font-semibold text-success transition-colors hover:bg-success/25"
+          >
+            <PhoneCall size={11} /> Call
+          </button>
+          <button
+            onClick={() => onText(item.lead!)}
+            className="flex flex-1 items-center justify-center gap-1 rounded-md bg-primary/15 py-1.5 text-[11.5px] font-semibold text-primary transition-colors hover:bg-primary/25"
+          >
+            <MessageSquare size={11} /> Text
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -143,12 +170,16 @@ function DayDetailModal({
   onClose,
   onToggleTask,
   onCompleteCall,
+  onCall,
+  onText,
 }: {
   day: { iso: string; weekday: string; month: string; dayNum: number; isToday: boolean };
   items: CalendarItem[];
   onClose: () => void;
   onToggleTask: (id: string, completed: boolean) => void;
   onCompleteCall: (lead: Lead) => void;
+  onCall: (lead: Lead) => void;
+  onText: (lead: Lead) => void;
 }) {
   const fullDate = new Date(`${day.iso}T00:00:00`);
   const title = fullDate.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -160,7 +191,7 @@ function DayDetailModal({
       ) : (
         <div className="max-h-[60vh] space-y-2 overflow-y-auto">
           {items.map((item) => (
-            <DayDetailRow key={item.id} item={item} onToggleTask={onToggleTask} onCompleteCall={onCompleteCall} />
+            <DayDetailRow key={item.id} item={item} onToggleTask={onToggleTask} onCompleteCall={onCompleteCall} onCall={onCall} onText={onText} />
           ))}
         </div>
       )}
@@ -176,11 +207,27 @@ function DayDetailModal({
  * disappearing off the front of the window, so nothing quietly falls through.
  */
 export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[] }) {
+  const navigate = useNavigate();
   const { data: tasks = [] } = useTasks(userId);
   const toggleTask = useToggleTask();
+  const addActivity = useAddActivity();
   const [completingCall, setCompletingCall] = useState<Lead | null>(null);
   const [openDayIso, setOpenDayIso] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Same handoff Kanban's own Call/Text card buttons use — Zoom's documented
+  // deep link actually places the call (a plain tel: link would launch
+  // whatever the OS has registered instead of Zoom Phone specifically), and
+  // "Text" just opens the lead's own SMS tab rather than composing here.
+  const handleCall = useCallback(
+    (lead: Lead) => {
+      addActivity.mutate({ leadId: lead.id, type: 'call', body: 'Quick call logged from Calendar' });
+      const e164 = toE164(lead.phone);
+      if (e164) window.location.href = `zoomphonecall://${e164}`;
+    },
+    [addActivity],
+  );
+  const handleText = useCallback((lead: Lead) => navigate(`/leads/${lead.id}?tab=sms`), [navigate]);
 
   const todayIso = localIsoDate(new Date());
 
@@ -237,6 +284,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
         title: leadDisplayName(lead.firstName, lead.lastName) ?? formatPhone(lead.phone),
         href: `/leads/${lead.id}`,
         overdue: lead.nextFollowUp < todayIso,
+        lead,
       });
     }
 
@@ -372,6 +420,8 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
             setOpenDayIso(null);
             setCompletingCall(lead);
           }}
+          onCall={handleCall}
+          onText={handleText}
         />
       )}
     </div>
