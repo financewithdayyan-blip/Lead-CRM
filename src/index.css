@@ -236,3 +236,17 @@ body {
     @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-text-3;
   }
 }
+
+/* Dark-mode re-color for a plain OpenStreetMap tile layer (CityZipMap) — a
+   filter on the tile pane, not a separate tile provider. CARTO's own free
+   dark tiles started serving "API key required" watermarks over every tile
+   despite the documented anonymous free tier, so this reaches for the one
+   basemap that's reliably keyless (the standard OSM tile server, same one
+   PacketMap already uses) and darkens it client-side instead: invert flips
+   light->dark, hue-rotate corrects the resulting hue swap (inverted blue
+   water would otherwise read orange), brightness/contrast tone down the
+   inverted white-heavy road/label ink so it doesn't glare. Applied via
+   Leaflet's tileLayer `className` option. */
+.map-tiles-dark {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}

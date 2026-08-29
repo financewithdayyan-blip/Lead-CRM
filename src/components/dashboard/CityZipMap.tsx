@@ -44,10 +44,11 @@ function popupHtml(z: ZipStat) {
  * a cluster of concentric rings around one point instead. Leaflet's own
  * fitBounds handles the zoom level, so zips always end up visibly spread
  * out regardless of how tightly or loosely packed they really are. Tiles
- * are CARTO's free Dark Matter basemap (built on the same OSM data
- * PacketMap's plain tiles use, just styled dark navy) so the city view
- * matches the national map's palette instead of switching to a plain light
- * basemap underneath the same green/yellow/red circles.
+ * are the same plain OpenStreetMap basemap PacketMap uses, darkened via a
+ * CSS filter (.map-tiles-dark in index.css) so the city view still matches
+ * the national map's dark navy palette instead of switching to a plain
+ * light basemap underneath the same green/yellow/red circles — see that
+ * class's own comment for why it's a filter and not a dark tile provider.
  *
  * Each zip starts as a plain circle at its centroid (instant — the geocode
  * is already in hand), then upgrades to its real boundary shape, shaded by
@@ -66,15 +67,16 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     mapRef.current = map;
     let cancelled = false;
 
-    // CARTO's Dark Matter basemap — free, keyless, built on the same OSM
-    // road/water/label data as PacketMap's tiles, just styled dark navy so
-    // the city view matches the national map's palette instead of jumping
-    // to a plain light basemap underneath the same green/yellow/red circles.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // CARTO's free "dark_all" tiles turned out to gate real usage behind an
+    // API key (served "API KEY REQUIRED" watermarks over every tile despite
+    // the documented anonymous free tier) — reverted to the same plain OSM
+    // tiles PacketMap already uses (genuinely keyless), darkened client-side
+    // via the .map-tiles-dark filter in index.css so the city view still
+    // matches the national map's dark navy palette.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      className: 'map-tiles-dark',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
