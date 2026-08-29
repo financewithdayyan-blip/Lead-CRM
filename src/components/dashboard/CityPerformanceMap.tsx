@@ -45,12 +45,15 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
  * A stylized, self-contained US map (state outlines drawn from a bundled
  * TopoJSON via d3-geo's Albers USA projection — the projection that insets
  * Alaska/Hawaii the way the reference image showed, no basemap tiles, no
- * network map requests) with one circle per city that has enough leads to
- * mean something. Every state is the same neutral navy — states carry no
- * data of their own here, they're just the backdrop; the circles do all the
- * talking: size = lead volume (sqrt-scaled, so area tracks count), color =
- * a green/yellow/red performance tier computed upstream from qualify rate +
- * reply rate. Coordinates come from the shared city_geocodes cache; a city
+ * network map requests) with one circle per city that has enough contacted
+ * leads to mean something — `cities` (built in DashboardPage) is already
+ * scoped to leads actually approached (stage !== 'new'), so the ~4k cold,
+ * untouched leads never dilute a city's rates. Every state is the same
+ * neutral navy — states carry no data of their own here, they're just the
+ * backdrop; the circles do all the talking: size = leads contacted
+ * (sqrt-scaled, so area tracks count), color = a green/yellow/red
+ * performance tier computed upstream from qualify rate + reply rate.
+ * Coordinates come from the shared city_geocodes cache; a city
  * missing one gets geocoded here in the background and written back so
  * every later load (any user) has it without hitting the free geocoders
  * again.
@@ -175,7 +178,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
             {TIER_LABEL[hover.stat.tier]}
           </div>
           <div className="mt-1 space-y-0.5 text-slate-300">
-            <div>{hover.stat.total} lead{hover.stat.total === 1 ? '' : 's'}</div>
+            <div>{hover.stat.total} contacted</div>
             <div>{hover.stat.qualified} qualified ({pct(hover.stat.qualifyRate)})</div>
             <div>{hover.stat.replied} replied ({pct(hover.stat.replyRate)})</div>
           </div>
@@ -202,7 +205,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
             </button>
           );
         })}
-        <span className="ml-1 text-text-3">Circle size = lead volume · click a tier to filter</span>
+        <span className="ml-1 text-text-3">Circle size = leads contacted · click a tier to filter</span>
       </div>
     </div>
   );

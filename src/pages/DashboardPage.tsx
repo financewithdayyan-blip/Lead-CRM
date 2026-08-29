@@ -370,11 +370,15 @@ export function DashboardView({
   // ── Marketing: which cities/states are actually converting — qualify rate
   // and reply rate per city, so spend/outreach can be pointed at what's
   // already working instead of split evenly across everywhere leads happen
-  // to come from. Cities under MIN_LEADS are dropped from the map entirely —
-  // a single lucky/unlucky lead would otherwise swing a city to a 100% or 0%
-  // rate and dominate a tier it doesn't really belong in. Tiers are relative
-  // (top/middle/bottom third of this account's own cities) rather than fixed
-  // thresholds, since what counts as "good" varies by business and volume.
+  // to come from. Scoped to contacted-or-beyond leads only (stage !== 'new')
+  // — with ~4k cold, never-approached leads still sitting on the board, a
+  // city's rate needs to be "of the leads we actually reached out to," not
+  // diluted by leads nobody has touched yet. Cities under MIN_LEADS
+  // (contacted leads, not raw lead count) are dropped from the map entirely
+  // — a single lucky/unlucky lead would otherwise swing a city to a 100% or
+  // 0% rate and dominate a tier it doesn't really belong in. Tiers are
+  // relative (top/middle/bottom third of this account's own cities) rather
+  // than fixed thresholds, since what counts as "good" varies by business.
   const cityStats = useMemo(() => {
     const MIN_LEADS = 3;
     if (!showSmsStats) return [];
@@ -386,6 +390,7 @@ export function DashboardView({
       { city: string; state: string; total: number; qualified: number; leadIds: string[] }
     >();
     for (const l of leads) {
+      if (l.stage === 'new') continue; // still cold — never approached
       if (!l.city?.trim() || !l.state?.trim() || l.state.trim().length !== 2) continue;
       const cityKey = l.city.trim().toLowerCase();
       const stateKey = l.state.trim().toUpperCase();
@@ -1308,7 +1313,7 @@ export function DashboardView({
                 <CardHeader
                   icon={MapIcon}
                   title="City Performance"
-                  sub="Where qualified leads and replies actually come from — target these cities/states, not just wherever leads happen to land"
+                  sub="Among leads actually contacted (cold, never-approached leads excluded) — where replies and qualifies actually come from"
                   tone="accent"
                 />
                 <Suspense fallback={<div className="mt-3 flex h-96 items-center justify-center text-[13px] text-text-3">Loading map…</div>}>
