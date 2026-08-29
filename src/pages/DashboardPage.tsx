@@ -46,6 +46,7 @@ import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useMarketingSpend } from '@/hooks/useMarketingSpend';
 import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVelocity } from '@/hooks/useSalesKpis';
+import { isMajorCity } from '@/lib/majorCities';
 
 type SmsRangeKey = '1d' | '7d' | '30d' | '90d' | 'all';
 const SMS_RANGE_OPTIONS: { key: SmsRangeKey; label: string }[] = [
@@ -382,7 +383,11 @@ export function DashboardView({
   // Cities and zips both apply a MIN_LEADS=3 floor before getting their own
   // tier — a single lucky/unlucky lead would otherwise swing one to a 100%
   // or 0% rate and dominate a tier it doesn't really belong in — and drop
-  // out of their parent's list entirely below that floor. States need a much
+  // out of their parent's list entirely below that floor. Cities are also
+  // restricted to major cities (70k+ population, see majorCities.ts) — small
+  // towns/hamlets are both statistically noisy at this volume and rarely
+  // have a real Census place boundary to shade in on the state-level map, so
+  // they rendered as plain circles instead. States need a much
   // higher floor (MIN_STATE_LEADS=300): a state with 30 contacts and 1 reply
   // was showing up as "best market" purely because its tiny sample produced
   // a noisy rate, not because it's actually performing — anything under 300
@@ -547,7 +552,13 @@ export function DashboardView({
           zips,
         };
       })
-      .filter((c) => c.total >= MIN_LEADS);
+      // Major cities only (70k+ population, see majorCities.ts) — small
+      // towns/hamlets rarely have a Census Incorporated Place boundary to
+      // draw at all (they showed up as unshaded circles instead of the real
+      // boundary shading every other city gets) and, being tiny slices of a
+      // state's contacted leads, add noise more than signal at this zoom
+      // level anyway.
+      .filter((c) => c.total >= MIN_LEADS && isMajorCity(c.city, c.stateKey));
 
     const cityTiers = tierRank(cityRows);
     const citiesWithTier = cityRows.map((c) => ({ ...c, tier: cityTiers.get(c)! }));
