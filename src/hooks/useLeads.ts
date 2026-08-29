@@ -41,11 +41,19 @@ async function fetchLeadPage(userId: string, i: number, attempt = 0): Promise<Le
  * front so all pages fire in parallel — the previous serial loop paid one full
  * round-trip per 1000 leads before the next could even start.
  *
+ * A large account (10k+ leads) still means 10+ requests each carrying every
+ * column on the table, and waiting on all of them together meant the board
+ * stayed blank for as long as the single slowest page took — on a
+ * bandwidth-constrained connection that's the whole multi-megabyte transfer,
+ * not just one page's worth. `onPage` lets the caller paint each page the
+ * moment it lands instead of waiting on the rest, so the board becomes
+ * usable in roughly 1/Nth the time and keeps filling in from there.
+ *
  * A lead inserted between the count and the page reads can be missed until the
  * next refetch; the serial version had the same race and it self-corrects on
  * the next invalidate.
  */
-async function fetchLeadsPaged(userId: string): Promise<Lead[]> {
+async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void): Promise<Lead[]> {
   const { count, error: countError } = await supabase
     .from('leads')
     .select('id', { count: 'exact', head: true })
@@ -53,19 +61,32 @@ async function fetchLeadsPaged(userId: string): Promise<Lead[]> {
   if (countError) throw countError;
   if (!count) return [];
 
-  const pages = await Promise.all(
-    Array.from({ length: Math.ceil(count / PAGE) }, (_, i) => fetchLeadPage(userId, i)),
+  const pageCount = Math.ceil(count / PAGE);
+  let all = await fetchLeadPage(userId, 0);
+  onPage?.(all);
+  if (pageCount === 1) return all;
+
+  // The remaining pages still fire in parallel — updating `all` is a single
+  // synchronous statement per page with no `await` inside it, so concurrent
+  // resolutions can't interleave and lose one page's rows to another's.
+  await Promise.all(
+    Array.from({ length: pageCount - 1 }, (_, i) => i + 1).map(async (i) => {
+      const page = await fetchLeadPage(userId, i);
+      all = [...all, ...page].sort((a, b) => (a.leadNum ?? 0) - (b.leadNum ?? 0));
+      onPage?.(all);
+    }),
   );
 
-  return pages.flat();
+  return all;
 }
 
 export function useLeads(targetUserId?: string) {
   const { session } = useAuth();
   const userId = targetUserId ?? session?.user.id;
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['leads', userId],
-    queryFn: () => fetchLeadsPaged(userId!),
+    queryFn: () => fetchLeadsPaged(userId!, (soFar) => qc.setQueryData(['leads', userId], soFar)),
     enabled: !!userId,
   });
 }
@@ -114,7 +135,7 @@ export function useContractStageLeads() {
 export function prefetchLeads(qc: QueryClient, userId: string) {
   return qc.prefetchQuery({
     queryKey: ['leads', userId],
-    queryFn: () => fetchLeadsPaged(userId),
+    queryFn: () => fetchLeadsPaged(userId, (soFar) => qc.setQueryData(['leads', userId], soFar)),
     staleTime: 5 * 60_000,
   });
 }
