@@ -138,6 +138,7 @@ function StatCard({
   color,
   icon: Icon,
   hero,
+  compact,
 }: {
   label: string;
   value: string | number;
@@ -148,6 +149,9 @@ function StatCard({
    * 3-4 headline numbers on the page, matching the bold hero-tile pattern
    * real dashboard products use instead of treating every KPI equally. */
   hero?: boolean;
+  /** Tighter padding/type for a denser grid (e.g. 2-col × 4-row next to a
+   * chart) — same visual language as the regular size, just smaller. */
+  compact?: boolean;
 }) {
   // Every real call site passes an explicit color; this fallback only
   // exists so a future one that doesn't still gets a color with real
@@ -157,39 +161,39 @@ function StatCard({
   if (hero) {
     return (
       <div
-        className="rounded-lg p-4 shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover"
+        className={`rounded-lg shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover ${compact ? 'p-2.5' : 'p-4'}`}
         style={{ background: c }}
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{label}</div>
+          <div className={`font-semibold uppercase tracking-wide text-white/70 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{label}</div>
           {Icon && (
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/15 text-white">
-              <Icon size={14} />
+            <span className={`flex shrink-0 items-center justify-center rounded-md bg-white/15 text-white ${compact ? 'h-6 w-6' : 'h-7 w-7'}`}>
+              <Icon size={compact ? 12 : 14} />
             </span>
           )}
         </div>
-        <div className="mt-2 font-mono text-2xl font-semibold tabular-nums text-white">{value}</div>
-        <div className="mt-0.5 text-[12px] text-white/75">{sub}</div>
+        <div className={`font-mono font-semibold tabular-nums text-white ${compact ? 'mt-1 text-lg' : 'mt-2 text-2xl'}`}>{value}</div>
+        <div className={`text-white/75 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
       </div>
     );
   }
   return (
-    <div className="card !p-4 transition-transform hover:-translate-y-0.5 hover:shadow-card-hover">
+    <div className={`card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover ${compact ? '!p-2.5' : '!p-4'}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+        <div className={`font-semibold uppercase tracking-wide text-text-3 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{label}</div>
         {Icon && (
           <span
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+            className={`flex shrink-0 items-center justify-center rounded-md ${compact ? 'h-6 w-6' : 'h-7 w-7'}`}
             style={{ background: `${c}17`, color: c }}
           >
-            <Icon size={14} />
+            <Icon size={compact ? 12 : 14} />
           </span>
         )}
       </div>
-      <div className="mt-2 font-mono text-2xl font-semibold tabular-nums" style={{ color: c }}>
+      <div className={`font-mono font-semibold tabular-nums ${compact ? 'mt-1 text-lg' : 'mt-2 text-2xl'}`} style={{ color: c }}>
         {value}
       </div>
-      <div className="mt-0.5 text-[12px] text-text-3">{sub}</div>
+      <div className={`text-text-3 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
     </div>
   );
 }
@@ -823,8 +827,22 @@ export function DashboardView({
           <div>
             <SectionLabel>Overview</SectionLabel>
             {showSmsStats ? (
-              <>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
+                <div className="card chart-layer">
+                  <CardHeader
+                    icon={DollarSign}
+                    title="Revenue in Pipeline"
+                    tone="accent"
+                    sub={`Assignment fee across leads Under Contract · ${rangeLabel}`}
+                  />
+                  <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3">
+                      <RevenueInPipelineChart data={revenueInPipelineTrend} />
+                    </div>
+                  </Suspense>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
                   <StatCard
                     label="Total Leads"
                     value={stats.total.toLocaleString()}
@@ -832,6 +850,7 @@ export function DashboardView({
                     color="#0B1E33"
                     icon={Users}
                     hero
+                    compact
                   />
                   <StatCard
                     label="Qualified Leads"
@@ -840,6 +859,7 @@ export function DashboardView({
                     color="#1568A8"
                     icon={CheckCircle2}
                     hero
+                    compact
                   />
                   <StatCard
                     label="Contracts"
@@ -848,6 +868,7 @@ export function DashboardView({
                     color="#10b981"
                     icon={FileSignature}
                     hero
+                    compact
                   />
                   <StatCard
                     label="SMS Sent"
@@ -856,15 +877,15 @@ export function DashboardView({
                     color="#C9A24B"
                     icon={MessageSquare}
                     hero
+                    compact
                   />
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard
                     label="Replies"
                     value={stats.repliesInRange.toLocaleString()}
                     sub={`${stats.responseRate}% response rate`}
                     color="#22d3ee"
                     icon={Reply}
+                    compact
                   />
                   <StatCard
                     label="AI Auto-Replies"
@@ -872,6 +893,7 @@ export function DashboardView({
                     sub="drafted and sent, no human touch"
                     color="#a78bfa"
                     icon={Bot}
+                    compact
                   />
                   <StatCard
                     label="Calls to Qualified Leads"
@@ -883,6 +905,7 @@ export function DashboardView({
                     }
                     color={stats.callsOffProcess > 0 ? '#f59e0b' : '#fb923c'}
                     icon={PhoneCall}
+                    compact
                   />
                   <StatCard
                     label="Opted Out / DNC"
@@ -890,9 +913,10 @@ export function DashboardView({
                     sub={`${stats.optOutRate}% of contacted`}
                     color="#ef4444"
                     icon={UserX}
+                    compact
                   />
                 </div>
-              </>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -1051,22 +1075,6 @@ export function DashboardView({
                   <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3">
                       <PipelineActivityChart data={activityTrend} />
-                    </div>
-                  </Suspense>
-                </div>
-              )}
-
-              {showSmsStats && (
-                <div className="card chart-layer">
-                  <CardHeader
-                    icon={DollarSign}
-                    title="Revenue in Pipeline"
-                    tone="accent"
-                    sub={`Assignment fee across leads Under Contract · ${rangeLabel}`}
-                  />
-                  <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                    <div className="mt-3">
-                      <RevenueInPipelineChart data={revenueInPipelineTrend} />
                     </div>
                   </Suspense>
                 </div>
