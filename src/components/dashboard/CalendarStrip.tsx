@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CheckSquare, ChevronLeft, ChevronRight, Circle, Loader2, PhoneCall, Square } from 'lucide-react';
+import { Check, CheckSquare, ChevronLeft, ChevronRight, Circle, ListChecks, Loader2, PhoneCall, Square } from 'lucide-react';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useAddActivity } from '@/hooks/useActivities';
 import { useUpdateLead } from '@/hooks/useLeads';
@@ -81,62 +81,6 @@ const KIND_STYLE: Record<CalendarItem['kind'], { dot: string; label: string; pil
   followup: { dot: 'bg-accent', label: 'Follow-up', pill: 'bg-accent/15 text-accent' },
   task: { dot: 'bg-info', label: 'Task', pill: 'bg-info/15 text-info' },
 };
-
-function CalendarItemRow({
-  item,
-  onToggleTask,
-  onCompleteCall,
-}: {
-  item: CalendarItem;
-  onToggleTask: (id: string, completed: boolean) => void;
-  onCompleteCall: (lead: Lead) => void;
-}) {
-  const style = KIND_STYLE[item.kind];
-  const body = (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-1">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} title={style.label} />
-        <span className={`truncate text-[11.5px] font-medium ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>
-          {item.title}
-        </span>
-      </div>
-      <div className={`ml-2.5 truncate text-[10px] ${item.overdue ? 'text-danger' : 'text-text-3'}`}>
-        {item.time ? formatClockTime(item.time) : 'All day'}
-        {item.overdue ? ' · Overdue' : ''}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="flex items-center gap-1 rounded-md border border-border-2 bg-surface px-1.5 py-1" title={item.sub}>
-      {item.kind === 'task' && item.taskId && (
-        <button
-          onClick={() => onToggleTask(item.taskId!, !item.completed)}
-          className="shrink-0 text-text-3 hover:text-success"
-          title={item.completed ? 'Mark incomplete' : 'Mark complete'}
-        >
-          {item.completed ? <CheckSquare size={13} /> : <Square size={13} />}
-        </button>
-      )}
-      {item.kind === 'call' && item.lead && (
-        <button
-          onClick={() => onCompleteCall(item.lead!)}
-          className="shrink-0 text-text-3 hover:text-success"
-          title="Mark this call completed"
-        >
-          <Circle size={13} />
-        </button>
-      )}
-      {item.href ? (
-        <Link to={item.href} className="min-w-0 flex-1">
-          {body}
-        </Link>
-      ) : (
-        body
-      )}
-    </div>
-  );
-}
 
 /** One row inside the day popup — same actions as the compact card row, but
  * with the item's type spelled out as a pill (Task / Follow-up / Call
@@ -349,57 +293,52 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
       >
         {days.map((d) => {
           const items = itemsByDay.get(d.iso) ?? [];
+          const taskCount = items.filter((i) => i.kind === 'task').length;
+          // "Calls" bundles Scheduled Calls and Follow-ups together — both
+          // mean the same thing at a glance: someone to call that day. The
+          // popup (opened by clicking the card) still tells them apart.
+          const callCount = items.filter((i) => i.kind === 'call' || i.kind === 'followup').length;
           return (
-            <div
+            <button
               key={d.iso}
-              className={`shrink-0 rounded-lg border ${
-                d.isToday ? 'border-primary bg-primary/10 ring-1 ring-primary/40' : 'border-border-2 bg-surface-3'
+              onClick={() => setOpenDayIso(d.iso)}
+              className={`shrink-0 rounded-lg border text-left transition-colors ${
+                d.isToday
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/40 hover:bg-primary/15'
+                  : 'border-border-2 bg-surface-3 hover:bg-surface-2'
               }`}
               style={{ width: DAY_COLUMN_WIDTH, scrollSnapAlign: 'start' }}
+              title="View everything due this day"
             >
-              <button
-                onClick={() => setOpenDayIso(d.iso)}
-                className={`flex w-full items-center justify-between border-b px-2.5 py-1.5 text-left transition-colors ${
-                  d.isToday ? 'border-primary/30 hover:bg-primary/10' : 'border-border-2 hover:bg-surface-2'
-                }`}
-                title="View everything due this day"
-              >
-                <div className="flex items-center gap-2">
-                  {d.isToday ? (
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-white shadow-[0_0_0_3px] shadow-primary/20">
-                      {d.dayNum}
-                    </span>
-                  ) : null}
-                  <div>
-                    <div className={`text-[10px] font-semibold uppercase tracking-wide ${d.isToday ? 'text-primary' : 'text-text-3'}`}>
-                      {d.isToday ? 'Today' : d.weekday}
-                    </div>
-                    {!d.isToday && <div className="text-[14px] font-bold text-text">{d.month} {d.dayNum}</div>}
-                    {d.isToday && <div className="text-[11px] font-medium text-primary/80">{d.month}</div>}
-                  </div>
-                </div>
-                {items.length > 0 && (
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                      d.isToday ? 'bg-primary text-white' : 'bg-surface-2 text-text-3'
-                    }`}
-                  >
-                    {items.length}
+              <div className={`flex items-center gap-2 border-b px-2.5 py-1.5 ${d.isToday ? 'border-primary/30' : 'border-border-2'}`}>
+                {d.isToday ? (
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-white shadow-[0_0_0_3px] shadow-primary/20">
+                    {d.dayNum}
                   </span>
-                )}
-              </button>
-              <div className="max-h-[280px] min-h-[60px] space-y-1 overflow-y-auto p-1.5">
-                {items.length === 0 && <div className="px-1 py-3 text-center text-[11px] text-text-3">—</div>}
-                {items.map((item) => (
-                  <CalendarItemRow
-                    key={item.id}
-                    item={item}
-                    onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-                    onCompleteCall={setCompletingCall}
-                  />
-                ))}
+                ) : null}
+                <div>
+                  <div className={`text-[10px] font-semibold uppercase tracking-wide ${d.isToday ? 'text-primary' : 'text-text-3'}`}>
+                    {d.isToday ? 'Today' : d.weekday}
+                  </div>
+                  {!d.isToday && <div className="text-[14px] font-bold text-text">{d.month} {d.dayNum}</div>}
+                  {d.isToday && <div className="text-[11px] font-medium text-primary/80">{d.month}</div>}
+                </div>
               </div>
-            </div>
+              <div className="space-y-1 p-1.5">
+                <div className={`flex items-center justify-between rounded-md px-2 py-1 ${taskCount > 0 ? 'bg-info/15' : 'bg-surface-2'}`}>
+                  <span className={`flex items-center gap-1 text-[11px] font-medium ${taskCount > 0 ? 'text-info' : 'text-text-3'}`}>
+                    <ListChecks size={11} /> Tasks
+                  </span>
+                  <span className={`text-[12px] font-bold ${taskCount > 0 ? 'text-info' : 'text-text-3'}`}>{taskCount}</span>
+                </div>
+                <div className={`flex items-center justify-between rounded-md px-2 py-1 ${callCount > 0 ? 'bg-primary/15' : 'bg-surface-2'}`}>
+                  <span className={`flex items-center gap-1 text-[11px] font-medium ${callCount > 0 ? 'text-primary' : 'text-text-3'}`}>
+                    <PhoneCall size={11} /> Calls
+                  </span>
+                  <span className={`text-[12px] font-bold ${callCount > 0 ? 'text-primary' : 'text-text-3'}`}>{callCount}</span>
+                </div>
+              </div>
+            </button>
           );
         })}
       </div>
