@@ -7,7 +7,7 @@ import usStates from 'us-atlas/states-10m.json';
 import { geocodeAddress } from '@/lib/geocode';
 import { useCityGeocodes, useUpsertCityGeocode, cityGeoKey } from '@/hooks/useCityGeocodes';
 import { useZipGeocodes } from '@/hooks/useZipGeocodes';
-import { fetchPlaceBoundaries, placeGeoKey, type PlaceGeometry } from '@/lib/placeBoundaries';
+import { fetchPlaceBoundaries, placeGeoKey, STATE_FIPS, type PlaceGeometry } from '@/lib/placeBoundaries';
 import { CityZipMap } from './CityZipMap';
 
 export type Tier = 'green' | 'yellow' | 'red';
@@ -40,6 +40,19 @@ export interface CityStat {
   zips: ZipStat[];
 }
 
+export interface StateStat {
+  stateKey: string;
+  state: string;
+  total: number;
+  qualified: number;
+  qualifyRate: number;
+  replied: number;
+  replyRate: number;
+  score: number;
+  tier: Tier;
+  cities: CityStat[];
+}
+
 const TIER_COLOR: Record<Tier, string> = {
   green: '#22c55e',
   yellow: '#eab308',
@@ -59,16 +72,17 @@ const HEIGHT = 600;
 const STATE_FILL = '#102338';
 const STATE_STROKE = '#1f3a57';
 
+const FIPS_TO_STATE: Record<string, string> = Object.fromEntries(Object.entries(STATE_FIPS).map(([k, v]) => [v, k]));
+
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 // A single city's projected footprint should never come close to spanning
-// the whole national canvas — a defensive cap against degenerate geometry.
-// Simplifying a small village's boundary too aggressively (or a bad ring
-// from the source data) can produce a self-intersecting/inverted shape that
-// SVG's fill rule then paints as covering nearly the entire viewBox instead
-// of the tiny real place it's supposed to be — caught here by bounding-box
-// size rather than trusting every path blindly; a rejected boundary falls
-// back to the plain circle marker.
+// a whole state — a defensive cap against degenerate geometry. Simplifying
+// a small village's boundary too aggressively (or a bad ring from the
+// source data) can produce a self-intersecting/inverted shape that SVG's
+// fill rule then paints as covering far more area than the tiny real place
+// it's supposed to be — caught here by bounding-box size rather than
+// trusting every path blindly; a rejected boundary falls back to a circle.
 const MAX_CITY_PATH_SPAN = 200;
 
 function sanePathFor(pathGen: ReturnType<typeof geoPath>, geometry: PlaceGeometry): string | null {
@@ -83,43 +97,51 @@ function sanePathFor(pathGen: ReturnType<typeof geoPath>, geometry: PlaceGeometr
   return d;
 }
 
+interface HoverInfo {
+  label: string;
+  tier: Tier;
+  total: number;
+  qualified: number;
+  qualifyRate: number;
+  replied: number;
+  replyRate: number;
+  x: number;
+  y: number;
+}
+
 /**
- * A stylized, self-contained US map (state outlines drawn from a bundled
- * TopoJSON via d3-geo's Albers USA projection — the projection that insets
- * Alaska/Hawaii the way the reference image showed, no basemap tiles, no
- * network map requests) with one circle per city that has enough contacted
- * leads to mean something — `cities` (built in DashboardPage) is already
- * scoped to leads actually approached (stage !== 'new'), so the ~4k cold,
- * untouched leads never dilute a city's rates. Every state is the same
- * neutral navy — states carry no data of their own here, they're just the
- * backdrop; the circles do all the talking: size = leads contacted
- * (sqrt-scaled, so area tracks count), color = a green/yellow/red
- * performance tier computed upstream from qualify rate + reply rate.
- * Coordinates come from the shared city_geocodes cache; a city missing one
- * gets geocoded here in the background and written back so every later
- * load (any user) has it without hitting the free geocoders again.
+ * Three-level drill-down over one stylized, self-contained US map (state
+ * outlines drawn from a bundled TopoJSON via d3-geo's Albers USA
+ * projection, no basemap tiles, no network map requests):
  *
- * Cities are shaded by their own real municipal boundary (from TIGERweb's
- * Incorporated Places, falling back to Census Designated Places) rather
- * than a plain circle — the same choropleth-by-real-shape treatment the
- * zip drill-down already uses, just one level up. A city TIGERweb has
- * neither for falls back to a circle at its geocoded point.
+ * 1. National — every state shaded by its own performance tier (green/
+ *    yellow/red, computed upstream from qualify rate + reply rate across
+ *    every contacted lead in that state). Click a state to drill in.
+ * 2. State — the same map cropped (viewBox) to the selected state's real
+ *    bounds, showing that state's own cities: each shaded by its real
+ *    TIGERweb municipal boundary where one resolves, falling back to a
+ *    plain circle at its geocoded point otherwise. Click a city to drill
+ *    further.
+ * 3. City — swaps to CityZipMap, a real tile-based street map, since
+ *    telling a city's own zip codes apart needs actual road/neighborhood
+ *    context this map's abstraction deliberately doesn't have.
  *
- * Clicking a city swaps this stylized overview for CityZipMap — a real,
- * tile-based street map — since telling a city's own zip codes apart needs
- * actual road/neighborhood context this map's national-scale abstraction
- * deliberately doesn't have. Zip positions come from the offline-backfilled
- * zip_geocodes cache (see useZipGeocodes).
+ * `states` (built in DashboardPage) is already scoped to leads actually
+ * approached (stage !== 'new'), so the thousands of cold, untouched leads
+ * never dilute a rate at any level.
  */
-export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
+export function CityPerformanceMap({ states }: { states: StateStat[] }) {
   const { data: cityGeocodes = new Map() } = useCityGeocodes();
   const upsertCityGeocode = useUpsertCityGeocode();
   const { data: zipGeocodes = new Map() } = useZipGeocodes();
-  const [hover, setHover] = useState<{ label: string; tier: Tier; total: number; qualified: number; qualifyRate: number; replied: number; replyRate: number; x: number; y: number } | null>(null);
+  const [hover, setHover] = useState<HoverInfo | null>(null);
   const [visibleTiers, setVisibleTiers] = useState<Set<Tier>>(new Set(ALL_TIERS));
+  const [selectedState, setSelectedState] = useState<StateStat | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityStat | null>(null);
   const [placeBoundaries, setPlaceBoundaries] = useState<Map<string, PlaceGeometry>>(new Map());
   const svgRef = useRef<SVGSVGElement>(null);
+
+  const allCities = useMemo(() => states.flatMap((s) => s.cities), [states]);
 
   function toggleTier(tier: Tier) {
     setVisibleTiers((prev) => {
@@ -131,7 +153,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
   }
 
   useEffect(() => {
-    const missing = cities.filter((c) => !cityGeocodes.has(cityGeoKey(c.city, c.state))).slice(0, 25);
+    const missing = allCities.filter((c) => !cityGeocodes.has(cityGeoKey(c.city, c.state))).slice(0, 25);
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
@@ -148,43 +170,59 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(cities.map((c) => c.cityKey + c.stateKey)), cityGeocodes.size]);
+  }, [JSON.stringify(allCities.map((c) => c.cityKey + c.stateKey)), cityGeocodes.size]);
 
   useEffect(() => {
-    if (cities.length === 0) return;
+    if (allCities.length === 0) return;
     let cancelled = false;
-    fetchPlaceBoundaries(cities.map((c) => ({ city: c.city, state: c.state }))).then((found) => {
+    fetchPlaceBoundaries(allCities.map((c) => ({ city: c.city, state: c.state }))).then((found) => {
       if (!cancelled) setPlaceBoundaries(found);
     });
     return () => {
       cancelled = true;
     };
-    // Keyed on the cities' own identities (not the `cities` array reference)
-    // — DashboardPage recomputes cityStats as a fresh array on unrelated
-    // re-renders (date range, SMS range, any other dashboard state), which
-    // was re-triggering this fetch (and cancelling the previous one, via
-    // the cleanup above) before it ever got a chance to resolve, so
-    // placeBoundaries stayed empty and every city fell back to a circle.
+    // Keyed on the cities' own identities, not the `allCities` array
+    // reference — DashboardPage recomputes stateStats as a fresh array on
+    // unrelated re-renders (date range, SMS range, any of the several
+    // refetchInterval/realtime hooks elsewhere on the page), which would
+    // otherwise cancel an in-flight fetch and restart it every time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(cities.map((c) => c.cityKey + c.stateKey))]);
+  }, [JSON.stringify(allCities.map((c) => c.cityKey + c.stateKey))]);
 
-  const { statePaths, project, pathGen } = useMemo(() => {
+  const { statePaths, stateFeaturesByFips, project, pathGen } = useMemo(() => {
     const topology = usStates as unknown as Topology;
     const geo = feature(topology, topology.objects.states as GeometryCollection);
     const features = 'features' in geo ? geo.features : [geo];
     const projection = geoAlbersUsa().fitSize([WIDTH, HEIGHT], geo as any);
     const pathGenerator = geoPath(projection);
     const paths = features.map((f) => ({ id: String(f.id), d: pathGenerator(f as any) ?? '' })).filter((p) => p.d);
-    return { statePaths: paths, project: (lng: number, lat: number) => projection([lng, lat]), pathGen: pathGenerator };
+    const byFips = new Map(features.map((f) => [String(f.id), f]));
+    return {
+      statePaths: paths,
+      stateFeaturesByFips: byFips,
+      project: (lng: number, lat: number) => projection([lng, lat]),
+      pathGen: pathGenerator,
+    };
   }, []);
 
-  const cityTierCounts = useMemo(() => {
-    const counts: Record<Tier, number> = { green: 0, yellow: 0, red: 0 };
-    for (const c of cities) counts[c.tier]++;
-    return counts;
-  }, [cities]);
+  const statesByKey = useMemo(() => new Map(states.map((s) => [s.stateKey, s])), [states]);
 
-  const plottedCities = useMemo(() => {
+  const stateTierCounts = useMemo(() => {
+    const counts: Record<Tier, number> = { green: 0, yellow: 0, red: 0 };
+    for (const s of states) counts[s.tier]++;
+    return counts;
+  }, [states]);
+
+  const cityTierCountsInState = useMemo(() => {
+    const counts: Record<Tier, number> = { green: 0, yellow: 0, red: 0 };
+    if (!selectedState) return counts;
+    for (const c of selectedState.cities) counts[c.tier]++;
+    return counts;
+  }, [selectedState]);
+
+  const plottedCitiesInState = useMemo(() => {
+    if (!selectedState) return [];
+    const cities = selectedState.cities;
     const maxTotal = Math.max(...cities.map((c) => c.total), 1);
     const radiusFor = (total: number) => 4 + 15 * Math.sqrt(total / maxTotal);
     return cities
@@ -202,7 +240,19 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
       // Smaller circles/shapes drawn last so a big city never fully buries a
       // small nearby one.
       .sort((a, b) => b.r - a.r);
-  }, [cities, cityGeocodes, project, pathGen, placeBoundaries, visibleTiers]);
+  }, [selectedState, cityGeocodes, project, pathGen, placeBoundaries, visibleTiers]);
+
+  const stateViewBox = useMemo(() => {
+    if (!selectedState) return `0 0 ${WIDTH} ${HEIGHT}`;
+    const fips = STATE_FIPS[selectedState.stateKey];
+    const stateFeature = fips ? stateFeaturesByFips.get(fips) : undefined;
+    if (!stateFeature) return `0 0 ${WIDTH} ${HEIGHT}`;
+    const [[x0, y0], [x1, y1]] = pathGen.bounds(stateFeature as any);
+    const w = x1 - x0;
+    const h = y1 - y0;
+    const pad = Math.max(w, h) * 0.15;
+    return `${x0 - pad} ${y0 - pad} ${w + pad * 2} ${h + pad * 2}`;
+  }, [selectedState, stateFeaturesByFips, pathGen]);
 
   const zipTierCounts = useMemo(() => {
     const counts: Record<Tier, number> = { green: 0, yellow: 0, red: 0 };
@@ -222,77 +272,130 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
       .filter((z): z is ZipStat & { lat: number; lng: number } => z !== null);
   }, [selectedCity, zipGeocodes, visibleTiers]);
 
-  function handleEnter(e: React.MouseEvent, entry: { label: string; tier: Tier; total: number; qualified: number; qualifyRate: number; replied: number; replyRate: number }) {
+  function handleEnter(e: React.MouseEvent, entry: Omit<HoverInfo, 'x' | 'y'>) {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     setHover({ ...entry, x: e.clientX - rect.left, y: e.clientY - rect.top });
   }
 
-  const tierCounts = selectedCity ? zipTierCounts : cityTierCounts;
+  const tierCounts = selectedCity ? zipTierCounts : selectedState ? cityTierCountsInState : stateTierCounts;
+  const hintText = selectedCity
+    ? 'Circle size = leads contacted in this zip · click a circle for details'
+    : selectedState
+      ? 'Shaded by real city boundary where available (circle = boundary not found) · click a city to see its zip codes'
+      : 'Click a state to see its cities';
+
+  function handleBack() {
+    setHover(null);
+    if (selectedCity) setSelectedCity(null);
+    else setSelectedState(null);
+  }
 
   return (
     <div className="relative">
-      {selectedCity && (
+      {(selectedState || selectedCity) && (
         <button
-          onClick={() => {
-            setSelectedCity(null);
-            setHover(null);
-          }}
+          onClick={handleBack}
           className="mb-2 flex items-center gap-1.5 rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12.5px] font-semibold text-text-2 transition-colors hover:bg-surface-2"
         >
-          <ArrowLeft size={13} /> Back to national map
-          <span className="text-text-3">— {selectedCity.city}, {selectedCity.state} by zip code</span>
+          <ArrowLeft size={13} />
+          {selectedCity ? `Back to ${selectedState!.state}` : 'Back to national map'}
+          {selectedCity && <span className="text-text-3">— {selectedCity.city}, {selectedCity.state} by zip code</span>}
         </button>
       )}
 
       {selectedCity ? (
         <CityZipMap zips={zipMarkers} cityLabel={`${selectedCity.city}, ${selectedCity.state}`} />
       ) : (
-        <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full">
+        <svg ref={svgRef} viewBox={selectedState ? stateViewBox : `0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full">
           <g>
-            {statePaths.map((p) => (
-              <path key={p.id} d={p.d} fill={STATE_FILL} stroke={STATE_STROKE} strokeWidth={1} strokeLinejoin="round" />
-            ))}
-          </g>
-          <g>
-            {plottedCities.map(({ stat, x, y, r, d }) => {
-              const handlers = {
-                onMouseEnter: (e: React.MouseEvent) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat }),
-                onMouseMove: (e: React.MouseEvent) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat }),
-                onMouseLeave: () => setHover(null),
-                onClick: () => {
-                  setHover(null);
-                  setSelectedCity(stat);
-                },
-              };
-              return d ? (
+            {statePaths.map((p) => {
+              if (selectedState) {
+                // Drilled into one state — every state stays visible for
+                // geographic context, but only the selected one is tinted;
+                // none are clickable at this level.
+                const isSelected = p.id === STATE_FIPS[selectedState.stateKey];
+                return (
+                  <path
+                    key={p.id}
+                    d={p.d}
+                    fill={isSelected ? TIER_COLOR[selectedState.tier] : STATE_FILL}
+                    fillOpacity={isSelected ? 0.12 : 1}
+                    stroke={STATE_STROKE}
+                    strokeWidth={1}
+                    strokeLinejoin="round"
+                  />
+                );
+              }
+              const stateKey = FIPS_TO_STATE[p.id];
+              const stat = stateKey ? statesByKey.get(stateKey) : undefined;
+              const shown = stat && visibleTiers.has(stat.tier) ? stat : null;
+              return (
                 <path
-                  key={`${stat.cityKey}-${stat.stateKey}`}
-                  d={d}
-                  fill={TIER_COLOR[stat.tier]}
-                  fillOpacity={0.55}
-                  stroke={TIER_COLOR[stat.tier]}
-                  strokeWidth={1.25}
+                  key={p.id}
+                  d={p.d}
+                  fill={shown ? TIER_COLOR[shown.tier] : STATE_FILL}
+                  fillOpacity={shown ? 0.55 : 1}
+                  stroke={STATE_STROKE}
+                  strokeWidth={1}
                   strokeLinejoin="round"
-                  className="cursor-pointer transition-opacity hover:!fill-opacity-80"
-                  {...handlers}
-                />
-              ) : (
-                <circle
-                  key={`${stat.cityKey}-${stat.stateKey}`}
-                  cx={x}
-                  cy={y}
-                  r={r}
-                  fill={TIER_COLOR[stat.tier]}
-                  fillOpacity={0.62}
-                  stroke={TIER_COLOR[stat.tier]}
-                  strokeWidth={1.25}
-                  className="cursor-pointer transition-opacity hover:!fill-opacity-90"
-                  {...handlers}
+                  className={shown ? 'cursor-pointer transition-opacity hover:!fill-opacity-75' : undefined}
+                  onMouseEnter={shown ? (e) => handleEnter(e, { label: shown.state, ...shown }) : undefined}
+                  onMouseMove={shown ? (e) => handleEnter(e, { label: shown.state, ...shown }) : undefined}
+                  onMouseLeave={shown ? () => setHover(null) : undefined}
+                  onClick={
+                    shown
+                      ? () => {
+                          setHover(null);
+                          setSelectedState(shown);
+                        }
+                      : undefined
+                  }
                 />
               );
             })}
           </g>
+          {selectedState && (
+            <g>
+              {plottedCitiesInState.map(({ stat, x, y, r, d }) => {
+                const handlers = {
+                  onMouseEnter: (e: React.MouseEvent) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat }),
+                  onMouseMove: (e: React.MouseEvent) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat }),
+                  onMouseLeave: () => setHover(null),
+                  onClick: () => {
+                    setHover(null);
+                    setSelectedCity(stat);
+                  },
+                };
+                return d ? (
+                  <path
+                    key={`${stat.cityKey}-${stat.stateKey}`}
+                    d={d}
+                    fill={TIER_COLOR[stat.tier]}
+                    fillOpacity={0.55}
+                    stroke={TIER_COLOR[stat.tier]}
+                    strokeWidth={0.6}
+                    strokeLinejoin="round"
+                    className="cursor-pointer transition-opacity hover:!fill-opacity-80"
+                    {...handlers}
+                  />
+                ) : (
+                  <circle
+                    key={`${stat.cityKey}-${stat.stateKey}`}
+                    cx={x}
+                    cy={y}
+                    r={r * 0.4}
+                    fill={TIER_COLOR[stat.tier]}
+                    fillOpacity={0.62}
+                    stroke={TIER_COLOR[stat.tier]}
+                    strokeWidth={0.6}
+                    className="cursor-pointer transition-opacity hover:!fill-opacity-90"
+                    {...handlers}
+                  />
+                );
+              })}
+            </g>
+          )}
         </svg>
       )}
 
@@ -339,11 +442,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
             </button>
           );
         })}
-        <span className="ml-1 text-text-3">
-          {selectedCity
-            ? 'Circle size = leads contacted in this zip · click a circle for details'
-            : 'Shaded by real city boundary where available (circle = boundary not found) · click a city to see its zip codes'}
-        </span>
+        <span className="ml-1 text-text-3">{hintText}</span>
       </div>
     </div>
   );

@@ -367,22 +367,26 @@ export function DashboardView({
     return { totalSpend, tagged, total: leads.length, taggedPct: leads.length > 0 ? (tagged / leads.length) * 100 : 0 };
   }, [marketingSpend, leads]);
 
-  // ── Marketing: which cities/states are actually converting — qualify rate
-  // and reply rate per city, so spend/outreach can be pointed at what's
-  // already working instead of split evenly across everywhere leads happen
-  // to come from. Scoped to contacted-or-beyond leads only (stage !== 'new')
-  // — with ~4k cold, never-approached leads still sitting on the board, a
-  // city's rate needs to be "of the leads we actually reached out to," not
-  // diluted by leads nobody has touched yet. Cities under MIN_LEADS
-  // (contacted leads, not raw lead count) are dropped from the map entirely
-  // — a single lucky/unlucky lead would otherwise swing a city to a 100% or
-  // 0% rate and dominate a tier it doesn't really belong in. Tiers are
-  // relative (top/middle/bottom third of this account's own cities) rather
+  // ── Marketing: which states/cities/zips are actually converting — qualify
+  // rate and reply rate at all three levels, so spend/outreach can be
+  // pointed at what's already working instead of split evenly across
+  // everywhere leads happen to come from. Scoped to contacted-or-beyond
+  // leads only (stage !== 'new') — with ~4k cold, never-approached leads
+  // still sitting on the board, a rate needs to be "of the leads we
+  // actually reached out to," not diluted by leads nobody has touched yet.
+  //
+  // Three nested levels for the map's click-to-drill-down (state -> its
+  // cities -> a city's zips): a STATE's own total/qualified/replied count
+  // every contacted lead in it regardless of city size, so it's never
+  // artificially low just because most of its leads sit in small cities.
+  // Cities and zips both apply a MIN_LEADS=3 floor before getting their own
+  // tier — a single lucky/unlucky lead would otherwise swing one to a 100%
+  // or 0% rate and dominate a tier it doesn't really belong in — and drop
+  // out of their parent's list entirely below that floor. Tiers at every
+  // level are relative (top/middle/bottom third *within that level*, e.g.
+  // a zip ranked against its own city's other zips, not nationally) rather
   // than fixed thresholds, since what counts as "good" varies by business.
-  // Each city also carries its own zip-code breakdown (same MIN_LEADS floor
-  // and same relative tiering, but ranked against that city's OTHER zips,
-  // not nationally) for the map's click-to-drill-down view.
-  const cityStats = useMemo(() => {
+  const stateStats = useMemo(() => {
     const MIN_LEADS = 3;
     if (!showSmsStats) return [];
 
@@ -397,6 +401,10 @@ export function DashboardView({
       string,
       { city: string; state: string; total: number; qualified: number; leadIds: string[]; zipGroups: Map<string, Bucket> }
     >();
+    // Independent of byCity's own MIN_LEADS floor below — a state's total
+    // must reflect every contacted lead in it, not just the ones that
+    // happened to land in a city big enough to get its own tier.
+    const byState = new Map<string, Bucket>();
     for (const l of leads) {
       if (l.stage === 'new') continue; // still cold — never approached
       if (!l.city?.trim() || !l.state?.trim() || l.state.trim().length !== 2) continue;
@@ -412,6 +420,15 @@ export function DashboardView({
       entry.total++;
       entry.leadIds.push(l.id);
       if (isQualified) entry.qualified++;
+
+      let stateEntry = byState.get(stateKey);
+      if (!stateEntry) {
+        stateEntry = { total: 0, qualified: 0, leadIds: [] };
+        byState.set(stateKey, stateEntry);
+      }
+      stateEntry.total++;
+      stateEntry.leadIds.push(l.id);
+      if (isQualified) stateEntry.qualified++;
 
       // Zip is often stored as ZIP+4 ("33610-6838") — normalized to the
       // base 5 digits so both halves of a split zip+4 code count together.
@@ -487,7 +504,26 @@ export function DashboardView({
       .filter((c) => c.total >= MIN_LEADS);
 
     const cityTiers = tierRank(cityRows);
-    return cityRows.map((c) => ({ ...c, tier: cityTiers.get(c)! }));
+    const citiesWithTier = cityRows.map((c) => ({ ...c, tier: cityTiers.get(c)! }));
+
+    const stateRows = Array.from(byState.entries()).map(([stateKey, e]) => {
+      const replied = e.leadIds.filter((id) => repliedLeadIds.has(id)).length;
+      const qualifyRate = e.total > 0 ? e.qualified / e.total : 0;
+      const replyRate = e.total > 0 ? replied / e.total : 0;
+      return {
+        stateKey,
+        state: stateKey,
+        total: e.total,
+        qualified: e.qualified,
+        qualifyRate,
+        replied,
+        replyRate,
+        score: (qualifyRate + replyRate) / 2,
+        cities: citiesWithTier.filter((c) => c.stateKey === stateKey),
+      };
+    });
+    const stateTiers = tierRank(stateRows);
+    return stateRows.map((s) => ({ ...s, tier: stateTiers.get(s)! }));
   }, [leads, inboundMessages, showSmsStats]);
 
   const stats = useMemo(() => {
@@ -1366,12 +1402,12 @@ export function DashboardView({
                 <CardHeader
                   icon={MapIcon}
                   title="City Performance"
-                  sub="Among leads actually contacted (cold, never-approached leads excluded) — where replies and qualifies actually come from"
+                  sub="Among leads actually contacted (cold, never-approached leads excluded) — click a state, then a city, to drill down to zip codes"
                   tone="accent"
                 />
                 <Suspense fallback={<div className="mt-3 flex h-96 items-center justify-center text-[13px] text-text-3">Loading map…</div>}>
                   <div className="mt-3">
-                    <CityPerformanceMap cities={cityStats} />
+                    <CityPerformanceMap states={stateStats} />
                   </div>
                 </Suspense>
               </div>

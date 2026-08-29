@@ -127,4 +127,4 @@ export async function fetchPlaceBoundaries(cities: { city: string; state: string
   return result;
 }
 
-export { key as placeGeoKey };
+export { key as placeGeoKey, STATE_FIPS };
