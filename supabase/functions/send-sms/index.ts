@@ -85,13 +85,31 @@ const nowIso = () => new Date().toISOString();
  * 14:00-01:00 UTC. That lands at 9am-8pm US Eastern and 8am-7pm Central, so
  * every market stays inside 8am-9pm local.
  *
+ * No bulk cold outreach at all on Sunday — but "Sunday" here means the
+ * window that *starts* Sunday 7pm PKT (through Monday 6am PKT), not every
+ * instant that happens to read as a Sunday PKT wall-clock time. Blocking by
+ * literal current-moment weekday would cut Saturday's overnight window
+ * short right at Sunday 00:00 instead of letting it run to 6am as normal —
+ * this blocks by which evening the window *belongs to* instead, so
+ * Saturday's window (spilling into Sunday morning) runs its full course,
+ * and Sunday's window (spilling into Monday morning) is closed outright.
+ *
  * Applies to cold outreach only. AI auto-replies answer whenever the lead
  * writes, since replying to someone who just texted you is not cold contact.
  */
 export function withinSendWindow(now = new Date()): boolean {
   const utcHour = now.getUTCHours();
   // 14:00-23:59 UTC, or 00:00-00:59 UTC (the window crosses midnight UTC).
-  return utcHour >= 14 || utcHour < 1;
+  const inWindow = utcHour >= 14 || utcHour < 1;
+  if (!inWindow) return false;
+
+  // UTC 14:00 is 19:00 Pakistan — never rolls past midnight, so that start
+  // hour's UTC calendar date and Pakistan calendar date are the same date.
+  // The tail end (utcHour < 1) belongs to the window that started at UTC
+  // 14:00 the PREVIOUS UTC day, not today.
+  const windowStartDate = new Date(now);
+  if (utcHour < 1) windowStartDate.setUTCDate(windowStartDate.getUTCDate() - 1);
+  return windowStartDate.getUTCDay() !== 0; // 0 = Sunday
 }
 
 // ── Zoom auth ───────────────────────────────────────────────────────────────

@@ -10,12 +10,23 @@ import { MergeTagButtons } from './MergeTagButtons';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead, Tag } from '@/types/domain';
 
-/** UTC 14:00-01:00 is the 7pm-6am PKT cold-outreach window (see send-sms). */
+/** UTC 14:00-01:00 is the 7pm-6am PKT cold-outreach window (see send-sms).
+ * No bulk sends at all on the window that starts Sunday 7pm PKT (through
+ * Monday 6am PKT) — mirrors send-sms's own withinSendWindow exactly, so
+ * this banner never disagrees with what the backend will actually accept. */
 function withinWindow(): boolean {
-  const h = new Date().getUTCHours();
-  return h >= 14 || h < 1;
+  const now = new Date();
+  const h = now.getUTCHours();
+  const inWindow = h >= 14 || h < 1;
+  if (!inWindow) return false;
+  const windowStartDate = new Date(now);
+  if (h < 1) windowStartDate.setUTCDate(windowStartDate.getUTCDate() - 1);
+  return windowStartDate.getUTCDay() !== 0; // 0 = Sunday
 }
 
+/** Minutes until the next window that will actually be open — skips right
+ * past a Sunday-starting window (always rejected) to Monday's instead of
+ * counting down to an opening that would just get rejected too. */
 function nextWindowOpensIn(): string {
   const now = new Date();
   const utcH = now.getUTCHours();
@@ -23,10 +34,29 @@ function nextWindowOpensIn(): string {
   const minutesNow = utcH * 60 + utcM;
   const opensAt = 14 * 60; // 14:00 UTC
   let diff = opensAt - minutesNow;
-  if (diff <= 0) diff += 24 * 60;
+  let daysAhead = 0;
+  if (diff <= 0) {
+    diff += 24 * 60;
+    daysAhead = 1;
+  }
+  const windowStartDate = new Date(now);
+  windowStartDate.setUTCDate(windowStartDate.getUTCDate() + daysAhead);
+  if (windowStartDate.getUTCDay() === 0) diff += 24 * 60; // push past Sunday's closed window
   const h = Math.floor(diff / 60);
   const m = diff % 60;
   return `${h}h ${m}m`;
+}
+
+/** True specifically when it's the hour-of-day the window would normally be
+ * open, but it's closed anyway because this is Sunday's window — lets the
+ * banner say *why* instead of just a countdown that doesn't explain itself. */
+function closedForSunday(): boolean {
+  const now = new Date();
+  const h = now.getUTCHours();
+  if (!(h >= 14 || h < 1)) return false; // wrong hour entirely, not a Sunday-specific closure
+  const windowStartDate = new Date(now);
+  if (h < 1) windowStartDate.setUTCDate(windowStartDate.getUTCDate() - 1);
+  return windowStartDate.getUTCDay() === 0;
 }
 
 export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[]; onClose: () => void }) {
@@ -156,8 +186,11 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
             <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[13px] text-warning">
               <AlertTriangle size={15} className="mt-0.5 shrink-0" />
               <div>
-                Outside the cold-outreach window (7pm-6am Pakistan time). Opens in {nextWindowOpensIn()}. The send
-                will be rejected until then — this only applies to bulk sends, not AI replies to inbound texts.
+                {closedForSunday()
+                  ? "Bulk sends don't run on Sundays."
+                  : 'Outside the cold-outreach window (7pm-6am Pakistan time).'}{' '}
+                Opens in {nextWindowOpensIn()}. The send will be rejected until then — this only applies to bulk
+                sends, not AI replies to inbound texts.
               </div>
             </div>
           )}

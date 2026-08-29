@@ -58,7 +58,17 @@ const BATCH_SIZE = 100;
 
 export function withinSendWindow(now = new Date()): boolean {
   const utcHour = now.getUTCHours();
-  return utcHour >= 14 || utcHour < 1;
+  const inWindow = utcHour >= 14 || utcHour < 1;
+  if (!inWindow) return false;
+
+  // See send-sms's own copy of this function for the full explanation —
+  // blocks by which evening the window *started* (Sunday 7pm-Monday 6am
+  // PKT closed outright) rather than by the current PKT wall-clock weekday,
+  // so Saturday's overnight window still runs its full course into Sunday
+  // morning instead of getting cut short at Sunday 00:00.
+  const windowStartDate = new Date(now);
+  if (utcHour < 1) windowStartDate.setUTCDate(windowStartDate.getUTCDate() - 1);
+  return windowStartDate.getUTCDay() !== 0; // 0 = Sunday
 }
 
 // ── Zoom auth (verbatim copy of send-sms's own) ──────────────────────────────

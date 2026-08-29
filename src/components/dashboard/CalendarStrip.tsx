@@ -194,6 +194,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
         month: d.toLocaleDateString([], { month: 'short' }),
         dayNum: d.getDate(),
         isToday: i === 0,
+        dow: d.getDay(), // 0 = Sunday
       };
     });
   }, []);
@@ -252,6 +253,22 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
         overdue: t.dueDate < todayIso,
         taskId: t.id,
         completed: t.completed,
+      });
+    }
+
+    // Standing reminder, not a real DB task — Bulk SMS runs 6 days a week
+    // and never on Sunday (see send-sms's withinSendWindow, which actually
+    // enforces that at send time), so this shows on every day except Sunday
+    // rather than needing a recurring row someone has to keep creating.
+    for (const d of days) {
+      if (d.dow === 0) continue;
+      map.get(d.iso)!.push({
+        id: `bulk-sms-reminder-${d.iso}`,
+        kind: 'task',
+        time: null,
+        title: 'Run Bulk SMS',
+        href: '/bulk-sms',
+        overdue: false,
       });
     }
 
