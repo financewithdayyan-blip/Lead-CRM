@@ -159,7 +159,14 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
     return () => {
       cancelled = true;
     };
-  }, [cities]);
+    // Keyed on the cities' own identities (not the `cities` array reference)
+    // — DashboardPage recomputes cityStats as a fresh array on unrelated
+    // re-renders (date range, SMS range, any other dashboard state), which
+    // was re-triggering this fetch (and cancelling the previous one, via
+    // the cleanup above) before it ever got a chance to resolve, so
+    // placeBoundaries stayed empty and every city fell back to a circle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(cities.map((c) => c.cityKey + c.stateKey))]);
 
   const { statePaths, project, pathGen } = useMemo(() => {
     const topology = usStates as unknown as Topology;
