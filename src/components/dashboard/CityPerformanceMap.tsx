@@ -181,21 +181,35 @@ export function CityPerformanceMap({ states }: { states: StateStat[] }) {
   }, [JSON.stringify(allCities.map((c) => c.cityKey + c.stateKey)), cityGeocodes.size]);
 
   useEffect(() => {
-    if (allCities.length === 0) return;
+    const cities = selectedState?.cities ?? [];
+    if (cities.length === 0) return;
     let cancelled = false;
-    fetchPlaceBoundaries(allCities.map((c) => ({ city: c.city, state: c.state }))).then((found) => {
-      if (!cancelled) setPlaceBoundaries(found);
+    fetchPlaceBoundaries(cities.map((c) => ({ city: c.city, state: c.state }))).then((found) => {
+      // Merged, not replaced — going back to a previously-viewed state
+      // shouldn't drop the boundaries it already resolved (the module-level
+      // cache in placeBoundaries.ts makes the re-fetch instant anyway, but
+      // there's no reason to blank the map while it resolves).
+      if (!cancelled) setPlaceBoundaries((prev) => new Map([...prev, ...found]));
     });
     return () => {
       cancelled = true;
     };
-    // Keyed on the cities' own identities, not the `allCities` array
+    // Scoped to just the SELECTED state's cities, fetched on demand, rather
+    // than every city across every state up front — TIGERweb requests were
+    // all "parallel" at the JS level but still serialize behind the
+    // browser's per-host connection cap once an account spans ~29 states, so
+    // whichever state a user actually clicked into could sit stuck behind
+    // dozens of requests for states nobody was looking at, still rendering
+    // as plain circles well after the click. Fetching only on selection
+    // means at most a handful of requests are ever in flight at once.
+    //
+    // Keyed on the cities' own identities, not the `selectedState` object
     // reference — DashboardPage recomputes stateStats as a fresh array on
     // unrelated re-renders (date range, SMS range, any of the several
     // refetchInterval/realtime hooks elsewhere on the page), which would
     // otherwise cancel an in-flight fetch and restart it every time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(allCities.map((c) => c.cityKey + c.stateKey))]);
+  }, [selectedState ? JSON.stringify(selectedState.cities.map((c) => c.cityKey + c.stateKey)) : null]);
 
   const { statePaths, stateFeaturesByFips, project, pathGen } = useMemo(() => {
     const topology = usStates as unknown as Topology;
