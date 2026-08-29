@@ -81,49 +81,48 @@ function AiScoreCard({ lead }: { lead: Lead }) {
   );
 }
 
-function ShareLeadButton({ leadId, stage }: { leadId: string; stage: LeadStage }) {
-  const { data: pendingShare } = useMyPendingShareForLead(leadId);
-  const shareLead = useShareLead();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  if (pendingShare) {
-    return <span className="text-[12px] font-medium text-warning">Pending admin approval</span>;
-  }
-
-  return (
-    <>
-      <button className="btn !py-1.5 text-[12px]" onClick={() => setConfirmOpen(true)}>
-        <Share2 size={13} /> Share with Admin
-      </button>
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Share this lead?"
-        message={`Your admin will be notified and can accept or decline. If accepted, this lead (currently in ${STAGE_CONFIG[stage].label} stage) moves into their pipeline.`}
-        confirmLabel="Share"
-        onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          shareLead.mutate({ leadId, stage });
-          setConfirmOpen(false);
-        }}
-      />
-    </>
-  );
-}
-
-function AdminShareToCallerButton({
+function ShareWithAdminDialog({
   leadId,
   stage,
-  currentOwnerId,
+  open,
+  onClose,
 }: {
   leadId: string;
   stage: LeadStage;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const shareLead = useShareLead();
+  return (
+    <ConfirmDialog
+      open={open}
+      title="Share this lead?"
+      message={`Your admin will be notified and can accept or decline. If accepted, this lead (currently in ${STAGE_CONFIG[stage].label} stage) moves into their pipeline.`}
+      confirmLabel="Share"
+      onCancel={onClose}
+      onConfirm={() => {
+        shareLead.mutate({ leadId, stage });
+        onClose();
+      }}
+    />
+  );
+}
+
+function TransferLeadModal({
+  leadId,
+  currentOwnerId,
+  open,
+  onClose,
+}: {
+  leadId: string;
   currentOwnerId: string;
+  open: boolean;
+  onClose: () => void;
 }) {
   const { data: teamMembers = [] } = useTeamMembers();
   const { profile } = useAuth();
   const adminShare = useAdminShareLeadToCaller();
   const transferToAdmin = useTransferLeadToAdmin();
-  const [open, setOpen] = useState(false);
   const [selectedCallerId, setSelectedCallerId] = useState('');
 
   const callers = teamMembers
@@ -141,94 +140,157 @@ function AdminShareToCallerButton({
   // already the current owner.
   const canTransferToSelf = !!profile?.id && profile.id !== currentOwnerId;
 
+  function handleClose() {
+    setSelectedCallerId('');
+    onClose();
+  }
+
   function handleShare() {
     if (!selectedCallerId) return;
     if (selectedCallerId === '__self__') {
-      transferToAdmin.mutate(leadId, {
-        onSuccess: () => {
-          setOpen(false);
-          setSelectedCallerId('');
-        },
-      });
+      transferToAdmin.mutate(leadId, { onSuccess: handleClose });
       return;
     }
-    adminShare.mutate(
-      { leadId, toUserId: selectedCallerId },
-      {
-        onSuccess: () => {
-          setOpen(false);
-          setSelectedCallerId('');
-        },
-      },
-    );
+    adminShare.mutate({ leadId, toUserId: selectedCallerId }, { onSuccess: handleClose });
   }
 
+  if (!open) return null;
+
   return (
-    <>
-      <button className="btn !py-1.5 text-[12px]" onClick={() => setOpen(true)}>
-        <ArrowRightLeft size={13} /> Transfer Lead
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleClose}>
+      <div className="card w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="text-sm font-semibold text-text">Transfer this lead</div>
+        <select className="input text-[13px]" value={selectedCallerId} onChange={(e) => setSelectedCallerId(e.target.value)}>
+          <option value="">Select a team member…</option>
+          {canTransferToSelf && <option value="__self__">Myself</option>}
+          {otherAdmins.length > 0 && (
+            <optgroup label="Admins">
+              {otherAdmins.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.fullName || c.email}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {callers.length > 0 && (
+            <optgroup label="Callers">
+              {callers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.fullName || c.email}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        {callers.length === 0 && otherAdmins.length === 0 && !canTransferToSelf && (
+          <p className="text-[12px] text-text-3">No other team members to transfer to.</p>
+        )}
+        <p className="text-[12px] text-text-3">This lead will be transferred to the selected team member immediately.</p>
+        {(adminShare.isError || transferToAdmin.isError) && (
+          <p className="text-[12px] text-danger">Transfer failed. Please try again.</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button className="btn text-[12px]" onClick={handleClose}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary text-[12px]"
+            disabled={!selectedCallerId || adminShare.isPending || transferToAdmin.isPending}
+            onClick={handleShare}
+          >
+            {adminShare.isPending || transferToAdmin.isPending ? 'Transferring…' : 'Transfer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One icon button standing in for what used to be two separate buttons
+ * ("Share with Admin", "Transfer Lead") — a caller sees "Share with Admin"
+ * (asks their admin to approve taking this lead), an admin sees "Share with
+ * Callers" (reassigns it immediately, no approval needed); an admin viewing
+ * their own lead sees both, since this same page serves every role. */
+function ShareMenu({
+  leadId,
+  stage,
+  isAdmin,
+  allowShare,
+  currentOwnerId,
+}: {
+  leadId: string;
+  stage: LeadStage;
+  isAdmin: boolean;
+  allowShare: boolean;
+  currentOwnerId: string;
+}) {
+  const { data: pendingShare } = useMyPendingShareForLead(leadId);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [menuOpen]);
+
+  const showShareWithAdmin = allowShare && !pendingShare;
+  const showTransfer = isAdmin;
+  if (!showShareWithAdmin && !showTransfer && !pendingShare) return null;
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setMenuOpen((o) => !o)}
+        className="btn !p-2"
+        title={pendingShare ? 'Pending admin approval' : 'Share this lead'}
+      >
+        <Share2 size={15} className={pendingShare ? 'text-warning' : undefined} />
       </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
-          <div className="card w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="text-sm font-semibold text-text">Transfer this lead</div>
-            <select
-              className="input text-[13px]"
-              value={selectedCallerId}
-              onChange={(e) => setSelectedCallerId(e.target.value)}
-            >
-              <option value="">Select a team member…</option>
-              {canTransferToSelf && <option value="__self__">Myself</option>}
-              {otherAdmins.length > 0 && (
-                <optgroup label="Admins">
-                  {otherAdmins.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.fullName || c.email}
-                    </option>
-                  ))}
-                </optgroup>
+      {menuOpen && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-lg border border-border-2 bg-surface shadow-lg">
+          {pendingShare ? (
+            <div className="px-3 py-2.5 text-[12px] font-medium text-warning">Pending admin approval</div>
+          ) : (
+            <>
+              {showShareWithAdmin && (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-text hover:bg-surface-2"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setShareDialogOpen(true);
+                  }}
+                >
+                  <Share2 size={13} /> Share with Admin
+                </button>
               )}
-              {callers.length > 0 && (
-                <optgroup label="Callers">
-                  {callers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.fullName || c.email}
-                    </option>
-                  ))}
-                </optgroup>
+              {showTransfer && (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-text hover:bg-surface-2"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setTransferOpen(true);
+                  }}
+                >
+                  <ArrowRightLeft size={13} /> Share with Callers
+                </button>
               )}
-            </select>
-            {callers.length === 0 && otherAdmins.length === 0 && !canTransferToSelf && (
-              <p className="text-[12px] text-text-3">No other team members to transfer to.</p>
-            )}
-            <p className="text-[12px] text-text-3">
-              This lead will be transferred to the selected team member immediately.
-            </p>
-            {(adminShare.isError || transferToAdmin.isError) && (
-              <p className="text-[12px] text-danger">Transfer failed. Please try again.</p>
-            )}
-            <div className="flex justify-end gap-2">
-              <button
-                className="btn text-[12px]"
-                onClick={() => {
-                  setOpen(false);
-                  setSelectedCallerId('');
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary text-[12px]"
-                disabled={!selectedCallerId || adminShare.isPending || transferToAdmin.isPending}
-                onClick={handleShare}
-              >
-                {adminShare.isPending || transferToAdmin.isPending ? 'Transferring…' : 'Transfer'}
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       )}
-    </>
+      {showShareWithAdmin && (
+        <ShareWithAdminDialog leadId={leadId} stage={stage} open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} />
+      )}
+      {showTransfer && (
+        <TransferLeadModal leadId={leadId} currentOwnerId={currentOwnerId} open={transferOpen} onClose={() => setTransferOpen(false)} />
+      )}
+    </div>
   );
 }
 
@@ -518,9 +580,12 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
 
   return (
     <div>
-      <button onClick={() => navigate(backTo)} className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-text-3 hover:text-text">
-        <ArrowLeft size={14} /> Back to Leads
-      </button>
+      <div className="mb-4 flex items-center justify-between">
+        <button onClick={() => navigate(backTo)} className="inline-flex items-center gap-1.5 text-[13px] text-text-3 hover:text-text">
+          <ArrowLeft size={14} /> Back to Leads
+        </button>
+        <ShareMenu leadId={lead.id} stage={lead.stage} isAdmin={isAdmin} allowShare={allowShare} currentOwnerId={lead.userId} />
+      </div>
 
       <div className="card mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -580,14 +645,6 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 ));
               })()}
             </select>
-            {allowShare && <ShareLeadButton leadId={lead.id} stage={lead.stage} />}
-            {isAdmin && (
-              <AdminShareToCallerButton
-                leadId={lead.id}
-                stage={lead.stage}
-                currentOwnerId={lead.userId}
-              />
-            )}
           </div>
         </div>
 
