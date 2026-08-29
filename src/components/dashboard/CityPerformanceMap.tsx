@@ -7,6 +7,7 @@ import usStates from 'us-atlas/states-10m.json';
 import { geocodeAddress } from '@/lib/geocode';
 import { useCityGeocodes, useUpsertCityGeocode, cityGeoKey } from '@/hooks/useCityGeocodes';
 import { useZipGeocodes } from '@/hooks/useZipGeocodes';
+import { fetchPlaceBoundaries, placeGeoKey, type PlaceGeometry } from '@/lib/placeBoundaries';
 import { CityZipMap } from './CityZipMap';
 
 export type Tier = 'green' | 'yellow' | 'red';
@@ -76,6 +77,12 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
  * gets geocoded here in the background and written back so every later
  * load (any user) has it without hitting the free geocoders again.
  *
+ * Cities are shaded by their own real municipal boundary (from TIGERweb's
+ * Incorporated Places, falling back to Census Designated Places) rather
+ * than a plain circle — the same choropleth-by-real-shape treatment the
+ * zip drill-down already uses, just one level up. A city TIGERweb has
+ * neither for falls back to a circle at its geocoded point.
+ *
  * Clicking a city swaps this stylized overview for CityZipMap — a real,
  * tile-based street map — since telling a city's own zip codes apart needs
  * actual road/neighborhood context this map's national-scale abstraction
@@ -89,6 +96,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
   const [hover, setHover] = useState<{ label: string; tier: Tier; total: number; qualified: number; qualifyRate: number; replied: number; replyRate: number; x: number; y: number } | null>(null);
   const [visibleTiers, setVisibleTiers] = useState<Set<Tier>>(new Set(ALL_TIERS));
   const [selectedCity, setSelectedCity] = useState<CityStat | null>(null);
+  const [placeBoundaries, setPlaceBoundaries] = useState<Map<string, PlaceGeometry>>(new Map());
   const svgRef = useRef<SVGSVGElement>(null);
 
   function toggleTier(tier: Tier) {
@@ -120,14 +128,25 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(cities.map((c) => c.cityKey + c.stateKey)), cityGeocodes.size]);
 
-  const { statePaths, project } = useMemo(() => {
+  useEffect(() => {
+    if (cities.length === 0) return;
+    let cancelled = false;
+    fetchPlaceBoundaries(cities.map((c) => ({ city: c.city, state: c.state }))).then((found) => {
+      if (!cancelled) setPlaceBoundaries(found);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cities]);
+
+  const { statePaths, project, pathGen } = useMemo(() => {
     const topology = usStates as unknown as Topology;
     const geo = feature(topology, topology.objects.states as GeometryCollection);
     const features = 'features' in geo ? geo.features : [geo];
     const projection = geoAlbersUsa().fitSize([WIDTH, HEIGHT], geo as any);
-    const pathGen = geoPath(projection);
-    const paths = features.map((f) => ({ id: String(f.id), d: pathGen(f as any) ?? '' })).filter((p) => p.d);
-    return { statePaths: paths, project: (lng: number, lat: number) => projection([lng, lat]) };
+    const pathGenerator = geoPath(projection);
+    const paths = features.map((f) => ({ id: String(f.id), d: pathGenerator(f as any) ?? '' })).filter((p) => p.d);
+    return { statePaths: paths, project: (lng: number, lat: number) => projection([lng, lat]), pathGen: pathGenerator };
   }, []);
 
   const cityTierCounts = useMemo(() => {
@@ -146,13 +165,15 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
         if (!geo) return null;
         const point = project(geo.lng, geo.lat);
         if (!point) return null;
-        return { stat, x: point[0], y: point[1], r: radiusFor(stat.total) };
+        const boundary = placeBoundaries.get(placeGeoKey(stat.city, stat.state));
+        const d = boundary ? pathGen(boundary as any) : null;
+        return { stat, x: point[0], y: point[1], r: radiusFor(stat.total), d };
       })
-      .filter((p): p is { stat: CityStat; x: number; y: number; r: number } => p !== null)
-      // Smaller circles drawn last so a big city's bubble never fully buries a
+      .filter((p): p is { stat: CityStat; x: number; y: number; r: number; d: string | null } => p !== null)
+      // Smaller circles/shapes drawn last so a big city never fully buries a
       // small nearby one.
       .sort((a, b) => b.r - a.r);
-  }, [cities, cityGeocodes, project, visibleTiers]);
+  }, [cities, cityGeocodes, project, pathGen, placeBoundaries, visibleTiers]);
 
   const zipTierCounts = useMemo(() => {
     const counts: Record<Tier, number> = { green: 0, yellow: 0, red: 0 };
@@ -205,26 +226,43 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
             ))}
           </g>
           <g>
-            {plottedCities.map(({ stat, x, y, r }) => (
-              <circle
-                key={`${stat.cityKey}-${stat.stateKey}`}
-                cx={x}
-                cy={y}
-                r={r}
-                fill={TIER_COLOR[stat.tier]}
-                fillOpacity={0.62}
-                stroke={TIER_COLOR[stat.tier]}
-                strokeWidth={1.25}
-                onMouseEnter={(e) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat })}
-                onMouseMove={(e) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat })}
-                onMouseLeave={() => setHover(null)}
-                onClick={() => {
+            {plottedCities.map(({ stat, x, y, r, d }) => {
+              const handlers = {
+                onMouseEnter: (e: React.MouseEvent) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat }),
+                onMouseMove: (e: React.MouseEvent) => handleEnter(e, { label: `${stat.city}, ${stat.state}`, ...stat }),
+                onMouseLeave: () => setHover(null),
+                onClick: () => {
                   setHover(null);
                   setSelectedCity(stat);
-                }}
-                className="cursor-pointer transition-opacity hover:!fill-opacity-90"
-              />
-            ))}
+                },
+              };
+              return d ? (
+                <path
+                  key={`${stat.cityKey}-${stat.stateKey}`}
+                  d={d}
+                  fill={TIER_COLOR[stat.tier]}
+                  fillOpacity={0.55}
+                  stroke={TIER_COLOR[stat.tier]}
+                  strokeWidth={1.25}
+                  strokeLinejoin="round"
+                  className="cursor-pointer transition-opacity hover:!fill-opacity-80"
+                  {...handlers}
+                />
+              ) : (
+                <circle
+                  key={`${stat.cityKey}-${stat.stateKey}`}
+                  cx={x}
+                  cy={y}
+                  r={r}
+                  fill={TIER_COLOR[stat.tier]}
+                  fillOpacity={0.62}
+                  stroke={TIER_COLOR[stat.tier]}
+                  strokeWidth={1.25}
+                  className="cursor-pointer transition-opacity hover:!fill-opacity-90"
+                  {...handlers}
+                />
+              );
+            })}
           </g>
         </svg>
       )}
@@ -273,7 +311,9 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
           );
         })}
         <span className="ml-1 text-text-3">
-          {selectedCity ? 'Circle size = leads contacted in this zip · click a circle for details' : 'Circle size = leads contacted · click a city to see its zip codes'}
+          {selectedCity
+            ? 'Circle size = leads contacted in this zip · click a circle for details'
+            : 'Shaded by real city boundary where available (circle = boundary not found) · click a city to see its zip codes'}
         </span>
       </div>
     </div>
