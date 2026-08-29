@@ -1,11 +1,9 @@
 import {
   Area,
-  AreaChart,
   CartesianGrid,
-  Legend,
+  ComposedChart,
   ResponsiveContainer,
   Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -21,40 +19,66 @@ interface ActivityTrendPoint {
   qualified: number;
 }
 
+const SENT_COLOR = '#0891b2';
+const REPLIES_COLOR = '#22d3ee';
 const QUALIFIED_COLOR = '#a78bfa';
 
-// Two stacked recharts instances sharing the same `data` array, categorical
-// XAxis dataKey, and left/right margins — recharts computes identical band
-// positions for each in both, so the bubble strip's dots line up under the
-// exact day they belong to without any manual pixel math.
-//
-// Newly Qualified is deliberately not a third line here: its daily count
-// (typically 0-4) is invisible next to SMS Sent (up to several hundred) on
-// a shared y-scale — a real dual-magnitude problem, not a color problem.
-// Encoding it as bubble size in its own lane instead means it reads
-// regardless of how big the SMS/Replies numbers are.
+function StatHead({ color, label, value }: { color: string; label: string; value: number | string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="text-[11px] text-text-3">{label}</span>
+      <span className="font-mono text-[15px] font-bold text-text">{value.toLocaleString()}</span>
+    </div>
+  );
+}
+
+/** One chart for the whole pipeline, styled the same way as Revenue in
+ * Pipeline — thin 2px lines, no dot on every point, a light ~10% fill wash
+ * — with period totals up top standing in for a legend (a dot + label +
+ * number per series reads as both at once).
+ *
+ * Newly Qualified rides directly on the chart as bubbles on the Replies
+ * line (bigger bubble = more leads qualified that day, no bubble = zero)
+ * rather than a third line or a separate strip below — its size is the
+ * whole encoding, so it never needs its own y-scale the way a line would,
+ * and sitting on the Replies point tells the real story: no reply, no
+ * qualifying happens. All three series share one ComposedChart/data array,
+ * so a bubble's x-position can't drift from its real date. */
 export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) {
   const ct = useChartTheme();
   const maxQualified = Math.max(1, ...data.map((d) => d.qualified));
+  const totalSent = data.reduce((s, d) => s + d.sent, 0);
+  const totalReplies = data.reduce((s, d) => s + d.replies, 0);
+  const totalQualified = data.reduce((s, d) => s + d.qualified, 0);
 
   return (
     <div>
-      <ResponsiveContainer width="100%" height={230}>
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <StatHead color={SENT_COLOR} label="SMS Sent" value={totalSent} />
+        <StatHead color={REPLIES_COLOR} label="Replies" value={totalReplies} />
+        <StatHead color={QUALIFIED_COLOR} label="Newly Qualified" value={totalQualified} />
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
           <defs>
-            {[
-              ['gSent', '#0891b2'],
-              ['gReplies', '#22d3ee'],
-            ].map(([id, color]) => (
-              <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.32} />
-                <stop offset="100%" stopColor={color} stopOpacity={0.02} />
-              </linearGradient>
-            ))}
+            <linearGradient id="gSent" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={SENT_COLOR} stopOpacity={0.12} />
+              <stop offset="100%" stopColor={SENT_COLOR} stopOpacity={0.01} />
+            </linearGradient>
+            <linearGradient id="gReplies" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={REPLIES_COLOR} stopOpacity={0.12} />
+              <stop offset="100%" stopColor={REPLIES_COLOR} stopOpacity={0.01} />
+            </linearGradient>
           </defs>
           <CartesianGrid stroke={ct.gridStroke} vertical={false} />
           <XAxis dataKey="label" stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} />
-          <YAxis stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
+          <YAxis stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
+          {/* Zero-qualified days stay in the Scatter's own data (area 0,
+              invisible) rather than being filtered out — that keeps every
+              bubble's index-aligned with the real day it belongs to. */}
+          <ZAxis dataKey="qualified" domain={[0, maxQualified]} range={[0, 450]} />
           <Tooltip
             cursor={{ stroke: ct.axisStroke, strokeWidth: 1, strokeDasharray: '4 4' }}
             contentStyle={{
@@ -67,64 +91,46 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
               color: ct.textFill,
             }}
             itemStyle={{ padding: '1px 0' }}
+            // The bubble's own y-value is borrowed from "replies" so it sits
+            // on that line — its tooltip line has to read the real
+            // qualified count back out of the point's own payload instead.
+            formatter={(value: number, name: string, entry: any) =>
+              name === 'Newly Qualified' ? [entry?.payload?.qualified ?? 0, name] : [value, name]
+            }
           />
-          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
           <Area
             type="linear"
             dataKey="sent"
             name="SMS Sent"
-            stroke="#0891b2"
+            stroke={SENT_COLOR}
             fill="url(#gSent)"
-            strokeWidth={2.5}
-            dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#0ea5e9' }}
-            activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-            animationDuration={600}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
+            animationDuration={500}
           />
           <Area
             type="linear"
             dataKey="replies"
             name="Replies"
-            stroke="#22d3ee"
+            stroke={REPLIES_COLOR}
             fill="url(#gReplies)"
-            strokeWidth={2.5}
-            dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#22d3ee' }}
-            activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
-            animationDuration={600}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
+            animationDuration={500}
           />
-        </AreaChart>
-      </ResponsiveContainer>
-
-      <div className="mt-1 flex items-center gap-1.5 pl-1 text-[10.5px] text-text-3">
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: QUALIFIED_COLOR }} />
-        Newly Qualified — bubble size is how many that day (largest = {maxQualified})
-      </div>
-      <ResponsiveContainer width="100%" height={44}>
-        <ScatterChart margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-          {/* Every day goes into the Scatter, including the zero-qualified
-              ones — not just for that XAxis category domain to exactly
-              match the chart above (dropping zero days here would shrink
-              the domain and throw off the alignment), a zero-value point
-              also just renders at area 0, invisibly, via the ZAxis range
-              floor below, so it costs nothing to include. */}
-          <XAxis dataKey="label" type="category" allowDuplicatedCategory={false} hide />
-          <YAxis type="number" dataKey="y" domain={[0, 1]} hide />
-          <ZAxis type="number" dataKey="qualified" domain={[0, maxQualified]} range={[0, 500]} />
-          <Tooltip
-            cursor={false}
-            contentStyle={{
-              background: ct.tooltipBg,
-              border: `1px solid ${ct.tooltipBorder}`,
-              borderRadius: 10,
-              fontSize: 12,
-              boxShadow: '0 10px 25px -8px rgba(11,30,51,0.25)',
-              padding: '8px 12px',
-              color: ct.textFill,
-            }}
-            formatter={(value: number) => [value, 'Newly qualified']}
-            labelFormatter={(label) => label}
+          <Scatter
+            data={data.map((d) => ({ label: d.label, y: d.replies, qualified: d.qualified }))}
+            dataKey="y"
+            name="Newly Qualified"
+            fill={QUALIFIED_COLOR}
+            fillOpacity={0.6}
+            stroke={QUALIFIED_COLOR}
+            strokeWidth={1}
+            isAnimationActive={false}
           />
-          <Scatter data={data.map((d) => ({ label: d.label, y: 0.5, qualified: d.qualified }))} fill={QUALIFIED_COLOR} fillOpacity={0.75} />
-        </ScatterChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
