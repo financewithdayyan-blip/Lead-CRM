@@ -11,6 +11,7 @@ import {
   FileSignature,
   Flame,
   Gauge,
+  Map as MapIcon,
   Medal,
   Megaphone,
   MessageSquare,
@@ -57,6 +58,9 @@ const SMS_RANGE_OPTIONS: { key: SmsRangeKey; label: string }[] = [
 
 const PipelineActivityChart = lazy(() =>
   import('@/components/dashboard/PipelineActivityChart').then((m) => ({ default: m.PipelineActivityChart })),
+);
+const CityPerformanceMap = lazy(() =>
+  import('@/components/dashboard/CityPerformanceMap').then((m) => ({ default: m.CityPerformanceMap })),
 );
 const PipelineFunnel = lazy(() =>
   import('@/components/dashboard/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
@@ -362,6 +366,71 @@ export function DashboardView({
     const tagged = leads.filter((l) => l.source && l.source.trim()).length;
     return { totalSpend, tagged, total: leads.length, taggedPct: leads.length > 0 ? (tagged / leads.length) * 100 : 0 };
   }, [marketingSpend, leads]);
+
+  // ── Marketing: which cities/states are actually converting — qualify rate
+  // and reply rate per city, so spend/outreach can be pointed at what's
+  // already working instead of split evenly across everywhere leads happen
+  // to come from. Cities under MIN_LEADS are dropped from the map entirely —
+  // a single lucky/unlucky lead would otherwise swing a city to a 100% or 0%
+  // rate and dominate a tier it doesn't really belong in. Tiers are relative
+  // (top/middle/bottom third of this account's own cities) rather than fixed
+  // thresholds, since what counts as "good" varies by business and volume.
+  const cityStats = useMemo(() => {
+    const MIN_LEADS = 3;
+    if (!showSmsStats) return [];
+
+    const repliedLeadIds = new Set(inboundMessages.filter((m) => !m.isReaction && m.leadId).map((m) => m.leadId as string));
+
+    const byCity = new Map<
+      string,
+      { city: string; state: string; total: number; qualified: number; leadIds: string[] }
+    >();
+    for (const l of leads) {
+      if (!l.city?.trim() || !l.state?.trim() || l.state.trim().length !== 2) continue;
+      const cityKey = l.city.trim().toLowerCase();
+      const stateKey = l.state.trim().toUpperCase();
+      const key = `${cityKey}|${stateKey}`;
+      let entry = byCity.get(key);
+      if (!entry) {
+        entry = { city: l.city.trim(), state: stateKey, total: 0, qualified: 0, leadIds: [] };
+        byCity.set(key, entry);
+      }
+      entry.total++;
+      entry.leadIds.push(l.id);
+      if (QUALIFIED_PLUS_STAGES.includes(l.stage)) entry.qualified++;
+    }
+
+    const withRates = Array.from(byCity.entries())
+      .map(([key, e]) => {
+        const [cityKey, stateKey] = key.split('|');
+        const replied = e.leadIds.filter((id) => repliedLeadIds.has(id)).length;
+        const qualifyRate = e.total > 0 ? e.qualified / e.total : 0;
+        const replyRate = e.total > 0 ? replied / e.total : 0;
+        return {
+          cityKey,
+          stateKey,
+          city: e.city,
+          state: e.state,
+          total: e.total,
+          qualified: e.qualified,
+          qualifyRate,
+          replied,
+          replyRate,
+          score: (qualifyRate + replyRate) / 2,
+        };
+      })
+      .filter((c) => c.total >= MIN_LEADS);
+
+    const ranked = [...withRates].sort((a, b) => b.score - a.score);
+    const n = ranked.length;
+    const tierByKey = new Map<string, 'green' | 'yellow' | 'red'>();
+    ranked.forEach((c, i) => {
+      const pos = n > 1 ? i / (n - 1) : 0;
+      tierByKey.set(`${c.cityKey}|${c.stateKey}`, pos <= 1 / 3 ? 'green' : pos <= 2 / 3 ? 'yellow' : 'red');
+    });
+
+    return withRates.map((c) => ({ ...c, tier: tierByKey.get(`${c.cityKey}|${c.stateKey}`)! }));
+  }, [leads, inboundMessages, showSmsStats]);
 
   const stats = useMemo(() => {
     const total = leads.length;
@@ -1233,6 +1302,20 @@ export function DashboardView({
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="card chart-layer mt-3">
+                <CardHeader
+                  icon={MapIcon}
+                  title="City Performance"
+                  sub="Where qualified leads and replies actually come from — target these cities/states, not just wherever leads happen to land"
+                  tone="accent"
+                />
+                <Suspense fallback={<div className="mt-3 flex h-96 items-center justify-center text-[13px] text-text-3">Loading map…</div>}>
+                  <div className="mt-3">
+                    <CityPerformanceMap cities={cityStats} />
+                  </div>
+                </Suspense>
               </div>
             </div>
           )}
