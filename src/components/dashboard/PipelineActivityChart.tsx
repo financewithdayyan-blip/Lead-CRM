@@ -19,7 +19,7 @@ interface ActivityTrendPoint {
   qualified: number;
 }
 
-const SENT_COLOR = '#0891b2';
+const SENT_COLOR = '#f97316';
 const REPLIES_COLOR = '#22d3ee';
 const QUALIFIED_COLOR = '#a78bfa';
 
@@ -51,6 +51,12 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
   const totalSent = data.reduce((s, d) => s + d.sent, 0);
   const totalReplies = data.reduce((s, d) => s + d.replies, 0);
   const totalQualified = data.reduce((s, d) => s + d.qualified, 0);
+  // Computed explicitly (not left to recharts' 'auto') and given 15% headroom
+  // above the true peak — Sent and Replies share one Y axis, so a domain
+  // sized only to Replies clipped Sent's much taller peaks off the top of
+  // the plot area.
+  const yMax = Math.max(1, ...data.map((d) => Math.max(d.sent, d.replies)));
+  const yDomainTop = Math.ceil((yMax * 1.15) / 10) * 10;
 
   return (
     <div>
@@ -74,7 +80,15 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
           </defs>
           <CartesianGrid stroke={ct.gridStroke} vertical={false} />
           <XAxis dataKey="label" stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} />
-          <YAxis stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
+          <YAxis
+            stroke={ct.axisStroke}
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+            allowDecimals={false}
+            width={32}
+            domain={[0, yDomainTop]}
+          />
           {/* Zero-qualified days stay in the Scatter's own data (area 0,
               invisible) rather than being filtered out — that keeps every
               bubble's index-aligned with the real day it belongs to. */}
