@@ -7,6 +7,7 @@ import usStates from 'us-atlas/states-10m.json';
 import { geocodeAddress } from '@/lib/geocode';
 import { useCityGeocodes, useUpsertCityGeocode, cityGeoKey } from '@/hooks/useCityGeocodes';
 import { useZipGeocodes } from '@/hooks/useZipGeocodes';
+import { CityZipMap } from './CityZipMap';
 
 export type Tier = 'green' | 'yellow' | 'red';
 
@@ -56,9 +57,6 @@ const WIDTH = 960;
 const HEIGHT = 600;
 const STATE_FILL = '#102338';
 const STATE_STROKE = '#1f3a57';
-// Drill-down zoom window, in the same projected units as WIDTH/HEIGHT —
-// wide enough to comfortably fit a whole metro's zip-code spread.
-const ZOOM_SIZE = 90;
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -78,10 +76,11 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
  * gets geocoded here in the background and written back so every later
  * load (any user) has it without hitting the free geocoders again.
  *
- * Clicking a city zooms into its own zip codes (positions from the
- * offline-backfilled zip_geocodes cache — see useZipGeocodes) using the
- * exact same projection, just a cropped viewBox — so a zip's dot never
- * drifts relative to the state outlines under it.
+ * Clicking a city swaps this stylized overview for CityZipMap — a real,
+ * tile-based street map — since telling a city's own zip codes apart needs
+ * actual road/neighborhood context this map's national-scale abstraction
+ * deliberately doesn't have. Zip positions come from the offline-backfilled
+ * zip_geocodes cache (see useZipGeocodes).
  */
 export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
   const { data: cityGeocodes = new Map() } = useCityGeocodes();
@@ -155,9 +154,6 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
       .sort((a, b) => b.r - a.r);
   }, [cities, cityGeocodes, project, visibleTiers]);
 
-  const cityCenter = selectedCity ? cityGeocodes.get(cityGeoKey(selectedCity.city, selectedCity.state)) : null;
-  const cityCenterPoint = cityCenter ? project(cityCenter.lng, cityCenter.lat) : null;
-
   const zipTierCounts = useMemo(() => {
     const counts: Record<Tier, number> = { green: 0, yellow: 0, red: 0 };
     if (!selectedCity) return counts;
@@ -165,29 +161,16 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
     return counts;
   }, [selectedCity]);
 
-  const plottedZips = useMemo(() => {
+  const zipMarkers = useMemo(() => {
     if (!selectedCity) return [];
-    const maxTotal = Math.max(...selectedCity.zips.map((z) => z.total), 1);
-    const radiusFor = (total: number) => 1.5 + 5.5 * Math.sqrt(total / maxTotal);
     return selectedCity.zips
       .filter((z) => visibleTiers.has(z.tier))
       .map((stat) => {
         const geo = zipGeocodes.get(stat.zip5);
-        if (!geo) return null;
-        const point = project(geo.lng, geo.lat);
-        if (!point) return null;
-        return { stat, x: point[0], y: point[1], r: radiusFor(stat.total) };
+        return geo ? { ...stat, lat: geo.lat, lng: geo.lng } : null;
       })
-      .filter((p): p is { stat: ZipStat; x: number; y: number; r: number } => p !== null)
-      .sort((a, b) => b.r - a.r);
-  }, [selectedCity, zipGeocodes, project, visibleTiers]);
-
-  const viewBox = useMemo(() => {
-    if (!selectedCity || !cityCenterPoint) return `0 0 ${WIDTH} ${HEIGHT}`;
-    const x = Math.max(0, Math.min(WIDTH - ZOOM_SIZE, cityCenterPoint[0] - ZOOM_SIZE / 2));
-    const y = Math.max(0, Math.min(HEIGHT - ZOOM_SIZE, cityCenterPoint[1] - ZOOM_SIZE / 2));
-    return `${x} ${y} ${ZOOM_SIZE} ${ZOOM_SIZE}`;
-  }, [selectedCity, cityCenterPoint]);
+      .filter((z): z is ZipStat & { lat: number; lng: number } => z !== null);
+  }, [selectedCity, zipGeocodes, visibleTiers]);
 
   function handleEnter(e: React.MouseEvent, entry: { label: string; tier: Tier; total: number; qualified: number; qualifyRate: number; replied: number; replyRate: number }) {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -212,13 +195,15 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
         </button>
       )}
 
-      <svg ref={svgRef} viewBox={viewBox} className="h-auto w-full">
-        <g>
-          {statePaths.map((p) => (
-            <path key={p.id} d={p.d} fill={STATE_FILL} stroke={STATE_STROKE} strokeWidth={selectedCity ? 0.3 : 1} strokeLinejoin="round" />
-          ))}
-        </g>
-        {!selectedCity ? (
+      {selectedCity ? (
+        <CityZipMap zips={zipMarkers} cityLabel={`${selectedCity.city}, ${selectedCity.state}`} />
+      ) : (
+        <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full">
+          <g>
+            {statePaths.map((p) => (
+              <path key={p.id} d={p.d} fill={STATE_FILL} stroke={STATE_STROKE} strokeWidth={1} strokeLinejoin="round" />
+            ))}
+          </g>
           <g>
             {plottedCities.map(({ stat, x, y, r }) => (
               <circle
@@ -241,35 +226,10 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
               />
             ))}
           </g>
-        ) : (
-          <g>
-            {plottedZips.map(({ stat, x, y, r }) => (
-              <circle
-                key={stat.zip5}
-                cx={x}
-                cy={y}
-                r={r}
-                fill={TIER_COLOR[stat.tier]}
-                fillOpacity={0.62}
-                stroke={TIER_COLOR[stat.tier]}
-                strokeWidth={0.4}
-                onMouseEnter={(e) => handleEnter(e, { label: stat.zip5, ...stat })}
-                onMouseMove={(e) => handleEnter(e, { label: stat.zip5, ...stat })}
-                onMouseLeave={() => setHover(null)}
-                className="cursor-pointer transition-opacity hover:!fill-opacity-90"
-              />
-            ))}
-          </g>
-        )}
-      </svg>
-
-      {selectedCity && plottedZips.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-[13px] text-text-3">
-          Not enough zip-level data for {selectedCity.city} yet.
-        </div>
+        </svg>
       )}
 
-      {hover && (
+      {!selectedCity && hover && (
         <div
           className="pointer-events-none absolute z-10 min-w-[150px] rounded-lg border px-3 py-2 text-[12px] shadow-lg"
           style={{
@@ -313,7 +273,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
           );
         })}
         <span className="ml-1 text-text-3">
-          {selectedCity ? 'Circle size = leads contacted in this zip' : 'Circle size = leads contacted · click a city to see its zip codes'}
+          {selectedCity ? 'Circle size = leads contacted in this zip · click a circle for details' : 'Circle size = leads contacted · click a city to see its zip codes'}
         </span>
       </div>
     </div>
