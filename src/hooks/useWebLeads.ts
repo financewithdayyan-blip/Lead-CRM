@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 
@@ -32,6 +33,35 @@ function rowToWebLead(row: Record<string, unknown>): WebLead {
 }
 
 export function useWebLeads(enabled: boolean) {
+  const qc = useQueryClient();
+
+  // Live — a new website contact-form submission shows up the moment it's
+  // inserted instead of waiting on the poll below. Best-effort: this feeds
+  // NotificationsContext, which wraps every authenticated page, so a
+  // subscription failure must never throw into that render tree — the
+  // 15s poll underneath still catches it if the socket drops.
+  useEffect(() => {
+    if (!enabled) return;
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    try {
+      channel = supabase
+        .channel('web-leads:new')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'web_leads' },
+          () => qc.invalidateQueries({ queryKey: ['web-leads'] }),
+        )
+        .subscribe((status, err) => {
+          if (err) console.error('web-leads realtime subscription error', err);
+        });
+    } catch (e) {
+      console.error('web-leads realtime subscription failed to start', e);
+    }
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [enabled, qc]);
+
   return useQuery({
     queryKey: ['web-leads'],
     queryFn: async () => {
@@ -44,7 +74,9 @@ export function useWebLeads(enabled: boolean) {
       return (data ?? []).map(rowToWebLead);
     },
     enabled,
-    refetchInterval: 60_000,
+    // Fallback safety net in case the realtime socket drops — the
+    // subscription above is what actually delivers the ~instant update.
+    refetchInterval: 15_000,
   });
 }
 
