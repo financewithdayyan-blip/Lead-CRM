@@ -373,6 +373,61 @@ Deno.serve(async (req) => {
     // and (once Phase 4 exists) no AI call.
     if (reaction) return json({ ok: true, reaction: true });
 
+    // Zoom fires this same phone.sms_received event for a text WE sent from
+    // the Zoom Phone app/desktop client directly — bypassing this CRM's own
+    // reply box and send-sms entirely — not just for genuine inbound replies.
+    // from is then one of our own six numbers rather than the lead's, so
+    // resolveLead(fromNorm) below would never match and the message was
+    // silently stranded in inbound_messages with lead_id null: it never
+    // reached lead_activities, so the thread only ever showed the lead's
+    // side. Caught here before any of the inbound-only logic (Blue Docs
+    // signing replies, deterministic stop/decline, AI hand-off) that assumes
+    // fromRaw is the other party.
+    const sentFromOwnNumber = keyForSentFrom(fromRaw);
+    if (sentFromOwnNumber) {
+      const toNorm = normalizePhone(toRaw);
+      const lead = await resolveLead(admin, toNorm);
+      if (lead) {
+        // Deliberately NOT linking inserted.id's lead_id the way the inbound
+        // path below does — useLeadThread renders every linked
+        // inbound_messages row as an inbound bubble unconditionally, so
+        // doing that here would show our own outbound text as if the lead
+        // had sent it, duplicated alongside the real outbound bubble below.
+        // The unlinked row still exists for Zoom's retry-dedup (unique
+        // zoom_message_id) and as a raw audit trail.
+        await admin.from('lead_activities').insert({
+          lead_id: lead.id,
+          user_id: lead.user_id,
+          type: 'sms',
+          body,
+          meta: { direction: 'outbound', from: fromRaw, to: toRaw, hasAttachments: attachments.length > 0, sentViaZoomApp: true },
+        });
+        // A human just replied straight from the Zoom app — same reasoning
+        // send-sms already applies to a manual reply through the CRM: stop
+        // the AI from stepping on a conversation a person is now having.
+        await admin
+          .from('leads')
+          .update({ ai_reply_paused: true, photo_wait_ai_active: false })
+          .eq('id', lead.id);
+        return json({ ok: true, matched: true, ownSend: true });
+      }
+      const buyer = await resolveBuyer(admin, toNorm);
+      if (buyer) {
+        await admin.from('buyer_messages').insert({
+          buyer_id: buyer.id,
+          direction: 'outbound',
+          body,
+          from_phone: fromRaw,
+          to_phone: toRaw,
+          zoom_message_id: zoomMessageId ?? null,
+        });
+        return json({ ok: true, buyerMatched: true, ownSend: true });
+      }
+      // Not matched to a lead or buyer we recognize — the raw row inserted
+      // above already keeps the record; nothing further to do.
+      return json({ ok: true, ownSend: true });
+    }
+
     // Blue Docs shares this number with lead outreach (one number, not a
     // dedicated one) — so a reply from someone who's already a recognized
     // lead must keep flowing through the normal resolveLead/AI-reply path

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { SmsNumberKey } from '@/lib/smsNumbers';
@@ -27,6 +28,41 @@ export interface ThreadMessage {
 
 /** Inbound texts and outbound sends merged into one chronological thread. */
 export function useLeadThread(leadId: string | undefined) {
+  const qc = useQueryClient();
+
+  // Live — a reply from the lead, or a text sent from the Zoom app/desktop
+  // client directly (sms-webhook now logs those too), shows up the moment
+  // it lands instead of waiting on a manual reopen of the tab. Both tables
+  // that feed this thread can change independently, so both are watched.
+  // Best-effort, same as every other realtime subscription in this codebase
+  // (see useTasks) — a failure here must never throw into the profile page.
+  useEffect(() => {
+    if (!leadId) return;
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+    try {
+      channel = supabase
+        .channel(`lead-thread:${leadId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'inbound_messages', filter: `lead_id=eq.${leadId}` },
+          () => qc.invalidateQueries({ queryKey: ['lead_thread', leadId] }),
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'lead_activities', filter: `lead_id=eq.${leadId}` },
+          () => qc.invalidateQueries({ queryKey: ['lead_thread', leadId] }),
+        )
+        .subscribe((status, err) => {
+          if (err) console.error('lead-thread realtime subscription error', err);
+        });
+    } catch (e) {
+      console.error('lead-thread realtime subscription failed to start', e);
+    }
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [leadId, qc]);
+
   return useQuery({
     queryKey: ['lead_thread', leadId],
     queryFn: async () => {
