@@ -824,15 +824,15 @@ export function DashboardView({
             <SectionLabel>Overview</SectionLabel>
             {showSmsStats ? (
               <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
-                <div className="card chart-layer">
+                <div className="card chart-layer flex h-full flex-col">
                   <CardHeader
                     icon={DollarSign}
                     title="Revenue in Pipeline"
                     tone="accent"
                     sub={`Assignment fee across leads Under Contract · ${rangeLabel}`}
                   />
-                  <Suspense fallback={<div className="flex h-[240px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                    <div className="mt-3">
+                  <Suspense fallback={<div className="mt-3 flex flex-1 items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3 flex-1">
                       <RevenueInPipelineChart data={revenueInPipelineTrend} />
                     </div>
                   </Suspense>
