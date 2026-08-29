@@ -481,7 +481,7 @@ export function DashboardView({
   const trendDayCount = dateRange === '30d' ? 30 : dateRange === '90d' || dateRange === 'all' ? 90 : 7;
 
   const activityTrend = useMemo(() => {
-    const days: Array<{ iso: string; label: string; sent: number; replies: number; qualified: number; calls: number }> = [];
+    const days: Array<{ iso: string; label: string; sent: number; replies: number; qualified: number }> = [];
     const today = new Date();
     for (let i = trendDayCount - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
@@ -492,7 +492,6 @@ export function DashboardView({
         sent: 0,
         replies: 0,
         qualified: 0,
-        calls: 0,
       });
     }
     const byIso = new Map(days.map((d) => [d.iso, d]));
@@ -510,13 +509,8 @@ export function DashboardView({
       const day = byIso.get(localIsoDate(new Date(l.qualifiedAt)));
       if (day) day.qualified++;
     });
-    calls.forEach((a) => {
-      if (!qualifiedPlusIds.has(a.leadId)) return;
-      const day = byIso.get(localIsoDate(new Date(a.createdAt)));
-      if (day) day.calls++;
-    });
     return days;
-  }, [sendLog, inboundMessages, leads, calls, qualifiedPlusIds, trendDayCount]);
+  }, [sendLog, inboundMessages, leads, trendDayCount]);
 
   // "Revenue in pipeline" = total assignment fee across every lead
   // currently Under Contract — but "currently" only tells you today's
@@ -1067,7 +1061,7 @@ export function DashboardView({
             <div className="space-y-3">
               {showSmsStats && (
                 <div className="card chart-layer">
-                  <CardHeader icon={Waypoints} title="Pipeline Activity" sub={`SMS sent, replies, newly qualified, and calls to qualified leads · ${rangeLabel}`} />
+                  <CardHeader icon={Waypoints} title="Pipeline Activity" sub={`SMS sent and replies, newly qualified as bubbles · ${rangeLabel}`} />
                   <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3">
                       <PipelineActivityChart data={activityTrend} />
