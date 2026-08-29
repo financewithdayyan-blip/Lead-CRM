@@ -162,6 +162,49 @@ export function useActivityFeed(targetUserId?: string, sinceIso?: string) {
   });
 }
 
+export interface StageChangeRow {
+  leadId: string;
+  to: string;
+  createdAt: string;
+}
+
+/**
+ * Just the stage-change history — lead_id/meta/created_at, no SMS/call/note
+ * bodies — for charts that only care about when a lead moved between
+ * stages (currently: DashboardPage's Revenue in Pipeline). useActivityFeed
+ * pulls every activity type with full text bodies for the whole year,
+ * which for an account with tens of thousands of SMS sends is a genuinely
+ * large fetch; this is the same table filtered to one activity type, so it
+ * stays fast regardless of how much SMS/call volume the account has. Not
+ * bounded to "this year" either, since a stage_change-only fetch is cheap
+ * enough to just get the real, complete history.
+ */
+export function useStageChangeHistory(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['stage_change_history', userId],
+    queryFn: async () => {
+      const rows = await fetchAllPages<{ lead_id: string; meta: unknown; created_at: string }>((from, to) =>
+        supabase
+          .from('lead_activities')
+          .select('lead_id, meta, created_at')
+          .eq('user_id', userId)
+          .eq('type', 'stage_change')
+          .order('created_at', { ascending: true })
+          .range(from, to),
+      );
+      return rows
+        .map((r): StageChangeRow | null => {
+          const to = (r.meta as { to?: string } | null)?.to;
+          return to ? { leadId: r.lead_id, to, createdAt: r.created_at } : null;
+        })
+        .filter((r): r is StageChangeRow => r !== null);
+    },
+    enabled: !!userId,
+  });
+}
+
 /**
  * Set of distinct lead IDs that have a 'call' activity logged today (local date).
  * Query key includes todayIso so the query resets automatically after midnight.

@@ -32,7 +32,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
-import { useActivityFeed } from '@/hooks/useActivities';
+import { useActivityFeed, useStageChangeHistory } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
@@ -241,6 +241,7 @@ export function DashboardView({
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
+  const { data: stageChangeHistory = [] } = useStageChangeHistory(userId);
   const { data: tags = [] } = useTags(userId);
   const { data: sendLog = [] } = useSendLog(showSmsStats);
   const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
@@ -520,22 +521,22 @@ export function DashboardView({
   // "Revenue in pipeline" = total assignment fee across every lead
   // currently Under Contract — but "currently" only tells you today's
   // number, and the point of a trend chart is the days before today too.
-  // Reconstructed from each lead's real stage_change history (same source
-  // useSalesKpis' computeDealVelocity uses) rather than just projecting
-  // today's contract-stage total backward across the whole window: a lead
-  // that has since moved to In Title/Closed, or fallen through to Dead,
-  // still correctly counts on the days it really was under contract, and
-  // correctly stops counting once it left. Only leads with an assignment
-  // fee actually entered contribute anything.
+  // Reconstructed from each lead's real stage_change history via
+  // useStageChangeHistory — a dedicated, slim query (just the stage-change
+  // rows, no SMS/call/note bodies) rather than the full useActivityFeed
+  // used elsewhere on this page, which for an account with a large SMS
+  // volume is genuinely large and made this one chart slow to load for no
+  // reason it actually needed that data. A lead that has since moved to In
+  // Title/Closed, or fallen through to Dead, still correctly counts on the
+  // days it really was under contract, and correctly stops counting once
+  // it left. Only leads with an assignment fee actually entered contribute
+  // anything.
   const revenueInPipelineTrend = useMemo(() => {
     const transitionsByLead = new Map<string, Array<{ at: number; to: string }>>();
-    for (const a of activities) {
-      if (a.type !== 'stage_change') continue;
-      const to = (a.meta as { to?: string })?.to;
-      if (!to) continue;
-      const arr = transitionsByLead.get(a.leadId) ?? [];
-      arr.push({ at: new Date(a.createdAt).getTime(), to });
-      transitionsByLead.set(a.leadId, arr);
+    for (const r of stageChangeHistory) {
+      const arr = transitionsByLead.get(r.leadId) ?? [];
+      arr.push({ at: new Date(r.createdAt).getTime(), to: r.to });
+      transitionsByLead.set(r.leadId, arr);
     }
     for (const arr of transitionsByLead.values()) arr.sort((a, b) => a.at - b.at);
 
@@ -543,12 +544,11 @@ export function DashboardView({
     for (const [leadId, arr] of transitionsByLead) {
       if (arr.some((t) => t.to === 'contract')) everUnderContractIds.add(leadId);
     }
-    // useActivityFeed only covers this year — a lead that reached Contract
-    // before that with no activity since would otherwise vanish from this
-    // chart entirely, including from today's own total. Falls back to
-    // "currently Under Contract" so at least the present-day number (and
-    // every day within this window, since we have no real entry date to
-    // place it more precisely) stays correct.
+    // useStageChangeHistory covers full history (unlike useActivityFeed,
+    // which is bounded to this year), but a lead can still be missing its
+    // own history row in edge cases (e.g. created directly into Contract
+    // pre-dating the stage_change trigger) — falls back to "currently Under
+    // Contract" so at least the present-day number stays correct either way.
     const relevantLeads = leads.filter(
       (l) => (everUnderContractIds.has(l.id) || l.stage === 'contract') && l.assignmentFee,
     );
@@ -579,7 +579,7 @@ export function DashboardView({
       });
     }
     return days;
-  }, [leads, activities, trendDayCount]);
+  }, [leads, stageChangeHistory, trendDayCount]);
 
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
   // Zoom's own definitions, matched against Zoom's own "SMS Campaign" usage
