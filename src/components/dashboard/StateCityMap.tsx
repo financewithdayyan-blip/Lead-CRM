@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Tier, CityStat } from './CityPerformanceMap';
 import { fetchPlaceBoundaries, placeGeoKey } from '@/lib/placeBoundaries';
+import { MAP_STYLE } from '@/lib/mapStyle';
 
 const TIER_COLOR: Record<Tier, string> = {
   green: '#22c55e',
@@ -54,6 +57,11 @@ function tooltipHtml(c: CityStat) {
  * upgrades to its real TIGERweb municipal boundary the moment that resolves.
  * A city TIGERweb has nothing for just keeps its circle. Clicking a marker
  * (circle or resolved boundary) drills into that city's own zip-code map.
+ *
+ * Basemap is a minimal custom MapLibre style (src/lib/mapStyle.ts) over free
+ * keyless OpenFreeMap vector tiles — just water, boundaries, and place
+ * labels, colored to match the national map — rather than raster OSM tiles
+ * with roads/vegetation/buildings baked into the pixels.
  */
 export function StateCityMap({
   cities,
@@ -76,11 +84,7 @@ export function StateCityMap({
     mapRef.current = map;
     let cancelled = false;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      className: 'map-tiles-dark',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
+    maplibreGL({ style: MAP_STYLE }).addTo(map);
 
     const maxTotal = Math.max(...cities.map((c) => c.total), 1);
     const radiusFor = (total: number) => 10 + 26 * Math.sqrt(total / maxTotal);

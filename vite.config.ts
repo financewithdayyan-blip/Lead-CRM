@@ -42,6 +42,7 @@ export default defineConfig({
           'vendor-query': ['@tanstack/react-query'],
           'vendor-charts': ['recharts'],
           'vendor-virtual': ['@tanstack/react-virtual'],
+          'vendor-maplibre': ['maplibre-gl', '@maplibre/maplibre-gl-leaflet'],
         },
       },
     },

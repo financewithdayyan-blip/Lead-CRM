@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Tier, ZipStat } from './CityPerformanceMap';
 import { fetchZctaBoundaries } from '@/lib/zctaBoundaries';
+import { MAP_STYLE } from '@/lib/mapStyle';
 
 const TIER_COLOR: Record<Tier, string> = {
   green: '#22c55e',
@@ -39,17 +42,15 @@ function popupHtml(z: ZipStat) {
 }
 
 /**
- * The city drill-down. Went through two lighter-weight attempts first —
- * TIGERweb's own Primary+Secondary road layers only (no basemap at all),
- * then a dark-filtered plain OSM tile layer — but a Primary+Secondary-only
- * overlay reads as too sparse once you're actually looking at one city
- * (real requests: "add more roads, add the buildings as well"). Full OSM
- * raster tiles are what actually carry that density — the road network and
- * building footprints are baked into the tile images themselves, not
- * something realistic to reconstruct from a handful of separate vector
- * layers. Darkened via the .map-tiles-dark CSS filter (index.css) so it
- * still reads as the same dark navy map as the national view rather than
- * a plain light basemap.
+ * The city drill-down. Went through a few basemap iterations: TIGERweb's
+ * own Primary+Secondary road layers only (too sparse once you're actually
+ * looking at one city), then full OSM raster tiles dark-filtered via CSS
+ * (roads/vegetation/buildings baked into the pixels, too dense/cluttered
+ * and impossible to selectively strip since it's raster, not layered data).
+ * Settled on a minimal custom MapLibre style (src/lib/mapStyle.ts) over
+ * free keyless OpenFreeMap vector tiles — just water, boundaries, and place
+ * labels, colored to match the national map — same basemap StateCityMap one
+ * level up uses, so all three drill-down levels read as one consistent map.
  *
  * Each zip starts as a plain circle at its centroid (instant — the geocode
  * is already in hand), then upgrades to its real boundary shape the moment
@@ -67,11 +68,7 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     mapRef.current = map;
     let cancelled = false;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      className: 'map-tiles-dark',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
+    maplibreGL({ style: MAP_STYLE }).addTo(map);
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
     const radiusFor = (total: number) => 8 + 22 * Math.sqrt(total / maxTotal);
