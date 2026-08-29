@@ -29,6 +29,10 @@ const STATE_FIPS: Record<string, string> = {
 const TIGERWEB_BASE = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer';
 const INCORPORATED_PLACES_LAYER = 28;
 const CDP_LAYER = 30;
+// A single hung request must never block every other state's results —
+// each state runs independently (see below), so one timeout only costs
+// that state's cities their boundaries, not the whole map's.
+const FETCH_TIMEOUT_MS = 8000;
 
 const cache = new Map<string, PlaceGeometry | null>();
 const key = (city: string, state: string) => `${city.trim().toLowerCase()}|${state.trim().toUpperCase()}`;
@@ -48,7 +52,7 @@ async function queryLayer(layer: number, fips: string, names: string[]): Promise
     // covering the entire map. Finer offset, still small/fast per request.
     maxAllowableOffset: '0.0004',
   })}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`TIGERweb places layer ${layer} returned ${res.status}`);
   const data = await res.json();
   const out = new Map<string, PlaceGeometry>();
@@ -59,10 +63,39 @@ async function queryLayer(layer: number, fips: string, names: string[]): Promise
   return out;
 }
 
+async function resolveState(fips: string, group: { city: string; state: string }[]): Promise<Map<string, PlaceGeometry>> {
+  const names = group.map((c) => c.city.trim());
+  let found: Map<string, PlaceGeometry>;
+  try {
+    found = await queryLayer(INCORPORATED_PLACES_LAYER, fips, names);
+  } catch {
+    found = new Map();
+  }
+  const stillMissing = group.filter((c) => !found.has(c.city.trim().toLowerCase()));
+  if (stillMissing.length > 0) {
+    try {
+      const cdpFound = await queryLayer(CDP_LAYER, fips, stillMissing.map((c) => c.city.trim()));
+      for (const [k, v] of cdpFound) found.set(k, v);
+    } catch {
+      // best-effort — these fall back to markers
+    }
+  }
+  return found;
+}
+
 /** Resolves as many of the given city+state pairs to real boundary polygons
  * as TIGERweb has — a city genuinely not found in either layer is simply
  * absent from the result; callers should fall back to a plain marker for
- * those rather than treating it as an error. */
+ * those rather than treating it as an error.
+ *
+ * States are queried in parallel, not one after another — a real account
+ * easily spans 25-30+ distinct states, and awaiting each one's (up to two)
+ * requests in sequence meant the whole call could take well over a minute
+ * before ever resolving. Every state runs independently now, so total time
+ * is roughly the slowest single state's two requests, not the sum of all
+ * of them — this was the actual reason boundaries never appeared to finish
+ * loading in practice, not the effect-dependency issue fixed earlier
+ * (real, but not sufficient on its own with a fetch this slow). */
 export async function fetchPlaceBoundaries(cities: { city: string; state: string }[]): Promise<Map<string, PlaceGeometry>> {
   const result = new Map<string, PlaceGeometry>();
   const byState = new Map<string, { city: string; state: string }[]>();
@@ -79,30 +112,17 @@ export async function fetchPlaceBoundaries(cities: { city: string; state: string
     byState.get(fips)!.push(c);
   }
 
-  for (const [fips, group] of byState) {
-    const names = group.map((c) => c.city.trim());
-    let found: Map<string, PlaceGeometry>;
-    try {
-      found = await queryLayer(INCORPORATED_PLACES_LAYER, fips, names);
-    } catch {
-      found = new Map();
-    }
-    const stillMissing = group.filter((c) => !found.has(c.city.trim().toLowerCase()));
-    if (stillMissing.length > 0) {
-      try {
-        const cdpFound = await queryLayer(CDP_LAYER, fips, stillMissing.map((c) => c.city.trim()));
-        for (const [k, v] of cdpFound) found.set(k, v);
-      } catch {
-        // best-effort — these fall back to markers
+  await Promise.all(
+    Array.from(byState.entries()).map(async ([fips, group]) => {
+      const found = await resolveState(fips, group);
+      for (const c of group) {
+        const geom = found.get(c.city.trim().toLowerCase()) ?? null;
+        const k = key(c.city, c.state);
+        cache.set(k, geom);
+        if (geom) result.set(k, geom);
       }
-    }
-    for (const c of group) {
-      const geom = found.get(c.city.trim().toLowerCase()) ?? null;
-      const k = key(c.city, c.state);
-      cache.set(k, geom);
-      if (geom) result.set(k, geom);
-    }
-  }
+    }),
+  );
 
   return result;
 }
