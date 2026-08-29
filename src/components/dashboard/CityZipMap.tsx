@@ -3,6 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Tier, ZipStat } from './CityPerformanceMap';
 import { fetchZctaBoundaries } from '@/lib/zctaBoundaries';
+import { fetchCityRoads } from '@/lib/tigerRoads';
 
 const TIER_COLOR: Record<Tier, string> = {
   green: '#22c55e',
@@ -14,6 +15,8 @@ const TIER_LABEL: Record<Tier, string> = {
   yellow: 'Fair market',
   red: 'Poor market',
 };
+const STATE_FILL = '#102338'; // matches CityPerformanceMap's national-view background
+const ROAD_STROKE = '#2c4a6e';
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -37,24 +40,23 @@ function popupHtml(z: ZipStat) {
 }
 
 /**
- * A real, tile-based street map for the city drill-down — unlike the
- * national view, a zip-code comparison genuinely needs roads and
- * neighborhood context to mean anything, and cropping the stylized SVG map
- * tight enough to separate a city's zip codes just collapsed them all into
- * a cluster of concentric rings around one point instead. Leaflet's own
- * fitBounds handles the zoom level, so zips always end up visibly spread
- * out regardless of how tightly or loosely packed they really are. Tiles
- * are the same plain OpenStreetMap basemap PacketMap uses, darkened via a
- * CSS filter (.map-tiles-dark in index.css) so the city view still matches
- * the national map's dark navy palette instead of switching to a plain
- * light basemap underneath the same green/yellow/red circles — see that
- * class's own comment for why it's a filter and not a dark tile provider.
+ * The city drill-down, styled like the national map instead of a full
+ * tile-based basemap — no buildings, no POI icons, no dense labels. Plain
+ * dark navy background (same fill the national SVG map uses), TIGERweb
+ * road linework for orientation (Primary + a city-scale Secondary Roads
+ * layer — deliberately not Local Roads, the full street grid, which is
+ * exactly the clutter "no buildings" was asking to avoid), and zip
+ * boundaries shaded by performance tier. Every layer here comes from the
+ * same free, keyless Census TIGERweb infrastructure zctaBoundaries.ts
+ * already uses — tried the community Overpass API for roads first, but it
+ * took 25-30s+ even for one mid-size city's major roads, too slow for a
+ * click-to-drill-down interaction; TIGERweb's own Transportation service
+ * answers the same kind of query in ~2-3s.
  *
  * Each zip starts as a plain circle at its centroid (instant — the geocode
- * is already in hand), then upgrades to its real boundary shape, shaded by
- * performance tier, the moment TIGERweb's polygon resolves — an actual
- * choropleth by zip code rather than a dot standing in for one. A zip
- * TIGERweb has nothing for just keeps its circle.
+ * is already in hand), then upgrades to its real boundary shape the moment
+ * TIGERweb's polygon resolves. A zip TIGERweb has nothing for just keeps
+ * its circle.
  */
 export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,18 +68,6 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     const map = L.map(containerRef.current, { scrollWheelZoom: false });
     mapRef.current = map;
     let cancelled = false;
-
-    // CARTO's free "dark_all" tiles turned out to gate real usage behind an
-    // API key (served "API KEY REQUIRED" watermarks over every tile despite
-    // the documented anonymous free tier) — reverted to the same plain OSM
-    // tiles PacketMap already uses (genuinely keyless), darkened client-side
-    // via the .map-tiles-dark filter in index.css so the city view still
-    // matches the national map's dark navy palette.
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      className: 'map-tiles-dark',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
     const radiusFor = (total: number) => 8 + 22 * Math.sqrt(total / maxTotal);
@@ -98,6 +88,25 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     }
 
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+
+    // Roads drawn first (added to the map before boundaries/markers stack
+    // visually — Leaflet layers render in add-order), a comfortable margin
+    // past the fitted bounds so a road doesn't dead-end right at the edge
+    // of the visible area.
+    const padded = bounds.pad(0.15);
+    fetchCityRoads([padded.getWest(), padded.getSouth(), padded.getEast(), padded.getNorth()])
+      .then((roads) => {
+        if (cancelled) return;
+        for (const road of roads) {
+          L.geoJSON(road.geometry as GeoJSON.GeoJsonObject, {
+            style: { color: ROAD_STROKE, weight: 1.25, opacity: 0.9 },
+          }).addTo(map);
+        }
+      })
+      .catch(() => {
+        // Best-effort — the zip boundaries/markers below still tell the
+        // real story even with no road context.
+      });
 
     // Real boundary shapes arrive after the map already has something
     // useful on screen — each one swaps out that zip's circle for its
@@ -136,5 +145,11 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     );
   }
 
-  return <div ref={containerRef} className="isolate h-96 w-full rounded-xl border border-border-2" />;
+  return (
+    <div
+      ref={containerRef}
+      className="isolate h-96 w-full rounded-xl border border-border-2"
+      style={{ background: STATE_FILL }}
+    />
+  );
 }
