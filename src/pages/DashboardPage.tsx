@@ -2,7 +2,6 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity,
-  BarChart3,
   Bot,
   CalendarCheck,
   CalendarClock,
@@ -64,9 +63,6 @@ const PipelineFunnel = lazy(() =>
 );
 const CallProgressChart = lazy(() =>
   import('@/components/dashboard/CallProgressChart').then((m) => ({ default: m.CallProgressChart })),
-);
-const PipelineBreakdownChart = lazy(() =>
-  import('@/components/dashboard/PipelineBreakdownChart').then((m) => ({ default: m.PipelineBreakdownChart })),
 );
 const RevenueInPipelineChart = lazy(() =>
   import('@/components/dashboard/RevenueInPipelineChart').then((m) => ({ default: m.RevenueInPipelineChart })),
@@ -1159,27 +1155,6 @@ export function DashboardView({
                   </Suspense>
                 </div>
               )}
-
-              <div className="card chart-layer">
-                <CardHeader
-                  icon={BarChart3}
-                  title="Pipeline Breakdown"
-                  sub={`${stats.total.toLocaleString()} leads across every stage, ranked largest first`}
-                />
-                <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                  <div className="mt-3">
-                    <PipelineBreakdownChart
-                      data={STAGE_ORDER.map((s) => ({
-                        key: s,
-                        label: STAGE_CONFIG[s].label,
-                        count: stats.stageCounts[s],
-                        color: STAGE_CONFIG[s].color,
-                      }))}
-                      total={stats.total}
-                    />
-                  </div>
-                </Suspense>
-              </div>
 
               <div className="card">
                 <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
