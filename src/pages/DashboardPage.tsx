@@ -1057,6 +1057,37 @@ export function DashboardView({
           )}
 
           <div>
+            <SectionLabel>Pipeline</SectionLabel>
+            <div className="space-y-3">
+              {showSmsStats && (
+                <div className="card chart-layer">
+                  <CardHeader icon={Gauge} title="Pipeline" sub="live headcount — matches the Kanban board" />
+                  <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
+                    <div className="mt-3">
+                      <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
+                    </div>
+                  </Suspense>
+                </div>
+              )}
+
+              <div className="card">
+                <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
+                <div className="mt-2">
+                  {stats.tagCounts.length === 0 ? (
+                    <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+                  ) : (
+                    <div className={showSmsStats ? 'grid grid-cols-1 gap-x-6 sm:grid-cols-2' : undefined}>
+                      {stats.tagCounts.map(({ tag, count }) => (
+                        <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
             <SectionLabel>Performance</SectionLabel>
             <div className="space-y-3">
               {showSmsStats && (
@@ -1133,37 +1164,6 @@ export function DashboardView({
                 </div>
               )}
 
-            </div>
-          </div>
-
-          <div>
-            <SectionLabel>Pipeline</SectionLabel>
-            <div className="space-y-3">
-              {showSmsStats && (
-                <div className="card chart-layer">
-                  <CardHeader icon={Gauge} title="Pipeline" sub="live headcount — matches the Kanban board" />
-                  <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
-                    <div className="mt-3">
-                      <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
-                    </div>
-                  </Suspense>
-                </div>
-              )}
-
-              <div className="card">
-                <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
-                <div className="mt-2">
-                  {stats.tagCounts.length === 0 ? (
-                    <div className="text-[13px] text-text-3">No tagged leads yet.</div>
-                  ) : (
-                    <div className={showSmsStats ? 'grid grid-cols-1 gap-x-6 sm:grid-cols-2' : undefined}>
-                      {stats.tagCounts.map(({ tag, count }) => (
-                        <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
 
