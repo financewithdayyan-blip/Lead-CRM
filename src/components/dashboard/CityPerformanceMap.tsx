@@ -26,10 +26,11 @@ const TIER_COLOR: Record<CityStat['tier'], string> = {
   red: '#ef4444',
 };
 const TIER_LABEL: Record<CityStat['tier'], string> = {
-  green: 'High performing',
-  yellow: 'Average',
-  red: 'Needs attention',
+  green: 'Performing market',
+  yellow: 'Fair market',
+  red: 'Poor market',
 };
+const ALL_TIERS: CityStat['tier'][] = ['green', 'yellow', 'red'];
 
 // A fixed illustrative canvas (not a pannable/zoomable real map) — same
 // aspect ratio d3's own US examples use, scaled responsively via viewBox.
@@ -58,7 +59,17 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
   const { data: geocodes = new Map() } = useCityGeocodes();
   const upsertGeocode = useUpsertCityGeocode();
   const [hover, setHover] = useState<{ stat: CityStat; x: number; y: number } | null>(null);
+  const [visibleTiers, setVisibleTiers] = useState<Set<CityStat['tier']>>(new Set(ALL_TIERS));
   const svgRef = useRef<SVGSVGElement>(null);
+
+  function toggleTier(tier: CityStat['tier']) {
+    setVisibleTiers((prev) => {
+      const next = new Set(prev);
+      if (next.has(tier)) next.delete(tier);
+      else next.add(tier);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const missing = cities.filter((c) => !geocodes.has(cityGeoKey(c.city, c.state))).slice(0, 25);
@@ -90,10 +101,17 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
     return { statePaths: paths, project: (lng: number, lat: number) => projection([lng, lat]) };
   }, []);
 
+  const tierCounts = useMemo(() => {
+    const counts: Record<CityStat['tier'], number> = { green: 0, yellow: 0, red: 0 };
+    for (const c of cities) counts[c.tier]++;
+    return counts;
+  }, [cities]);
+
   const plotted = useMemo(() => {
     const maxTotal = Math.max(...cities.map((c) => c.total), 1);
     const radiusFor = (total: number) => 4 + 15 * Math.sqrt(total / maxTotal);
     return cities
+      .filter((stat) => visibleTiers.has(stat.tier))
       .map((stat) => {
         const geo = geocodes.get(cityGeoKey(stat.city, stat.state));
         if (!geo) return null;
@@ -105,7 +123,7 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
       // Smaller circles drawn last so a big city's bubble never fully buries a
       // small nearby one.
       .sort((a, b) => b.r - a.r);
-  }, [cities, geocodes, project]);
+  }, [cities, geocodes, project, visibleTiers]);
 
   function handleEnter(e: React.MouseEvent, stat: CityStat) {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -164,14 +182,27 @@ export function CityPerformanceMap({ cities }: { cities: CityStat[] }) {
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-4 text-[12px] text-text-2">
-        {(['green', 'yellow', 'red'] as const).map((t) => (
-          <span key={t} className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: TIER_COLOR[t] }} />
-            {TIER_LABEL[t]}
-          </span>
-        ))}
-        <span className="text-text-3">Circle size = lead volume · ranked by qualify rate + reply rate</span>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+        {ALL_TIERS.map((t) => {
+          const active = visibleTiers.has(t);
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => toggleTier(t)}
+              aria-pressed={active}
+              title={active ? `Hide ${TIER_LABEL[t].toLowerCase()} cities` : `Show ${TIER_LABEL[t].toLowerCase()} cities`}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-colors ${
+                active ? 'border-transparent bg-surface-3 text-text-2' : 'border-border-2 text-text-3 opacity-50 hover:opacity-75'
+              }`}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: TIER_COLOR[t] }} />
+              {TIER_LABEL[t]}
+              <span className="font-mono tabular-nums text-text-3">{tierCounts[t]}</span>
+            </button>
+          );
+        })}
+        <span className="ml-1 text-text-3">Circle size = lead volume · click a tier to filter</span>
       </div>
     </div>
   );
