@@ -3,7 +3,6 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Tier, ZipStat } from './CityPerformanceMap';
 import { fetchZctaBoundaries } from '@/lib/zctaBoundaries';
-import { fetchCityRoads } from '@/lib/tigerRoads';
 
 const TIER_COLOR: Record<Tier, string> = {
   green: '#22c55e',
@@ -15,8 +14,7 @@ const TIER_LABEL: Record<Tier, string> = {
   yellow: 'Fair market',
   red: 'Poor market',
 };
-const STATE_FILL = '#102338'; // matches CityPerformanceMap's national-view background
-const ROAD_STROKE = '#2c4a6e';
+const STATE_FILL = '#102338'; // matches CityPerformanceMap's national-view background, shown while tiles load
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -40,18 +38,17 @@ function popupHtml(z: ZipStat) {
 }
 
 /**
- * The city drill-down, styled like the national map instead of a full
- * tile-based basemap — no buildings, no POI icons, no dense labels. Plain
- * dark navy background (same fill the national SVG map uses), TIGERweb
- * road linework for orientation (Primary + a city-scale Secondary Roads
- * layer — deliberately not Local Roads, the full street grid, which is
- * exactly the clutter "no buildings" was asking to avoid), and zip
- * boundaries shaded by performance tier. Every layer here comes from the
- * same free, keyless Census TIGERweb infrastructure zctaBoundaries.ts
- * already uses — tried the community Overpass API for roads first, but it
- * took 25-30s+ even for one mid-size city's major roads, too slow for a
- * click-to-drill-down interaction; TIGERweb's own Transportation service
- * answers the same kind of query in ~2-3s.
+ * The city drill-down. Went through two lighter-weight attempts first —
+ * TIGERweb's own Primary+Secondary road layers only (no basemap at all),
+ * then a dark-filtered plain OSM tile layer — but a Primary+Secondary-only
+ * overlay reads as too sparse once you're actually looking at one city
+ * (real requests: "add more roads, add the buildings as well"). Full OSM
+ * raster tiles are what actually carry that density — the road network and
+ * building footprints are baked into the tile images themselves, not
+ * something realistic to reconstruct from a handful of separate vector
+ * layers. Darkened via the .map-tiles-dark CSS filter (index.css) so it
+ * still reads as the same dark navy map as the national view rather than
+ * a plain light basemap.
  *
  * Each zip starts as a plain circle at its centroid (instant — the geocode
  * is already in hand), then upgrades to its real boundary shape the moment
@@ -68,6 +65,12 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     const map = L.map(containerRef.current, { scrollWheelZoom: false });
     mapRef.current = map;
     let cancelled = false;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      className: 'map-tiles-dark',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
     const radiusFor = (total: number) => 8 + 22 * Math.sqrt(total / maxTotal);
@@ -88,25 +91,6 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     }
 
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
-
-    // Roads drawn first (added to the map before boundaries/markers stack
-    // visually — Leaflet layers render in add-order), a comfortable margin
-    // past the fitted bounds so a road doesn't dead-end right at the edge
-    // of the visible area.
-    const padded = bounds.pad(0.15);
-    fetchCityRoads([padded.getWest(), padded.getSouth(), padded.getEast(), padded.getNorth()])
-      .then((roads) => {
-        if (cancelled) return;
-        for (const road of roads) {
-          L.geoJSON(road.geometry as GeoJSON.GeoJsonObject, {
-            style: { color: ROAD_STROKE, weight: 1.25, opacity: 0.9 },
-          }).addTo(map);
-        }
-      })
-      .catch(() => {
-        // Best-effort — the zip boundaries/markers below still tell the
-        // real story even with no road context.
-      });
 
     // Real boundary shapes arrive after the map already has something
     // useful on screen — each one swaps out that zip's circle for its
