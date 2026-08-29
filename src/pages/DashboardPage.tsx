@@ -379,15 +379,23 @@ export function DashboardView({
   // 0% rate and dominate a tier it doesn't really belong in. Tiers are
   // relative (top/middle/bottom third of this account's own cities) rather
   // than fixed thresholds, since what counts as "good" varies by business.
+  // Each city also carries its own zip-code breakdown (same MIN_LEADS floor
+  // and same relative tiering, but ranked against that city's OTHER zips,
+  // not nationally) for the map's click-to-drill-down view.
   const cityStats = useMemo(() => {
     const MIN_LEADS = 3;
     if (!showSmsStats) return [];
 
     const repliedLeadIds = new Set(inboundMessages.filter((m) => !m.isReaction && m.leadId).map((m) => m.leadId as string));
 
+    interface Bucket {
+      total: number;
+      qualified: number;
+      leadIds: string[];
+    }
     const byCity = new Map<
       string,
-      { city: string; state: string; total: number; qualified: number; leadIds: string[] }
+      { city: string; state: string; total: number; qualified: number; leadIds: string[]; zipGroups: Map<string, Bucket> }
     >();
     for (const l of leads) {
       if (l.stage === 'new') continue; // still cold — never approached
@@ -397,20 +405,71 @@ export function DashboardView({
       const key = `${cityKey}|${stateKey}`;
       let entry = byCity.get(key);
       if (!entry) {
-        entry = { city: l.city.trim(), state: stateKey, total: 0, qualified: 0, leadIds: [] };
+        entry = { city: l.city.trim(), state: stateKey, total: 0, qualified: 0, leadIds: [], zipGroups: new Map() };
         byCity.set(key, entry);
       }
+      const isQualified = QUALIFIED_PLUS_STAGES.includes(l.stage);
       entry.total++;
       entry.leadIds.push(l.id);
-      if (QUALIFIED_PLUS_STAGES.includes(l.stage)) entry.qualified++;
+      if (isQualified) entry.qualified++;
+
+      // Zip is often stored as ZIP+4 ("33610-6838") — normalized to the
+      // base 5 digits so both halves of a split zip+4 code count together.
+      const zip5 = l.zip?.trim().match(/^\d{5}/)?.[0];
+      if (zip5) {
+        let zg = entry.zipGroups.get(zip5);
+        if (!zg) {
+          zg = { total: 0, qualified: 0, leadIds: [] };
+          entry.zipGroups.set(zip5, zg);
+        }
+        zg.total++;
+        zg.leadIds.push(l.id);
+        if (isQualified) zg.qualified++;
+      }
     }
 
-    const withRates = Array.from(byCity.entries())
+    // Ranks a set of {score}-carrying rows into relative thirds — top third
+    // green, middle yellow, bottom red — via object identity, not a key
+    // string, so it works the same for city rows and zip rows alike.
+    function tierRank<T extends { score: number }>(items: T[]): Map<T, 'green' | 'yellow' | 'red'> {
+      const ranked = [...items].sort((a, b) => b.score - a.score);
+      const n = ranked.length;
+      const map = new Map<T, 'green' | 'yellow' | 'red'>();
+      ranked.forEach((item, i) => {
+        const pos = n > 1 ? i / (n - 1) : 0;
+        map.set(item, pos <= 1 / 3 ? 'green' : pos <= 2 / 3 ? 'yellow' : 'red');
+      });
+      return map;
+    }
+
+    const cityRows = Array.from(byCity.entries())
       .map(([key, e]) => {
         const [cityKey, stateKey] = key.split('|');
         const replied = e.leadIds.filter((id) => repliedLeadIds.has(id)).length;
         const qualifyRate = e.total > 0 ? e.qualified / e.total : 0;
         const replyRate = e.total > 0 ? replied / e.total : 0;
+
+        const zipRows = Array.from(e.zipGroups.entries())
+          .map(([zip5, zg]) => {
+            const zReplied = zg.leadIds.filter((id) => repliedLeadIds.has(id)).length;
+            const zQualifyRate = zg.total > 0 ? zg.qualified / zg.total : 0;
+            const zReplyRate = zg.total > 0 ? zReplied / zg.total : 0;
+            return {
+              zip5,
+              city: e.city,
+              state: stateKey,
+              total: zg.total,
+              qualified: zg.qualified,
+              qualifyRate: zQualifyRate,
+              replied: zReplied,
+              replyRate: zReplyRate,
+              score: (zQualifyRate + zReplyRate) / 2,
+            };
+          })
+          .filter((z) => z.total >= MIN_LEADS);
+        const zipTiers = tierRank(zipRows);
+        const zips = zipRows.map((z) => ({ ...z, tier: zipTiers.get(z)! }));
+
         return {
           cityKey,
           stateKey,
@@ -422,19 +481,13 @@ export function DashboardView({
           replied,
           replyRate,
           score: (qualifyRate + replyRate) / 2,
+          zips,
         };
       })
       .filter((c) => c.total >= MIN_LEADS);
 
-    const ranked = [...withRates].sort((a, b) => b.score - a.score);
-    const n = ranked.length;
-    const tierByKey = new Map<string, 'green' | 'yellow' | 'red'>();
-    ranked.forEach((c, i) => {
-      const pos = n > 1 ? i / (n - 1) : 0;
-      tierByKey.set(`${c.cityKey}|${c.stateKey}`, pos <= 1 / 3 ? 'green' : pos <= 2 / 3 ? 'yellow' : 'red');
-    });
-
-    return withRates.map((c) => ({ ...c, tier: tierByKey.get(`${c.cityKey}|${c.stateKey}`)! }));
+    const cityTiers = tierRank(cityRows);
+    return cityRows.map((c) => ({ ...c, tier: cityTiers.get(c)! }));
   }, [leads, inboundMessages, showSmsStats]);
 
   const stats = useMemo(() => {
