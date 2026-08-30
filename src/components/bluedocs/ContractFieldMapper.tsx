@@ -276,7 +276,7 @@ export function ContractFieldMapper({
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-white px-4 py-2.5 shadow-sm">
         <div className="min-w-0 flex-1">
           <input
-            className="input !w-64 !text-[13px] !font-semibold"
+            className="input w-full max-w-md !text-[13px] !font-semibold"
             placeholder="Template name (e.g. PSA Cash)"
             value={name}
             onChange={(e) => setName(e.target.value)}
