@@ -28,6 +28,7 @@ import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
 import { packetImageUrl, packetVideoUrl } from '@/hooks/useDealPackets';
 import { CONDITION_SYSTEM_LABELS, CONDITION_SYSTEMS, DEAL_TYPE_CONFIG, type ConditionRating, type ConditionSystem } from '@/types/domain';
+import { repairIcon } from '@/lib/repairCatalog';
 
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -927,12 +928,20 @@ export function PublicPacketPage() {
         <Panel>
           <table className="w-full text-left text-[13px]">
             <tbody>
-              {packet.repairs.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-b-0">
-                  <td className="py-2.5 text-text-2">{r.item || '—'}</td>
-                  <td className="py-2.5 text-right font-mono font-medium tabular-nums text-text">{money(r.cost)}</td>
-                </tr>
-              ))}
+              {packet.repairs.map((r) => {
+                const Icon = repairIcon(r.item);
+                return (
+                  <tr key={r.id} className="border-b border-border last:border-b-0">
+                    <td className="py-2.5 text-text-2">
+                      <span className="flex items-center gap-2">
+                        <Icon size={15} className="shrink-0 text-text-3" />
+                        {r.item || '—'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right font-mono font-medium tabular-nums text-text">{money(r.cost)}</td>
+                  </tr>
+                );
+              })}
               <tr>
                 <td className="pt-3 text-[13px] font-semibold text-text">Total</td>
                 <td className="pt-3 text-right font-mono text-[15px] font-bold tabular-nums text-text">{money(repairTotalValue)}</td>

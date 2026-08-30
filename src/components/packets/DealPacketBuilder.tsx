@@ -54,6 +54,8 @@ import {
   type PacketStatus,
   type PacketVideo,
 } from '@/types/domain';
+import { repairIcon } from '@/lib/repairCatalog';
+import { RepairPicker } from './RepairPicker';
 
 const CONDITION_SYSTEM_ICON: Record<ConditionSystem, LucideIcon> = {
   electrical: Zap,
@@ -814,25 +816,29 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           </Section>
 
           {/* ── Repairs ─────────────────────────────────────────────────── */}
-          <Section title="Repair estimate">
+          <Section title="Repair estimate" hint="Search to add a common repair, or type one that isn't listed.">
             <div className="space-y-2">
-              {repairs.map((r, i) => (
-                <div key={i} className="grid grid-cols-[1fr_130px_auto] items-center gap-2">
-                  <input className="input !py-1 text-[13px]" placeholder="Item — e.g. Roof replacement" value={r.item}
-                         onChange={(e) => setRepairs((p) => p.map((x, idx) => idx === i ? { ...x, item: e.target.value } : x))} />
-                  <input className="input !py-1 text-[13px]" placeholder="Cost" inputMode="numeric" value={r.cost || ''}
-                         onChange={(e) => setRepairs((p) => p.map((x, idx) => idx === i ? { ...x, cost: num(e.target.value) ?? 0 } : x))} />
-                  <button type="button" onClick={() => setRepairs((p) => p.filter((_, idx) => idx !== i))}
-                          className="rounded p-1 text-text-3 hover:text-danger" title="Remove line">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-              <div className="flex items-center justify-between gap-2">
-                <button type="button" onClick={() => setRepairs((p) => [...p, { item: '', cost: 0 }])}
-                        className="btn !px-2 !py-1 text-[12px]">
-                  <Plus size={13} /> Add line item
-                </button>
+              {repairs.map((r, i) => {
+                const Icon = repairIcon(r.item);
+                return (
+                  <div key={i} className="grid grid-cols-[auto_1fr_130px_auto] items-center gap-2">
+                    <Icon size={15} className="shrink-0 text-text-3" />
+                    <input className="input !py-1 text-[13px]" placeholder="Item — e.g. Roof replacement" value={r.item}
+                           onChange={(e) => setRepairs((p) => p.map((x, idx) => idx === i ? { ...x, item: e.target.value } : x))} />
+                    <input className="input !py-1 text-[13px]" placeholder="Cost" inputMode="numeric" value={r.cost || ''}
+                           onChange={(e) => setRepairs((p) => p.map((x, idx) => idx === i ? { ...x, cost: num(e.target.value) ?? 0 } : x))} />
+                    <button type="button" onClick={() => setRepairs((p) => p.filter((_, idx) => idx !== i))}
+                            className="rounded p-1 text-text-3 hover:text-danger" title="Remove line">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+              <RepairPicker
+                existingItems={repairs.map((r) => r.item)}
+                onAdd={(item) => setRepairs((p) => [...p, { item, cost: 0 }])}
+              />
+              <div className="flex items-center justify-end gap-2">
                 <div className="text-[13px] text-text-2">
                   Total: <strong className="text-text">{money(totalRepairs)}</strong>
                 </div>
