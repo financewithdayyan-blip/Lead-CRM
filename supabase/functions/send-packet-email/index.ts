@@ -106,6 +106,31 @@ function factCallout(facts: Array<[string, string]>): string {
 </div>`;
 }
 
+// The numbers an investor actually decides on — visually distinct from the
+// plain grey property-specs box (factCallout) on purpose: navy background,
+// much larger figures, a 2-column grid that stays legible on a phone-width
+// email (a single 4-across row doesn't survive a ~280px mobile card). The
+// last "accent" item (Potential Spread) renders in gold, largest of all —
+// that's the one number that answers "is this worth opening."
+function dealHighlight(items: Array<{ label: string; value: string; accent?: boolean }>): string {
+  const rows: string[] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    const pair = items.slice(i, i + 2);
+    const cell = ({ label, value, accent }: (typeof items)[number], isFirst: boolean) => `<td style="width:50%;${
+      isFirst ? 'padding-right:10px;' : 'padding-left:10px;'
+    }${i > 0 ? 'padding-top:18px;' : ''}">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${accent ? '#E8C97A' : '#8CA0B8'};">${label}</div>
+<div style="margin-top:4px;font-size:22px;font-weight:800;line-height:1.2;color:${accent ? '#E8C97A' : '#ffffff'};">${value}</div>
+</td>`;
+    const cells = pair.length === 2 ? cell(pair[0], true) + cell(pair[1], false) : cell(pair[0], true) + `<td style="width:50%;"></td>`;
+    rows.push(`<tr>${cells}</tr>`);
+  }
+  return `<p style="margin:18px 0 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8693A1;">The Numbers</p>
+<div style="padding:18px 20px;background:#0B1E33;border-radius:12px;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">${rows.join('')}</table>
+</div>`;
+}
+
 function ctaButton(link: string, label: string): string {
   return `<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td style="background:#C9A24B;border-radius:10px;">
 <a href="${link}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:#0B1E33;text-decoration:none;">${label}</a>
@@ -148,7 +173,7 @@ Deno.serve(async (req) => {
     const propType = packet.prop_type || 'Property';
     const area = [packet.city, packet.state].filter(Boolean).join(', ');
     const dealTypeLabels = ((packet.deal_types ?? []) as string[]).map((t) => DEAL_TYPE_LABELS[t]).filter(Boolean);
-    const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+    const money = (n: number) => (n < 0 ? '-' : '') + `$${Math.round(Math.abs(n)).toLocaleString('en-US')}`;
     const repairsTotal = ((packet.packet_repairs ?? []) as Array<{ cost: number | null }>).reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
 
     const propertyFacts: Array<[string, string]> = [['Property', propType]];
@@ -159,13 +184,16 @@ Deno.serve(async (req) => {
     if (packet.sqft != null) propertyFacts.push(['Sqft', String(packet.sqft)]);
     if (dealTypeLabels.length > 0) propertyFacts.push(['Structure', dealTypeLabels.join(', ')]);
 
-    // A second, separate fact row for the numbers — keeps property specs and
-    // deal economics visually distinct instead of cramming 8 columns into
-    // one card.
-    const dealFacts: Array<[string, string]> = [];
-    if (packet.purchase_price != null) dealFacts.push(['Sale Price', money(packet.purchase_price)]);
-    if (packet.arv != null) dealFacts.push(['ARV', money(packet.arv)]);
-    if (repairsTotal > 0) dealFacts.push(['Est. Repairs', money(repairsTotal)]);
+    // The headline economics — Potential Spread (ARV minus price minus
+    // repairs) is the one number that actually answers "is this worth a
+    // look," so it only shows once there's enough to compute it for real.
+    const dealItems: Array<{ label: string; value: string; accent?: boolean }> = [];
+    if (packet.purchase_price != null) dealItems.push({ label: 'Sale Price', value: money(packet.purchase_price) });
+    if (packet.arv != null) dealItems.push({ label: 'ARV', value: money(packet.arv) });
+    if (repairsTotal > 0) dealItems.push({ label: 'Est. Repairs', value: money(repairsTotal) });
+    if (packet.purchase_price != null && packet.arv != null) {
+      dealItems.push({ label: 'Potential Spread', value: money(packet.arv - packet.purchase_price - repairsTotal), accent: true });
+    }
 
     const noteHtml = note?.trim()
       ? `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${note.trim()}</p>`
@@ -177,7 +205,7 @@ Deno.serve(async (req) => {
       `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Thought you'd want a look at this one. Full details, photos, comps and numbers are in the deal packet below.</p>`,
       noteHtml,
       factCallout(propertyFacts),
-      dealFacts.length > 0 ? factCallout(dealFacts) : '',
+      dealItems.length > 0 ? dealHighlight(dealItems) : '',
       `<div style="margin:20px 0 0;">${ctaButton(link, 'View Full Deal Packet')}</div>`,
       `<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Let me know if you want to move on it.<br>Thanks,<br>Dayyan</p>`,
       fallbackLink(link),
