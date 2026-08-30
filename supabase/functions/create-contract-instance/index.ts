@@ -290,6 +290,23 @@ Deno.serve(async (req) => {
     );
     if (templateErr) throw templateErr;
 
+    // A template can define fields for an optional role nobody actually
+    // filled in this send (e.g. a co-seller/co-buyer section only some
+    // deals need) — those fields still exist on the template row for the
+    // NEXT contract that does need them, but stamping them into THIS
+    // instance's own snapshot would leave a permanently-unsigned "not yet
+    // signed" placeholder on a document where that role was never sent to
+    // anyone and never will sign. Excluded unless either (a) a live party
+    // actually has that role, or (b) it already got a pre-filled value —
+    // some roles (Novation/Cash Deal's built-in "buyer") are pre-fill-only
+    // and never get a live signing party at all, so role-presence alone
+    // would wrongly strip every one of their fields (name, price, address,
+    // ...) off of every single contract.
+    const sentRoles = new Set(normalizedParties.map((p) => p.role));
+    const prefilledIds = new Set(Object.keys(fieldValues ?? {}));
+    const templateFields = Array.isArray(template.fields) ? (template.fields as ContractField[]) : [];
+    const relevantFields = templateFields.filter((f) => sentRoles.has(f.role) || prefilledIds.has(f.id));
+
     // Hashed at send time so the certificate can later show whether the
     // blank template itself changed between being sent and being signed —
     // tamper-evidence for the starting document, not just the finished one.
@@ -312,7 +329,7 @@ Deno.serve(async (req) => {
         field_values: fieldValues ?? {},
         created_by: userId,
         status: 'sent',
-        template_fields_snapshot: template.fields,
+        template_fields_snapshot: relevantFields,
         template_party_roles_snapshot: template.party_roles,
         template_storage_path_snapshot: template.storage_path,
         template_docx_storage_path_snapshot: template.docx_storage_path,
