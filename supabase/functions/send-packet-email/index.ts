@@ -60,18 +60,23 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 // ── Branded shell — table-based, every style inlined, matching the Blue Docs
-// contract emails so every email this company sends looks like one system. ──
+// contract emails so every email this company sends looks like one system.
+// Every <table> below sets border/cellpadding/cellspacing as HTML
+// ATTRIBUTES, not just CSS — Outlook's Word rendering engine reads the
+// attributes, not the inline style, and a table missing them can pick up
+// its own default spacing, which is what was opening up a stray gap
+// between the fallback link and the footer bar in some clients. ──
 function emailShell(preheader: string, bodyHtml: string): string {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);">
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);border-collapse:collapse;">
 <tr><td style="background:#0B1E33;padding:24px 32px;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
 <td style="width:28px;height:28px;background:#1568A8;border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:28px;">&#9993;</td>
 <td style="padding-left:10px;font-size:15px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Bluebird <span style="font-weight:500;color:#8CA0B8;">Acquisition</span></td>
 </tr></table>
@@ -90,19 +95,19 @@ function emailShell(preheader: string, bodyHtml: string): string {
 function factCallout(facts: Array<[string, string]>): string {
   const cells = facts
     .map(
-      ([label, value]) => `<td style="padding:0 14px 0 0;">
+      ([label, value]) => `<td style="padding:0 14px 10px 0;">
 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">${label}</div>
 <div style="margin-top:2px;font-size:14px;font-weight:600;color:#0B1E33;">${value}</div>
 </td>`,
     )
     .join('');
-  return `<div style="margin:20px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
+  return `<div style="margin:14px 0 0;padding:14px 16px 4px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
 </div>`;
 }
 
 function ctaButton(link: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#C9A24B;border-radius:10px;">
+  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr><td style="background:#C9A24B;border-radius:10px;">
 <a href="${link}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:#0B1E33;text-decoration:none;">${label}</a>
 </td></tr></table>`;
 }
@@ -129,9 +134,11 @@ Deno.serve(async (req) => {
 
     // RLS-scoped to the caller — returns nothing if they don't own this
     // packet and aren't an overseeing admin, exactly like opening it in the app.
+    // packet_repairs is a child table (see useDealPackets.ts's PACKET_SELECT) —
+    // only its cost column is needed here, just to sum an estimate total.
     const { data: packet, error: packetErr } = await callerClient
       .from('deal_packets')
-      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types')
+      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types, purchase_price, arv, packet_repairs(cost)')
       .eq('id', packetId)
       .single();
     if (packetErr || !packet) return json({ error: 'Packet not found, or you don\'t have access to it.' }, 404);
@@ -141,30 +148,42 @@ Deno.serve(async (req) => {
     const propType = packet.prop_type || 'Property';
     const area = [packet.city, packet.state].filter(Boolean).join(', ');
     const dealTypeLabels = ((packet.deal_types ?? []) as string[]).map((t) => DEAL_TYPE_LABELS[t]).filter(Boolean);
+    const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+    const repairsTotal = ((packet.packet_repairs ?? []) as Array<{ cost: number | null }>).reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
 
-    const facts: Array<[string, string]> = [['Property', propType]];
-    if (area) facts.push(['Area', area]);
+    const propertyFacts: Array<[string, string]> = [['Property', propType]];
+    if (area) propertyFacts.push(['Area', area]);
     if (packet.beds != null || packet.baths != null) {
-      facts.push(['Beds / Baths', `${packet.beds ?? '—'} / ${packet.baths ?? '—'}`]);
+      propertyFacts.push(['Beds / Baths', `${packet.beds ?? '—'} / ${packet.baths ?? '—'}`]);
     }
-    if (packet.sqft != null) facts.push(['Sqft', String(packet.sqft)]);
-    if (dealTypeLabels.length > 0) facts.push(['Structure', dealTypeLabels.join(', ')]);
+    if (packet.sqft != null) propertyFacts.push(['Sqft', String(packet.sqft)]);
+    if (dealTypeLabels.length > 0) propertyFacts.push(['Structure', dealTypeLabels.join(', ')]);
+
+    // A second, separate fact row for the numbers — keeps property specs and
+    // deal economics visually distinct instead of cramming 8 columns into
+    // one card.
+    const dealFacts: Array<[string, string]> = [];
+    if (packet.purchase_price != null) dealFacts.push(['Sale Price', money(packet.purchase_price)]);
+    if (packet.arv != null) dealFacts.push(['ARV', money(packet.arv)]);
+    if (repairsTotal > 0) dealFacts.push(['Est. Repairs', money(repairsTotal)]);
 
     const noteHtml = note?.trim()
       ? `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${note.trim()}</p>`
       : '';
 
-    const html = emailShell(
-      `New off-market deal${area ? ` in ${area}` : ''}`,
-      `<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C9A24B;">Off-Market Deal</p>
-<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${propType}${area ? ` — ${area}` : ''}</h1>
-<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Thought you'd want a look at this one. Full details, photos, comps and numbers are in the deal packet below.</p>
-${noteHtml}
-${factCallout(facts)}
-${ctaButton(link, 'View Full Deal Packet')}
-<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Let me know if you want to move on it.<br>Thanks,<br>Dayyan</p>
-${fallbackLink(link)}`,
-    );
+    const bodyParts = [
+      `<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C9A24B;">Off-Market Deal</p>`,
+      `<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${propType}${area ? ` — ${area}` : ''}</h1>`,
+      `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Thought you'd want a look at this one. Full details, photos, comps and numbers are in the deal packet below.</p>`,
+      noteHtml,
+      factCallout(propertyFacts),
+      dealFacts.length > 0 ? factCallout(dealFacts) : '',
+      `<div style="margin:20px 0 0;">${ctaButton(link, 'View Full Deal Packet')}</div>`,
+      `<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Let me know if you want to move on it.<br>Thanks,<br>Dayyan</p>`,
+      fallbackLink(link),
+    ];
+
+    const html = emailShell(`New off-market deal${area ? ` in ${area}` : ''}`, bodyParts.filter(Boolean).join('\n'));
 
     await sendEmail(
       email.trim(),
