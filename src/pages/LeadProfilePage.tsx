@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Archive, ChevronDown, DollarSign, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User, Video } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
@@ -1332,5 +1332,7 @@ function FilesTab({ lead }: { lead: Lead }) {
 
 export function LeadProfilePage() {
   const { id } = useParams<{ id: string }>();
-  return <LeadProfileView id={id} backTo="/leads" allowShare />;
+  const location = useLocation();
+  const cameFromKanban = (location.state as { from?: string } | null)?.from === 'kanban';
+  return <LeadProfileView id={id} backTo={cameFromKanban ? '/kanban' : '/leads'} allowShare />;
 }

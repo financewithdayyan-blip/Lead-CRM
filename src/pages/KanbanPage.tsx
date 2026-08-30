@@ -923,12 +923,15 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     if (e164) window.location.href = `zoomphonecall://${e164}`;
   }, [addActivity]);
 
+  // Lets the profile page's "Back to Leads" return to the Kanban board
+  // instead of always landing on the flat Leads list — opening a card here
+  // should close back to here, not somewhere the user wasn't just looking.
   const handleOpen = useCallback((id: string) => {
-    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`);
+    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`, { state: { from: 'kanban' } });
   }, [navigate, targetUserId]);
 
   const handleOpenSms = useCallback((id: string) => {
-    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}?tab=sms` : `/leads/${id}?tab=sms`);
+    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}?tab=sms` : `/leads/${id}?tab=sms`, { state: { from: 'kanban' } });
   }, [navigate, targetUserId]);
 
   const selCount = selectedIds.size;
