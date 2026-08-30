@@ -16,7 +16,7 @@ import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
-import { daysUntil, formatPhone, formatDate, formatDateTime, formatClockTime, isImageFile, isVideoFile, localIsoDate } from '@/lib/utils';
+import { daysUntil, formatPhone, formatDate, formatDateTime, formatClockTime, isImageFile, isVideoFile, localIsoDate, toE164 } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
 import { PacketTab } from '@/components/packets/PacketTab';
@@ -566,6 +566,17 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();
   const setLeadTags = useSetLeadTags();
+  const addActivity = useAddActivity();
+  // Zoom's own documented deep link, not a generic tel: link, so it launches
+  // Zoom Phone specifically rather than whatever else the OS has registered
+  // for tel: — same pattern as the Kanban card and Calendar quick actions.
+  const handleCall = (phone: string | null | undefined) => {
+    if (!lead) return;
+    const e164 = toE164(phone ?? '');
+    if (!e164) return;
+    addActivity.mutate({ leadId: lead.id, type: 'call', body: 'Quick call logged from lead profile' });
+    window.location.href = `zoomphonecall://${e164}`;
+  };
   // Lets a link (e.g. the Kanban card's "Text" action) land straight on a
   // specific tab via `?tab=sms` instead of always opening on Overview. Read
   // once at mount — this page doesn't re-init the tab if the query string
@@ -597,10 +608,34 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
               <StageBadge stage={lead.stage} />
               {lead.leadNum && <span className="text-[12px] text-text-3">#{lead.leadNum}</span>}
             </div>
-            <div className="mt-1 text-sm text-text-2">
-              {formatPhone(lead.phone)}
-              {lead.phone2 ? ` · ${formatPhone(lead.phone2)}` : ''}
-              {lead.email ? ` · ${lead.email}` : ''}
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-text-2">
+              {lead.phone && (
+                <button
+                  onClick={() => handleCall(lead.phone)}
+                  className="inline-flex items-center gap-1 rounded hover:text-primary"
+                  title={`Call ${formatPhone(lead.phone)}`}
+                >
+                  <PhoneCall size={13} /> {formatPhone(lead.phone)}
+                </button>
+              )}
+              {lead.phone2 && (
+                <>
+                  <span className="text-text-3">·</span>
+                  <button
+                    onClick={() => handleCall(lead.phone2)}
+                    className="inline-flex items-center gap-1 rounded hover:text-primary"
+                    title={`Call ${formatPhone(lead.phone2)}`}
+                  >
+                    <PhoneCall size={13} /> {formatPhone(lead.phone2)}
+                  </button>
+                </>
+              )}
+              {lead.email && (
+                <>
+                  <span className="text-text-3">·</span>
+                  <span>{lead.email}</span>
+                </>
+              )}
             </div>
             {lead.address && (
               <div className="mt-0.5 text-sm text-text-3">
