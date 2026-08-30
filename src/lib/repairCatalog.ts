@@ -107,6 +107,13 @@ const DEFAULT_REPAIR_ICON: LucideIcon = Wrench;
 
 const catalogByLabel = new Map(REPAIR_CATALOG.map((r) => [r.label.toLowerCase(), r]));
 
+// The "5 majors" — standard wholesaling shorthand for the highest-cost
+// systems that drive a rehab budget on nearly every deal, worth a one-click
+// shortcut instead of searching for each one every time.
+export const MAJOR_FIVE = REPAIR_CATALOG.filter((r) =>
+  ['Roof Replacement', 'HVAC System', 'Electrical Rewiring', 'Plumbing Repipe', 'Foundation Repair'].includes(r.label),
+);
+
 /** Icon for a repair line — exact (case-insensitive) match against the
  * catalog, falling back to a generic wrench for anything typed freehand
  * that isn't in it. */

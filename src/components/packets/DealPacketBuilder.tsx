@@ -54,7 +54,7 @@ import {
   type PacketStatus,
   type PacketVideo,
 } from '@/types/domain';
-import { repairIcon } from '@/lib/repairCatalog';
+import { repairIcon, MAJOR_FIVE } from '@/lib/repairCatalog';
 import { RepairPicker } from './RepairPicker';
 
 const CONDITION_SYSTEM_ICON: Record<ConditionSystem, LucideIcon> = {
@@ -834,6 +834,32 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                   </div>
                 );
               })}
+              <div>
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-text-3">Quick add — the 5 majors</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {MAJOR_FIVE.map((m) => {
+                    const Icon = m.icon;
+                    const already = repairs.some((r) => r.item.trim().toLowerCase() === m.label.toLowerCase());
+                    return (
+                      <button
+                        key={m.label}
+                        type="button"
+                        disabled={already}
+                        onClick={() => setRepairs((p) => [...p, { item: m.label, cost: 0 }])}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                          already
+                            ? 'cursor-default border-border-2 bg-surface-3 text-text-3'
+                            : 'border-primary/30 bg-primary-dim text-primary-text hover:bg-primary/10'
+                        }`}
+                      >
+                        <Icon size={13} />
+                        {m.label}
+                        {already && <Check size={12} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <RepairPicker
                 existingItems={repairs.map((r) => r.item)}
                 onAdd={(item) => setRepairs((p) => [...p, { item, cost: 0 }])}
