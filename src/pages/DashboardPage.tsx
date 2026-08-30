@@ -737,20 +737,25 @@ export function DashboardView({
     return days;
   }, [sendLog, inboundMessages, leads, trendDayCount]);
 
-  // "Revenue in pipeline" = total assignment fee across every lead
-  // currently Under Contract — but "currently" only tells you today's
-  // number, and the point of a trend chart is the days before today too.
+  // "Revenue in pipeline" = total assignment fee across every lead that has
+  // reached Under Contract and hasn't fallen out of that track since —
+  // Contract, In Title, and Closed are the three phases of the SAME deal
+  // (Contract -> In Title -> Closed is where the fee actually gets paid),
+  // not separate pots, so a lead progressing through them should never look
+  // like the money disappeared. "Currently" only tells you today's number,
+  // and the point of a trend chart is the days before today too.
   // Reconstructed from each lead's real stage_change history via
   // useStageChangeHistory — a dedicated, slim query (just the stage-change
   // rows, no SMS/call/note bodies) rather than the full useActivityFeed
   // used elsewhere on this page, which for an account with a large SMS
   // volume is genuinely large and made this one chart slow to load for no
-  // reason it actually needed that data. A lead that has since moved to In
-  // Title/Closed, or fallen through to Dead, still correctly counts on the
-  // days it really was under contract, and correctly stops counting once
-  // it left. Only leads with an assignment fee actually entered contribute
-  // anything.
+  // reason it actually needed that data. A lead that has since fallen
+  // through to Dead still correctly counts on the days it really was in the
+  // contract track, and correctly stops counting once it left. Only leads
+  // with an assignment fee actually entered contribute anything.
   const revenueInPipelineTrend = useMemo(() => {
+    const CONTRACT_PLUS_STAGES = new Set(['contract', 'in_title', 'closed']);
+
     const transitionsByLead = new Map<string, Array<{ at: number; to: string }>>();
     for (const r of stageChangeHistory) {
       const arr = transitionsByLead.get(r.leadId) ?? [];
@@ -765,16 +770,20 @@ export function DashboardView({
     }
     // useStageChangeHistory covers full history (unlike useActivityFeed,
     // which is bounded to this year), but a lead can still be missing its
-    // own history row in edge cases (e.g. created directly into Contract
-    // pre-dating the stage_change trigger) — falls back to "currently Under
-    // Contract" so at least the present-day number stays correct either way.
+    // own history row in edge cases (e.g. created directly into Contract, In
+    // Title, or Closed pre-dating the stage_change trigger) — falls back to
+    // "currently somewhere in the contract track" so at least the
+    // present-day number stays correct either way.
     const relevantLeads = leads.filter(
-      (l) => (everUnderContractIds.has(l.id) || l.stage === 'contract') && l.assignmentFee,
+      (l) => (everUnderContractIds.has(l.id) || CONTRACT_PLUS_STAGES.has(l.stage)) && l.assignmentFee,
     );
 
     function stageAsOf(leadId: string, atMs: number): string {
       const arr = transitionsByLead.get(leadId);
-      if (!arr) return relevantLeads.some((l) => l.id === leadId && l.stage === 'contract') ? 'contract' : 'new';
+      if (!arr) {
+        const current = relevantLeads.find((l) => l.id === leadId);
+        return current && CONTRACT_PLUS_STAGES.has(current.stage) ? current.stage : 'new';
+      }
       let stage = 'new';
       for (const t of arr) {
         if (t.at > atMs) break;
@@ -788,7 +797,7 @@ export function DashboardView({
     for (let i = trendDayCount - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i, 23, 59, 59, 999);
       const revenue = relevantLeads.reduce(
-        (sum, l) => sum + (stageAsOf(l.id, d.getTime()) === 'contract' ? l.assignmentFee ?? 0 : 0),
+        (sum, l) => sum + (CONTRACT_PLUS_STAGES.has(stageAsOf(l.id, d.getTime())) ? l.assignmentFee ?? 0 : 0),
         0,
       );
       days.push({
@@ -1048,7 +1057,7 @@ export function DashboardView({
                     icon={DollarSign}
                     title="Revenue in Pipeline"
                     tone="accent"
-                    sub={`Assignment fee across leads Under Contract · ${rangeLabel}`}
+                    sub={`Assignment fee across leads Under Contract, In Title, or Closed · ${rangeLabel}`}
                   />
                   <Suspense fallback={<div className="mt-3 flex flex-1 items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3 flex-1">
