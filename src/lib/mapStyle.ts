@@ -1,4 +1,23 @@
+import { setWorkerUrl } from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
+// eslint-disable-next-line import/no-unresolved
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+
+// MapLibre locates its own worker script by taking `import.meta.url` of
+// whatever module it ends up bundled into and requesting a sibling file
+// named maplibre-gl-worker.mjs next to it — a assumption that only holds
+// when maplibre-gl's dist/ files are deployed unbundled, side by side. Once
+// Rollup bundles it into our own vendor-maplibre chunk, that sibling file
+// never exists (nothing emits it), the worker's script fetch 404s
+// asynchronously (past the point a synchronous try/catch inside maplibre-gl
+// can catch it), and the map silently never finishes loading — no error
+// event, no console error, just a background color and nothing else,
+// forever. Explicitly pointing MapLibre at a real, Vite-emitted copy of the
+// worker (via the `?url` import, which copies the file into dist/assets and
+// hands back its actual hashed path) fixes it. Must run before any map is
+// constructed — this module is imported by both map components specifically
+// so this side effect always runs first.
+setWorkerUrl(maplibreWorkerUrl);
 
 /**
  * A hand-authored MapLibre style over OpenFreeMap's free, keyless vector
@@ -102,7 +121,13 @@ export const MAP_STYLE: StyleSpecification = {
       type: 'line',
       source: 'openmaptiles',
       'source-layer': 'boundary',
-      filter: ['all', ['>=', ['get', 'admin_level'], 2], ['<=', ['get', 'admin_level'], 6], ['!=', ['get', 'maritime'], 1]],
+      filter: [
+        'all',
+        ['has', 'admin_level'],
+        ['>=', ['get', 'admin_level'], 2],
+        ['<=', ['get', 'admin_level'], 6],
+        ['!=', ['get', 'maritime'], 1],
+      ],
       paint: { 'line-color': '#1f3a57', 'line-width': 1 },
     },
     {
