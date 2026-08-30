@@ -1,28 +1,22 @@
 import {
   AppWindow,
-  Archive,
   Biohazard,
   Bug,
-  ChefHat,
   CloudRain,
   Construction,
   Droplets,
   Fan,
   Fence,
   Flame,
-  Grid3x3,
   Hammer,
   Home,
   Layers,
   Lightbulb,
   PaintBucket,
-  Paintbrush,
   PanelTop,
   PanelsTopLeft,
   Refrigerator,
-  Ruler,
   ShieldAlert,
-  ShowerHead,
   Siren,
   Snowflake,
   Sparkles,
@@ -84,14 +78,12 @@ export const REPAIR_CATALOG: RepairCatalogItem[] = [
   { label: 'Landscaping / Tree Removal', icon: TreePine, group: 'Exterior' },
   { label: 'Pool Repair / Removal', icon: Waves, group: 'Exterior' },
 
-  // Interior & cosmetic
-  { label: 'Kitchen Remodel', icon: ChefHat, group: 'Interior & Cosmetic' },
-  { label: 'Bathroom Remodel', icon: ShowerHead, group: 'Interior & Cosmetic' },
-  { label: 'Flooring', icon: Grid3x3, group: 'Interior & Cosmetic' },
-  { label: 'Interior Paint', icon: Paintbrush, group: 'Interior & Cosmetic' },
+  // Interior & cosmetic — kitchen, bath, flooring, paint, cabinets, and trim
+  // all fold into one lump-sum "Cosmetic Rehab & Remodeling" line rather
+  // than separate per-room entries: at deal-analysis stage this is one
+  // estimate, not a room-by-room contractor bid.
+  { label: 'Cosmetic Rehab & Remodeling', icon: Sparkles, group: 'Interior & Cosmetic' },
   { label: 'Drywall Repair', icon: PanelTop, group: 'Interior & Cosmetic' },
-  { label: 'Cabinets & Countertops', icon: Archive, group: 'Interior & Cosmetic' },
-  { label: 'Trim & Molding', icon: Ruler, group: 'Interior & Cosmetic' },
   { label: 'Insulation', icon: Snowflake, group: 'Interior & Cosmetic' },
   { label: 'Appliances', icon: Refrigerator, group: 'Interior & Cosmetic' },
   { label: 'Lighting & Electrical Fixtures', icon: Lightbulb, group: 'Interior & Cosmetic' },
@@ -99,7 +91,6 @@ export const REPAIR_CATALOG: RepairCatalogItem[] = [
 
   // General
   { label: 'Junk Removal / Debris', icon: Trash2, group: 'General' },
-  { label: 'Cosmetic Rehab & Cleanup', icon: Sparkles, group: 'General' },
   { label: 'Miscellaneous / Other', icon: Wrench, group: 'General' },
 ];
 
