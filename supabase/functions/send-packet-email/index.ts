@@ -92,11 +92,14 @@ function emailShell(preheader: string, bodyHtml: string): string {
 </html>`;
 }
 
-function factCallout(facts: Array<[string, string]>): string {
+// icon is a plain Unicode glyph, not an SVG/icon-font/image — the one thing
+// that reliably shows up the same way across Gmail, Outlook, and Apple Mail
+// without a broken-image icon or a font that silently fails to load.
+function factCallout(facts: Array<[string, string, string?]>): string {
   const cells = facts
     .map(
-      ([label, value]) => `<td style="padding:0 14px 10px 0;">
-<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">${label}</div>
+      ([label, value, icon]) => `<td style="padding:0 14px 10px 0;vertical-align:top;">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">${icon ? `${icon} ` : ''}${label}</div>
 <div style="margin-top:2px;font-size:14px;font-weight:600;color:#0B1E33;">${value}</div>
 </td>`,
     )
@@ -108,26 +111,28 @@ function factCallout(facts: Array<[string, string]>): string {
 
 // The numbers an investor actually decides on — visually distinct from the
 // plain grey property-specs box (factCallout) on purpose: navy background,
-// much larger figures, a 2-column grid that stays legible on a phone-width
-// email (a single 4-across row doesn't survive a ~280px mobile card). The
-// last "accent" item (Potential Spread) renders in gold, largest of all —
-// that's the one number that answers "is this worth opening."
+// larger bold figures, gold for the "accent" item (Potential Spread) since
+// that's the one number that answers "is this worth opening" at a glance.
+// A single row, same structural shape as factCallout above it (one <tr>,
+// uniform per-cell padding, no row-to-row conditional styling) — an earlier
+// 2-row grid version rendered fine in a browser preview but broke badly in
+// real Gmail (a label detached and floating, a large dead gap), while this
+// exact single-row shape is the one already proven to render correctly
+// right above it in the same email. Not worth chasing the 2-row version's
+// exact failure — matching what's already known to work is safer than
+// guessing again, and a single row is shorter besides.
 function dealHighlight(items: Array<{ label: string; value: string; accent?: boolean }>): string {
-  const rows: string[] = [];
-  for (let i = 0; i < items.length; i += 2) {
-    const pair = items.slice(i, i + 2);
-    const cell = ({ label, value, accent }: (typeof items)[number], isFirst: boolean) => `<td style="width:50%;${
-      isFirst ? 'padding-right:10px;' : 'padding-left:10px;'
-    }${i > 0 ? 'padding-top:18px;' : ''}">
+  const cells = items
+    .map(
+      ({ label, value, accent }) => `<td style="padding:0 20px 0 0;vertical-align:top;">
 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${accent ? '#E8C97A' : '#8CA0B8'};">${label}</div>
-<div style="margin-top:4px;font-size:22px;font-weight:800;line-height:1.2;color:${accent ? '#E8C97A' : '#ffffff'};">${value}</div>
-</td>`;
-    const cells = pair.length === 2 ? cell(pair[0], true) + cell(pair[1], false) : cell(pair[0], true) + `<td style="width:50%;"></td>`;
-    rows.push(`<tr>${cells}</tr>`);
-  }
+<div style="margin-top:4px;font-size:19px;font-weight:800;line-height:1.2;white-space:nowrap;color:${accent ? '#E8C97A' : '#ffffff'};">${value}</div>
+</td>`,
+    )
+    .join('');
   return `<p style="margin:18px 0 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8693A1;">The Numbers</p>
-<div style="padding:18px 20px;background:#0B1E33;border-radius:12px;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">${rows.join('')}</table>
+<div style="padding:16px 18px;background:#0B1E33;border-radius:12px;">
+<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
 </div>`;
 }
 
@@ -163,7 +168,9 @@ Deno.serve(async (req) => {
     // only its cost column is needed here, just to sum an estimate total.
     const { data: packet, error: packetErr } = await callerClient
       .from('deal_packets')
-      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types, purchase_price, arv, packet_repairs(cost)')
+      .select(
+        'id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types, purchase_price, assignment_fee, arv, packet_repairs(cost)',
+      )
       .eq('id', packetId)
       .single();
     if (packetErr || !packet) return json({ error: 'Packet not found, or you don\'t have access to it.' }, 404);
@@ -175,24 +182,30 @@ Deno.serve(async (req) => {
     const dealTypeLabels = ((packet.deal_types ?? []) as string[]).map((t) => DEAL_TYPE_LABELS[t]).filter(Boolean);
     const money = (n: number) => (n < 0 ? '-' : '') + `$${Math.round(Math.abs(n)).toLocaleString('en-US')}`;
     const repairsTotal = ((packet.packet_repairs ?? []) as Array<{ cost: number | null }>).reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
+    // What an investor actually pays is the contract price PLUS our
+    // assignment fee — purchase_price alone is what WE pay the seller, not
+    // the number a buyer is being offered the deal at.
+    const investorPrice = packet.purchase_price != null ? packet.purchase_price + (packet.assignment_fee ?? 0) : null;
 
-    const propertyFacts: Array<[string, string]> = [['Property', propType]];
-    if (area) propertyFacts.push(['Area', area]);
+    const propertyFacts: Array<[string, string, string?]> = [['Property', propType, '🏠']];
+    if (area) propertyFacts.push(['Area', area, '📍']);
     if (packet.beds != null || packet.baths != null) {
-      propertyFacts.push(['Beds / Baths', `${packet.beds ?? '—'} / ${packet.baths ?? '—'}`]);
+      propertyFacts.push(['Beds / Baths', `${packet.beds ?? '—'} 🛏️  ${packet.baths ?? '—'} 🛁`, undefined]);
     }
-    if (packet.sqft != null) propertyFacts.push(['Sqft', String(packet.sqft)]);
-    if (dealTypeLabels.length > 0) propertyFacts.push(['Structure', dealTypeLabels.join(', ')]);
+    if (packet.sqft != null) propertyFacts.push(['Sqft', String(packet.sqft), '📐']);
+    if (dealTypeLabels.length > 0) propertyFacts.push(['Structure', dealTypeLabels.join(', '), '🤝']);
 
-    // The headline economics — Potential Spread (ARV minus price minus
-    // repairs) is the one number that actually answers "is this worth a
-    // look," so it only shows once there's enough to compute it for real.
+    // The headline economics — Potential Spread (ARV minus the investor's
+    // actual price minus repairs) is the one number that answers "is this
+    // worth a look," so it only shows once there's enough to compute it for
+    // real. Uses investorPrice throughout so the spread reflects what an
+    // investor's own profit would actually be, not our contract price.
     const dealItems: Array<{ label: string; value: string; accent?: boolean }> = [];
-    if (packet.purchase_price != null) dealItems.push({ label: 'Sale Price', value: money(packet.purchase_price) });
+    if (investorPrice != null) dealItems.push({ label: 'Sale Price', value: money(investorPrice) });
     if (packet.arv != null) dealItems.push({ label: 'ARV', value: money(packet.arv) });
     if (repairsTotal > 0) dealItems.push({ label: 'Est. Repairs', value: money(repairsTotal) });
-    if (packet.purchase_price != null && packet.arv != null) {
-      dealItems.push({ label: 'Potential Spread', value: money(packet.arv - packet.purchase_price - repairsTotal), accent: true });
+    if (investorPrice != null && packet.arv != null) {
+      dealItems.push({ label: 'Potential Spread', value: money(packet.arv - investorPrice - repairsTotal), accent: true });
     }
 
     const noteHtml = note?.trim()
