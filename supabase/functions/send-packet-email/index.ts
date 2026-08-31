@@ -95,38 +95,44 @@ function emailShell(preheader: string, bodyHtml: string): string {
 // icon is a plain Unicode glyph, not an SVG/icon-font/image — the one thing
 // that reliably shows up the same way across Gmail, Outlook, and Apple Mail
 // without a broken-image icon or a font that silently fails to load.
-function factCallout(facts: Array<[string, string, string?]>): string {
-  const cells = facts
-    .map(
-      ([label, value, icon]) => `<td style="padding:0 14px 10px 0;vertical-align:top;">
+//
+// Takes rows of facts, not one flat list — 5 columns crammed into one row
+// read as congested at the card's ~500px width. Each row renders as its
+// OWN separate single-row <table>, stacked inside one shared background/
+// border wrapper — deliberately not multiple <tr>s in one table: an earlier
+// version that packed 2 rows into one table via conditional per-cell
+// padding (row 2 got extra top-padding, alternating cells got left- vs
+// right-padding) rendered fine in a browser preview but broke badly in real
+// Gmail — a label detached and floating, a large dead gap. Every row here
+// uses the exact same plain per-cell style with nothing conditional, same
+// shape proven to render correctly before.
+function factCard(rows: Array<Array<[string, string, string?]>>): string {
+  const rowHtml = rows
+    .map((facts, i) => {
+      const cells = facts
+        .map(
+          ([label, value, icon]) => `<td style="padding:0 20px 12px 0;vertical-align:top;">
 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">${icon ? `${icon} ` : ''}${label}</div>
 <div style="margin-top:2px;font-size:14px;font-weight:600;color:#0B1E33;">${value}</div>
 </td>`,
-    )
+        )
+        .join('');
+      return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="${i > 0 ? 'margin-top:2px;' : ''}"><tr>${cells}</tr></table>`;
+    })
     .join('');
-  return `<div style="margin:14px 0 0;padding:14px 16px 4px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
-</div>`;
+  return `<div style="margin:14px 0 0;padding:14px 16px 2px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">${rowHtml}</div>`;
 }
 
 // The numbers an investor actually decides on — visually distinct from the
-// plain grey property-specs box (factCallout) on purpose: navy background,
-// larger bold figures, gold for the "accent" item (Potential Spread) since
-// that's the one number that answers "is this worth opening" at a glance.
-// A single row, same structural shape as factCallout above it (one <tr>,
-// uniform per-cell padding, no row-to-row conditional styling) — an earlier
-// 2-row grid version rendered fine in a browser preview but broke badly in
-// real Gmail (a label detached and floating, a large dead gap), while this
-// exact single-row shape is the one already proven to render correctly
-// right above it in the same email. Not worth chasing the 2-row version's
-// exact failure — matching what's already known to work is safer than
-// guessing again, and a single row is shorter besides.
-function dealHighlight(items: Array<{ label: string; value: string; accent?: boolean }>): string {
+// plain grey property-specs card on purpose: navy background, larger bold
+// figures. Same single-row-per-table shape as factCard above, for the same
+// Gmail-safety reason.
+function dealHighlight(items: Array<{ label: string; value: string }>): string {
   const cells = items
     .map(
-      ({ label, value, accent }) => `<td style="padding:0 20px 0 0;vertical-align:top;">
-<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${accent ? '#E8C97A' : '#8CA0B8'};">${label}</div>
-<div style="margin-top:4px;font-size:19px;font-weight:800;line-height:1.2;white-space:nowrap;color:${accent ? '#E8C97A' : '#ffffff'};">${value}</div>
+      ({ label, value }) => `<td style="padding:0 24px 0 0;vertical-align:top;">
+<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8CA0B8;">${label}</div>
+<div style="margin-top:4px;font-size:19px;font-weight:800;line-height:1.2;white-space:nowrap;color:#ffffff;">${value}</div>
 </td>`,
     )
     .join('');
@@ -187,26 +193,24 @@ Deno.serve(async (req) => {
     // the number a buyer is being offered the deal at.
     const investorPrice = packet.purchase_price != null ? packet.purchase_price + (packet.assignment_fee ?? 0) : null;
 
-    const propertyFacts: Array<[string, string, string?]> = [['Property', propType, '🏠']];
-    if (area) propertyFacts.push(['Area', area, '📍']);
+    // Two rows instead of one 5-across line — identity facts (what/where) on
+    // top, specs (size/deal type) below, so neither row is cramped.
+    const identityRow: Array<[string, string, string?]> = [['Property', propType, '🏠']];
+    if (area) identityRow.push(['Area', area, '📍']);
+    const specsRow: Array<[string, string, string?]> = [];
     if (packet.beds != null || packet.baths != null) {
-      propertyFacts.push(['Beds / Baths', `${packet.beds ?? '—'} 🛏️  ${packet.baths ?? '—'} 🛁`, undefined]);
+      specsRow.push(['Beds / Baths', `${packet.beds ?? '—'} 🛏️  ${packet.baths ?? '—'} 🛁`, undefined]);
     }
-    if (packet.sqft != null) propertyFacts.push(['Sqft', String(packet.sqft), '📐']);
-    if (dealTypeLabels.length > 0) propertyFacts.push(['Structure', dealTypeLabels.join(', '), '🤝']);
+    if (packet.sqft != null) specsRow.push(['Sqft', String(packet.sqft), '📐']);
+    if (dealTypeLabels.length > 0) specsRow.push(['Structure', dealTypeLabels.join(', '), '🤝']);
+    const propertyRows = [identityRow, specsRow].filter((r) => r.length > 0);
 
-    // The headline economics — Potential Spread (ARV minus the investor's
-    // actual price minus repairs) is the one number that answers "is this
-    // worth a look," so it only shows once there's enough to compute it for
-    // real. Uses investorPrice throughout so the spread reflects what an
-    // investor's own profit would actually be, not our contract price.
-    const dealItems: Array<{ label: string; value: string; accent?: boolean }> = [];
+    // Sale Price uses investorPrice (contract price + our assignment fee) —
+    // what an investor actually pays, not our own cost.
+    const dealItems: Array<{ label: string; value: string }> = [];
     if (investorPrice != null) dealItems.push({ label: 'Sale Price', value: money(investorPrice) });
     if (packet.arv != null) dealItems.push({ label: 'ARV', value: money(packet.arv) });
     if (repairsTotal > 0) dealItems.push({ label: 'Est. Repairs', value: money(repairsTotal) });
-    if (investorPrice != null && packet.arv != null) {
-      dealItems.push({ label: 'Potential Spread', value: money(packet.arv - investorPrice - repairsTotal), accent: true });
-    }
 
     const noteHtml = note?.trim()
       ? `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${note.trim()}</p>`
@@ -217,7 +221,7 @@ Deno.serve(async (req) => {
       `<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${propType}${area ? ` — ${area}` : ''}</h1>`,
       `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Thought you'd want a look at this one. Full details, photos, comps and numbers are in the deal packet below.</p>`,
       noteHtml,
-      factCallout(propertyFacts),
+      propertyRows.length > 0 ? factCard(propertyRows) : '',
       dealItems.length > 0 ? dealHighlight(dealItems) : '',
       `<div style="margin:20px 0 0;">${ctaButton(link, 'View Full Deal Packet')}</div>`,
       `<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Let me know if you want to move on it.<br>Thanks,<br>Dayyan</p>`,
