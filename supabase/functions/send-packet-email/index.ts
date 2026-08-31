@@ -65,12 +65,21 @@ async function sendEmail(to: string, subject: string, html: string) {
 // ATTRIBUTES, not just CSS — Outlook's Word rendering engine reads the
 // attributes, not the inline style, and a table missing them can pick up
 // its own default spacing, which is what was opening up a stray gap
-// between the fallback link and the footer bar in some clients. ──
+// between the fallback link and the footer bar in some clients.
+//
+// -webkit-text-size-adjust:100% (both the <style> block and inline on
+// <body>, belt and suspenders since some clients strip one or the other) is
+// what was actually behind the fallback link rendering at ~50px on mobile —
+// iOS Mail auto-inflates small text (the link paragraph is 11.5px) that it
+// decides is "too small to read," ignoring the real inline font-size
+// entirely unless this is explicitly turned off. ──
 function emailShell(preheader: string, bodyHtml: string): string {
   return `<!doctype html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title></head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Bluebird Acquisition</title>
+<style>body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}</style>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
 <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
@@ -106,18 +115,24 @@ function emailShell(preheader: string, bodyHtml: string): string {
 // Gmail — a label detached and floating, a large dead gap. Every row here
 // uses the exact same plain per-cell style with nothing conditional, same
 // shape proven to render correctly before.
+// Every row's <table> is width="100%" with each <td> given an explicit
+// even percentage width (100 / column count) — without that, a <td> only
+// takes up as much width as its own content needs and the row sits
+// left-aligned inside the card, leaving dead space on the right instead of
+// the columns spreading out to fill it.
 function factCard(rows: Array<Array<[string, string, string?]>>): string {
   const rowHtml = rows
     .map((facts, i) => {
+      const colWidth = Math.floor(100 / facts.length);
       const cells = facts
         .map(
-          ([label, value, icon]) => `<td style="padding:0 20px 12px 0;vertical-align:top;">
+          ([label, value, icon], idx) => `<td style="width:${colWidth}%;padding:0 ${idx === facts.length - 1 ? 0 : 12}px 12px 0;vertical-align:top;">
 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">${icon ? `${icon} ` : ''}${label}</div>
 <div style="margin-top:2px;font-size:14px;font-weight:600;color:#0B1E33;">${value}</div>
 </td>`,
         )
         .join('');
-      return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="${i > 0 ? 'margin-top:2px;' : ''}"><tr>${cells}</tr></table>`;
+      return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="${i > 0 ? 'margin-top:2px;' : ''}"><tr>${cells}</tr></table>`;
     })
     .join('');
   return `<div style="margin:14px 0 0;padding:14px 16px 2px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">${rowHtml}</div>`;
@@ -126,11 +141,13 @@ function factCard(rows: Array<Array<[string, string, string?]>>): string {
 // The numbers an investor actually decides on — visually distinct from the
 // plain grey property-specs card on purpose: navy background, larger bold
 // figures. Same single-row-per-table shape as factCard above, for the same
-// Gmail-safety reason.
+// Gmail-safety reason, and the same even-width columns so the row fills the
+// box instead of leaving space on the right.
 function dealHighlight(items: Array<{ label: string; value: string }>): string {
+  const colWidth = Math.floor(100 / items.length);
   const cells = items
     .map(
-      ({ label, value }) => `<td style="padding:0 24px 0 0;vertical-align:top;">
+      ({ label, value }, idx) => `<td style="width:${colWidth}%;padding:0 ${idx === items.length - 1 ? 0 : 12}px 0 0;vertical-align:top;">
 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#8CA0B8;">${label}</div>
 <div style="margin-top:4px;font-size:19px;font-weight:800;line-height:1.2;white-space:nowrap;color:#ffffff;">${value}</div>
 </td>`,
@@ -138,7 +155,7 @@ function dealHighlight(items: Array<{ label: string; value: string }>): string {
     .join('');
   return `<p style="margin:18px 0 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8693A1;">The Numbers</p>
 <div style="padding:16px 18px;background:#0B1E33;border-radius:12px;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr>${cells}</tr></table>
 </div>`;
 }
 
