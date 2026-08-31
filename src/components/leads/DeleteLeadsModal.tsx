@@ -1,32 +1,49 @@
 import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { useDeleteLeads } from '@/hooks/useLeads';
-import { STAGE_CONFIG, type Lead, type LeadStage, type Tag } from '@/types/domain';
+import { useAllLeadStagesAndTags, useDeleteLeads } from '@/hooks/useLeads';
+import { STAGE_CONFIG, type LeadStage, type Tag } from '@/types/domain';
+
+// Common subset of Lead and LeadStageAndTags — "selected" mode gets full Lead
+// objects straight from the Leads table's current page, "by filter" mode gets
+// the lighter per-account fetch below; both carry everything this modal needs.
+interface DeletableLead {
+  id: string;
+  leadNum: number | null;
+  firstName: string;
+  lastName: string;
+  stage: LeadStage;
+  tagIds: string[];
+}
 
 export function DeleteLeadsModal({
-  leads,
+  selectedLeads,
   tags,
-  selectedIds,
+  targetUserId,
   onClose,
 }: {
-  leads: Lead[];
+  selectedLeads: DeletableLead[];
   tags: Tag[];
-  selectedIds: Set<string>;
+  targetUserId?: string;
   onClose: () => void;
 }) {
   const deleteLeads = useDeleteLeads();
-  const hasSelection = selectedIds.size > 0;
+  const hasSelection = selectedLeads.length > 0;
   const [mode, setMode] = useState<'selected' | 'filter'>(hasSelection ? 'selected' : 'filter');
   const [stages, setStages] = useState<Set<LeadStage>>(new Set());
   const [tagIds, setTagIds] = useState<Set<string>>(new Set());
   const [confirmText, setConfirmText] = useState('');
 
+  // "By filter" needs live stage/tag counts across the WHOLE account, not
+  // just whatever page the Leads table currently has loaded — fetched only
+  // while this modal is open.
+  const { data: allLeads = [] } = useAllLeadStagesAndTags(targetUserId);
+
   const targets = useMemo(() => {
-    if (mode === 'selected') return leads.filter((l) => selectedIds.has(l.id));
-    return leads.filter(
+    if (mode === 'selected') return selectedLeads;
+    return allLeads.filter(
       (l) => (stages.size > 0 && stages.has(l.stage)) || (tagIds.size > 0 && l.tagIds.some((t) => tagIds.has(t))),
     );
-  }, [leads, mode, selectedIds, stages, tagIds]);
+  }, [selectedLeads, allLeads, mode, stages, tagIds]);
 
   function toggleStage(s: LeadStage) {
     setStages((prev) => {
@@ -66,7 +83,7 @@ export function DeleteLeadsModal({
         <div className="flex gap-2">
           {hasSelection && (
             <button onClick={() => setMode('selected')} className={`btn ${mode === 'selected' ? '!border-danger !text-danger' : ''}`}>
-              Selected ({selectedIds.size})
+              Selected ({selectedLeads.length})
             </button>
           )}
           <button onClick={() => setMode('filter')} className={`btn ${mode === 'filter' ? '!border-danger !text-danger' : ''}`}>
@@ -80,7 +97,7 @@ export function DeleteLeadsModal({
               <div className="label">By stage</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(STAGE_CONFIG).map(([key, cfg]) => {
-                  const count = leads.filter((l) => l.stage === key).length;
+                  const count = allLeads.filter((l) => l.stage === key).length;
                   if (!count) return null;
                   return (
                     <button
@@ -99,7 +116,7 @@ export function DeleteLeadsModal({
                 <div className="label">By tag</div>
                 <div className="flex flex-wrap gap-1.5">
                   {tags.map((t) => {
-                    const count = leads.filter((l) => l.tagIds.includes(t.id)).length;
+                    const count = allLeads.filter((l) => l.tagIds.includes(t.id)).length;
                     return (
                       <button
                         key={t.id}

@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { dbToLead, leadToDbInsert, leadToDbUpdate } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Lead } from '@/types/domain';
+import { fetchAllPages } from '@/lib/paginate';
+import type { Lead, LeadStage } from '@/types/domain';
 
 // List views (Kanban, leads table, dashboard) don't render comps or files —
 // omitting them cuts payload by ~70% for large accounts.
@@ -87,6 +88,145 @@ export function useLeads(targetUserId?: string) {
   return useQuery({
     queryKey: ['leads', userId],
     queryFn: () => fetchLeadsPaged(userId!, (soFar) => qc.setQueryData(['leads', userId], soFar)),
+    enabled: !!userId,
+    // The app-wide default (5 min staleTime, 15 min gcTime — see App.tsx) is
+    // right for most queries, but this one fetches the whole account (Kanban/
+    // Dashboard/etc.) in chunks of 1000 with a visible pop-in as each chunk
+    // lands. Sitting on a lead for a few minutes (a call, texting) and coming
+    // back to Kanban was enough to go stale and silently re-trigger that
+    // whole chunked fetch, or — past 15 min — get garbage-collected and
+    // refetch from a blank board. This should only ever run once per app
+    // load; every real change already updates the cache directly (see
+    // useCreateLead/useUpdateLead/useDeleteLeads/useSetLeadTags below), so
+    // there's nothing for a time-based refetch to catch that isn't already
+    // covered — except another user's edit, which won't show here until the
+    // next full reload (no realtime wired to this query; a deliberate
+    // trade-off per the user, not an oversight).
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+const LEADS_PAGE_SIZE = 200;
+
+export interface LeadsPageResult {
+  rows: Lead[];
+  count: number;
+}
+
+/**
+ * One page, sorted server-side by pipeline priority (see migration
+ * 0125_leads_stage_priority.sql for the tier mapping) rather than creation
+ * order, so the leads that matter most land on page 1. `!inner` on the
+ * lead_tags embed turns tagFilter into a real join filter instead of just
+ * hydrating tags for display.
+ */
+async function fetchLeadsPage(
+  userId: string,
+  page: number,
+  search: string,
+  stageFilter: LeadStage | '',
+  tagFilter: string,
+): Promise<LeadsPageResult> {
+  let query = supabase
+    .from('leads')
+    .select(tagFilter ? '*, lead_tags!inner(tag_id)' : LEAD_LIST_SELECT, { count: 'exact' })
+    .eq('user_id', userId);
+
+  if (stageFilter) query = query.eq('stage', stageFilter);
+  if (tagFilter) query = query.eq('lead_tags.tag_id', tagFilter);
+  const q = search.trim();
+  if (q) {
+    const pattern = `%${q}%`;
+    query = query.or(`first_name.ilike.${pattern},last_name.ilike.${pattern},phone.ilike.${pattern},address.ilike.${pattern}`);
+  }
+
+  const from = (page - 1) * LEADS_PAGE_SIZE;
+  const { data, error, count } = await query
+    .order('stage_priority', { ascending: true })
+    .order('lead_num', { ascending: true })
+    .range(from, from + LEADS_PAGE_SIZE - 1);
+  if (error) throw error;
+  return { rows: (data ?? []).map(dbToLead), count: count ?? 0 };
+}
+
+/** Server-side-paginated leads for the Leads table — unlike useLeads() this
+ *  never loads more than one page into the browser. Kanban/Dashboard/etc.
+ *  keep using useLeads() since they need the full account in memory. */
+export function useLeadsPage(
+  targetUserId: string | undefined,
+  page: number,
+  search: string,
+  stageFilter: LeadStage | '',
+  tagFilter: string,
+) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'page', userId, page, search, stageFilter, tagFilter],
+    queryFn: () => fetchLeadsPage(userId!, page, search, stageFilter, tagFilter),
+    enabled: !!userId,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Account-wide lead count, unfiltered — backs the Leads table's "N total"
+ *  header, which (unlike the pagination footer) always shows the grand total
+ *  regardless of the active search/stage/tag filters. */
+export function useLeadsTotalCount(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'count', userId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    enabled: !!userId,
+  });
+}
+
+export interface LeadStageAndTags {
+  id: string;
+  leadNum: number | null;
+  firstName: string;
+  lastName: string;
+  stage: LeadStage;
+  tagIds: string[];
+}
+
+/** Every lead's id/stage/tags (no comps/files/pricing) for DeleteLeadsModal's
+ *  "by filter" mode, which needs live per-stage/per-tag counts across the
+ *  whole account — something the paginated Leads table no longer holds. */
+export function useAllLeadStagesAndTags(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'stagesAndTags', userId],
+    queryFn: () =>
+      fetchAllPages<any>((from, to) =>
+        supabase
+          .from('leads')
+          .select('id, lead_num, first_name, last_name, stage, lead_tags(tag_id)')
+          .eq('user_id', userId)
+          .order('lead_num', { ascending: true })
+          .range(from, to),
+      ).then((rows) =>
+        rows.map(
+          (r): LeadStageAndTags => ({
+            id: r.id,
+            leadNum: r.lead_num,
+            firstName: r.first_name ?? '',
+            lastName: r.last_name ?? '',
+            stage: r.stage,
+            tagIds: (r.lead_tags ?? []).map((t: any) => t.tag_id),
+          }),
+        ),
+      ),
     enabled: !!userId,
   });
 }
@@ -207,10 +347,21 @@ export function useUpdateLead() {
     },
     onSuccess: (id, variables) => {
       const { id: _id, ...updates } = variables;
-      // Patch the list cache in place — no full refetch of 4000 leads.
-      qc.setQueriesData<Lead[]>({ queryKey: ['leads'] }, (old) =>
-        old?.map((l) => (l.id === id ? { ...l, ...updates } : l)),
-      );
+      const patch = (l: Lead) => (l.id === id ? { ...l, ...updates } : l);
+      // Patch every cached leads list in place — no full refetch. Two shapes
+      // share the 'leads' key prefix: the full-list array from useLeads()
+      // (Kanban/Dashboard/etc.) and the {rows, count} page from
+      // useLeadsPage() (the Leads table) — the plain number from
+      // useLeadsTotalCount() falls through untouched since an edit never
+      // changes the account's total lead count.
+      qc.setQueriesData({ queryKey: ['leads'] }, (old: unknown) => {
+        if (Array.isArray(old)) return old.map((l) => patch(l as Lead));
+        if (old && typeof old === 'object' && Array.isArray((old as LeadsPageResult).rows)) {
+          const page = old as LeadsPageResult;
+          return { ...page, rows: page.rows.map(patch) };
+        }
+        return old;
+      });
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['activities', id] });
     },
@@ -254,12 +405,29 @@ class PartialDeleteError extends Error {
 export function useDeleteLeads() {
   const qc = useQueryClient();
 
-  // Drop the deleted rows straight out of the list cache. A blanket invalidate
-  // would refetch every lead on the account just to learn about the removals.
+  // Drop the deleted rows straight out of every cached leads list/page. A
+  // blanket invalidate would refetch every lead on the account just to learn
+  // about the removals. Same two-shape handling as useUpdateLead above; a
+  // page's own count shrinks by however many of its rows were removed, and
+  // the account-wide total (useLeadsTotalCount) shrinks by the full delete count.
   const dropFromCache = (ids: string[]) => {
     if (!ids.length) return;
     const gone = new Set(ids);
-    qc.setQueriesData<Lead[]>({ queryKey: ['leads'] }, (old) => old?.filter((l) => !gone.has(l.id)));
+    qc.setQueriesData({ queryKey: ['leads'] }, (old: unknown) => {
+      if (Array.isArray(old)) return old.filter((l: Lead) => !gone.has(l.id));
+      if (old && typeof old === 'object' && Array.isArray((old as LeadsPageResult).rows)) {
+        const page = old as LeadsPageResult;
+        const rows = page.rows.filter((l) => !gone.has(l.id));
+        return { rows, count: Math.max(0, page.count - (page.rows.length - rows.length)) };
+      }
+      return old;
+    });
+    // Not patched optimistically like the lists above: this cache key isn't
+    // scoped per-delete-call the way the id-filtered lists are, so a blind
+    // decrement here could double-count against another cached account's
+    // total (e.g. an admin who's browsed two team members' leads recently).
+    // It's a cheap head-only count query, so just invalidate it.
+    qc.invalidateQueries({ queryKey: ['leads', 'count'] });
   };
 
   return useMutation({

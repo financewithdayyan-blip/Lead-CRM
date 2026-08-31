@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Share2, Trash2, Upload, UserPlus } from 'lucide-react';
-import { useLeads } from '@/hooks/useLeads';
+import { useLeadsPage, useLeadsTotalCount } from '@/hooks/useLeads';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { StageBadge } from '@/components/ui/StageBadge';
@@ -16,12 +17,13 @@ import { formatPhone, getErrorMessage } from '@/lib/utils';
 
 export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
-  const { data: leads = [], isLoading, isError, error, refetch, isRefetching } = useLeads(targetUserId);
+  const { data: totalCount = 0 } = useLeadsTotalCount(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const { data: receivedShares = {} } = useReceivedLeadShares();
   const transferLead = useTransferLeadToAdmin();
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [stageFilter, setStageFilter] = useState<LeadStage | ''>('');
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -32,23 +34,20 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
   const [showDelete, setShowDelete] = useState(false);
   const [takeTarget, setTakeTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return leads.filter((l) => {
-      if (stageFilter && l.stage !== stageFilter) return false;
-      if (tagFilter && !l.tagIds.includes(tagFilter)) return false;
-      if (q) {
-        const haystack = `${l.firstName} ${l.lastName} ${l.phone} ${l.address ?? ''}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [leads, search, stageFilter, tagFilter]);
+  const {
+    data: pageResult,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isRefetching,
+  } = useLeadsPage(targetUserId, page, debouncedSearch, stageFilter, tagFilter);
+  const leads = pageResult?.rows ?? [];
+  const filteredCount = pageResult?.count ?? 0;
 
-  useEffect(() => { setPage(1); }, [search, stageFilter, tagFilter]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, stageFilter, tagFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -57,8 +56,11 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
       return next;
     });
   }
+  // Selects only the rows on the current page — with results now paginated
+  // server-side, "every lead matching the filters across the whole account"
+  // is what DeleteLeadsModal's "By filter" mode is for.
   function toggleSelectAll() {
-    setSelected(selected.size === filtered.length ? new Set() : new Set(filtered.map((l) => l.id)));
+    setSelected(selected.size === leads.length ? new Set() : new Set(leads.map((l) => l.id)));
   }
 
   function paginationPages(): (number | '…')[] {
@@ -77,7 +79,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         <div>
           <h1 className="text-2xl font-semibold text-text">Leads</h1>
           <p className="text-sm text-text-3">
-            {isError ? 'Failed to load' : `${leads.length} total`}
+            {isError ? 'Failed to load' : `${totalCount} total`}
             {viewOnly && " · this is their lead list - changes apply to their account"}
           </p>
         </div>
@@ -126,7 +128,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
             <Trash2 size={14} /> Delete {selected.size}
           </button>
         )}
-        {selected.size === 0 && leads.length > 0 && (
+        {selected.size === 0 && totalCount > 0 && (
           <button className="btn ml-auto" onClick={() => setShowDelete(true)}>
             <Trash2 size={14} /> Manage / bulk delete
           </button>
@@ -138,7 +140,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
           <thead className="border-b border-border bg-surface-3 text-[11px] uppercase tracking-wide text-text-3">
             <tr>
               <th className="px-3 py-2.5">
-                <input type="checkbox" checked={selected.size > 0 && selected.size === filtered.length} onChange={toggleSelectAll} />
+                <input type="checkbox" checked={selected.size > 0 && selected.size === leads.length} onChange={toggleSelectAll} />
               </th>
               <th className="px-3 py-2.5">#</th>
               <th className="px-3 py-2.5">Name</th>
@@ -158,14 +160,14 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                 </td>
               </tr>
             )}
-            {!isLoading && filtered.length === 0 && (
+            {!isLoading && leads.length === 0 && (
               <tr>
                 <td colSpan={targetUserId ? 10 : 9} className="px-3 py-8 text-center text-text-3">
                   No leads match your filters.
                 </td>
               </tr>
             )}
-            {paginated.map((lead) => {
+            {leads.map((lead) => {
               const sharedFrom = receivedShares[lead.id];
               return (
                 <tr
@@ -224,7 +226,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-[13px] text-text-2">
           <span>
-            Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+            Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredCount)} of {filteredCount}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -262,9 +264,9 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
       {showImport && <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />}
       {showDelete && (
         <DeleteLeadsModal
-          leads={leads}
+          selectedLeads={leads.filter((l) => selected.has(l.id))}
           tags={tags}
-          selectedIds={selected}
+          targetUserId={targetUserId}
           onClose={() => { setShowDelete(false); setSelected(new Set()); }}
         />
       )}
