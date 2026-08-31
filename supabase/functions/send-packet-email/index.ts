@@ -60,18 +60,26 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 // ── Branded shell — table-based, every style inlined, matching the Blue Docs
-// contract emails so every email this company sends looks like one system. ──
+// contract emails so every email this company sends looks like one system.
+// -webkit-text-size-adjust:100% (style block + inline on <body>, belt and
+// suspenders since some clients strip one or the other) is the fix for the
+// footer paragraph splitting apart with a huge blank gap in the middle —
+// iOS Mail auto-inflates small text (that paragraph is 11px) it decides is
+// "too small to read," reflowing it at an inconsistent effective size
+// unless this is explicitly turned off. ──
 function emailShell(preheader: string, bodyHtml: string): string {
   return `<!doctype html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title></head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title>
+<style>body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}</style>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);">
+<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);border-collapse:collapse;">
 <tr><td style="background:#0B1E33;padding:24px 32px;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
 <td style="width:28px;height:28px;background:#1568A8;border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:28px;">&#9993;</td>
 <td style="padding-left:10px;font-size:15px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Bluebird <span style="font-weight:500;color:#8CA0B8;">Acquisition</span></td>
 </tr></table>
