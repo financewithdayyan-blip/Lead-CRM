@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { refetchAndPatchLead } from '@/hooks/useLeads';
 import type { SmsNumberKey } from '@/lib/smsNumbers';
 
 export interface ThreadAttachment {
@@ -208,7 +209,12 @@ export function useSendManualReply() {
     },
     onSettled: (_d, _e, { leadId }) => {
       qc.invalidateQueries({ queryKey: ['lead_thread', leadId] });
-      qc.invalidateQueries({ queryKey: ['leads'] });
+      // send-sms can advance this one lead's stage/flags server-side (e.g.
+      // 'new' -> 'contacted') without reporting exactly what changed back
+      // here — patch just this lead in place rather than invalidating (and
+      // re-fetching, in 1000-row chunks) the whole account's leads list to
+      // catch one row's possible change.
+      refetchAndPatchLead(qc, leadId);
     },
   });
 }

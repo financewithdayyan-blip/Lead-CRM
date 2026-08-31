@@ -337,6 +337,43 @@ export function useBulkCreateLeads() {
   });
 }
 
+/**
+ * Applies `patch` to one lead across every cached leads list/page. Two
+ * shapes share the 'leads' key prefix: the full-list array from useLeads()
+ * (Kanban/Dashboard/etc.) and the {rows, count} page from useLeadsPage()
+ * (the Leads table) — the plain number from useLeadsTotalCount() falls
+ * through untouched since patching one lead never changes the account's
+ * total lead count. Exported so any mutation that changes a single lead can
+ * update the cache in place instead of invalidating (and re-fetching, in
+ * 1000-row chunks) the whole account just to reflect one row's change.
+ */
+function patchLeadInCaches(qc: QueryClient, id: string, patch: (l: Lead) => Lead) {
+  qc.setQueriesData({ queryKey: ['leads'] }, (old: unknown) => {
+    if (Array.isArray(old)) return old.map((l) => ((l as Lead).id === id ? patch(l as Lead) : l));
+    if (old && typeof old === 'object' && Array.isArray((old as LeadsPageResult).rows)) {
+      const page = old as LeadsPageResult;
+      return { ...page, rows: page.rows.map((l) => (l.id === id ? patch(l) : l)) };
+    }
+    return old;
+  });
+}
+
+/**
+ * Re-fetches one lead and patches it into every cached leads list/page —
+ * for flows where the server may have changed a lead as a side effect (e.g.
+ * sending it a first SMS auto-advances stage 'new' to 'contacted', see
+ * send-sms) without reporting exactly what changed back to the caller.
+ * Costs one single-row request instead of invalidating the entire account's
+ * leads list just to catch one lead's possible change.
+ */
+export async function refetchAndPatchLead(qc: QueryClient, id: string) {
+  const { data, error } = await supabase.from('leads').select(LEAD_LIST_SELECT).eq('id', id).single();
+  if (error || !data) return;
+  const fresh = dbToLead(data);
+  patchLeadInCaches(qc, id, () => fresh);
+  qc.setQueryData(['lead', id], fresh);
+}
+
 export function useUpdateLead() {
   const qc = useQueryClient();
   return useMutation({
@@ -347,21 +384,7 @@ export function useUpdateLead() {
     },
     onSuccess: (id, variables) => {
       const { id: _id, ...updates } = variables;
-      const patch = (l: Lead) => (l.id === id ? { ...l, ...updates } : l);
-      // Patch every cached leads list in place — no full refetch. Two shapes
-      // share the 'leads' key prefix: the full-list array from useLeads()
-      // (Kanban/Dashboard/etc.) and the {rows, count} page from
-      // useLeadsPage() (the Leads table) — the plain number from
-      // useLeadsTotalCount() falls through untouched since an edit never
-      // changes the account's total lead count.
-      qc.setQueriesData({ queryKey: ['leads'] }, (old: unknown) => {
-        if (Array.isArray(old)) return old.map((l) => patch(l as Lead));
-        if (old && typeof old === 'object' && Array.isArray((old as LeadsPageResult).rows)) {
-          const page = old as LeadsPageResult;
-          return { ...page, rows: page.rows.map(patch) };
-        }
-        return old;
-      });
+      patchLeadInCaches(qc, id, (l) => ({ ...l, ...updates }));
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['activities', id] });
     },
@@ -378,7 +401,9 @@ export function useSetLeadTags() {
       }
     },
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['leads'] });
+      // Already know exactly what changed (vars.tagIds) — patch in place,
+      // no need for even the single-row re-fetch refetchAndPatchLead does.
+      patchLeadInCaches(qc, vars.leadId, (l) => ({ ...l, tagIds: vars.tagIds }));
       qc.invalidateQueries({ queryKey: ['lead', vars.leadId] });
     },
   });

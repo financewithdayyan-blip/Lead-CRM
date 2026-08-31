@@ -4,6 +4,7 @@ import { dbToActivity } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
 import { localIsoDate } from '@/lib/utils';
 import { fetchAllPages } from '@/lib/paginate';
+import { refetchAndPatchLead } from '@/hooks/useLeads';
 import type { ActivityType } from '@/types/domain';
 
 export interface AdminNoteNotif {
@@ -63,12 +64,20 @@ export function useAddActivity() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
       qc.invalidateQueries({ queryKey: ['today_calls'] });
-      qc.invalidateQueries({ queryKey: ['activity_feed'] });
       qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
-      if (vars.type === 'call') {
-        qc.invalidateQueries({ queryKey: ['leads'] });
-        qc.invalidateQueries({ queryKey: ['lead', vars.leadId] });
-      }
+      // Deliberately NOT invalidating 'activity_feed' here: it's a
+      // fetchAllPages-backed, whole-year dashboard chart query that can be
+      // large on a high-volume account, and one logged activity invalidating
+      // it on every single add is the same expensive-refetch-on-a-narrow-
+      // change bug as the 'leads' one above — it'll pick this up on its own
+      // via the normal 5-min staleTime, which is a fine lag for a chart.
+      // Logging a call clears next_follow_up on this one lead server-side
+      // (see mutationFn above) — patch it in place rather than invalidating
+      // (and re-fetching, in 1000-row chunks) the whole account's leads list
+      // for a field change on a single row. This is one of the most common
+      // lead-profile/Kanban actions, so the blanket invalidate here was the
+      // main trigger for leads re-fetching on almost every "back to Kanban."
+      if (vars.type === 'call') refetchAndPatchLead(qc, vars.leadId);
     },
   });
 }
@@ -113,7 +122,8 @@ export function useUpdateActivity() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
-      qc.invalidateQueries({ queryKey: ['activity_feed'] });
+      // Same reasoning as useAddActivity above — not invalidating the
+      // whole-year activity_feed chart query for a single edited row.
       qc.invalidateQueries({ queryKey: ['recent_activities'] });
       qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
     },
