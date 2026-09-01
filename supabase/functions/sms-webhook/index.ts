@@ -545,10 +545,18 @@ Deno.serve(async (req) => {
       }
 
       // Only advance forward. A lead already past 'replied' (in Negotiation,
-      // say) shouldn't be pulled backward by a new inbound text.
-      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted']);
+      // say) shouldn't be pulled backward by a new inbound text. 'onhold' is
+      // included so a reply to the automated On Hold nurture sequence
+      // (send-onhold-followups) wakes the lead back up — those leads also
+      // have ai_reply_paused set true (from the price-decline path that put
+      // them on hold in the first place), which ai-reply's own gate checks
+      // independently of stage, so it's cleared here too or the framework
+      // still wouldn't resume despite the stage now being AI-active.
+      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted', 'onhold']);
       if (ADVANCE_FROM.has(lead.stage)) {
-        await admin.from('leads').update({ stage: 'replied' }).eq('id', lead.id);
+        const updates: Record<string, unknown> = { stage: 'replied' };
+        if (lead.stage === 'onhold') updates.ai_reply_paused = false;
+        await admin.from('leads').update(updates).eq('id', lead.id);
       }
 
       await admin.from('lead_activities').insert({
