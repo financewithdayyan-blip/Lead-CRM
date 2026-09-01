@@ -3,7 +3,7 @@ import { Check, Loader2 } from 'lucide-react';
 import { useSmsSendSettings, useSaveSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { SMS_NUMBER_KEYS } from '@/lib/smsNumbers';
 
-/** Bulk-send defaults (each number's own rolling daily limit, delay between
+/** Bulk-send defaults (each number's own daily limit, delay between
  * messages) — set once here instead of re-entering on every send. Every
  * slot is offered regardless of which are actually configured, same as the
  * manual single-send picker — the client has no visibility into that. */
@@ -59,11 +59,11 @@ export function BulkSmsSettingsEditor() {
       </div>
 
       <div className="mt-3">
-        <span className="label">Rolling 24h limit per number</span>
+        <span className="label">Daily limit per number</span>
         <p className="mt-1 mb-2 text-[11px] text-text-3">
-          The most texts each number will go out from in any trailing 24 hours — a sliding window, not a midnight
-          reset. Once a number hits its own limit, a bulk send rotates to the next one instead, which keeps any
-          single number from tripping carrier/10DLC volume filtering. Leave a number at 0 for no cap.
+          The most texts each number will go out from per day, resetting at midnight Pakistan time. Once a number
+          hits its own limit, a bulk send rotates to the next one instead, which keeps any single number from
+          tripping carrier/10DLC volume filtering. Leave a number at 0 for no cap.
         </p>
         <div className="flex flex-wrap gap-3">
           {SMS_NUMBER_KEYS.map((key) => (

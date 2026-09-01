@@ -19,8 +19,8 @@ export interface BulkSmsInput {
    * and auto-splits across every configured number instead. */
   fromKey: SmsNumberKey;
   perMessageDelayMs?: number;
-  /** Per-number rolling 24h cap, keyed '1'-'4'. Missing or 0 for a key means
-   * unlimited for that number. */
+  /** Per-number daily cap (resets at midnight PKT), keyed '1'-'4'. Missing
+   * or 0 for a key means unlimited for that number. */
   dailyLimits?: Record<string, number>;
   /** When set, send-sms writes live per-lead progress to bulk_sms_job_items
    * as it works, instead of only returning a final summary at the end. */

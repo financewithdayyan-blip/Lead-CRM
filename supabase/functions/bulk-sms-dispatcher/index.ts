@@ -297,9 +297,9 @@ Deno.serve(async (req) => {
       }),
     ), 'daily limit check');
     if (senders.every(([key]) => (dailyLimits[key] ?? 0) > 0 && (dailyRemaining.get(key) ?? 0) <= 0)) {
-      // Not a job failure — every number's rolling cap will free up within
-      // 24h, and the next tick will simply find capacity again then.
-      return json({ ok: true, jobId: job.id, skipped: true, reason: 'every configured number at its rolling 24h limit' });
+      // Not a job failure — every number's cap resets at midnight PKT, and
+      // the next tick will simply find capacity again once it does.
+      return json({ ok: true, jobId: job.id, skipped: true, reason: 'every configured number at its daily limit' });
     }
 
     const token = await withTimeout(zoomToken(), 'Zoom auth');
@@ -360,12 +360,12 @@ Deno.serve(async (req) => {
       const isPinned = isActiveKey(pinned) && senders.some(([k]) => k === pinned);
 
       if (isPinned) {
-        if (!hasCapacity(pinned!)) { markSkipped(lead.id, 'assigned number has reached its rolling 24h limit'); continue; }
+        if (!hasCapacity(pinned!)) { markSkipped(lead.id, 'assigned number has reached its daily limit'); continue; }
         key = pinned!;
         from = NUMBERS[pinned!];
       } else {
         const idx = nextSender();
-        if (idx === -1) { markSkipped(lead.id, 'every configured number has reached its rolling 24h limit'); continue; }
+        if (idx === -1) { markSkipped(lead.id, 'every configured number has reached its daily limit'); continue; }
         [key, from] = senders[idx];
         rotation = (idx + 1) % senders.length;
       }

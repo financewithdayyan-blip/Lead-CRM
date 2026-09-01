@@ -3,13 +3,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface SmsSendSettings {
-  /** Rolling 24h cap per sending number, keyed '1'-'4'. Missing or 0 for a
-   * key means unlimited for that number. */
+  /** Daily cap per sending number, keyed '1'-'4', resetting at midnight
+   * Pakistan time (see sends_in_window). Missing or 0 for a key means
+   * unlimited for that number. */
   dailyLimits: Record<string, number>;
   perMessageDelayMs: number;
   /** Caps how many leads a single bulk send will ever queue, regardless of
    * how many were selected in the Pipeline — 0 means no cap. Separate from
-   * dailyLimits above: that's a per-number rolling-24h send cap enforced
+   * dailyLimits above: that's a per-number daily send cap enforced
    * server-side; this trims the selection itself before a job is even
    * created, so selecting an entire large column doesn't have to also mean
    * remembering to trim it by hand first. */

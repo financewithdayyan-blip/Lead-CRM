@@ -2,7 +2,7 @@
 //
 // Bulk cold outreach over Zoom Phone. Admin-only.
 //
-// The sending window, the rolling limits and the opt-out check all live here
+// The sending window, the daily send limits and the opt-out check all live here
 // rather than in the client, because the client can be bypassed and none of
 // these are cosmetic — sending outside the window or to an opted-out number is
 // a compliance problem, not a UX one.
@@ -292,8 +292,9 @@ Deno.serve(async (req) => {
       defaultTemplate: string;
       fromKey: string;
       perMessageDelayMs?: number;
-      /** Per-number rolling 24h cap, keyed '1'-'4' matching NUMBERS above.
-       * Missing or <= 0 for a key means unlimited for that number. */
+      /** Per-number daily cap (resets at midnight PKT — see sends_in_window),
+       * keyed '1'-'4' matching NUMBERS above. Missing or <= 0 for a key means
+       * unlimited for that number. */
       dailyLimits?: Record<string, number>;
       jobId?: string;
       /** A human replying by hand from the lead's own SMS Thread, not bulk
@@ -358,7 +359,7 @@ Deno.serve(async (req) => {
 
     // Bulk (more than one lead) auto-splits evenly across every configured
     // number, switching to the next once a number's share — or its own
-    // rolling 24h cap — is reached (individual leads already pinned to a
+    // daily cap — is reached (individual leads already pinned to a
     // number, handled in the send loop below, sit outside this split
     // entirely). A single send (a manual reply, or one lead picked in the
     // bulk modal) instead uses exactly one number: whichever number this
@@ -391,7 +392,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Each number's own remaining rolling-24h capacity against its own
+    // Each number's own remaining capacity for today (PKT) against its own
     // configured limit, checked once up front. A number already at its cap
     // is simply skipped by the rotation below rather than blocking the whole
     // run — and a number with no limit set (or 0) never even gets checked,
@@ -408,7 +409,7 @@ Deno.serve(async (req) => {
       }),
     ), 'daily limit check');
     if (senders.every(([key]) => (dailyLimits[key] ?? 0) > 0 && (dailyRemaining.get(key) ?? 0) <= 0)) {
-      return bail('Every configured number has already reached its own rolling 24h limit.', 422);
+      return bail('Every configured number has already reached its own daily limit.', 422);
     }
 
     const token = await withTimeout(zoomToken(), 'Zoom auth');
@@ -520,7 +521,7 @@ Deno.serve(async (req) => {
 
       if (isPinned) {
         if (!hasCapacity(pinned!)) {
-          markSkipped(lead.id, 'assigned number has reached its rolling 24h limit');
+          markSkipped(lead.id, 'assigned number has reached its daily limit');
           continue;
         }
         key = pinned!;
@@ -528,7 +529,7 @@ Deno.serve(async (req) => {
       } else {
         const idx = nextSender();
         if (idx === -1) {
-          markSkipped(lead.id, 'every configured number has reached its rolling 24h limit');
+          markSkipped(lead.id, 'every configured number has reached its daily limit');
           continue;
         }
         [key, from] = senders[idx];

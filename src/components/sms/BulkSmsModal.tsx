@@ -216,7 +216,7 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
           {leads.length > 1 ? (
             <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[12px] text-text-2">
               Rotates through every configured sending number one lead at a time (1, 2, 3, 4, 1, 2, …), skipping a
-              number once it hits its own rolling 24h limit below.
+              number once it hits its own daily limit below.
             </div>
           ) : (
             <div>
@@ -294,10 +294,11 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
           )}
 
           <div>
-            <span className="label">Rolling 24h limit per number</span>
+            <span className="label">Daily limit per number</span>
             <p className="mt-1 mb-2 text-[11px] text-text-3">
-              The most texts each number will send in any trailing 24 hours before this send rotates to the next
-              one. Pre-filled from Settings — change it there to update the default for every future send.
+              The most texts each number will send per day (resets at midnight Pakistan time) before this send
+              rotates to the next one. Pre-filled from Settings — change it there to update the default for every
+              future send.
             </p>
             <div className="flex flex-wrap gap-3">
               {SMS_NUMBER_KEYS.map((key) => (
