@@ -6,6 +6,16 @@ import { useCreateTag, useTags, nextTagColor } from '@/hooks/useTags';
 import { CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, guessColumnMapping, mapRowsToLeads, parseCsvFile, type CsvParseResult } from '@/lib/csv';
 import { getErrorMessage } from '@/lib/utils';
 import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
+import type { LeadStage } from '@/types/domain';
+
+// Only these stages mean real engagement happened — a reply came in, they're
+// qualified, in negotiation, under contract, or closed. A phone number that
+// only matches a Cold/Contacted/On Hold/Others/Dead lead isn't a meaningful
+// duplicate: nothing ever came of it, so a fresh CSV row for that number is
+// worth another shot rather than getting silently skipped. Same reasoning
+// the code already applied to Dead/Declined alone; this just extends it to
+// every stage that isn't actually a real, live relationship with the lead.
+const DEDUPE_STAGES: LeadStage[] = ['replied', 'initial_contact', 'followup', 'negotiation', 'contract', 'in_title', 'closed'];
 
 type Step = 'upload' | 'mapping' | 'tags';
 
@@ -38,10 +48,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   }
 
   const previewMapped = parsed ? mapRowsToLeads(parsed.rows, mapping) : [];
-  // Dead/Declined leads don't block a re-import — that phone number is done
-  // and gone as far as the pipeline's concerned, so a fresh CSV row with the
-  // same number is treated as a new lead worth another shot, not a dupe.
-  const dedupeAgainst = existingLeads.filter((l) => l.stage !== 'dead_declined');
+  const dedupeAgainst = existingLeads.filter((l) => DEDUPE_STAGES.includes(l.stage));
   const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, dedupeAgainst);
   // A source is required for every import — either a mapped CSV column
   // (per-row) or a batch fallback covering the whole file.
@@ -238,7 +245,11 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
                 <div className="text-text">
                   {unique.length} new lead{unique.length !== 1 ? 's' : ''} will be imported.
                 </div>
-                {duplicateCount > 0 && <div className="mt-1 text-warning">{duplicateCount} duplicate(s) skipped (matched by phone number).</div>}
+                {duplicateCount > 0 && (
+                  <div className="mt-1 text-warning">
+                    {duplicateCount} duplicate(s) skipped — phone number matches a lead you've already Replied to, Qualified, Negotiated, Contracted, or Closed.
+                  </div>
+                )}
                 {auctionWarnings.length > 0 && (
                   <div className="mt-2 rounded border border-warning/40 bg-warning/10 p-2 text-[12px] text-warning">
                     <div className="font-semibold">⚠ {auctionWarnings.length} lead{auctionWarnings.length !== 1 ? 's have' : ' has'} a suspicious auction date — verify before importing:</div>
