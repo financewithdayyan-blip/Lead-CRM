@@ -615,6 +615,13 @@ Deno.serve(async (req) => {
           if (isManualReply) {
             leadUpdates.ai_reply_paused = true;
             leadUpdates.photo_wait_ai_active = false;
+            // A follow-up doesn't have to be a call — texting a lead by hand
+            // is just as much "I followed up" as logging a call is (see
+            // useAddActivity's next_follow_up clear for the call side of
+            // this same rule). Scoped to isManualReply so a bulk cold-
+            // outreach blast to a lead who happens to have a Next Follow-Up
+            // date set doesn't silently clear it.
+            leadUpdates.next_follow_up = null;
           }
 
           // These three writes are independent of each other, so they run

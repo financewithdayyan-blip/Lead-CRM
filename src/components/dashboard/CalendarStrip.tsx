@@ -14,8 +14,10 @@ const DAYS_TOTAL = 14;
 
 /** Same flow as the old ScheduledCallsCard — logs what happened on the call
  * as a real activity (twice, so it shows in both Call History and Notes),
- * then clears the callback so it drops off the calendar. */
-function MarkCallCompleteModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+ * then clears the callback so it drops off the calendar. `onCompleted` fires
+ * right before close so the day modal behind this one can show the item as
+ * done instead of it just vanishing. */
+function MarkCallCompleteModal({ lead, onClose, onCompleted }: { lead: Lead; onClose: () => void; onCompleted: () => void }) {
   const [notes, setNotes] = useState('');
   const addActivity = useAddActivity();
   const updateLead = useUpdateLead();
@@ -27,6 +29,7 @@ function MarkCallCompleteModal({ lead, onClose }: { lead: Lead; onClose: () => v
     await addActivity.mutateAsync({ leadId: lead.id, type: 'call', body, meta: { scheduledCallCompleted: true } });
     await addActivity.mutateAsync({ leadId: lead.id, type: 'note', body: `Scheduled call: ${body}` });
     await updateLead.mutateAsync({ id: lead.id, scheduledCallbackAt: null, scheduledCallbackNote: null });
+    onCompleted();
     onClose();
   }
 
@@ -98,14 +101,15 @@ function DayDetailRow({
 }: {
   item: CalendarItem;
   onToggleTask: (id: string, completed: boolean) => void;
-  onCompleteCall: (lead: Lead) => void;
-  onCall: (lead: Lead) => void;
-  onText: (lead: Lead) => void;
+  onCompleteCall: (item: CalendarItem) => void;
+  onCall: (item: CalendarItem) => void;
+  onText: (item: CalendarItem) => void;
 }) {
   const style = KIND_STYLE[item.kind];
-  const showQuickActions = (item.kind === 'call' || item.kind === 'followup') && !!item.lead;
+  const showQuickActions = (item.kind === 'call' || item.kind === 'followup') && !!item.lead && !item.completed;
+  const showCompleteToggle = item.kind === 'call' && !!item.lead && !item.completed;
   return (
-    <div className="rounded-lg border border-border-2 bg-surface-3 px-3 py-2.5">
+    <div className={`rounded-lg border border-border-2 px-3 py-2.5 ${item.completed ? 'bg-surface-2' : 'bg-surface-3'}`}>
       <div className="flex items-center gap-2.5">
         {item.kind === 'task' && item.taskId && (
           <button
@@ -113,22 +117,27 @@ function DayDetailRow({
             className="shrink-0 text-text-3 hover:text-success"
             title={item.completed ? 'Mark incomplete' : 'Mark complete'}
           >
-            {item.completed ? <CheckSquare size={17} /> : <Square size={17} />}
+            {item.completed ? <CheckSquare size={17} className="text-success" /> : <Square size={17} />}
           </button>
         )}
-        {item.kind === 'call' && item.lead && (
+        {showCompleteToggle && (
           <button
-            onClick={() => onCompleteCall(item.lead!)}
+            onClick={() => onCompleteCall(item)}
             className="shrink-0 text-text-3 hover:text-success"
             title="Mark this call completed"
           >
             <Circle size={17} />
           </button>
         )}
+        {item.completed && item.kind !== 'task' && <Check size={17} className="shrink-0 text-success" />}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${style.pill}`}>{style.label}</span>
-            {item.overdue && <span className="shrink-0 rounded-full bg-danger-dim px-1.5 py-0.5 text-[10px] font-semibold text-danger">Overdue</span>}
+            {item.completed ? (
+              <span className="shrink-0 rounded-full bg-success/15 px-1.5 py-0.5 text-[10px] font-semibold text-success">Completed</span>
+            ) : (
+              item.overdue && <span className="shrink-0 rounded-full bg-danger-dim px-1.5 py-0.5 text-[10px] font-semibold text-danger">Overdue</span>
+            )}
           </div>
           {item.href ? (
             <Link to={item.href} className={`mt-0.5 block truncate text-[13px] font-medium hover:underline ${item.completed ? 'text-text-3 line-through' : 'text-text'}`}>
@@ -144,13 +153,13 @@ function DayDetailRow({
       {showQuickActions && (
         <div className="mt-2 flex gap-1.5">
           <button
-            onClick={() => onCall(item.lead!)}
+            onClick={() => onCall(item)}
             className="flex flex-1 items-center justify-center gap-1 rounded-md bg-success/15 py-1.5 text-[11.5px] font-semibold text-success transition-colors hover:bg-success/25"
           >
             <PhoneCall size={11} /> Call
           </button>
           <button
-            onClick={() => onText(item.lead!)}
+            onClick={() => onText(item)}
             className="flex flex-1 items-center justify-center gap-1 rounded-md bg-primary/15 py-1.5 text-[11.5px] font-semibold text-primary transition-colors hover:bg-primary/25"
           >
             <MessageSquare size={11} /> Text
@@ -177,9 +186,9 @@ function DayDetailModal({
   items: CalendarItem[];
   onClose: () => void;
   onToggleTask: (id: string, completed: boolean) => void;
-  onCompleteCall: (lead: Lead) => void;
-  onCall: (lead: Lead) => void;
-  onText: (lead: Lead) => void;
+  onCompleteCall: (item: CalendarItem) => void;
+  onCall: (item: CalendarItem) => void;
+  onText: (item: CalendarItem) => void;
 }) {
   const fullDate = new Date(`${day.iso}T00:00:00`);
   const title = fullDate.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -213,6 +222,15 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
   const addActivity = useAddActivity();
   const [completingCall, setCompletingCall] = useState<Lead | null>(null);
   const [openDayIso, setOpenDayIso] = useState<string | null>(null);
+  // Calls and Follow-ups have no persisted "completed" flag — marking one
+  // done just clears its underlying schedule field (scheduledCallbackAt /
+  // nextFollowUp), which makes it vanish from itemsByDay entirely on the
+  // next data refresh instead of showing as done. This keeps a snapshot of
+  // just-completed items around for the rest of the session so the row
+  // flips to a struck-through "Completed" state instead of disappearing —
+  // deliberately not persisted past a reload (confirmed with the user;
+  // Tasks below use their own real `completed` column instead).
+  const [completedOverlay, setCompletedOverlay] = useState<Map<string, { dayIso: string; item: CalendarItem }>>(new Map());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Same handoff Kanban's own Call/Text card buttons use — Zoom's documented
@@ -220,14 +238,24 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
   // whatever the OS has registered instead of Zoom Phone specifically), and
   // "Text" just opens the lead's own SMS tab rather than composing here.
   const handleCall = useCallback(
-    (lead: Lead) => {
+    (item: CalendarItem) => {
+      const lead = item.lead!;
       addActivity.mutate({ leadId: lead.id, type: 'call', body: 'Quick call logged from Calendar' });
+      // Logging a call against a Follow-up is what actually completes it
+      // (useAddActivity clears next_follow_up for type 'call') — reflect
+      // that immediately rather than waiting for the leads list to refetch.
+      if (item.kind === 'followup' && openDayIso) {
+        setCompletedOverlay((prev) => new Map(prev).set(item.id, { dayIso: openDayIso, item: { ...item, completed: true } }));
+      }
       const e164 = toE164(lead.phone);
       if (e164) window.location.href = `zoomphonecall://${e164}`;
     },
-    [addActivity],
+    [addActivity, openDayIso],
   );
-  const handleText = useCallback((lead: Lead) => navigate(`/leads/${lead.id}?tab=sms`), [navigate]);
+  // Texting navigates away to actually compose/send, so there's nothing to
+  // show as "completed" here — the send itself (elsewhere) is what clears
+  // next_follow_up now (see send-sms's isManualReply handling).
+  const handleText = useCallback((item: CalendarItem) => navigate(`/leads/${item.lead!.id}?tab=sms`), [navigate]);
 
   const todayIso = localIsoDate(new Date());
 
@@ -289,7 +317,9 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
     }
 
     for (const t of tasks) {
-      if (t.completed || !t.dueDate) continue;
+      // Completed tasks stay visible (struck through via item.completed
+      // below) instead of disappearing the moment they're checked off.
+      if (!t.dueDate) continue;
       const bucketIso = bucket(t.dueDate);
       if (!map.has(bucketIso)) continue;
       map.get(bucketIso)!.push({
@@ -298,7 +328,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
         time: t.dueTime,
         title: t.title,
         href: t.leadId ? `/leads/${t.leadId}` : undefined,
-        overdue: t.dueDate < todayIso,
+        overdue: !t.completed && t.dueDate < todayIso,
         taskId: t.id,
         completed: t.completed,
       });
@@ -320,6 +350,16 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
       });
     }
 
+    // Fold in this session's just-completed calls/follow-ups — only when
+    // the live data no longer has that item (it fell out because the
+    // underlying field just got cleared), so a real still-scheduled item
+    // never gets shadowed by a stale completed snapshot.
+    for (const { dayIso, item } of completedOverlay.values()) {
+      const dayItems = map.get(dayIso);
+      if (!dayItems || dayItems.some((existing) => existing.id === item.id)) continue;
+      dayItems.push(item);
+    }
+
     for (const list of map.values()) {
       list.sort((a, b) => {
         if (!a.time && !b.time) return 0;
@@ -329,7 +369,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
       });
     }
     return map;
-  }, [days, leads, tasks, todayIso]);
+  }, [days, leads, tasks, todayIso, completedOverlay]);
 
   function scroll(dir: 1 | -1) {
     scrollRef.current?.scrollBy({ left: dir * DAYS_VISIBLE_STEP * (DAY_COLUMN_WIDTH + 8), behavior: 'smooth' });
@@ -358,11 +398,14 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
       >
         {days.map((d) => {
           const items = itemsByDay.get(d.iso) ?? [];
-          const taskCount = items.filter((i) => i.kind === 'task').length;
+          // Both badges count only what's still outstanding — a completed
+          // item stays visible in the popup (struck through) but shouldn't
+          // still read as something due on the compact card.
+          const taskCount = items.filter((i) => i.kind === 'task' && !i.completed).length;
           // "Calls" bundles Scheduled Calls and Follow-ups together — both
           // mean the same thing at a glance: someone to call that day. The
           // popup (opened by clicking the card) still tells them apart.
-          const callCount = items.filter((i) => i.kind === 'call' || i.kind === 'followup').length;
+          const callCount = items.filter((i) => (i.kind === 'call' || i.kind === 'followup') && !i.completed).length;
           return (
             <button
               key={d.iso}
@@ -408,7 +451,31 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
         })}
       </div>
 
-      {completingCall && <MarkCallCompleteModal lead={completingCall} onClose={() => setCompletingCall(null)} />}
+      {completingCall && (
+        <MarkCallCompleteModal
+          lead={completingCall}
+          onClose={() => setCompletingCall(null)}
+          onCompleted={() => {
+            if (!openDayIso) return;
+            const id = `call-${completingCall.id}`;
+            setCompletedOverlay((prev) =>
+              new Map(prev).set(id, {
+                dayIso: openDayIso,
+                item: {
+                  id,
+                  kind: 'call',
+                  time: null,
+                  title: leadDisplayName(completingCall.firstName, completingCall.lastName) ?? formatPhone(completingCall.phone),
+                  href: `/leads/${completingCall.id}`,
+                  overdue: false,
+                  lead: completingCall,
+                  completed: true,
+                },
+              }),
+            );
+          }}
+        />
+      )}
 
       {openDayIso && (
         <DayDetailModal
@@ -416,10 +483,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
           items={itemsByDay.get(openDayIso) ?? []}
           onClose={() => setOpenDayIso(null)}
           onToggleTask={(id, completed) => toggleTask.mutate({ id, completed })}
-          onCompleteCall={(lead) => {
-            setOpenDayIso(null);
-            setCompletingCall(lead);
-          }}
+          onCompleteCall={(item) => setCompletingCall(item.lead!)}
           onCall={handleCall}
           onText={handleText}
         />
