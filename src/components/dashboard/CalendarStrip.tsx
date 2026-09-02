@@ -318,9 +318,15 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
 
     for (const t of tasks) {
       // Completed tasks stay visible (struck through via item.completed
-      // below) instead of disappearing the moment they're checked off.
+      // below) instead of disappearing the moment they're checked off — but
+      // only on the day they were actually due. The overdue-collapses-onto-
+      // today bucketing below exists so an outstanding item never quietly
+      // falls off the front of the window; applying that to completed tasks
+      // too would pile up every task ever completed, going back indefinitely,
+      // onto today forever. A completed task whose real due date is before
+      // today's visible window just has no bucket and doesn't render at all.
       if (!t.dueDate) continue;
-      const bucketIso = bucket(t.dueDate);
+      const bucketIso = t.completed ? t.dueDate : bucket(t.dueDate);
       if (!map.has(bucketIso)) continue;
       map.get(bucketIso)!.push({
         id: `task-${t.id}`,
