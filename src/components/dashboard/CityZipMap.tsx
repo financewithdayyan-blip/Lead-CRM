@@ -6,6 +6,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Tier, ZipStat } from './CityPerformanceMap';
 import { fetchZctaBoundaries } from '@/lib/zctaBoundaries';
 import { MAP_STYLE } from '@/lib/mapStyle';
+import { geocodeAddress } from '@/lib/geocode';
+import { useLeadGeocodes, useUpsertLeadGeocode } from '@/hooks/useLeadGeocodes';
 
 const TIER_COLOR: Record<Tier, string> = {
   green: '#22c55e',
@@ -60,6 +62,8 @@ function popupHtml(z: ZipStat) {
 export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const { data: leadGeocodes = new Map() } = useLeadGeocodes();
+  const upsertLeadGeocode = useUpsertLeadGeocode();
 
   useEffect(() => {
     if (!containerRef.current || zips.length === 0) return;
@@ -89,6 +93,44 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     }
 
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+
+    // Small fixed-size dots for each shown zip's under-contract properties —
+    // a much smaller, independent layer on top of the zip shading above, so
+    // it never gets mistaken for the zip's own performance tier. Whatever's
+    // already cached (leadGeocodes) renders immediately; anything still
+    // missing geocodes lazily in the background (same 1.1s-spaced pattern
+    // CityPerformanceMap's own city loop uses) and is written back via
+    // useUpsertLeadGeocode so every future view already has it.
+    function addPropertyMarker(prop: { id: string; address: string }, lat: number, lng: number) {
+      L.circleMarker([lat, lng], { radius: 5, color: '#0b1826', weight: 1.5, fillColor: '#f5d90a', fillOpacity: 1 })
+        .bindPopup(
+          `<div style="font:500 13px system-ui;min-width:150px">
+             <div style="font-weight:600;margin-bottom:2px">${prop.address}</div>
+             <div style="color:#64748b;font-size:12px">Under contract</div>
+           </div>`,
+        )
+        .addTo(map);
+    }
+    const properties = zips.flatMap((z) => z.contractProperties);
+    const missingGeo: typeof properties = [];
+    for (const prop of properties) {
+      const geo = leadGeocodes.get(prop.id);
+      if (geo) addPropertyMarker(prop, geo.lat, geo.lng);
+      else missingGeo.push(prop);
+    }
+    if (missingGeo.length > 0) {
+      (async () => {
+        for (const prop of missingGeo) {
+          if (cancelled) return;
+          const point = await geocodeAddress(prop.address, `${prop.city}, ${prop.state}`).catch(() => null);
+          if (point && !cancelled) {
+            addPropertyMarker(prop, point.lat, point.lng);
+            upsertLeadGeocode.mutate({ leadId: prop.id, lat: point.lat, lng: point.lng });
+          }
+          await new Promise((r) => setTimeout(r, 1100));
+        }
+      })();
+    }
 
     // Real boundary shapes arrive after the map already has something
     // useful on screen — each one swaps out that zip's circle for its

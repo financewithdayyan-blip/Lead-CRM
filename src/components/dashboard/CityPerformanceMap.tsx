@@ -13,6 +13,13 @@ import { StateCityMap } from './StateCityMap';
 
 export type Tier = 'green' | 'yellow' | 'red';
 
+export interface ContractProperty {
+  id: string;
+  address: string;
+  city: string;
+  state: string;
+}
+
 export interface ZipStat {
   zip5: string;
   city: string;
@@ -26,6 +33,7 @@ export interface ZipStat {
   replyRate: number;
   score: number;
   tier: Tier;
+  contractProperties: ContractProperty[];
 }
 
 export interface CityStat {

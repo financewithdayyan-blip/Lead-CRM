@@ -414,11 +414,21 @@ export function DashboardView({
     const MAP_QUALIFIED_STAGES: LeadStage[] = ['initial_contact', 'followup', 'negotiation', 'contract', 'in_title', 'closed'];
     const MAP_CONTRACT_STAGES: LeadStage[] = ['contract', 'in_title', 'closed'];
 
+    interface ContractProperty {
+      id: string;
+      address: string;
+      city: string;
+      state: string;
+    }
     interface Bucket {
       total: number;
       qualified: number;
       contracts: number;
       leadIds: string[];
+      // Only ever populated on a zip-level bucket (zg below) — city/state
+      // buckets share this same type but never read it. One entry per
+      // under-contract lead in this zip, feeding CityZipMap's property pins.
+      contractProperties: ContractProperty[];
     }
     const byCity = new Map<
       string,
@@ -456,7 +466,7 @@ export function DashboardView({
 
       let stateEntry = byState.get(stateKey);
       if (!stateEntry) {
-        stateEntry = { total: 0, qualified: 0, contracts: 0, leadIds: [] };
+        stateEntry = { total: 0, qualified: 0, contracts: 0, leadIds: [], contractProperties: [] };
         byState.set(stateKey, stateEntry);
       }
       stateEntry.total++;
@@ -470,13 +480,18 @@ export function DashboardView({
       if (zip5) {
         let zg = entry.zipGroups.get(zip5);
         if (!zg) {
-          zg = { total: 0, qualified: 0, contracts: 0, leadIds: [] };
+          zg = { total: 0, qualified: 0, contracts: 0, leadIds: [], contractProperties: [] };
           entry.zipGroups.set(zip5, zg);
         }
         zg.total++;
         zg.leadIds.push(l.id);
         if (isQualified) zg.qualified++;
-        if (isContract) zg.contracts++;
+        if (isContract) {
+          zg.contracts++;
+          if (l.address?.trim()) {
+            zg.contractProperties.push({ id: l.id, address: l.address.trim(), city: l.city!.trim(), state: stateKey });
+          }
+        }
       }
     }
 
@@ -530,6 +545,7 @@ export function DashboardView({
               replied: zReplied,
               replyRate: zReplyRate,
               score: scoreOf(zg.total, zg.qualified, zg.contracts, zReplied),
+              contractProperties: zg.contractProperties,
             };
           })
           .filter((z) => z.total >= MIN_LEADS);
