@@ -23,10 +23,12 @@ const STATE_FILL = '#102338'; // matches CityPerformanceMap's national-view back
 // A fixed neutral outline for every zip shape, independent of its tier fill
 // — two adjacent same-tier zips (e.g. both yellow) previously drew their
 // shared border in that same tier color, so it visually disappeared and the
-// zips read as one merged blob. A consistent dark outline (matching the
-// property pins' own border) keeps every zip's boundary visible no matter
-// what color its neighbors are.
-const ZIP_OUTLINE = '#0b1826';
+// zips read as one merged blob. Light rather than dark: each tier's fill is
+// only 0.45 opacity over the dark basemap, so the effective color reads as
+// a muted, darkened tone — a dark outline (tried first) barely showed up
+// against it. A light slate outline keeps every zip's boundary visible
+// against any tier's muted fill.
+const ZIP_OUTLINE = '#cbd5e1';
 
 // Every zip shape (circle or boundary polygon) fades in via this transition
 // rather than popping in instantly — same treatment for the property pins
@@ -135,7 +137,7 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     for (const z of zips) {
       const marker = fadeIn(
         L.circleMarker([z.lat, z.lng], { radius: radiusFor(z.total) }),
-        { color: ZIP_OUTLINE, weight: 2, fillColor: TIER_COLOR[z.tier], fillOpacity: 0.45 },
+        { color: ZIP_OUTLINE, weight: 2.5, fillColor: TIER_COLOR[z.tier], fillOpacity: 0.45 },
       );
       marker.bindPopup(popupHtml(z));
       marker.bindTooltip(z.zip5, { permanent: true, direction: 'center', className: 'zip-label' });
@@ -234,7 +236,7 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
         const oldMarker = markersByZip.get(z.zip5);
         fadeIn(L.geoJSON(geometry as GeoJSON.GeoJsonObject), {
           color: ZIP_OUTLINE,
-          weight: 2,
+          weight: 2.5,
           fillColor: TIER_COLOR[z.tier],
           fillOpacity: 0.45,
         })
@@ -278,7 +280,7 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
           box-shadow: none;
           padding: 0;
           color: #f8fafc;
-          font: 700 12px/1 system-ui, sans-serif;
+          font: 700 10px/1 system-ui, sans-serif;
           text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.7);
           pointer-events: none;
         }
