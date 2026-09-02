@@ -96,7 +96,15 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     if (pinPane) pinPane.style.zIndex = '650';
 
     maplibreGL({ style: MAP_STYLE }).addTo(map);
-    const hideOverlay = () => overlayRef.current?.classList.add('opacity-0', 'pointer-events-none');
+    // Must remove opacity-100, not just add opacity-0 — Tailwind utility
+    // classes for the same property don't override by DOM add-order, only
+    // by their fixed position in the compiled stylesheet, so leaving both
+    // classes on the element at once left this stuck at opacity-100 forever
+    // regardless of when opacity-0 was added.
+    const hideOverlay = () => {
+      overlayRef.current?.classList.remove('opacity-100');
+      overlayRef.current?.classList.add('opacity-0', 'pointer-events-none');
+    };
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
     const radiusFor = (total: number) => 8 + 22 * Math.sqrt(total / maxTotal);
