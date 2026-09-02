@@ -21,12 +21,12 @@ const TIER_LABEL: Record<Tier, string> = {
 };
 const STATE_FILL = '#102338'; // matches CityPerformanceMap's national-view background, shown while tiles load
 
-const pct = (n: number) => `${Math.round(n * 100)}%`;
-
-interface ZipMarker extends ZipStat {
-  lat: number;
-  lng: number;
-}
+// Every zip shape (circle or boundary polygon) fades in via this transition
+// rather than popping in instantly — same treatment for the property pins
+// layered on top and for the circle-to-boundary swap below. Scoped to this
+// component's own wrapper class so it never touches Leaflet paths in other
+// maps (PacketMap, StateCityMap) that don't opt into it.
+const FADE_MS = 280;
 
 function popupHtml(z: ZipStat) {
   return `<div style="font:500 13px system-ui;min-width:170px">
@@ -41,6 +41,12 @@ function popupHtml(z: ZipStat) {
        ${z.replied} replied (${pct(z.replyRate)})
      </div>
    </div>`;
+}
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+interface ZipMarker extends ZipStat {
+  lat: number;
+  lng: number;
 }
 
 /**
@@ -61,6 +67,7 @@ function popupHtml(z: ZipStat) {
  */
 export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const { data: leadGeocodes = new Map() } = useLeadGeocodes();
   const upsertLeadGeocode = useUpsertLeadGeocode();
@@ -68,25 +75,57 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
   useEffect(() => {
     if (!containerRef.current || zips.length === 0) return;
 
+    // Cover the map with the loading overlay again on every rebuild (not
+    // just first mount) — switching cities re-runs this effect on the same
+    // component instance, and the base tiles/shapes need to repopulate
+    // behind the overlay the same way they did the first time.
+    overlayRef.current?.classList.remove('opacity-0', 'pointer-events-none');
+    overlayRef.current?.classList.add('opacity-100');
+
     const map = L.map(containerRef.current, { scrollWheelZoom: false });
     mapRef.current = map;
     let cancelled = false;
 
-    maplibreGL({ style: MAP_STYLE }).addTo(map);
+    // Property pins get their own pane, stacked above both the zip-shading
+    // overlayPane (circles + boundary polygons, z-index 400) and the
+    // tilePane, so they're always clickable regardless of add order — the
+    // boundary polygons that swap in later would otherwise cover them, since
+    // Leaflet stacks same-pane layers by insertion order.
+    map.createPane('propertyPins');
+    const pinPane = map.getPane('propertyPins');
+    if (pinPane) pinPane.style.zIndex = '650';
+
+    const glLayer = maplibreGL({ style: MAP_STYLE }).addTo(map);
+    const hideOverlay = () => overlayRef.current?.classList.add('opacity-0', 'pointer-events-none');
+    glLayer.getMaplibreMap().once('load', hideOverlay);
+    // Fallback in case the 'load' event is missed (slow tile fetch, cached
+    // style) — the overlay should never get stuck covering a ready map.
+    const overlayFallback = setTimeout(hideOverlay, 4000);
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
     const radiusFor = (total: number) => 8 + 22 * Math.sqrt(total / maxTotal);
 
+    // Adds a path layer at zero opacity, then bumps it to its real style one
+    // frame later — the jump from nothing to a flat-colored shape reads as a
+    // pop; fading the opacity change (via the CSS transition below) makes it
+    // read as the shape resolving in, not appearing.
+    function fadeIn<T extends { setStyle: (style: L.PathOptions) => unknown; addTo: (map: L.Map) => unknown }>(
+      layer: T,
+      targetStyle: L.PathOptions,
+    ) {
+      layer.setStyle({ ...targetStyle, opacity: 0, fillOpacity: 0 });
+      layer.addTo(map);
+      requestAnimationFrame(() => layer.setStyle(targetStyle));
+      return layer;
+    }
+
     const markersByZip = new Map<string, L.CircleMarker>();
     const bounds = L.latLngBounds([]);
     for (const z of zips) {
-      const marker = L.circleMarker([z.lat, z.lng], {
-        radius: radiusFor(z.total),
-        color: TIER_COLOR[z.tier],
-        weight: 2,
-        fillColor: TIER_COLOR[z.tier],
-        fillOpacity: 0.45,
-      }).addTo(map);
+      const marker = fadeIn(
+        L.circleMarker([z.lat, z.lng], { radius: radiusFor(z.total) }),
+        { color: TIER_COLOR[z.tier], weight: 2, fillColor: TIER_COLOR[z.tier], fillOpacity: 0.45 },
+      );
       marker.bindPopup(popupHtml(z));
       markersByZip.set(z.zip5, marker);
       bounds.extend([z.lat, z.lng]);
@@ -120,14 +159,18 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
       qualified: 'Qualified',
     } as const;
     function addPropertyMarker(prop: { address: string }, kind: keyof typeof PIN_COLOR, lat: number, lng: number) {
-      L.circleMarker([lat, lng], { radius: 5, color: '#0b1826', weight: 1.5, fillColor: PIN_COLOR[kind], fillOpacity: 1 })
-        .bindPopup(
-          `<div style="font:500 13px system-ui;min-width:150px">
-             <div style="font-weight:600;margin-bottom:2px">${prop.address}</div>
-             <div style="color:#64748b;font-size:12px">${PIN_LABEL[kind]}</div>
-           </div>`,
-        )
-        .addTo(map);
+      const marker = fadeIn(L.circleMarker([lat, lng], { radius: 5, pane: 'propertyPins' }), {
+        color: '#0b1826',
+        weight: 1.5,
+        fillColor: PIN_COLOR[kind],
+        fillOpacity: 1,
+      });
+      marker.bindPopup(
+        `<div style="font:500 13px system-ui;min-width:150px">
+           <div style="font-weight:600;margin-bottom:2px">${prop.address}</div>
+           <div style="color:#64748b;font-size:12px">${PIN_LABEL[kind]}</div>
+         </div>`,
+      );
     }
     const properties = [
       ...zips.flatMap((z) => z.contractProperties.map((p) => ({ ...p, kind: 'contract' as const }))),
@@ -157,24 +200,34 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
 
     // Real boundary shapes arrive after the map already has something
     // useful on screen — each one swaps out that zip's circle for its
-    // actual shaded shape as soon as it resolves, not all-or-nothing.
+    // actual shaded shape as soon as it resolves, not all-or-nothing. The
+    // old circle fades out while the polygon fades in underneath it (both
+    // in the same overlayPane, so the swap reads as a crossfade rather than
+    // an instant substitution) before the circle is actually removed.
     fetchZctaBoundaries(zips.map((z) => z.zip5)).then((boundaries) => {
       if (cancelled) return;
       for (const z of zips) {
         const geometry = boundaries.get(z.zip5);
         if (!geometry) continue;
-        const marker = markersByZip.get(z.zip5);
-        if (marker) map.removeLayer(marker);
-        L.geoJSON(geometry as GeoJSON.GeoJsonObject, {
-          style: { color: TIER_COLOR[z.tier], weight: 2, fillColor: TIER_COLOR[z.tier], fillOpacity: 0.45 },
-        })
-          .bindPopup(popupHtml(z))
-          .addTo(map);
+        const oldMarker = markersByZip.get(z.zip5);
+        fadeIn(L.geoJSON(geometry as GeoJSON.GeoJsonObject), {
+          color: TIER_COLOR[z.tier],
+          weight: 2,
+          fillColor: TIER_COLOR[z.tier],
+          fillOpacity: 0.45,
+        }).bindPopup(popupHtml(z));
+        if (oldMarker) {
+          oldMarker.setStyle({ opacity: 0, fillOpacity: 0 });
+          setTimeout(() => {
+            if (!cancelled) map.removeLayer(oldMarker);
+          }, FADE_MS);
+        }
       }
     });
 
     return () => {
       cancelled = true;
+      clearTimeout(overlayFallback);
       map.remove();
       mapRef.current = null;
     };
@@ -193,10 +246,17 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="isolate h-96 w-full rounded-xl border border-border-2"
-      style={{ background: STATE_FILL }}
-    />
+    <div className="city-zip-map relative isolate h-96 w-full overflow-hidden rounded-xl border border-border-2">
+      <style>{`.city-zip-map .leaflet-interactive { transition: opacity ${FADE_MS}ms ease, fill-opacity ${FADE_MS}ms ease; }`}</style>
+      <div ref={containerRef} className="h-full w-full" style={{ background: STATE_FILL }} />
+      <div
+        ref={overlayRef}
+        className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center gap-2 text-[13px] text-text-3 opacity-100 transition-opacity duration-300"
+        style={{ background: STATE_FILL }}
+      >
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-text-3/30 border-t-text-3" />
+        Loading map…
+      </div>
+    </div>
   );
 }
