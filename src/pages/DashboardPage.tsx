@@ -427,10 +427,12 @@ export function DashboardView({
       leadIds: string[];
       // Only ever populated on a zip-level bucket (zg below) — city/state
       // buckets share this same type but never read it. One entry per
-      // under-contract/in-negotiation lead in this zip, feeding CityZipMap's
-      // property pins.
+      // under-contract/in-negotiation/partial-qualified/qualified lead in
+      // this zip, feeding CityZipMap's property pins.
       contractProperties: ContractProperty[];
       negotiationProperties: ContractProperty[];
+      partialQualifiedProperties: ContractProperty[];
+      qualifiedProperties: ContractProperty[];
     }
     const byCity = new Map<
       string,
@@ -462,6 +464,8 @@ export function DashboardView({
       const isQualified = MAP_QUALIFIED_STAGES.includes(l.stage);
       const isContract = MAP_CONTRACT_STAGES.includes(l.stage);
       const isNegotiation = l.stage === 'negotiation';
+      const isPartialQualified = l.stage === 'initial_contact';
+      const isFullyQualified = l.stage === 'followup';
       entry.total++;
       entry.leadIds.push(l.id);
       if (isQualified) entry.qualified++;
@@ -469,7 +473,16 @@ export function DashboardView({
 
       let stateEntry = byState.get(stateKey);
       if (!stateEntry) {
-        stateEntry = { total: 0, qualified: 0, contracts: 0, leadIds: [], contractProperties: [], negotiationProperties: [] };
+        stateEntry = {
+          total: 0,
+          qualified: 0,
+          contracts: 0,
+          leadIds: [],
+          contractProperties: [],
+          negotiationProperties: [],
+          partialQualifiedProperties: [],
+          qualifiedProperties: [],
+        };
         byState.set(stateKey, stateEntry);
       }
       stateEntry.total++;
@@ -483,7 +496,16 @@ export function DashboardView({
       if (zip5) {
         let zg = entry.zipGroups.get(zip5);
         if (!zg) {
-          zg = { total: 0, qualified: 0, contracts: 0, leadIds: [], contractProperties: [], negotiationProperties: [] };
+          zg = {
+            total: 0,
+            qualified: 0,
+            contracts: 0,
+            leadIds: [],
+            contractProperties: [],
+            negotiationProperties: [],
+            partialQualifiedProperties: [],
+            qualifiedProperties: [],
+          };
           entry.zipGroups.set(zip5, zg);
         }
         zg.total++;
@@ -497,6 +519,12 @@ export function DashboardView({
         }
         if (isNegotiation && l.address?.trim()) {
           zg.negotiationProperties.push({ id: l.id, address: l.address.trim(), city: l.city!.trim(), state: stateKey });
+        }
+        if (isPartialQualified && l.address?.trim()) {
+          zg.partialQualifiedProperties.push({ id: l.id, address: l.address.trim(), city: l.city!.trim(), state: stateKey });
+        }
+        if (isFullyQualified && l.address?.trim()) {
+          zg.qualifiedProperties.push({ id: l.id, address: l.address.trim(), city: l.city!.trim(), state: stateKey });
         }
       }
     }
@@ -553,6 +581,8 @@ export function DashboardView({
               score: scoreOf(zg.total, zg.qualified, zg.contracts, zReplied),
               contractProperties: zg.contractProperties,
               negotiationProperties: zg.negotiationProperties,
+              partialQualifiedProperties: zg.partialQualifiedProperties,
+              qualifiedProperties: zg.qualifiedProperties,
             };
           })
           .filter((z) => z.total >= MIN_LEADS);

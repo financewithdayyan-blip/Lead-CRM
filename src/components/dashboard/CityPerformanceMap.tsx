@@ -35,6 +35,8 @@ export interface ZipStat {
   tier: Tier;
   contractProperties: ContractProperty[];
   negotiationProperties: ContractProperty[];
+  partialQualifiedProperties: ContractProperty[];
+  qualifiedProperties: ContractProperty[];
 }
 
 export interface CityStat {
