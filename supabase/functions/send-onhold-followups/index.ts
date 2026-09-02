@@ -56,13 +56,21 @@ const FETCH_TIMEOUT_MS = 15_000;
 // reached keeps next_onhold_followup_at in the past.
 const MAX_LEADS_PER_RUN = 50;
 
-// The escalating schedule, in days since onhold_entered_at. Past the last
-// entry, keeps advancing by 30 days indefinitely — "we will not stop"
-// until the lead replies and qualifies (confirmed with the user).
-const FOLLOWUP_SCHEDULE_DAYS = [5, 10, 20, 30, 45, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360];
+// The escalating schedule, in days since onhold_entered_at. Revised
+// 2026-09-02 per the user: drop the original day-5 checkpoint (day 10 is
+// now the first automated follow-up after a lead enters On Hold), then 20,
+// 30, then every 15 days indefinitely — no end date, "there is no end
+// time" until the lead opts out, blocks the number, or gets a contract
+// (which moves it off stage = 'onhold' and out of this sweep's query
+// entirely — see 0130). migration 0131 updates the trigger that seeds a
+// brand-new On Hold entry to match (day 10, not day 5); leads already
+// mid-schedule need no data fix — their currently-stored
+// next_onhold_followup_at already lands on day 10 from their actual send,
+// which is unchanged by this revision.
+const FOLLOWUP_SCHEDULE_DAYS = [10, 20, 30];
 
 function nextFollowupDay(currentDay: number): number {
-  return FOLLOWUP_SCHEDULE_DAYS.find((d) => d > currentDay) ?? currentDay + 30;
+  return FOLLOWUP_SCHEDULE_DAYS.find((d) => d > currentDay) ?? currentDay + 15;
 }
 
 function addDaysIso(fromIso: string, days: number): string {
