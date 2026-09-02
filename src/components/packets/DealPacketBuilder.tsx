@@ -25,6 +25,7 @@ import {
   analyzeDeal,
   compSetConfidence,
   estimateComparableArv,
+  PACKET_IMAGE_SIZES,
   packetImageUrl,
   packetVideoUrl,
   packetUrl,
@@ -525,7 +526,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
             <div className="flex flex-wrap gap-3">
               {images.map((img, i) => (
                 <div key={img.id} className="relative">
-                  <img src={packetImageUrl(img.storagePath, { width: 256, quality: 65 })} alt={img.caption ?? 'Property photo'}
+                  <img src={packetImageUrl(img.storagePath, PACKET_IMAGE_SIZES.small)} alt={img.caption ?? 'Property photo'}
                        loading="lazy" decoding="async"
                        className="h-24 w-32 rounded-md border border-border-2 object-cover" />
                   <button

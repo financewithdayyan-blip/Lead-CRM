@@ -450,7 +450,10 @@ export function packetUrl(slug: string): string {
  * image transform for a right-sized, modern-format (webp where supported)
  * render instead of the raw upload; omit it only where the original is
  * actually needed at full size. Transformed renders are cached at the edge
- * after the first request, so this only costs anything once per size/photo.
+ * after the first request, but each distinct width/quality combination is
+ * still billed once against the account's monthly transform quota — that's
+ * why every caller uses one of the two shared presets below rather than a
+ * one-off size, capping the whole app at exactly 2 transforms per photo.
  */
 export function packetImageUrl(
   storagePath: string,
@@ -460,6 +463,31 @@ export function packetImageUrl(
     .from('packet-images')
     .getPublicUrl(storagePath, size ? { transform: { resize: 'cover', quality: 70, ...size } } : undefined)
     .data.publicUrl;
+}
+
+// The only two photo sizes any Deal Packet view is allowed to request —
+// keeping the whole app to exactly 2 combinations is what keeps Supabase's
+// Storage Image Transformations quota under control (see packetImageUrl's
+// own comment). Change a size here, not at a call site.
+export const PACKET_IMAGE_SIZES = {
+  small: { width: 640, quality: 70 }, // mobile viewports, and any fixed-small slot (thumbnails, editor)
+  large: { width: 1600, quality: 78 }, // desktop viewports, and the lightbox's full view
+} as const;
+
+/**
+ * A ready-to-spread `{ src, srcSet }` pair for a responsive `<img>` — the
+ * browser picks whichever of the 2 PACKET_IMAGE_SIZES actually matches the
+ * visitor's viewport and pixel density, so a phone no longer downloads the
+ * same large image a desktop does. Pair with a `sizes` attribute at the
+ * call site describing how wide the image actually renders there.
+ */
+export function packetImageSrcSet(storagePath: string): { src: string; srcSet: string } {
+  const small = packetImageUrl(storagePath, PACKET_IMAGE_SIZES.small);
+  const large = packetImageUrl(storagePath, PACKET_IMAGE_SIZES.large);
+  return {
+    src: large,
+    srcSet: `${small} ${PACKET_IMAGE_SIZES.small.width}w, ${large} ${PACKET_IMAGE_SIZES.large.width}w`,
+  };
 }
 
 export function packetVideoUrl(storagePath: string): string {

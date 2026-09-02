@@ -26,7 +26,7 @@ import { analyzeDeal, compSetConfidence, estimateComparableArv, type CompScore, 
 import { VERDICT_STYLE } from '@/lib/dealVerdict';
 import { useAnnouncePacketPresence } from '@/hooks/usePacketPresence';
 import { getViewerIdentity, saveViewerIdentity, type ViewerIdentity } from '@/lib/viewerToken';
-import { packetImageUrl, packetVideoUrl } from '@/hooks/useDealPackets';
+import { PACKET_IMAGE_SIZES, packetImageSrcSet, packetImageUrl, packetVideoUrl } from '@/hooks/useDealPackets';
 import { CONDITION_SYSTEM_LABELS, CONDITION_SYSTEMS, DEAL_TYPE_CONFIG, type ConditionRating, type ConditionSystem } from '@/types/domain';
 import { repairIcon } from '@/lib/repairCatalog';
 
@@ -274,10 +274,11 @@ interface PacketPhoto {
 function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: number) => void }) {
   if (!images.length) return null;
 
-  const Tile = ({ img, index, className, overlay, width }: { img: PacketPhoto; index: number; className: string; overlay?: number; width: number }) => (
+  const Tile = ({ img, index, className, overlay, sizes }: { img: PacketPhoto; index: number; className: string; overlay?: number; sizes: string }) => (
     <button onClick={() => onOpen(index)} className={`group relative overflow-hidden rounded-xl border border-border ${className}`}>
       <img
-        src={packetImageUrl(img.storagePath, { width, quality: 72 })}
+        {...packetImageSrcSet(img.storagePath)}
+        sizes={sizes}
         alt={img.caption ?? 'Property photo'}
         loading={index === 0 ? undefined : 'lazy'}
         decoding="async"
@@ -292,13 +293,13 @@ function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: nu
   );
 
   if (images.length === 1) {
-    return <Tile img={images[0]} index={0} className="block h-72 w-full sm:h-[420px]" width={1200} />;
+    return <Tile img={images[0]} index={0} className="block h-72 w-full sm:h-[420px]" sizes="100vw" />;
   }
 
   if (images.length === 2) {
     return (
       <div className="grid h-56 grid-cols-2 gap-2 sm:h-[420px]">
-        {images.map((img, i) => <Tile key={img.id} img={img} index={i} className="h-full" width={700} />)}
+        {images.map((img, i) => <Tile key={img.id} img={img} index={i} className="h-full" sizes="50vw" />)}
       </div>
     );
   }
@@ -311,14 +312,14 @@ function PhotoMosaic({ images, onOpen }: { images: PacketPhoto[]; onOpen: (i: nu
 
   return (
     <div className={`grid grid-cols-2 gap-2 sm:h-[420px] sm:grid-rows-2 ${wide ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-      <Tile img={images[0]} index={0} className="col-span-2 h-56 sm:row-span-2 sm:h-full" width={900} />
+      <Tile img={images[0]} index={0} className="col-span-2 h-56 sm:row-span-2 sm:h-full" sizes="(min-width: 640px) 50vw, 100vw" />
       {thumbs.map((img, i) => (
         <Tile
           key={img.id}
           img={img}
           index={i + 1}
           className="h-28 sm:h-full"
-          width={360}
+          sizes={wide ? '25vw' : '(min-width: 640px) 33vw, 50vw'}
           overlay={extra > 0 && i === thumbs.length - 1 ? extra : undefined}
         />
       ))}
@@ -575,7 +576,7 @@ export function PublicPacketPage() {
     if (lightboxIndex === null || !packet?.images.length || imageCount < 2) return;
     for (const delta of [1, -1]) {
       const neighbor = packet.images[(lightboxIndex + delta + imageCount) % imageCount];
-      if (neighbor) new Image().src = packetImageUrl(neighbor.storagePath, { width: 1920, quality: 82 });
+      if (neighbor) new Image().src = packetImageUrl(neighbor.storagePath, PACKET_IMAGE_SIZES.large);
     }
   }, [lightboxIndex, packet?.images, imageCount]);
 
@@ -1093,7 +1094,7 @@ export function PublicPacketPage() {
                 on mobile, where the viewport is usually narrower than the
                 photo anyway and this already looked right. */}
             <img
-              src={packetImageUrl(packet.images[lightboxIndex].storagePath, { width: 1920, quality: 82 })}
+              src={packetImageUrl(packet.images[lightboxIndex].storagePath, PACKET_IMAGE_SIZES.large)}
               alt={packet.images[lightboxIndex].caption ?? 'Property photo'}
               onClick={(e) => e.stopPropagation()}
               onLoad={() => setMainImageLoading(false)}
@@ -1126,7 +1127,7 @@ export function PublicPacketPage() {
                   }`}
                 >
                   <img
-                    src={packetImageUrl(img.storagePath, { width: 128, quality: 60 })}
+                    src={packetImageUrl(img.storagePath, PACKET_IMAGE_SIZES.small)}
                     alt=""
                     loading="lazy"
                     decoding="async"
