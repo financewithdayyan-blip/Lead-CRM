@@ -5,22 +5,27 @@
 // escalating day schedule (see FOLLOWUP_SCHEDULE_DAYS below, driven by
 // leads.next_onhold_followup_at — see migration 0127) since a seller's
 // situation can change months later even if it hasn't in the first few
-// weeks. Structurally a trim of send-reminders: same dual auth, same
+// weeks. Structurally a trim of send-reminders: same
 // atomic-claim-then-draft-then-send shape, same pinned-number reuse. Called
-// only by pg_cron (migration 0128) — no button anywhere triggers this.
+// only by pg_cron (migration 0129) — no button anywhere triggers this. Auth
+// is a purpose-made secret, not send-reminders' service-role-key pattern —
+// see the check below.
 //
 // Every message is drafted fresh by Claude rather than sent from a fixed
 // template, on purpose: the same wording landing in a string of leads'
 // threads every 5/10/20 days is exactly what would make this read as
-// automated. Stops on its own the moment a lead replies — sms-webhook
-// advances On Hold to Replied on any inbound message (see 0127's sibling
-// change there), which drops the lead out of this sweep's `stage = 'onhold'`
-// filter and lets ai-reply's normal qualification framework take over.
+// automated. Stops on its own the moment a lead replies — sms-webhook sets
+// onhold_reengaged true on any inbound message from an On Hold lead (see
+// migration 0130), which this sweep excludes below, and lets ai-reply's
+// normal qualification framework take over from there. The lead itself
+// stays on the On Hold stage the whole time (0130) — only this sweep's own
+// escalating nurture text stops, not the AI conversation.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
+const DISPATCH_SECRET = Deno.env.get('ONHOLD_FOLLOWUP_CRON_SECRET')!;
 
 const ZOOM_ACCOUNT_ID = Deno.env.get('ZOOM_ACCOUNT_ID')!;
 const ZOOM_CLIENT_ID = Deno.env.get('ZOOM_CLIENT_ID')!;
@@ -107,17 +112,15 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Either the cron job (service role key) or an admin clicking a button,
-  // same posture as send-reminders — no button exists for this today, but
-  // the same dual-auth shape costs nothing to keep for parity/future use.
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const bearer = authHeader.replace('Bearer ', '');
-  if (bearer !== SERVICE_ROLE_KEY) {
-    const { data: userData } = await admin.auth.getUser(bearer);
-    const userId = userData?.user?.id;
-    if (!userId) return json({ error: 'Not signed in.' }, 401);
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', userId).single();
-    if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
+  // Called only by pg_cron via pg_net, never by a user — a purpose-made
+  // Vault secret compared via a plain header, same pattern as
+  // bulk-sms-dispatcher and ai-reply-review. NOT the service role key: that
+  // key has rotated formats between what's stored in Vault and what
+  // deployed edge functions actually see, which silently 401s a job forever
+  // with no way to notice (see migration 0077's comment, and 0129 which
+  // moved this function onto the same fix after exactly that happened here).
+  if (req.headers.get('x-internal-secret') !== DISPATCH_SECRET) {
+    return json({ error: 'Unauthorized.' }, 401);
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -127,6 +130,14 @@ Deno.serve(async (req) => {
     .select('id, user_id, first_name, address, city, state, phone, assigned_sms_number, onhold_entered_at, onhold_followup_day')
     .eq('stage', 'onhold')
     .eq('opted_out', false)
+    // On Hold leads now stay on this stage through their entire AI
+    // conversation (migration 0130) rather than moving to Replied once they
+    // reply, so 'stage = onhold' alone no longer means "still silently
+    // waiting." onhold_reengaged (set by sms-webhook the moment a reply
+    // actually comes in) is what distinguishes that — a lead who's already
+    // replied doesn't need another automated "checking in" text landing on
+    // top of a live or already-handled conversation.
+    .eq('onhold_reengaged', false)
     .or(`next_onhold_followup_at.is.null,next_onhold_followup_at.lte.${todayIso}`)
     .limit(MAX_LEADS_PER_RUN);
   if (leadsErr) return json({ error: leadsErr.message }, 500);

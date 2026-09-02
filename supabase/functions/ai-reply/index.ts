@@ -344,6 +344,8 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 - Negative or declining, or an explicit request to not be contacted again (in any phrasing, not just a bare "STOP" — plain STOP-style keywords are handled separately and never reach you): reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Also set hard_decline:
   - false only if the decline is clearly and specifically about the price or offer amount (e.g. "too low", "not enough", "lowball", "insulting offer") and nothing else — not a refusal to sell at all, just this number. This stops you from texting them further without marking them permanently unreachable, since a different number or a human follow-up might still work.
   - true for every other kind of decline — not interested, wrong time, doesn't want to sell, tired of being contacted, or anything not clearly and only about price. If genuinely unsure which one this is, set hard_decline true: treat it as the permanent, safer option rather than guess.
+
+- Says or implies the property is currently listed for sale on the open market — with a realtor/agent, or specifically on Zillow, Realtor.com, or Redfin, or phrasing like "it's already listed" or "we have it listed": stop the qualification framework immediately, right on this reply — do not continue with MOTIVATION, CONDITION, TIMELINE, PRICE, DECISION, or PHOTOS, and do not ask about any of that again even if they bring up something from it themselves later. This isn't a decline, so do not set negative_reply. Instead, reply briefly acknowledging what they said, then ask what's a good time for someone from the team to give them a call to talk it over directly. If they name a real day and time in this same message, fill in scheduled_callback_at and scheduled_callback_note exactly like the CALLBACK step does. Set listed_on_market true. Do not set fully_qualified true for this — the interview itself was never completed, a human is taking this one over directly instead.
 {{LEARNED_CASES}}
 FRAMEWORK for this lead:
 {{FRAMEWORK}}
@@ -404,14 +406,16 @@ Deno.serve(async (req) => {
 
   // Qualified-plus normally means ai_reply_paused is true and stays true —
   // except Partial Qualified (initial_contact), which only ever got there
-  // because everything but photos is already done. That transition still
-  // sets ai_reply_paused true (the qualified-tasks trigger relies on that
-  // exact flip to skip its own generic task pair), so photo_wait_ai_active is
-  // a second, narrower flag: true only while the AI itself is still allowed
-  // to chase photos/a callback time for this lead. A human manually replying
-  // (useSendManualReply) clears it, which is what actually silences the AI
-  // here — the stage never changes just because a human sent one message.
-  const photoWaitActive = lead.stage === 'initial_contact' && lead.photo_wait_ai_active;
+  // because everything but photos is already done, and On Hold, which now
+  // (migration 0130) never actually leaves that stage even once qualified —
+  // see the routing comment near the bottom of this file. Both keep
+  // ai_reply_paused true right alongside photo_wait_ai_active true, so
+  // photo_wait_ai_active is the real, narrower flag: true only while the AI
+  // itself is still allowed to chase photos/a callback time for this lead.
+  // A human manually replying (useSendManualReply) clears it, which is what
+  // actually silences the AI here — the stage never changes just because a
+  // human sent one message.
+  const photoWaitActive = (lead.stage === 'initial_contact' || lead.stage === 'onhold') && lead.photo_wait_ai_active;
   if (lead.ai_reply_paused && !photoWaitActive) {
     return json({ aborted: true, reason: 'ai_reply_paused' });
   }
@@ -422,12 +426,17 @@ Deno.serve(async (req) => {
   // fact. The AI must never text a lead sitting in Qualified, Follow-Up,
   // Negotiation or any later stage regardless of how it got there, so this is
   // a second, independent gate rather than trusting ai_reply_paused alone.
-  // initial_contact (Partial Qualified) is the one exception, gated above by
+  // initial_contact (Partial Qualified) is one exception, gated above by
   // photoWaitActive rather than by stage alone — a lead landing there any
   // other way (a manual drag, say) has photo_wait_ai_active false and stays
-  // silent same as before.
-  const AI_ACTIVE_STAGES = new Set(['contacted', 'replied']);
-  const isPhotoWaitMode = photoWaitActive; // already implies stage === 'initial_contact'
+  // silent same as before. 'onhold' is included outright (not just via
+  // photoWaitActive): a lead that replies while On Hold stays on that stage
+  // for its entire conversation (0130) but still needs the AI actually
+  // responding — ai_reply_paused is what keeps a freshly-onhold, never-
+  // replied lead silent, this stage gate was never the thing protecting
+  // that case.
+  const AI_ACTIVE_STAGES = new Set(['contacted', 'replied', 'onhold']);
+  const isPhotoWaitMode = photoWaitActive; // already implies stage === 'initial_contact' or 'onhold'
   if (!AI_ACTIVE_STAGES.has(lead.stage) && !isPhotoWaitMode) {
     return json({ aborted: true, reason: 'stage_not_ai_active', stage: lead.stage });
   }
@@ -704,6 +713,11 @@ Deno.serve(async (req) => {
                     description:
                       'True only on the message where you ask a confirmed non-owner contact if they know the property owner or a way to reach them (the wrong-number special case). False on every other message, including this same lead\'s next reply whichever way it goes — this flag only ever means "I just asked this exact question and am waiting on the answer."',
                   },
+                  listed_on_market: {
+                    type: 'boolean',
+                    description:
+                      'True on the message where the lead first says or implies the property is currently listed for sale on the open market (an agent, or specifically Zillow, Realtor.com, Redfin). Stops the qualification framework for this lead — see the special case above. Not a decline, so never paired with negative_reply true.',
+                  },
                   summary: {
                     type: 'string',
                     description:
@@ -805,6 +819,7 @@ Deno.serve(async (req) => {
     scheduled_callback_note: scheduledCallbackNote,
     next_action: nextAction,
     awaiting_owner_info: awaitingOwnerInfoRaw,
+    listed_on_market: listedOnMarketRaw,
     script_answers: scriptAnswersRaw,
   } = toolUse.input as {
     reply_parts: string[];
@@ -820,8 +835,10 @@ Deno.serve(async (req) => {
     scheduled_callback_note?: string;
     next_action?: string;
     awaiting_owner_info?: boolean;
+    listed_on_market?: boolean;
     script_answers?: Record<string, unknown>;
   };
+  const listedOnMarket = !!listedOnMarketRaw;
 
   // Fills in a name/address the CRM never had, and a callback time once the
   // seller actually gives one — all independent of qualification outcome,
@@ -976,6 +993,11 @@ Deno.serve(async (req) => {
   // later with a different number or offer, since this isn't "there is no
   // real lead at that number," it's "not at this price."
   //
+  // listed_on_market also pauses the AI immediately, same as fully_qualified,
+  // but for the opposite reason — the interview was interrupted, not
+  // completed, so the stage is deliberately left alone rather than moved to
+  // Qualified. See its own branch below for how it still surfaces.
+  //
   // fully_qualified always pauses the AI immediately — its only job is to
   // qualify, and once the framework interview (condition/price/timeline,
   // +mortgage for lien leads, photos asked as the last step) is done, a
@@ -996,10 +1018,31 @@ Deno.serve(async (req) => {
       // written here — see get_followup_leads in 0080_daily_task_summary.sql.
       await admin.from('leads').update({ stage: 'onhold', ai_reply_paused: true }).eq('id', leadId);
     }
+  } else if (listedOnMarket) {
+    // Listed-on-market needs a human conversation, not the automated
+    // interview — pause for good, same as fully_qualified, but deliberately
+    // leave the stage alone rather than forcing it into Qualified: the
+    // interview itself was never actually completed, so that label would be
+    // wrong. Staying in Replied (or wherever it already was) still surfaces
+    // this lead through the dashboard's "Do followups" aggregate once it
+    // goes quiet (get_followup_leads already includes 'replied'), and
+    // through Scheduled Calls too if a callback time was captured above.
+    const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const callbackLine = recoveredFields.scheduled_callback_at
+      ? `Callback: ${(scheduledCallbackNote ?? '').trim() || 'time given, see Scheduled Calls'}`
+      : 'Callback: not given yet, needs a human follow-up to get a time';
+    const block = `AI Paused — Listed on Market — ${dateLabel}\nLead says the property is currently listed (agent/Zillow/Realtor.com/Redfin). Qualification framework stopped, needs a human call instead.\n${callbackLine}\n\n---\n\n`;
+    await admin.from('leads').update({ ai_reply_paused: true, notes: block + (lead.notes ?? '') }).eq('id', leadId);
   } else if (fullyQualified) {
     const landingOnFollowup = hasPhotos as boolean;
+    const cameFromOnhold = lead.stage === 'onhold';
     const updates: Record<string, unknown> = {
-      stage: landingOnFollowup ? 'followup' : 'initial_contact',
+      // On Hold leads stay on the On Hold board through qualification too
+      // (0130) — a human moves them to Negotiation/Contract by hand once a
+      // deal is actually happening, same as every other manual stage move
+      // already works. Everything else about "fully qualified" (pause,
+      // photo-wait flag, the Notes summary below) still applies unchanged.
+      ...(cameFromOnhold ? {} : { stage: landingOnFollowup ? 'followup' : 'initial_contact' }),
       ai_reply_paused: true,
       // Only Partial Qualified (no photos yet) leaves the AI able to keep
       // texting this lead — photo-wait mode above is gated on this flag
@@ -1035,10 +1078,16 @@ Deno.serve(async (req) => {
     // asking every turn until it gets a real answer, same as the main
     // framework's own CALLBACK step). No qualification task needed here —
     // the one written when this lead first became qualified still covers
-    // it; the callback task inserted below is the new, concrete thing.
+    // it; the callback task inserted below is the new, concrete thing. On
+    // Hold leads stay on the On Hold board here too (0130) — same reasoning
+    // as the fully_qualified branch above.
     await admin
       .from('leads')
-      .update({ stage: 'followup', photo_wait_ai_active: false, next_reminder_at: null })
+      .update({
+        ...(lead.stage === 'onhold' ? {} : { stage: 'followup' }),
+        photo_wait_ai_active: false,
+        next_reminder_at: null,
+      })
       .eq('id', leadId);
   }
 
@@ -1054,5 +1103,5 @@ Deno.serve(async (req) => {
   // aggregate (get_followup_leads in 0080_daily_task_summary.sql), the same
   // as any other stalled conversation.
 
-  return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined });
+  return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined, listedOnMarket });
 });

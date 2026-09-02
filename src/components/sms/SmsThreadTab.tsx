@@ -8,15 +8,20 @@ import { formatDateTime, formatPhone } from '@/lib/utils';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
 import type { Lead } from '@/types/domain';
 
-// ai-reply only ever texts a lead sitting in Contacted or Replied — any
-// later stage (Qualified, Follow-Up, Negotiation, ...) is silent regardless
-// of ai_reply_paused, since a manual Kanban drag or a deal handled entirely
-// by phone never touches that flag. Mirrored here so the chip doesn't claim
-// "auto-replying" for a lead the AI will actually never text again.
-// Partial Qualified (initial_contact) is the one exception, gated below by
+// ai-reply only ever texts a lead sitting in Contacted, Replied, or On Hold
+// — any later stage (Qualified, Follow-Up, Negotiation, ...) is silent
+// regardless of ai_reply_paused, since a manual Kanban drag or a deal
+// handled entirely by phone never touches that flag. Mirrored here so the
+// chip doesn't claim "auto-replying" for a lead the AI will actually never
+// text again. On Hold leads now stay on that stage through their entire AI
+// conversation (migration 0130) rather than moving to Replied/Partial
+// Qualified, so it's included outright rather than only via
+// photoWaitAiActive; ai_reply_paused (true by default the moment a lead
+// enters On Hold) is what actually keeps a silent, never-replied one quiet.
+// Partial Qualified (initial_contact) is the other stage gated only via
 // photoWaitAiActive rather than being in this set outright — a lead sitting
 // there any other way (a manual drag, say) still reads as paused.
-const AI_ACTIVE_STAGES = new Set(['contacted', 'replied']);
+const AI_ACTIVE_STAGES = new Set(['contacted', 'replied', 'onhold']);
 
 /**
  * Explains *why* AI is or isn't replying, checking the same gates ai-reply
@@ -33,7 +38,7 @@ function AiStatusChip({ lead, globalEnabled }: { lead: Lead; globalEnabled: bool
       </span>
     );
   }
-  const photoWaitActive = lead.stage === 'initial_contact' && lead.photoWaitAiActive;
+  const photoWaitActive = (lead.stage === 'initial_contact' || lead.stage === 'onhold') && lead.photoWaitAiActive;
   const stageAllows = AI_ACTIVE_STAGES.has(lead.stage) || photoWaitActive;
   const effectivelyPaused = lead.aiReplyPaused && !photoWaitActive;
   if (effectivelyPaused || !stageAllows) {

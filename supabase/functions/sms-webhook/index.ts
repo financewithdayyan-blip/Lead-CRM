@@ -546,17 +546,26 @@ Deno.serve(async (req) => {
 
       // Only advance forward. A lead already past 'replied' (in Negotiation,
       // say) shouldn't be pulled backward by a new inbound text. 'onhold' is
-      // included so a reply to the automated On Hold nurture sequence
-      // (send-onhold-followups) wakes the lead back up — those leads also
-      // have ai_reply_paused set true (from the price-decline path that put
-      // them on hold in the first place), which ai-reply's own gate checks
-      // independently of stage, so it's cleared here too or the framework
-      // still wouldn't resume despite the stage now being AI-active.
-      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted', 'onhold']);
+      // handled separately below rather than folded into ADVANCE_FROM: a
+      // reply wakes the lead's AI conversation back up, but the lead stays
+      // on the On Hold board the whole time — qualification, negotiation,
+      // everything — and only actually leaves once a human moves it
+      // forward (dragging to Negotiation/Contract once a deal is real,
+      // same as it already works for every other manual stage move). This
+      // was a real bug until 2026-09-02 (migration 0130): On Hold leads
+      // that replied were silently moving to Replied/Partial Qualified.
+      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted']);
       if (ADVANCE_FROM.has(lead.stage)) {
-        const updates: Record<string, unknown> = { stage: 'replied' };
-        if (lead.stage === 'onhold') updates.ai_reply_paused = false;
-        await admin.from('leads').update(updates).eq('id', lead.id);
+        await admin.from('leads').update({ stage: 'replied' }).eq('id', lead.id);
+      } else if (lead.stage === 'onhold') {
+        // ai_reply_paused is cleared so ai-reply's own gate (independent of
+        // stage) lets the framework respond — see the 'onhold' entry
+        // ai-reply's AI_ACTIVE_STAGES set now allows. onhold_reengaged marks
+        // this lead as having actually replied, which excludes it from the
+        // escalating nurture sweep (send-onhold-followups) going forward —
+        // that sweep is only for leads still silently waiting, not ones
+        // already mid-conversation or handed to a human.
+        await admin.from('leads').update({ ai_reply_paused: false, onhold_reengaged: true }).eq('id', lead.id);
       }
 
       await admin.from('lead_activities').insert({
