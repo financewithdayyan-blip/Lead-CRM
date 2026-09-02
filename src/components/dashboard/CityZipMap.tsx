@@ -20,6 +20,13 @@ const TIER_LABEL: Record<Tier, string> = {
   red: 'Poor market',
 };
 const STATE_FILL = '#102338'; // matches CityPerformanceMap's national-view background, shown while tiles load
+// A fixed neutral outline for every zip shape, independent of its tier fill
+// — two adjacent same-tier zips (e.g. both yellow) previously drew their
+// shared border in that same tier color, so it visually disappeared and the
+// zips read as one merged blob. A consistent dark outline (matching the
+// property pins' own border) keeps every zip's boundary visible no matter
+// what color its neighbors are.
+const ZIP_OUTLINE = '#0b1826';
 
 // Every zip shape (circle or boundary polygon) fades in via this transition
 // rather than popping in instantly — same treatment for the property pins
@@ -128,9 +135,10 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     for (const z of zips) {
       const marker = fadeIn(
         L.circleMarker([z.lat, z.lng], { radius: radiusFor(z.total) }),
-        { color: TIER_COLOR[z.tier], weight: 2, fillColor: TIER_COLOR[z.tier], fillOpacity: 0.45 },
+        { color: ZIP_OUTLINE, weight: 2, fillColor: TIER_COLOR[z.tier], fillOpacity: 0.45 },
       );
       marker.bindPopup(popupHtml(z));
+      marker.bindTooltip(z.zip5, { permanent: true, direction: 'center', className: 'zip-label' });
       markersByZip.set(z.zip5, marker);
       bounds.extend([z.lat, z.lng]);
     }
@@ -225,11 +233,13 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
         if (!geometry) continue;
         const oldMarker = markersByZip.get(z.zip5);
         fadeIn(L.geoJSON(geometry as GeoJSON.GeoJsonObject), {
-          color: TIER_COLOR[z.tier],
+          color: ZIP_OUTLINE,
           weight: 2,
           fillColor: TIER_COLOR[z.tier],
           fillOpacity: 0.45,
-        }).bindPopup(popupHtml(z));
+        })
+          .bindPopup(popupHtml(z))
+          .bindTooltip(z.zip5, { permanent: true, direction: 'center', className: 'zip-label' });
         if (oldMarker) {
           oldMarker.setStyle({ opacity: 0, fillOpacity: 0 });
           setTimeout(() => {
@@ -260,7 +270,20 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
 
   return (
     <div className="city-zip-map relative isolate h-96 w-full overflow-hidden rounded-xl border border-border-2">
-      <style>{`.city-zip-map .leaflet-interactive { transition: opacity ${FADE_MS}ms ease, fill-opacity ${FADE_MS}ms ease; }`}</style>
+      <style>{`
+        .city-zip-map .leaflet-interactive { transition: opacity ${FADE_MS}ms ease, fill-opacity ${FADE_MS}ms ease; }
+        .city-zip-map .zip-label {
+          background: transparent;
+          border: none;
+          box-shadow: none;
+          padding: 0;
+          color: #f8fafc;
+          font: 700 12px/1 system-ui, sans-serif;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.7);
+          pointer-events: none;
+        }
+        .city-zip-map .zip-label::before { display: none; }
+      `}</style>
       <div ref={containerRef} className="h-full w-full" style={{ background: STATE_FILL }} />
       <div
         ref={overlayRef}
