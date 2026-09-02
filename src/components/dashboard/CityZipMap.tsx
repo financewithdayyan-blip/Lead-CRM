@@ -97,9 +97,9 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
 
     const glLayer = maplibreGL({ style: MAP_STYLE }).addTo(map);
     const hideOverlay = () => overlayRef.current?.classList.add('opacity-0', 'pointer-events-none');
-    glLayer.getMaplibreMap().once('load', hideOverlay);
-    // Fallback in case the 'load' event is missed (slow tile fetch, cached
-    // style) — the overlay should never get stuck covering a ready map.
+    // Fallback in case the underlying MapLibre 'load' event is missed (slow
+    // tile fetch, cached style) — the overlay should never get stuck
+    // covering a ready map.
     const overlayFallback = setTimeout(hideOverlay, 4000);
 
     const maxTotal = Math.max(...zips.map((z) => z.total), 1);
@@ -132,6 +132,14 @@ export function CityZipMap({ zips, cityLabel }: { zips: ZipMarker[]; cityLabel: 
     }
 
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 14 });
+
+    // The underlying MapLibre GL map only gets created once this Leaflet
+    // layer's own onAdd actually runs — which Leaflet defers until the map
+    // has a view (whenReady), i.e. until fitBounds above. Registering this
+    // listener any earlier hits a `getMaplibreMap()` that's still undefined
+    // (TypeError: Cannot read properties of undefined (reading 'once')) —
+    // real crash seen in production on 2026-09-02, hence the reorder.
+    glLayer.getMaplibreMap()?.once('load', hideOverlay);
 
     // Small fixed-size dots for each shown zip's under-contract,
     // in-negotiation, partial-qualified, and qualified properties — a much
