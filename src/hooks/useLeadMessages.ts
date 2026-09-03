@@ -178,9 +178,22 @@ export function useThreadMessageCounts(enabled: boolean) {
 export function useSendManualReply() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ leadId, body, fromKey }: { leadId: string; body: string; fromKey: SmsNumberKey }) => {
+    mutationFn: async ({
+      leadId,
+      body,
+      fromKey,
+      overrideNumber,
+    }: {
+      leadId: string;
+      body: string;
+      fromKey: SmsNumberKey;
+      /** Ignore this lead's existing pinned number and send from fromKey
+       * instead — see send-sms's own overrideNumber comment. Re-pins the
+       * lead to fromKey going forward, same as any other send. */
+      overrideNumber?: boolean;
+    }) => {
       const { data, error } = await supabase.functions.invoke('send-sms', {
-        body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey, isManualReply: true },
+        body: { leadIds: [leadId], templatesByTag: {}, defaultTemplate: body, fromKey, isManualReply: true, overrideNumber },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);

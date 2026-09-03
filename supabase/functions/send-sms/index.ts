@@ -286,6 +286,7 @@ Deno.serve(async (req) => {
       dailyLimits = {},
       jobId: jobIdIn,
       isManualReply = false,
+      overrideNumber = false,
     } = body as {
       leadIds: string[];
       templatesByTag: Record<string, string>;
@@ -303,6 +304,15 @@ Deno.serve(async (req) => {
        * lead_activities below, instead of a second full round trip the
        * client used to make only after this function had already returned. */
       isManualReply?: boolean;
+      /** Deliberately ignore this single lead's existing pin and send from
+       * fromKey instead — e.g. a lead who's gone quiet on their original
+       * number, worth trying a different one. Single-lead sends only (see
+       * effectiveKey below); meaningless for a bulk send, which never pins.
+       * The normal post-send "first time = pin it" write further down
+       * re-pins to whichever key was actually used, so an override send
+       * re-homes the conversation to the new number for everything after
+       * it too, not just this one message. */
+      overrideNumber?: boolean;
     };
     jobId = jobIdIn;
 
@@ -373,7 +383,7 @@ Deno.serve(async (req) => {
       if (!senders.length) return bail('No sending numbers are configured.', 400);
     } else {
       const pinned = leads[0]?.assigned_sms_number as string | null | undefined;
-      const effectiveKey = isActiveKey(pinned) ? pinned : fromKey;
+      const effectiveKey = isActiveKey(pinned) && !overrideNumber ? pinned : fromKey;
       const single = NUMBERS[effectiveKey];
       if (!single?.phone || !single.email) {
         return bail(`Sending number "${effectiveKey}" is not configured.`, 400);

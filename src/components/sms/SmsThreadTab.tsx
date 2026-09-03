@@ -63,6 +63,11 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   const [message, setMessage] = useState('');
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [error, setError] = useState<string | null>(null);
+  // Lets an admin deliberately override a lead's pinned number — e.g. a
+  // stale/non-responsive lead, worth trying a fresh number to see if that
+  // gets a reply. Off by default; the picker otherwise stays hidden per the
+  // pinnedNumber logic below.
+  const [switchingNumber, setSwitchingNumber] = useState(false);
 
   function displayNumber(key: SmsNumberKey) {
     const phone = numberLabels?.[key]?.phoneNumber;
@@ -92,9 +97,11 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
     // unless the send actually fails, in which case the draft comes back.
     setMessage('');
     setError(null);
+    const overriding = switchingNumber && !!pinnedNumber;
     sendReply.mutate(
-      { leadId: lead.id, body: text, fromKey: pinnedNumber ?? fromKey },
+      { leadId: lead.id, body: text, fromKey: overriding ? fromKey : (pinnedNumber ?? fromKey), overrideNumber: overriding },
       {
+        onSuccess: () => setSwitchingNumber(false),
         onError: (e) => {
           setError(e instanceof Error ? e.message : 'Send failed.');
           setMessage(text);
@@ -191,15 +198,26 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
             />
           </div>
           <div className="flex items-center justify-between gap-2">
-            {pinnedNumber ? (
-              <span
-                className="rounded-full bg-border-2 px-2 py-1 text-[12px] font-semibold text-text-2"
-                title="This lead's whole thread lives on this number — every reply keeps going out from it."
-              >
-                Sending from {displayNumber(pinnedNumber)}
-              </span>
+            {pinnedNumber && !switchingNumber ? (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="rounded-full bg-border-2 px-2 py-1 text-[12px] font-semibold text-text-2"
+                  title="This lead's whole thread lives on this number — every reply keeps going out from it."
+                >
+                  Sending from {displayNumber(pinnedNumber)}
+                </span>
+                <button
+                  onClick={() => {
+                    setFromKey(pinnedNumber);
+                    setSwitchingNumber(true);
+                  }}
+                  className="text-[11px] font-medium text-primary hover:underline"
+                >
+                  Switch number
+                </button>
+              </div>
             ) : (
-              <div className="flex gap-1">
+              <div className="flex flex-wrap items-center gap-1">
                 {SMS_NUMBER_KEYS.map((key) => (
                   <button
                     key={key}
@@ -209,6 +227,14 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
                     {displayNumber(key)}
                   </button>
                 ))}
+                {pinnedNumber && (
+                  <button
+                    onClick={() => setSwitchingNumber(false)}
+                    className="ml-1 text-[11px] text-text-3 hover:underline"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             )}
             <button
@@ -224,8 +250,9 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
             <div className="rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[12px] text-danger">{error}</div>
           )}
           <p className="text-[11px] text-text-3">
-            A single reply like this always goes out, any time of day — only bulk sends respect the 7pm-6am
-            Pakistan-time window. Sending here pauses AI auto-reply on this lead.
+            {pinnedNumber && switchingNumber
+              ? "Sending from a different number moves this lead's whole conversation to it going forward, same as if it had started there."
+              : 'A single reply like this always goes out, any time of day — only bulk sends respect the 7pm-6am Pakistan-time window. Sending here pauses AI auto-reply on this lead.'}
           </p>
         </div>
       )}
