@@ -33,7 +33,7 @@ const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 // Stages that are no longer active work — visually receded (muted column,
 // faded cards) rather than removed, so a full pipeline doesn't bury the
 // stages that still need attention.
-const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'onhold', 'others'];
+const DIMMED_STAGES: LeadStage[] = ['dead_declined', 'non_responsive', 'onhold', 'others'];
 // Cold Lead / Contacted are pre-outreach stages — nothing to call or text
 // about yet, so the Call/Text row is hidden on cards in these columns.
 const NO_CONTACT_STAGES: LeadStage[] = ['new', 'contacted'];

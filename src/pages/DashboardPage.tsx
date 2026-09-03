@@ -301,6 +301,7 @@ export function DashboardView({
     }));
     const offFunnel = [
       { label: 'Dead / Declined', count: leads.filter((l) => l.stage === 'dead_declined').length, color: '#ef4444' },
+      { label: 'Non Responsive', count: leads.filter((l) => l.stage === 'non_responsive').length, color: '#78716c' },
       { label: 'On Hold', count: leads.filter((l) => l.stage === 'onhold').length, color: '#2dd4bf' },
       { label: 'Others', count: leads.filter((l) => l.stage === 'others').length, color: '#94a3b8' },
       { label: 'Voicemail (legacy)', count: leads.filter((l) => l.stage === 'voicemail').length, color: '#f59e0b' },

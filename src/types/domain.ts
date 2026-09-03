@@ -14,6 +14,7 @@ export type LeadStage =
   | 'in_title'
   | 'closed'
   | 'dead_declined'
+  | 'non_responsive'
   | 'onhold'
   | 'others';
 
@@ -29,6 +30,7 @@ export const STAGE_ORDER: LeadStage[] = [
   'in_title',
   'closed',
   'dead_declined',
+  'non_responsive',
   'onhold',
   'others',
 ];
@@ -59,6 +61,13 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   in_title: { label: 'In Title', color: '#6366f1' },
   closed: { label: 'Closed', color: '#C9A24B' },
   dead_declined: { label: 'Dead / Declined', color: '#ef4444' },
+  // Auto-detected (detect-non-responsive-leads, daily cron): a lead whose
+  // last outbound text has sat unanswered 20+ days, moved here automatically
+  // so it's easy to find and try a different sending number for — see
+  // SmsThreadTab's "Switch number" control. Unlike On Hold, a reply promotes
+  // this straight back to 'replied' (sms-webhook's ADVANCE_FROM) rather than
+  // staying pinned, since the whole point of this stage is temporary.
+  non_responsive: { label: 'Non Responsive', color: '#78716c' },
   onhold: { label: 'On Hold', color: '#2dd4bf' },
   // Catch-all — leads moved here manually for reasons that don't fit
   // anywhere else in the pipeline. No automated flow ever sets this stage.

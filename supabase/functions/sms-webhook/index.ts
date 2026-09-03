@@ -554,7 +554,11 @@ Deno.serve(async (req) => {
       // same as it already works for every other manual stage move). This
       // was a real bug until 2026-09-02 (migration 0130): On Hold leads
       // that replied were silently moving to Replied/Partial Qualified.
-      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted']);
+      // 'non_responsive' is the opposite of 'onhold': that stage is only
+      // ever reached because the lead went quiet, so a reply is exactly the
+      // signal it exists to catch — no special-case branch needed, it just
+      // advances to 'replied' like a normal reply would (migration 0135).
+      const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted', 'non_responsive']);
       if (ADVANCE_FROM.has(lead.stage)) {
         await admin.from('leads').update({ stage: 'replied' }).eq('id', lead.id);
       } else if (lead.stage === 'onhold') {
