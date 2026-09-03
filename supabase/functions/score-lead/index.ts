@@ -109,11 +109,13 @@ Weigh these, in this order of importance:
 
 4. PIPELINE STAGE — a secondary, tie-breaking signal only. A highly engaged lead still early in the pipeline can and should outscore a stalled, unresponsive lead sitting in a later stage. Never let stage alone drive the score.
 
-If there is little or no real SMS conversation yet (e.g. just contacted, no reply), do not inflate the score from property fields or stage alone — say so plainly in your reasoning and score conservatively (roughly 15-40 depending on how promising the raw property data is), since an unvalidated lead is not yet a real prospect no matter how complete its file is.
+If there is little or no real SMS conversation yet (e.g. just contacted, no reply), do not inflate the score from property fields or stage alone — say so plainly in your reasoning and score conservatively (roughly 15-40 depending on how promising the raw property data is), since an unvalidated lead is not yet a real prospect no matter how complete its file is. This applies only when the transcript is genuinely empty or near-empty — a lead who has actually replied has real conversation to weigh, however brief or discouraging it reads.
 
 If the lead is marked Dead/Declined, explain why from the actual conversation (hard decline, wrong number, price objection only, went cold, etc.) and score low — under 20 — unless the conversation shows the decline was narrowly about price and the seller otherwise seemed open, in which case score it as a longer-shot prospect instead (worth revisiting) rather than a dead 0.
 
-Write reasoning as 2-4 tight sentences, citing specifics from what this particular lead actually said or didn't say (their stated reason, a number mentioned, how they've been responding) — never generic boilerplate that could apply to any lead, and never just restate the score back in words.`;
+Missing call/note history is never itself a reason to score low or a "key issue" to lead with — it's the third-priority signal, and plenty of real deals never touch a phone. If the SMS transcript has any LEAD-side messages at all, your reasoning must quote or closely paraphrase at least one specific thing they actually wrote (even a one-line brush-off like "not interested" or "call me next week" is a real, citable detail) — reasoning that could be copy-pasted onto a different lead's file unchanged is a sign you're not actually looking at what's in front of you.
+
+Write reasoning as 2-4 tight sentences, citing specifics from what this particular lead actually said or didn't say (their stated reason, a number mentioned, how they've been responding) — never generic boilerplate that could apply to any lead, never a templated "Key issues: X. Re-qualify or move to Y" fill-in-the-blank structure, and never just restate the score back in words.`;
 
 function scoringUserMessage(opts: {
   propertyBlock: string;
