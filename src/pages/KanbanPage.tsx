@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Pencil, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon } from 'lucide-react';
+import { Phone, Eye, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
@@ -248,6 +248,7 @@ function exportCsv(selectedLeads: Lead[], tags: Tag[]) {
 
 function KanbanCardVisual({
   lead,
+  href,
   viewOnly,
   tags,
   sharedFrom,
@@ -264,6 +265,10 @@ function KanbanCardVisual({
   lifted = false,
 }: {
   lead: Lead;
+  // A real href (not just the onOpen callback) so the preview button below
+  // is an actual link — ctrl/cmd-click and right-click "open in new tab"
+  // work natively, which they can't on a plain onClick-navigate button.
+  href: string;
   viewOnly: boolean;
   tags: Tag[];
   sharedFrom?: string;
@@ -379,16 +384,14 @@ function KanbanCardVisual({
                   {copied ? <Check size={11} /> : <Copy size={11} />}
                 </button>
               )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpen();
-                }}
+              <Link
+                to={href}
+                onClick={(e) => e.stopPropagation()}
                 className={`rounded p-1 transition-colors ${sx.iconBtn}`}
-                title="Edit"
+                title="Preview (right-click to open in a new tab)"
               >
-                <Pencil size={11} />
-              </button>
+                <Eye size={11} />
+              </Link>
               {DELETABLE_STAGES.includes(lead.stage) && (
                 <button
                   onClick={(e) => {
@@ -500,6 +503,7 @@ function KanbanCardVisual({
 const KanbanCard = memo(
   function KanbanCard({
     lead,
+    href,
     viewOnly,
     tags,
     sharedFrom,
@@ -514,6 +518,7 @@ const KanbanCard = memo(
     onDelete,
   }: {
     lead: Lead;
+    href: string;
     viewOnly: boolean;
     tags: Tag[];
     sharedFrom?: string;
@@ -537,6 +542,7 @@ const KanbanCard = memo(
         ) : (
           <KanbanCardVisual
             lead={lead}
+            href={href}
             viewOnly={viewOnly}
             tags={tags}
             sharedFrom={sharedFrom}
@@ -558,6 +564,7 @@ const KanbanCard = memo(
   // Skip re-renders when only callback refs change — data props are what matter.
   (prev, next) =>
     prev.lead === next.lead &&
+    prev.href === next.href &&
     prev.viewOnly === next.viewOnly &&
     prev.tags === next.tags &&
     prev.sharedFrom === next.sharedFrom &&
@@ -572,6 +579,7 @@ const KanbanCard = memo(
 const KanbanColumn = memo(function KanbanColumn({
   stage,
   leads,
+  leadHref,
   viewOnly,
   tags,
   receivedShares,
@@ -589,6 +597,7 @@ const KanbanColumn = memo(function KanbanColumn({
 }: {
   stage: LeadStage;
   leads: Lead[];
+  leadHref: (id: string) => string;
   viewOnly: boolean;
   tags: Tag[];
   receivedShares: Record<string, string>;
@@ -660,6 +669,7 @@ const KanbanColumn = memo(function KanbanColumn({
           renderItem={(l) => (
             <KanbanCard
               lead={l}
+              href={leadHref(l.id)}
               viewOnly={viewOnly}
               tags={tags}
               sharedFrom={receivedShares[l.id]}
@@ -933,6 +943,14 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     navigate(targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`, { state: { from: 'kanban' } });
   }, [navigate, targetUserId]);
 
+  // Same URL handleOpen navigates to, but as a string a real <Link> can use
+  // — ctrl/cmd-click and right-click "open in new tab" only work on an
+  // actual href, not a button that calls navigate() imperatively.
+  const leadHref = useCallback(
+    (id: string) => (targetUserId ? `/team/${targetUserId}/leads/${id}` : `/leads/${id}`),
+    [targetUserId],
+  );
+
   const handleOpenSms = useCallback((id: string) => {
     navigate(targetUserId ? `/team/${targetUserId}/leads/${id}?tab=sms` : `/leads/${id}?tab=sms`, { state: { from: 'kanban' } });
   }, [navigate, targetUserId]);
@@ -1073,6 +1091,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
               key={stage}
               stage={stage}
               leads={byStage[stage]}
+              leadHref={leadHref}
               viewOnly={viewOnly}
               tags={tags}
               receivedShares={receivedShares}
@@ -1097,6 +1116,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           {activeLead ? (
             <KanbanCardVisual
               lead={activeLead}
+              href={leadHref(activeLead.id)}
               viewOnly={viewOnly}
               tags={tags}
               sharedFrom={receivedShares[activeLead.id]}
