@@ -40,6 +40,33 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
+// Kept byte-identical to score-lead/index.ts's own copy — see its comment
+// for why: Anthropic's 429/500/502/503/529 are documented-transient, and a
+// short backoff-retry turns most of them into a normal successful score
+// instead of a failed lead that just waits for the next scheduled run.
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 529]);
+const MAX_ATTEMPTS = 3;
+
+async function fetchAnthropicWithRetry(body: string): Promise<Response> {
+  let res: Response;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (res.ok || !RETRYABLE_STATUSES.has(res.status) || attempt === MAX_ATTEMPTS) return res;
+    await res.text().catch(() => {});
+    await new Promise((r) => setTimeout(r, attempt * 1500));
+  }
+  return res!;
+}
+
 // Stages where the seller has engaged enough for a score to be meaningful —
 // matches the Kanban labels: Partial Qualified, Qualified, Negotiation,
 // Contract. Earlier stages (Cold Lead, Contacted, Replied) skip this batch
@@ -229,42 +256,37 @@ async function scoreOneLead(admin: ReturnType<typeof createClient>, leadId: stri
     hasTranscript: turns.length > 0,
   });
 
-  const aiRes = await withTimeout(
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-5',
-        max_tokens: 4096,
-        thinking: { type: 'adaptive' },
-        system: SCORING_SYSTEM,
-        messages: [{ role: 'user', content: userMessage }],
-        tools: [
-          {
-            name: 'score_lead',
-            description: 'Your acquisition-likelihood score and reasoning for this lead.',
-            input_schema: {
-              type: 'object',
-              properties: {
-                score: { type: 'integer', minimum: 0, maximum: 100, description: '0-100 acquisition likelihood score.' },
-                reasoning: {
-                  type: 'string',
-                  description: '2-4 sentences, specific to this lead, citing what was actually said or is actually on file.',
-                },
+  // Not wrapped in withTimeout — fetchAnthropicWithRetry already bounds each
+  // individual attempt with its own AbortSignal.timeout, and the outer 45s
+  // race would otherwise cut off a legitimate retry sequence (attempt +
+  // backoff + attempt can exceed 45s total even when no single attempt is
+  // slow) before it gets a chance to succeed.
+  const aiRes = await fetchAnthropicWithRetry(
+    JSON.stringify({
+      model: 'claude-opus-5',
+      max_tokens: 4096,
+      thinking: { type: 'adaptive' },
+      system: SCORING_SYSTEM,
+      messages: [{ role: 'user', content: userMessage }],
+      tools: [
+        {
+          name: 'score_lead',
+          description: 'Your acquisition-likelihood score and reasoning for this lead.',
+          input_schema: {
+            type: 'object',
+            properties: {
+              score: { type: 'integer', minimum: 0, maximum: 100, description: '0-100 acquisition likelihood score.' },
+              reasoning: {
+                type: 'string',
+                description: '2-4 sentences, specific to this lead, citing what was actually said or is actually on file.',
               },
-              required: ['score', 'reasoning'],
             },
+            required: ['score', 'reasoning'],
           },
-        ],
-        tool_choice: { type: 'tool', name: 'score_lead' },
-      }),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        },
+      ],
+      tool_choice: { type: 'tool', name: 'score_lead' },
     }),
-    `Claude scoring for ${leadId}`,
   );
 
   if (!aiRes.ok) throw new Error(`Anthropic error (${aiRes.status}): ${(await aiRes.text()).slice(0, 300)}`);

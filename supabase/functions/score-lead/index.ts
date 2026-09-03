@@ -30,6 +30,34 @@ function json(body: unknown, status = 200) {
 
 const FETCH_TIMEOUT_MS = 45_000;
 
+// Anthropic's 429/500/502/503/529 are documented-transient — 529
+// ("Overloaded") in particular clears within seconds most of the time.
+// Retrying a couple of times with a short backoff turns what would
+// otherwise be a raw error surfaced straight to the user into a normal,
+// if slightly slower, successful score.
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 529]);
+const MAX_ATTEMPTS = 3;
+
+async function fetchAnthropicWithRetry(body: string): Promise<Response> {
+  let res: Response;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (res.ok || !RETRYABLE_STATUSES.has(res.status) || attempt === MAX_ATTEMPTS) return res;
+    await res.text().catch(() => {}); // drain so the connection can be reused
+    await new Promise((r) => setTimeout(r, attempt * 1500));
+  }
+  return res!;
+}
+
 function money(n: unknown): string | null {
   const v = typeof n === 'number' ? n : Number(n);
   if (!Number.isFinite(v) || v === 0) return null;
@@ -238,14 +266,8 @@ Deno.serve(async (req) => {
       hasTranscript: turns.length > 0,
     });
 
-    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const aiRes = await fetchAnthropicWithRetry(
+      JSON.stringify({
         model: 'claude-opus-5',
         max_tokens: 4096,
         thinking: { type: 'adaptive' },
@@ -270,8 +292,7 @@ Deno.serve(async (req) => {
         ],
         tool_choice: { type: 'tool', name: 'score_lead' },
       }),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    );
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
