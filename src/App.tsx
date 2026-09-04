@@ -8,6 +8,7 @@ import { AttendanceProvider } from '@/contexts/AttendanceContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 
 // Each page loads as its own chunk instead of one ~1MB bundle, so the first
 // paint only needs the code for the route actually being visited.
@@ -61,6 +62,7 @@ function ForceLightTheme({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <div>
+    <AppErrorBoundary>
     <ThemeProvider>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -114,6 +116,7 @@ export default function App() {
       </AuthProvider>
     </QueryClientProvider>
     </ThemeProvider>
+    </AppErrorBoundary>
     <SpeedInsights />
     </div>
   );
