@@ -279,7 +279,7 @@ STYLE:
 - Never use an em dash, en dash, or semicolon. Use a comma, a period, or a new message in reply_parts instead.
 - A casual emoji is fine occasionally, not in every message.
 - Never invent facts, numbers, or offers not actually said in this conversation.
-- Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price earlier. You only gather information; a human decides and makes the actual offer, always on a call, never over text. If price comes up again, acknowledge it neutrally ("Got it, noted") without reacting as if a number is locked in.
+- Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price earlier. You only gather information; a human decides and makes the actual offer, always on a call, never over text. If price comes up again, acknowledge it neutrally in one short reply_parts message ("Got it, noted") and never leave that as the whole reply — immediately follow it, in the next reply_parts message, with whatever's actually next (asking for photos if they haven't sent them, or a callback time if photos are already in). A bare acknowledgment with nothing else is a dead end that gives them nothing to respond to.
 
 Call draft_photo_wait_reply with your response.`;
 
@@ -299,12 +299,13 @@ STYLE — every reply, always:
 - Use contractions, always — "I'll", "you're", "don't", "that's", "can't". Writing "I will" or "you are" out in full is exactly what makes a reply read as robotic.
 - Cut business/customer-service phrasing entirely: no "I appreciate that", "just so I have it", "please note", "moving forward", "at this time", "sounds good" as a stock filler, "that makes total sense". A real person doesn't narrate that they understood you, they just responds to what you said.
 - Don't recap or restate what they just told you before responding — that's a support-ticket habit, not how anyone actually texts a person back. React to it briefly if at all, then move on.
+- Never send a reply that is only an acknowledgment with nothing else — "got it", "noted", "makes sense" and then stopping there gives them nothing to respond to and the conversation goes quiet. Every reply has to end on a question or something that actually moves the current step forward, even a short reaction gets a follow-up in the same reply_parts.
 - Break the reply into separate messages in reply_parts whenever there's more than one distinct thought, or a side reaction (a laugh, "no worries", "totally get it", "fair point") that a real person would send separately from the substantive point rather than cramming both into one text with a comma or dash. Usually 1-2 messages, 3 only if genuinely needed. This is what real texting looks like, not one long paragraph.
 - No "Dear", no signature, no sign-off.
 - Never use an em dash, en dash, or semicolon. Use a comma, a period, or a new message in reply_parts instead.
 - A casual emoji is fine occasionally, for a human touch, not in every message.
 - Never invent facts, numbers, or offers that were not actually said in this conversation. Never state a specific dollar figure that has not actually been negotiated in this conversation.
-- Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price during the PRICE step. You only qualify leads; a human decides and makes the actual offer, always on a call, never over text. If price comes up again later in the conversation, acknowledge it neutrally ("Got it, noted your number") without reacting as if a number is locked in or ready to close on.
+- Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price during the PRICE step. You only qualify leads; a human decides and makes the actual offer, always on a call, never over text. If a price comes up — including early, before you've actually reached the PRICE step — acknowledge it neutrally in one short reply_parts message ("Got it, noted your number") without reacting as if it's locked in, and never leave that acknowledgment as the whole reply: immediately follow it, in the next reply_parts message, with your actual next question for whatever step you're currently on (e.g. "but first, what's the inside of the place looking like?" if you're still on CONDITION). A bare acknowledgment with no question gives them nothing to respond to and the conversation goes dead.
 - Follow the framework's numbered steps in strict order, no exceptions: never jump ahead to a later step before every step before it is actually answered, and never revisit or re-ask one already answered — including OWNER CONFIRMATION, which is done the moment it's established and is never brought up again. The order across steps is fixed; within a step, phrase it naturally and respond to what they actually say, but do not let a tangent, a question, or something they bring up unprompted pull you into a later step early — answer what's needed to keep the conversation natural, then return to the current step.
 
 BEFORE DRAFTING: review the entire conversation below, both sides, everything said so far, and any prior call/note history provided — not just the latest message in isolation. A frustrated or dismissive reply often has a real reason behind it (like an offer discussed on a call), not just a raw refusal; check the call/note history before assuming it's unexplained. Don't re-ask something already answered. Don't contradict something you already said or that's already on record from a call. Then name, to yourself, exactly ONE step from the numbered list above that is the single next thing to ask about — the earliest one not yet actually answered in this conversation. Your reply must move that one step forward and nothing else: not a later step, not two steps at once, not a sub-item from CONDITION bundled with another. If you catch yourself about to mention more than one framework topic in the same reply, cut it down to the one step you actually identified.
@@ -372,6 +373,19 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+  // Everything else in this invocation happens inside runReply, wrapped in
+  // the try/catch below. Before this, an uncaught exception anywhere past
+  // this point (an Anthropic fetch throwing, a malformed response, a DB
+  // write failing) just killed the invocation — Deno.serve returns its own
+  // unhandled 500, sms-webhook's trigger fetch only catches network-level
+  // failures and never inspects the response status, so the lead's message
+  // sat there with nothing attempted, nothing logged, and nothing to alert a
+  // human. Confirmed for real on 2026-09-02: a lead asked "what's your
+  // offer?" and got total silence for two days until an admin noticed and
+  // stepped in by hand. Every deliberate "don't reply" outcome above and
+  // within runReply already returns its own json(...) — this catch only
+  // ever fires for a genuine, unexpected failure.
+  async function runReply(): Promise<Response> {
   // Step 1: wait before drafting anything, so a burst of fragment messages
   // has time to finish arriving before any of them gets answered.
   await sleep(16_000);
@@ -615,7 +629,7 @@ Deno.serve(async (req) => {
 
   // Step 6: draft, via forced tool-call output so the three fields are
   // structured rather than parsed out of prose.
-  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+  const anthropicRequestInit: RequestInit = {
     method: 'POST',
     headers: {
       'x-api-key': ANTHROPIC_API_KEY,
@@ -785,8 +799,20 @@ Deno.serve(async (req) => {
       ],
       tool_choice: { type: 'tool', name: isPhotoWaitMode ? 'draft_photo_wait_reply' : 'draft_reply' },
     }),
-    signal: AbortSignal.timeout(30_000),
-  });
+  };
+  // A transient network blip or a 30s timeout here used to kill the whole
+  // invocation uncaught — the lead's message just never got a reply, with no
+  // trace anywhere that a reply was even attempted (confirmed for real on
+  // 2026-09-02: a lead asked "what's your offer?" and got silence for two
+  // days). One retry catches the transient case outright; anything that
+  // still fails twice surfaces through the outer catch below instead of
+  // vanishing.
+  let aiRes: Response;
+  try {
+    aiRes = await fetch('https://api.anthropic.com/v1/messages', { ...anthropicRequestInit, signal: AbortSignal.timeout(30_000) });
+  } catch {
+    aiRes = await fetch('https://api.anthropic.com/v1/messages', { ...anthropicRequestInit, signal: AbortSignal.timeout(30_000) });
+  }
 
   if (!aiRes.ok) {
     const errText = await aiRes.text();
@@ -1104,4 +1130,28 @@ Deno.serve(async (req) => {
   // as any other stalled conversation.
 
   return json({ ok: true, sent: true, fullyQualified, negativeReply, hardDecline: negativeReply ? hardDecline : undefined, listedOnMarket });
+  }
+
+  try {
+    return await runReply();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (triggerMessageId) {
+      await admin.from('inbound_messages').update({ send_error: message }).eq('id', triggerMessageId);
+    }
+    // Surface it somewhere a human will actually see it, since this lead's
+    // reply just silently failed to go out — without this, the only way to
+    // find out is a seller (or the admin) noticing the thread went quiet.
+    const { data: failedLead } = await admin.from('leads').select('user_id, first_name, last_name, address').eq('id', leadId).maybeSingle();
+    if (failedLead?.user_id) {
+      const who = [failedLead.first_name, failedLead.last_name].filter(Boolean).join(' ') || 'A lead';
+      await admin.from('lc_notifications').insert({
+        user_id: failedLead.user_id,
+        type: 'ai_reply_failed',
+        title: `AI couldn't reply to ${who}`,
+        body: `${failedLead.address ? `${failedLead.address} — ` : ''}${message.slice(0, 300)}`,
+      });
+    }
+    return json({ error: 'internal error', detail: message }, 500);
+  }
 });
