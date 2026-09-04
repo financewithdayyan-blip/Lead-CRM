@@ -352,10 +352,18 @@ function VideoGrid({ videos }: { videos: PacketVideoClip[] }) {
   );
 }
 
-/** Name-only wall, shown before any packet content when the admin enables it. */
+function isValidGatePhone(raw: string): boolean {
+  const digits = raw.replace(/\D/g, '');
+  return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+}
+
+/** Name-and-phone wall, shown before any packet content when the admin enables it. */
 function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) => void }) {
   const [name, setName] = useState('');
-  const valid = name.trim().length > 1;
+  const [phone, setPhone] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const nameValid = name.trim().length > 1;
+  const phoneValid = isValidGatePhone(phone);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-4">
@@ -363,13 +371,14 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
         className="w-full max-w-sm rounded-2xl border border-border bg-surface p-7 shadow-2xl"
         onSubmit={(e) => {
           e.preventDefault();
-          if (valid) onSubmit({ name: name.trim() });
+          setSubmitted(true);
+          if (nameValid && phoneValid) onSubmit({ name: name.trim(), phone: phone.trim() });
         }}
       >
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Investment Opportunity</div>
         <h1 className="mt-1.5 font-serif text-[19px] font-semibold text-text">Who's viewing?</h1>
         <p className="mt-1 text-[13px] leading-snug text-text-3">
-          Just your name — the full packet opens straight away.
+          Your name and phone — the full packet opens straight away.
         </p>
         <input
           className="input mt-4"
@@ -378,7 +387,18 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
           placeholder="Your name"
           autoFocus
         />
-        <button type="submit" disabled={!valid} className="btn btn-primary mt-3 w-full justify-center">
+        <input
+          className={`input mt-2 ${submitted && !phoneValid ? '!border-danger' : ''}`}
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Your phone number"
+        />
+        {submitted && !phoneValid && (
+          <p className="mt-1 text-[12px] text-danger">Enter a valid 10-digit phone number.</p>
+        )}
+        <button type="submit" className="btn btn-primary mt-3 w-full justify-center">
           View deal packet
         </button>
       </form>
