@@ -72,7 +72,7 @@ const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency
   { key: 'cashDueAtClosing', label: 'Cash Due to Seller at Closing', type: 'currency', placeholder: '409000', required: true },
   { key: 'closingDate', label: 'Closing Date', type: 'date', required: true },
   { key: 'titleCompany', label: 'Title Company', type: 'text', placeholder: 'e.g. Bluebird Title Co.', required: true },
-  { key: 'inspectionPeriod', label: 'Inspection Period (days)', type: 'text', placeholder: 'e.g. 10', required: true },
+  { key: 'inspectionPeriod', label: 'Inspection Period (business days)', type: 'text', placeholder: 'e.g. 10', required: true },
   { key: 'additionalTerms', label: 'Additional Terms (optional)', type: 'textarea', placeholder: 'Any extra terms both parties agreed to', required: false },
 ];
 

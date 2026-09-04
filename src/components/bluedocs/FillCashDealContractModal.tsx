@@ -85,7 +85,7 @@ const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency
   { key: 'purchasePrice', label: 'Purchase Price', type: 'currency', placeholder: '410000' },
   { key: 'emdAmount', label: 'Earnest Money Deposit', type: 'currency', placeholder: '1000' },
   { key: 'titleCompany', label: 'Title Company', type: 'text', placeholder: 'e.g. Bluebird Title Co.' },
-  { key: 'inspectionPeriod', label: 'Inspection Period (days)', type: 'text', placeholder: 'e.g. 10' },
+  { key: 'inspectionPeriod', label: 'Inspection Period (business days)', type: 'text', placeholder: 'e.g. 10' },
   { key: 'closingDate', label: 'Closing Date', type: 'date' },
   { key: 'governingState', label: 'Governing State', type: 'state', placeholder: 'Start typing a state…' },
 ];
