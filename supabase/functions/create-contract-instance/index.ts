@@ -359,9 +359,16 @@ Deno.serve(async (req) => {
     const firstParty = [...insertedParties].sort((a, b) => a.sign_order - b.sign_order)[0];
     const docKind = template.type === 'loi' ? 'your Letter of Intent' : name;
     const link = `https://www.bluebirdacquisition.com/crm/sign/${firstParty.access_token}`;
-    let sentAny = false;
+
+    // Per-channel outcome, surfaced back to the admin instead of only ever
+    // logged server-side — a silent SMTP/Zoom failure used to be
+    // indistinguishable from a real send in the CRM, which is exactly why
+    // "most of the time they don't receive it" went unnoticed for so long.
+    const smsResult: { attempted: boolean; sent: boolean; error?: string } = { attempted: false, sent: false };
+    const emailResult: { attempted: boolean; sent: boolean; error?: string } = { attempted: false, sent: false };
 
     if (firstParty.send_sms && firstParty.phone) {
+      smsResult.attempted = true;
       try {
         const token = await withTimeout(zoomToken(), 'Zoom auth');
         await withTimeout(zoomUserId(BLUEDOCS_NUMBER.email, token), 'Zoom user lookup');
@@ -369,16 +376,18 @@ Deno.serve(async (req) => {
           sendZoomSms(BLUEDOCS_NUMBER.phone, firstParty.phone, INVITE_MESSAGE(docKind, propertyAddress.trim(), link), token),
           'Zoom send',
         );
-        sentAny = true;
+        smsResult.sent = true;
       } catch (smsErr) {
         // The contract instance and parties are already created — a send
         // failure shouldn't lose that. The admin can still copy the link
-        // manually from the Envelopes dashboard; this just logs the miss.
+        // manually from the Envelopes dashboard.
         console.error('Blue Docs invite SMS failed:', smsErr);
+        smsResult.error = smsErr instanceof Error ? smsErr.message : 'SMS send failed';
       }
     }
 
     if (firstParty.send_email && firstParty.email) {
+      emailResult.attempted = true;
       try {
         const html = signRequestEmailHtml({
           opener: `Hi ${firstParty.name.split(' ')[0]}, you have a document to sign`,
@@ -387,13 +396,14 @@ Deno.serve(async (req) => {
           link,
         });
         await sendEmail(firstParty.email, `${docKind} ready for your signature — ${propertyAddress.trim()}`, html);
-        sentAny = true;
+        emailResult.sent = true;
       } catch (emailErr) {
         console.error('Blue Docs invite email failed:', emailErr);
+        emailResult.error = emailErr instanceof Error ? emailErr.message : 'Email send failed';
       }
     }
 
-    if (sentAny) {
+    if (smsResult.sent || emailResult.sent) {
       await admin.from('contract_audit_events').insert({
         contract_instance_id: instance.id,
         party_id: firstParty.id,
@@ -404,6 +414,7 @@ Deno.serve(async (req) => {
     return json({
       instanceId: instance.id as string,
       parties: insertedParties.map((p) => ({ role: p.role, name: p.name, access_token: p.access_token, sign_order: p.sign_order })),
+      delivery: { sms: smsResult, email: emailResult },
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : 'unexpected error' }, 500);

@@ -15,6 +15,8 @@ import {
   PURCHASE_CONTRACT_TYPES,
   type DocTemplate,
 } from '@/hooks/useDocTemplates';
+import type { DeliveryResult } from '@/hooks/useContractInstances';
+import { AlertTriangle } from 'lucide-react';
 
 function SigningLinkRow({ label, url }: { label: string; url: string }) {
   const [copied, setCopied] = useState(false);
@@ -46,7 +48,7 @@ function useDocFlow() {
   const deleteTemplate = useDeleteDocTemplate();
   const [mappingTarget, setMappingTarget] = useState<{ template: DocTemplate; pdfUrl: string } | null>(null);
   const [sendTarget, setSendTarget] = useState<DocTemplate | null>(null);
-  const [firstSignerLink, setFirstSignerLink] = useState<{ label: string; url: string } | null>(null);
+  const [firstSignerLink, setFirstSignerLink] = useState<{ label: string; url: string; delivery: DeliveryResult } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; storagePath: string | null; docxStoragePath: string | null } | null>(null);
 
   async function openMapper(t: DocTemplate) {
@@ -67,6 +69,31 @@ function useDocFlow() {
     closeMapper: () => setMappingTarget(null),
     deleteTemplate,
   };
+}
+
+/** Turns a raw per-channel send outcome into what the admin actually needs
+ * to know — previously the modal always said "was just texted", regardless
+ * of which channel(s) were even selected or whether the send actually
+ * worked, which is exactly why silent SMTP/Zoom failures went unnoticed. */
+function summarizeDelivery(delivery: DeliveryResult): { ok: boolean; message: string } {
+  const sent: string[] = [];
+  const failed: string[] = [];
+  if (delivery.sms.attempted) (delivery.sms.sent ? sent : failed).push('text');
+  if (delivery.email.attempted) (delivery.email.sent ? sent : failed).push('email');
+
+  if (sent.length && !failed.length) {
+    return { ok: true, message: `Sent by ${sent.join(' and ')} — they should have it now.` };
+  }
+  if (sent.length && failed.length) {
+    return {
+      ok: false,
+      message: `Sent by ${sent.join(' and ')}, but the ${failed.join(' and ')} send failed. Share the link below directly to be safe.`,
+    };
+  }
+  if (failed.length) {
+    return { ok: false, message: `The ${failed.join(' and ')} send failed. Copy the link below and send it yourself.` };
+  }
+  return { ok: false, message: 'No delivery method was selected. Copy the link below and send it yourself.' };
 }
 
 function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
@@ -114,23 +141,38 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
         />
       )}
 
-      {flow.firstSignerLink && (
-        <Modal open onClose={() => flow.setFirstSignerLink(null)} title="Invitation sent" width="md">
-          <p className="text-[13px] text-text-2">
-            {flow.firstSignerLink.label.split(' — ')[0]} was just texted their signing link automatically. Each next
-            party gets texted the same way as soon as it's their turn — track progress any time from Envelopes. Here's
-            the link too, in case you want to share it another way.
-          </p>
-          <div className="mt-3">
-            <SigningLinkRow label={flow.firstSignerLink.label} url={flow.firstSignerLink.url} />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button className="btn btn-primary" onClick={() => flow.setFirstSignerLink(null)}>
-              Done
-            </button>
-          </div>
-        </Modal>
-      )}
+      {flow.firstSignerLink && (() => {
+        const summary = summarizeDelivery(flow.firstSignerLink.delivery);
+        return (
+          <Modal open onClose={() => flow.setFirstSignerLink(null)} title={summary.ok ? 'Invitation sent' : 'Invitation created'} width="md">
+            {!summary.ok && (
+              <div className="mb-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[12.5px] text-warning">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>{summary.message}</span>
+              </div>
+            )}
+            <p className="text-[13px] text-text-2">
+              {summary.ok ? (
+                <>
+                  {flow.firstSignerLink.label.split(' — ')[0]} — {summary.message} Each next party gets notified the
+                  same way as soon as it's their turn — track progress any time from Envelopes. Here's the link too,
+                  in case you want to share it another way.
+                </>
+              ) : (
+                'The contract and its signing link were created below — copy it and send it to them directly.'
+              )}
+            </p>
+            <div className="mt-3">
+              <SigningLinkRow label={flow.firstSignerLink.label} url={flow.firstSignerLink.url} />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button className="btn btn-primary" onClick={() => flow.setFirstSignerLink(null)}>
+                Done
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       <ConfirmDialog
         open={!!flow.deleteTarget}

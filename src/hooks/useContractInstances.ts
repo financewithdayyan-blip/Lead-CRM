@@ -157,10 +157,19 @@ export function useGenerateContract() {
       return data as {
         instanceId: string;
         parties: Array<{ role: PartyRole; name: string; access_token: string; sign_order: number }>;
+        delivery: DeliveryResult;
       };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
   });
+}
+
+/** Per-channel outcome of the first signer's invite send — see
+ * create-contract-instance. Lets the UI tell the admin what actually
+ * happened instead of a blanket "sent" regardless of outcome. */
+export interface DeliveryResult {
+  sms: { attempted: boolean; sent: boolean; error?: string };
+  email: { attempted: boolean; sent: boolean; error?: string };
 }
 
 export function useDeleteContractInstance() {
@@ -273,7 +282,14 @@ export function usePublicSigningParty(token: string | undefined) {
       } as SigningPartyInfo;
     },
     enabled: !!token,
-    retry: false,
+    // A transient network blip or a cold-start PostgREST error on first load
+    // (very plausible over mobile signal from inside an SMS/email in-app
+    // browser) used to render identically to a genuinely missing token —
+    // "This link is no longer valid" — with zero retries. A real miss
+    // (get_signing_party resolving to null) isn't a thrown error, so it
+    // still fails immediately either way; this only gives transient errors
+    // a couple of chances before giving up.
+    retry: 2,
     // Polled while waiting for the other party, so "their turn" flips
     // without the signer having to refresh manually.
     refetchInterval: (query) => (query.state.data && !query.state.data.isTurn ? 8000 : false),

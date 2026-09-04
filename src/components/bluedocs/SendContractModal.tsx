@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, Loader2, Plus, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { useGenerateContract } from '@/hooks/useContractInstances';
+import { useGenerateContract, type DeliveryResult } from '@/hooks/useContractInstances';
 import { roleLabel, type DocTemplate, type PartyRole } from '@/hooks/useDocTemplates';
 
 interface PartyDraft {
@@ -54,7 +54,7 @@ export function SendContractModal({
 }: {
   template: DocTemplate;
   onClose: () => void;
-  onSent: (link: { label: string; url: string }) => void;
+  onSent: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
 }) {
   const generate = useGenerateContract();
   const firstRoleLabel = roleLabel('buyer', template.type);
@@ -99,7 +99,7 @@ export function SendContractModal({
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const { parties: created } = await generate.mutateAsync({
+      const { parties: created, delivery } = await generate.mutateAsync({
         templateId: template.id,
         name: name.trim(),
         propertyAddress: propertyAddress.trim(),
@@ -113,6 +113,7 @@ export function SendContractModal({
       onSent({
         label: `${roleLabel(first.role, template.type, template.partyRoles)}${first.name ? ` — ${first.name}` : ''}`,
         url: `${window.location.origin}/crm/sign/${first.access_token}`,
+        delivery,
       });
     } finally {
       setSubmitting(false);

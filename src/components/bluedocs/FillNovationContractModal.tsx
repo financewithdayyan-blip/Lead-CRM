@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { useGenerateContract } from '@/hooks/useContractInstances';
+import { useGenerateContract, type DeliveryResult } from '@/hooks/useContractInstances';
 import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatCurrency } from '@/lib/currency';
 import type { DocTemplate } from '@/hooks/useDocTemplates';
@@ -91,7 +91,7 @@ export function FillNovationContractModal({
 }: {
   template: DocTemplate;
   onClose: () => void;
-  onSent: (link: { label: string; url: string }) => void;
+  onSent: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
 }) {
   const generate = useGenerateContract();
   const buyerRole = template.partyRoles[0]?.id;
@@ -194,7 +194,7 @@ export function FillNovationContractModal({
         },
       ];
 
-      const { parties: created } = await generate.mutateAsync({
+      const { parties: created, delivery } = await generate.mutateAsync({
         templateId: template.id,
         name: template.name,
         propertyAddress: [values.streetAddress.trim(), values.cityStateZip.trim()].filter(Boolean).join(', '),
@@ -205,6 +205,7 @@ export function FillNovationContractModal({
       onSent({
         label: `Seller${first.name ? ` — ${first.name}` : ''}`,
         url: `${window.location.origin}/crm/sign/${first.access_token}`,
+        delivery,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong sending this.');
