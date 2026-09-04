@@ -386,9 +386,11 @@ function KanbanCardVisual({
               )}
               <Link
                 to={href}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className={`rounded p-1 transition-colors ${sx.iconBtn}`}
-                title="Preview (right-click to open in a new tab)"
+                title="Preview (opens in a new tab)"
               >
                 <Eye size={11} />
               </Link>
