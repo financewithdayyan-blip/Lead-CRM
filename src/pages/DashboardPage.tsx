@@ -791,14 +791,17 @@ export function DashboardView({
     return days;
   }, [sendLog, inboundMessages, leads, trendDayCount]);
 
-  // "Revenue in pipeline" = total assignment fee across every lead that has
+  // "Expected revenue" = total assignment fee across every lead that has
   // reached Under Contract and hasn't fallen out of that track since —
   // Contract, In Title, and Closed are the three phases of the SAME deal
   // (Contract -> In Title -> Closed is where the fee actually gets paid),
   // not separate pots, so a lead progressing through them should never look
-  // like the money disappeared. "Currently" only tells you today's number,
-  // and the point of a trend chart is the days before today too.
-  // Reconstructed from each lead's real stage_change history via
+  // like the money disappeared. "Actual revenue" is the narrower, realized
+  // slice of that same money — only the fee for leads that have actually
+  // landed in Closed, nothing still in Contract or In Title, since that's
+  // the only point the deal is actually done. "Currently" only tells you
+  // today's number, and the point of a trend chart is the days before today
+  // too. Reconstructed from each lead's real stage_change history via
   // useStageChangeHistory — a dedicated, slim query (just the stage-change
   // rows, no SMS/call/note bodies) rather than the full useActivityFeed
   // used elsewhere on this page, which for an account with a large SMS
@@ -809,6 +812,7 @@ export function DashboardView({
   // with an assignment fee actually entered contribute anything.
   const revenueInPipelineTrend = useMemo(() => {
     const CONTRACT_PLUS_STAGES = new Set(['contract', 'in_title', 'closed']);
+    const CLOSED_STAGE = 'closed';
 
     const transitionsByLead = new Map<string, Array<{ at: number; to: string }>>();
     for (const r of stageChangeHistory) {
@@ -846,18 +850,22 @@ export function DashboardView({
       return stage;
     }
 
-    const days: Array<{ iso: string; label: string; revenue: number }> = [];
+    const days: Array<{ iso: string; label: string; expected: number; actual: number }> = [];
     const today = new Date();
     for (let i = trendDayCount - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i, 23, 59, 59, 999);
-      const revenue = relevantLeads.reduce(
-        (sum, l) => sum + (CONTRACT_PLUS_STAGES.has(stageAsOf(l.id, d.getTime())) ? l.assignmentFee ?? 0 : 0),
-        0,
-      );
+      let expected = 0;
+      let actual = 0;
+      for (const l of relevantLeads) {
+        const stage = stageAsOf(l.id, d.getTime());
+        if (CONTRACT_PLUS_STAGES.has(stage)) expected += l.assignmentFee ?? 0;
+        if (stage === CLOSED_STAGE) actual += l.assignmentFee ?? 0;
+      }
       days.push({
         iso: localIsoDate(d),
         label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
-        revenue,
+        expected,
+        actual,
       });
     }
     return days;
@@ -1109,9 +1117,9 @@ export function DashboardView({
                 <div className="card chart-layer flex h-full flex-col">
                   <CardHeader
                     icon={DollarSign}
-                    title="Revenue in Pipeline"
+                    title="Revenue: Expected vs Actual"
                     tone="accent"
-                    sub={`Assignment fee across leads Under Contract, In Title, or Closed · ${rangeLabel}`}
+                    sub={`Expected = fee across Contract, In Title, or Closed · Actual = fee only once Closed · ${rangeLabel}`}
                   />
                   <Suspense fallback={<div className="mt-3 flex flex-1 items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3 flex-1">

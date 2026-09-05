@@ -1,14 +1,15 @@
-import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { Area, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useChartTheme } from '@/hooks/useChartTheme';
 
 export interface RevenuePipelinePoint {
   iso: string;
   label: string;
-  revenue: number;
+  expected: number;
+  actual: number;
 }
 
-const GOLD = '#C9A24B';
+const EXPECTED_COLOR = '#C9A24B';
+const ACTUAL_COLOR = '#10B981';
 
 function formatShort(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`;
@@ -18,46 +19,54 @@ function formatShort(v: number): string {
 
 const money = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
-/** Total assignment fee sitting across every lead currently Under Contract,
- * reconstructed day by day from each lead's real stage-change history (see
- * DashboardPage's revenueInPipelineTrend) rather than just today's snapshot
- * — a lead that later moved to In Title/Closed, or fell through entirely,
- * still correctly shows in the days it really was under contract.
+function StatHead({ color, label, value }: { color: string; label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="text-[11px] text-text-3">{label}</span>
+      <span className="font-mono text-[15px] font-bold text-text">{money(value)}</span>
+    </div>
+  );
+}
+
+/** Two series sharing one timeline: Expected (the gold line, unchanged from
+ * before this had a second series) is the assignment fee sitting across
+ * every lead currently Under Contract, In Title, or Closed — the same
+ * three-phases-of-one-deal step function as always, reconstructed day by
+ * day from each lead's real stage-change history (see DashboardPage's
+ * revenueInPipelineTrend) rather than just today's snapshot. Actual is the
+ * narrower, realized slice of that same money — only the fee for leads that
+ * have actually landed in Closed, nothing still in Contract or In Title —
+ * so a viewer can see both the full pipeline and how much of it has
+ * genuinely turned into paid revenue at a glance, not just today's totals.
  *
- * Rendered as a step area, not a straight-line interpolation — the
- * underlying value only ever moves when a lead actually enters or leaves
- * Under Contract, so it's a genuine step function. A linear line drawn
- * between two flat stretches implied a smooth ramp that never happened. */
+ * Both rendered as step areas, not straight-line interpolation — the
+ * underlying values only ever move when a lead actually enters or leaves a
+ * stage, so they're genuine step functions. A linear line drawn between two
+ * flat stretches would imply a smooth ramp that never happened. */
 export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] }) {
   const ct = useChartTheme();
-  const current = data.length ? data[data.length - 1].revenue : 0;
-  const start = data.length ? data[0].revenue : 0;
-  const delta = current - start;
-  const deltaUp = delta > 0;
-  const deltaFlat = delta === 0;
-  const last = data[data.length - 1];
+  const currentExpected = data.length ? data[data.length - 1].expected : 0;
+  const currentActual = data.length ? data[data.length - 1].actual : 0;
 
   return (
     <div className="flex h-full min-h-[220px] flex-col">
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <div className="font-mono text-[28px] font-bold leading-none text-text">{money(current)}</div>
-        {!deltaFlat && (
-          <div
-            className={`mb-0.5 flex items-center gap-1 text-[12.5px] font-semibold ${deltaUp ? 'text-success' : 'text-danger'}`}
-          >
-            {deltaUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-            {money(Math.abs(delta))} this period
-          </div>
-        )}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <StatHead color={EXPECTED_COLOR} label="Expected" value={currentExpected} />
+        <StatHead color={ACTUAL_COLOR} label="Actual (Closed)" value={currentActual} />
       </div>
 
       <div className="mt-3 min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+          <ComposedChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id="gRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={GOLD} stopOpacity={0.12} />
-                <stop offset="100%" stopColor={GOLD} stopOpacity={0.01} />
+              <linearGradient id="gRevenueExpected" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={EXPECTED_COLOR} stopOpacity={0.12} />
+                <stop offset="100%" stopColor={EXPECTED_COLOR} stopOpacity={0.01} />
+              </linearGradient>
+              <linearGradient id="gRevenueActual" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ACTUAL_COLOR} stopOpacity={0.16} />
+                <stop offset="100%" stopColor={ACTUAL_COLOR} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke={ct.gridStroke} vertical={false} />
@@ -74,22 +83,32 @@ export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] 
                 padding: '8px 12px',
                 color: ct.textFill,
               }}
-              formatter={(value: number) => [money(value), 'Revenue in Pipeline']}
+              itemStyle={{ padding: '1px 0' }}
+              formatter={(value: number, name: string) => [money(value), name]}
             />
             <Area
               type="stepAfter"
-              dataKey="revenue"
-              stroke={GOLD}
-              fill="url(#gRevenue)"
+              dataKey="expected"
+              name="Expected"
+              stroke={EXPECTED_COLOR}
+              fill="url(#gRevenueExpected)"
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
               animationDuration={500}
             />
-            {last && (
-              <ReferenceDot x={last.label} y={last.revenue} r={5} fill={GOLD} stroke={ct.tooltipBg} strokeWidth={2} isFront />
-            )}
-          </AreaChart>
+            <Area
+              type="stepAfter"
+              dataKey="actual"
+              name="Actual (Closed)"
+              stroke={ACTUAL_COLOR}
+              fill="url(#gRevenueActual)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
+              animationDuration={500}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
