@@ -3,6 +3,7 @@ import { Image as ImageIcon, Loader2, MessageSquare, Send, ThumbsUp } from 'luci
 import { useLeadThread, useSendManualReply } from '@/hooks/useLeadMessages';
 import { useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { useAiSettings } from '@/hooks/useAiSettings';
+import { useUpdateLead } from '@/hooks/useLeads';
 import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatDateTime, formatPhone } from '@/lib/utils';
 import { SMS_NUMBER_KEYS, type SmsNumberKey } from '@/lib/smsNumbers';
@@ -52,6 +53,32 @@ function AiStatusChip({ lead, globalEnabled }: { lead: Lead; globalEnabled: bool
     <span className="rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success" title={photoWaitActive ? 'Still chasing photos or a callback time for this lead.' : undefined}>
       AI auto-replying
     </span>
+  );
+}
+
+/**
+ * A manual send (from here or the Zoom app directly) pauses AI auto-reply on
+ * a lead permanently — ai-reply never clears that flag on its own, on
+ * purpose, so it never talks over a human who's already stepped in. That
+ * left no way back for a lead where stepping in was only ever meant to
+ * unstick one stalled reply, not hand the whole conversation over for good.
+ * Only rendered when flipping the flag would actually matter — a lead past
+ * the AI-active stages (Qualified, Follow-Up, Negotiation, ...) stays silent
+ * regardless of this flag, so resuming there would look actionable and do
+ * nothing.
+ */
+function ResumeAiButton({ lead }: { lead: Lead }) {
+  const updateLead = useUpdateLead();
+  if (!lead.aiReplyPaused || !AI_ACTIVE_STAGES.has(lead.stage)) return null;
+  return (
+    <button
+      onClick={() => updateLead.mutate({ id: lead.id, aiReplyPaused: false })}
+      disabled={updateLead.isPending}
+      className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+      title="Let the AI pick the conversation back up for this lead."
+    >
+      {updateLead.isPending ? 'Resuming…' : 'Resume AI'}
+    </button>
   );
 }
 
@@ -121,6 +148,7 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
             <span className="rounded-full bg-danger-dim px-2 py-0.5 font-semibold text-danger">Opted out</span>
           )}
           <AiStatusChip lead={lead} globalEnabled={aiSettings?.autoReplyEnabled ?? true} />
+          <ResumeAiButton lead={lead} />
           <span>
             {realMessages.filter((m) => m.direction === 'inbound').length} repl
             {realMessages.filter((m) => m.direction === 'inbound').length === 1 ? 'y' : 'ies'}
