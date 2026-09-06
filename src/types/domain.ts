@@ -6,7 +6,6 @@ export type LeadStage =
   | 'new'
   | 'voicemail'
   | 'contacted'
-  | 'non_responsive'
   | 'replied'
   | 'initial_contact'
   | 'followup'
@@ -22,7 +21,6 @@ export const STAGE_ORDER: LeadStage[] = [
   'new',
   'voicemail',
   'contacted',
-  'non_responsive',
   'replied',
   'initial_contact',
   'followup',
@@ -49,15 +47,6 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   // SMS outreach stages — a bulk text moves a lead here automatically, and a
   // reply advances it again. See send-sms and the sms-webhook edge functions.
   contacted: { label: 'Contacted', color: '#38bdf8' },
-  // Auto-detected (detect-non-responsive-leads, daily cron): a lead whose
-  // last outbound text has sat unanswered 20+ days, moved here automatically
-  // so it's easy to find and try a different sending number for — see
-  // SmsThreadTab's "Switch number" control. Sits ahead of Replied rather than
-  // with Dead/On Hold — this is still an active lead we can keep texting, not
-  // one we've given up on. A reply promotes it straight back to 'replied'
-  // (sms-webhook's ADVANCE_FROM) rather than staying pinned like On Hold,
-  // since the whole point of this stage is temporary.
-  non_responsive: { label: 'Non Responsive', color: '#78716c' },
   replied: { label: 'Replied', color: '#22d3ee' },
   // "Partial Qualified" / "Qualified" here specifically, not "Follow-Up":
   // fully qualified now means photos are actually in hand (see hasPhotos in
