@@ -32,7 +32,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { useLeads, useCalendarStripLeads } from '@/hooks/useLeads';
+import { useLeads, useCalendarStripLeads, useLeadsTotalCount } from '@/hooks/useLeads';
 import { useActivityFeed, useStageChangeHistory } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones } from '@/hooks/useSmsStats';
@@ -246,6 +246,14 @@ export function DashboardView({
 }) {
   const { data: leads = [] } = useLeads(userId);
   const { data: calendarStripLeads = [] } = useCalendarStripLeads(userId);
+  // The account's real total, straight from the DB — leads itself can lag
+  // behind reality for a while (see useLeads' own staleTime), and a raw
+  // count is the one number where that's immediately, visibly wrong to
+  // anyone cross-checking against the Leads page. This one query is cheap
+  // enough to always stay fresh (App.tsx's default 5-min staleTime, not the
+  // long-lived one useLeads uses), so it's worth pulling separately here
+  // rather than trusting leads.length.
+  const { data: totalLeadsCount = 0 } = useLeadsTotalCount(userId);
   const { data: activities = [] } = useActivityFeed(userId);
   const { data: stageChangeHistory = [] } = useStageChangeHistory(userId);
   const { data: tags = [] } = useTags(userId);
@@ -1131,7 +1139,7 @@ export function DashboardView({
                 <div className="grid grid-cols-2 gap-2.5">
                   <StatCard
                     label="Total Leads"
-                    value={stats.total.toLocaleString()}
+                    value={totalLeadsCount.toLocaleString()}
                     sub={`${leads.filter((l) => l.stage === 'new').length} still cold`}
                     color="#0B1E33"
                     icon={Users}
@@ -1206,7 +1214,7 @@ export function DashboardView({
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatCard label="Total Leads" value={stats.total} sub={`${stats.qualified} qualified`} color="#0B1E33" icon={Users} hero />
+                  <StatCard label="Total Leads" value={totalLeadsCount} sub={`${stats.qualified} qualified`} color="#0B1E33" icon={Users} hero />
                   <StatCard
                     label="Qualified Leads"
                     value={stats.qualified}
@@ -1223,7 +1231,7 @@ export function DashboardView({
                     icon={FileSignature}
                     hero
                   />
-                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${stats.total} leads`} color="#C9A24B" icon={Phone} hero />
+                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${totalLeadsCount} leads`} color="#C9A24B" icon={Phone} hero />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#1568A8" icon={Activity} />

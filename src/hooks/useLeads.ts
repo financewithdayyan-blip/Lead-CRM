@@ -77,10 +77,18 @@ const leadsFetchGeneration = new Map<string, number>();
  * next refetch; the serial version had the same race and it self-corrects on
  * the next invalidate.
  */
-async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void): Promise<Lead[]> {
+async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void, hasExistingData = false): Promise<Lead[]> {
   const myGeneration = (leadsFetchGeneration.get(userId) ?? 0) + 1;
   leadsFetchGeneration.set(userId, myGeneration);
+  // A cold start (nothing shown yet) should paint every page as it lands —
+  // partial data beats a blank board. A background refetch of an account
+  // that's already fully loaded (see useLeads' staleTime + refetchOnWindowFocus
+  // below) is the opposite case: the old, complete list is strictly better to
+  // keep showing than a partial one, so intermediate pages stay silent and
+  // the switch to the fresh list happens once, atomically, when it's whole —
+  // no visible drop back to 1,000 just because the tab regained focus.
   const emit = (soFar: Lead[]) => {
+    if (hasExistingData) return;
     if (leadsFetchGeneration.get(userId) === myGeneration) onPage?.(soFar);
   };
 
@@ -116,23 +124,34 @@ export function useLeads(targetUserId?: string) {
   const qc = useQueryClient();
   return useQuery({
     queryKey: ['leads', userId],
-    queryFn: () => fetchLeadsPaged(userId!, (soFar) => qc.setQueryData(['leads', userId], soFar)),
+    queryFn: () => {
+      const hasExistingData = !!(qc.getQueryData(['leads', userId]) as Lead[] | undefined)?.length;
+      return fetchLeadsPaged(userId!, (soFar) => qc.setQueryData(['leads', userId], soFar), hasExistingData);
+    },
     enabled: !!userId,
-    // The app-wide default (5 min staleTime, 15 min gcTime — see App.tsx) is
-    // right for most queries, but this one fetches the whole account (Kanban/
-    // Dashboard/etc.) in chunks of 1000 with a visible pop-in as each chunk
-    // lands. Sitting on a lead for a few minutes (a call, texting) and coming
-    // back to Kanban was enough to go stale and silently re-trigger that
-    // whole chunked fetch, or — past 15 min — get garbage-collected and
-    // refetch from a blank board. This should only ever run once per app
-    // load; every real change already updates the cache directly (see
-    // useCreateLead/useUpdateLead/useDeleteLeads/useSetLeadTags below), so
-    // there's nothing for a time-based refetch to catch that isn't already
-    // covered — except another user's edit, which won't show here until the
-    // next full reload (no realtime wired to this query; a deliberate
-    // trade-off per the user, not an oversight).
-    staleTime: Infinity,
+    // This fetches the whole account (Kanban/Dashboard/etc.) in chunks of
+    // 1000 — used to be cached for the entire app session (staleTime:
+    // Infinity) to avoid re-running that whole chunked fetch on every
+    // return visit. That traded away real correctness: a lead added by
+    // anything other than this same tab's own Import CSV button (another
+    // teammate's session, a script, a second tab) would never be reflected
+    // here for the rest of the session no matter how long you waited or how
+    // many times you navigated away and back — confirmed for real when a
+    // fresh CSV import left Dashboard/Kanban stuck showing an old count
+    // while the Leads table (a separately, normally-cached query) already
+    // showed the right one. 10 minutes is long enough that normal in-app
+    // navigation between pages never re-triggers this, short enough that
+    // the board self-heals well within a work session. refetchOnWindowFocus
+    // catches the more common real case directly — you were away importing
+    // or on another tab, and coming back to this one should double-check
+    // rather than trust however old the cache already is. A background
+    // refetch of an already-populated cache doesn't repaint page by page
+    // (see fetchLeadsPaged's hasExistingData) — it swaps to the complete
+    // fresh list once, atomically, so this doesn't reintroduce a visible
+    // "drops to 1,000, climbs back up" on every tab-focus.
+    staleTime: 10 * 60_000,
     gcTime: Infinity,
+    refetchOnWindowFocus: true,
   });
 }
 
