@@ -27,6 +27,7 @@ import { TagPill } from '@/components/ui/TagPill';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { formatDate, formatPhone, localIsoDate, toE164 } from '@/lib/utils';
 import { STAGE_ORDER, STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
+import { supabase } from '@/lib/supabase';
 
 const CLEARABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
 const DELETABLE_STAGES: LeadStage[] = ['new', 'voicemail', 'dead_declined'];
@@ -719,6 +720,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteSelected, setShowDeleteSelected] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showBulkSms, setShowBulkSms] = useState(false);
   const sendReminders = useSendReminders();
@@ -855,9 +857,31 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
     }
   }
 
-  function handleExportCsv() {
+  // Notes isn't part of the main Kanban select (trimmed to keep the whole-
+  // account fetch small — see LEAD_LIST_SELECT in useLeads.ts), so it's
+  // fetched here on demand, scoped to just the leads actually being
+  // exported, rather than carried on every lead for a feature almost never
+  // used.
+  async function handleExportCsv() {
     const selectedLeads = filtered.filter((l) => selectedIds.has(l.id));
-    exportCsv(selectedLeads, tags);
+    if (selectedLeads.length === 0) return;
+    setExportingCsv(true);
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, notes')
+        .in('id', selectedLeads.map((l) => l.id));
+      if (error) throw error;
+      const notesById = new Map((data ?? []).map((r) => [r.id as string, r.notes as string | null]));
+      exportCsv(
+        selectedLeads.map((l) => ({ ...l, notes: notesById.get(l.id) ?? null })),
+        tags,
+      );
+    } catch (e) {
+      setBulkError(e instanceof Error ? `${e.message} — export failed.` : 'Export failed.');
+    } finally {
+      setExportingCsv(false);
+    }
   }
 
   async function handleBulkShare() {
@@ -1035,9 +1059,10 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
               onClick={handleExportCsv}
+              disabled={exportingCsv}
               className="btn btn-sm flex items-center gap-1.5"
             >
-              <Download size={13} /> Export CSV
+              <Download size={13} /> {exportingCsv ? 'Exporting…' : 'Export CSV'}
             </button>
             {isAdmin && (callers.length > 0 || otherAdmins.length > 0 || canTransferToSelf) && (
               <button

@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
-import { useLeads, useUpdateLead } from '@/hooks/useLeads';
+import { useNotificationsLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTeamWeeklySummaries } from '@/hooks/useDailySummaries';
 import {
   useAcceptLeadShare,
@@ -85,7 +85,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds(userId));
 
   const { data: tasks = [] } = useTasks();
-  const { data: leads = [] } = useLeads();
+  const { data: leads = [] } = useNotificationsLeads();
   const { data: teamSummaries = [] } = useTeamWeeklySummaries();
   const { data: pendingShares = [] } = usePendingLeadShares();
   const { data: pendingIncomingShares = [] } = usePendingIncomingShares();

@@ -32,7 +32,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { useLeads } from '@/hooks/useLeads';
+import { useLeads, useCalendarStripLeads } from '@/hooks/useLeads';
 import { useActivityFeed, useStageChangeHistory } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones } from '@/hooks/useSmsStats';
@@ -245,6 +245,7 @@ export function DashboardView({
   showSmsStats?: boolean;
 }) {
   const { data: leads = [] } = useLeads(userId);
+  const { data: calendarStripLeads = [] } = useCalendarStripLeads(userId);
   const { data: activities = [] } = useActivityFeed(userId);
   const { data: stageChangeHistory = [] } = useStageChangeHistory(userId);
   const { data: tags = [] } = useTags(userId);
@@ -1265,7 +1266,7 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Calendar</SectionLabel>
-              <CalendarStrip userId={userId} leads={leads} />
+              <CalendarStrip userId={userId} leads={calendarStripLeads} />
             </div>
           )}
 

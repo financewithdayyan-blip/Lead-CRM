@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBusinessCard } from '@/hooks/useBusinessCard';
-import { useLeads, useUpdateLead } from '@/hooks/useLeads';
+import { useCallSessionLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useAddActivity, useTodayCalledLeadIds } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useScriptAnswers } from '@/hooks/useScriptAnswers';
@@ -206,7 +206,7 @@ export function CallSessionPage() {
   const callingSessionIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | undefined>(session?.access_token);
 
-  const { data: leads = [], isLoading } = useLeads();
+  const { data: leads = [], isLoading } = useCallSessionLeads();
   const { data: todayCalledIds = new Set<string>() } = useTodayCalledLeadIds(userId);
   const { data: tags = [] } = useTags();
   const updateLead = useUpdateLead();

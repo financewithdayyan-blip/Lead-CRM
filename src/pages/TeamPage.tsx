@@ -4,7 +4,7 @@ import { Shield, UserPlus, Trash2, ChevronDown, LayoutDashboard, Mail, Copy, Clo
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers, useRemoveTeamMember, useUpdateMemberRole, useTeamInvites, useSendInvite, useRevokeInvite } from '@/hooks/useTeam';
-import { useLeads, prefetchLeads } from '@/hooks/useLeads';
+import { useMemberLeadStats, prefetchLeads } from '@/hooks/useLeads';
 import { useActivityFeed, prefetchActivityFeed } from '@/hooks/useActivities';
 import { aggregateTodayAttendance, useAttendanceSessions, useTeamTodaySessions } from '@/hooks/useAttendance';
 import { nextTagColor, prefetchTags } from '@/hooks/useTags';
@@ -16,23 +16,22 @@ import { formatDuration, formatTime, getErrorMessage, initials, localIsoDate } f
 const ROLE_LABELS: Record<Role, string> = { admin: 'Admin', caller: 'Caller' };
 
 function MemberStats({ memberId }: { memberId: string }) {
-  const { data: leads = [], isLoading: leadsLoading } = useLeads(memberId);
+  const { data: stats, isLoading: leadsLoading } = useMemberLeadStats(memberId);
   const { data: activities = [], isLoading: activityLoading } = useActivityFeed(memberId);
 
-  if (leadsLoading || activityLoading) {
+  if (leadsLoading || activityLoading || !stats) {
     return <div className="mt-3 text-[12px] text-text-3">Loading their data…</div>;
   }
 
   const calls = activities.filter((a) => a.type === 'call');
   const today = localIsoDate(new Date());
   const callsToday = calls.filter((c) => localIsoDate(new Date(c.createdAt)) === today).length;
-  const contracts = leads.filter((l) => l.stage === 'contract').length;
-  const followups = leads.filter((l) => ['initial_contact', 'followup', 'negotiation'].includes(l.stage)).length;
+  const { total, contracts, followups } = stats;
 
   return (
     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">
-        <div className="font-mono text-lg font-bold text-primary">{leads.length}</div>
+        <div className="font-mono text-lg font-bold text-primary">{total}</div>
         <div className="text-[10px] uppercase tracking-wide text-text-3">Leads</div>
       </div>
       <div className="rounded-md border border-border-2 bg-surface-3 p-2.5 text-center">

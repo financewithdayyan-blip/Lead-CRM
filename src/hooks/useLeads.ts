@@ -5,10 +5,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { fetchAllPages } from '@/lib/paginate';
 import type { Lead, LeadStage } from '@/types/domain';
 
-// List views (Kanban, leads table, dashboard) don't render comps or files —
-// omitting them cuts payload by ~70% for large accounts.
-const LEAD_LIST_SELECT = '*, lead_tags(tag_id)';
-// Detail view (lead profile) needs comps and files.
+// Kanban, the Leads table, and the Dashboard's own stat/funnel/revenue
+// calculations — the only fields those three actually read. Every other
+// feature that used to piggyback on this same fetch (Notifications, Call
+// Session, the Calendar Strip, Team stats, CSV-import dedupe) now has its
+// own narrower query below, so this one no longer needs to carry fields
+// only they used. Trimming this from a bare `*` cut the payload for a
+// ~13k-lead account from ~19MB to a fraction of that — confirmed by
+// measuring both directly against the live DB, not guessed.
+const LEAD_LIST_SELECT =
+  'id, first_name, last_name, phone, phone2, email, address, city, state, zip, source, stage, lead_num, ai_score, auction_date, created_at, assignment_fee, opted_out, qualified_at, lead_tags(tag_id)';
+// Detail view (lead profile) needs everything, plus comps and files.
 const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 const PAGE = 1000;
@@ -102,6 +109,121 @@ export function useLeads(targetUserId?: string) {
     // covered — except another user's edit, which won't show here until the
     // next full reload (no realtime wired to this query; a deliberate
     // trade-off per the user, not an oversight).
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+// ── Per-feature narrow queries ──────────────────────────────────────────────
+// Each of these mirrors useLeads() (same WHERE clause, every lead for the
+// account — never an added stage/date filter, so a lead can never silently
+// drop out of one of these lists) but selects only the columns that specific
+// feature actually reads. Query keys stay prefixed with 'leads' so they're
+// automatically kept in sync by patchLeadInCaches/dropFromCache below (the
+// same generic prefix-matched update already relied on for
+// useAllLeadStagesAndTags and useContractStageLeads).
+
+/** Global — NotificationsProvider mounts on every authenticated page, so
+ *  this was previously the single biggest hidden cost in the app: a lead
+ *  fetched with every column, on every page, just to check follow-up/
+ *  auction dates for the bell icon. */
+export function useNotificationsLeads(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'notifications', userId],
+    queryFn: () =>
+      fetchAllPages<any>((from, to) =>
+        supabase
+          .from('leads')
+          .select('id, stage, next_follow_up, auction_date, auction_milestones_notified')
+          .eq('user_id', userId)
+          .range(from, to),
+      ).then((rows) => rows.map(dbToLead)),
+    enabled: !!userId,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+/** Call Session's queue — needs the fields the script/offer cards and call
+ *  notes actually read, not the full 63-column row. */
+export function useCallSessionLeads(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'callSession', userId],
+    queryFn: () =>
+      fetchAllPages<any>((from, to) =>
+        supabase
+          .from('leads')
+          .select(
+            'id, lead_num, first_name, last_name, phone, phone2, address, city, state, zip, stage, notes, repairs, property_rating, script_answers, auction_date, min_offer, max_offer, arv, lead_tags(tag_id)',
+          )
+          .eq('user_id', userId)
+          .order('lead_num', { ascending: true })
+          .range(from, to),
+      ).then((rows) => rows.map(dbToLead)),
+    enabled: !!userId,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+/** Dashboard's Calendar Strip — follow-up/callback scheduling fields only.
+ *  DashboardPage calls this alongside its own (trimmed) useLeads() and
+ *  passes the result into <CalendarStrip>, which is otherwise unchanged. */
+export function useCalendarStripLeads(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'calendarStrip', userId],
+    queryFn: () =>
+      fetchAllPages<any>((from, to) =>
+        supabase
+          .from('leads')
+          .select('id, first_name, last_name, phone, stage, next_follow_up, next_follow_up_time, scheduled_callback_at, scheduled_callback_note')
+          .eq('user_id', userId)
+          .range(from, to),
+      ).then((rows) => rows.map(dbToLead)),
+    enabled: !!userId,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+/** Team page's per-member stats panel — only rendered once an admin expands
+ *  a member row, and only ever needs counts, not full lead rows. */
+export function useMemberLeadStats(memberId: string | undefined) {
+  return useQuery({
+    queryKey: ['leads', 'memberStats', memberId],
+    queryFn: async () => {
+      const stages = await fetchAllPages<{ stage: LeadStage }>((from, to) =>
+        supabase.from('leads').select('stage').eq('user_id', memberId).range(from, to),
+      );
+      const FOLLOWUP_STAGES = new Set<LeadStage>(['initial_contact', 'followup', 'negotiation']);
+      return {
+        total: stages.length,
+        contracts: stages.filter((s) => s.stage === 'contract').length,
+        followups: stages.filter((s) => FOLLOWUP_STAGES.has(s.stage)).length,
+      };
+    },
+    enabled: !!memberId,
+  });
+}
+
+/** CSV-import de-dup check only ever compares by phone, gated to a handful
+ *  of "real engagement" stages (see DEDUPE_STAGES in ImportCsvModal). */
+export function useImportDedupeLeads(targetUserId?: string) {
+  const { session } = useAuth();
+  const userId = targetUserId ?? session?.user.id;
+  return useQuery({
+    queryKey: ['leads', 'importDedupe', userId],
+    queryFn: () =>
+      fetchAllPages<any>((from, to) =>
+        supabase.from('leads').select('id, phone, stage').eq('user_id', userId).range(from, to),
+      ).then((rows) => rows.map(dbToLead)),
+    enabled: !!userId,
     staleTime: Infinity,
     gcTime: Infinity,
   });
@@ -365,13 +487,22 @@ function patchLeadInCaches(qc: QueryClient, id: string, patch: (l: Lead) => Lead
  * send-sms) without reporting exactly what changed back to the caller.
  * Costs one single-row request instead of invalidating the entire account's
  * leads list just to catch one lead's possible change.
+ *
+ * Merges `fresh` onto whatever was already cached rather than replacing it
+ * outright — `fresh` only ever carries LEAD_LIST_SELECT's (trimmed) columns,
+ * and this same patch also lands in every other narrower per-feature cache
+ * (Notifications, Call Session, ...) and the Lead Profile page's own full-
+ * detail cache at ['lead', id]. A wholesale replace would blank out every
+ * field `fresh` doesn't carry — comps/files on the profile page, or
+ * notes/repairs/script answers wherever this same lead is also cached for
+ * Call Session — until the next full reload.
  */
 export async function refetchAndPatchLead(qc: QueryClient, id: string) {
   const { data, error } = await supabase.from('leads').select(LEAD_LIST_SELECT).eq('id', id).single();
   if (error || !data) return;
   const fresh = dbToLead(data);
-  patchLeadInCaches(qc, id, () => fresh);
-  qc.setQueryData(['lead', id], fresh);
+  patchLeadInCaches(qc, id, (l) => ({ ...l, ...fresh }));
+  qc.setQueryData(['lead', id], (old: Lead | undefined) => (old ? { ...old, ...fresh } : fresh));
 }
 
 export function useUpdateLead() {

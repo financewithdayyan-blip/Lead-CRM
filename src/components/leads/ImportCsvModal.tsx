@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { useBulkCreateLeads, useLeads } from '@/hooks/useLeads';
+import { useBulkCreateLeads, useImportDedupeLeads } from '@/hooks/useLeads';
 import { useCreateTag, useTags, nextTagColor } from '@/hooks/useTags';
 import { CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, guessColumnMapping, mapRowsToLeads, parseCsvFile, type CsvParseResult } from '@/lib/csv';
 import { getErrorMessage } from '@/lib/utils';
@@ -20,7 +20,7 @@ const DEDUPE_STAGES: LeadStage[] = ['replied', 'initial_contact', 'followup', 'n
 type Step = 'upload' | 'mapping' | 'tags';
 
 export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void; targetUserId?: string }) {
-  const { data: existingLeads = [] } = useLeads(targetUserId);
+  const { data: existingLeads = [] } = useImportDedupeLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const createTag = useCreateTag();
   const bulkCreate = useBulkCreateLeads();
