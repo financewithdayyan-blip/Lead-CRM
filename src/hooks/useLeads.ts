@@ -44,6 +44,22 @@ async function fetchLeadPage(userId: string, i: number, attempt = 0): Promise<Le
   return data.map(dbToLead);
 }
 
+// Guards fetchLeadsPaged's onPage writes against a second, newer call for
+// the same user racing them — e.g. a CSV bulk import's onSuccess invalidates
+// every 'leads'-prefixed query the instant it lands, and if that fires while
+// this account's initial load is still mid-flight, React Query starts a
+// second fetchLeadsPaged run for the exact same query key while the first is
+// still resolving pages. Both used to call onPage -> qc.setQueryData
+// directly, with no notion of which run was "the real one" — the visible
+// lead count could climb past 6,000, then drop back to 1,000 the moment the
+// newer run's first page landed, and in the worst case get stuck permanently
+// incomplete if the OLDER run's later page happened to resolve after the
+// newer run's last one. Each call claims the latest generation for its
+// userId up front; only whichever call currently holds it gets to write —
+// an outdated run's pages still finish (no wasted requests, no thrown
+// errors), they just stop reaching the cache once superseded.
+const leadsFetchGeneration = new Map<string, number>();
+
 /**
  * Fetches every lead for a user. A `head: true` count gives us the page count up
  * front so all pages fire in parallel — the previous serial loop paid one full
@@ -62,6 +78,12 @@ async function fetchLeadPage(userId: string, i: number, attempt = 0): Promise<Le
  * the next invalidate.
  */
 async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void): Promise<Lead[]> {
+  const myGeneration = (leadsFetchGeneration.get(userId) ?? 0) + 1;
+  leadsFetchGeneration.set(userId, myGeneration);
+  const emit = (soFar: Lead[]) => {
+    if (leadsFetchGeneration.get(userId) === myGeneration) onPage?.(soFar);
+  };
+
   const { count, error: countError } = await supabase
     .from('leads')
     .select('id', { count: 'exact', head: true })
@@ -71,7 +93,7 @@ async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void)
 
   const pageCount = Math.ceil(count / PAGE);
   let all = await fetchLeadPage(userId, 0);
-  onPage?.(all);
+  emit(all);
   if (pageCount === 1) return all;
 
   // The remaining pages still fire in parallel — updating `all` is a single
@@ -81,7 +103,7 @@ async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void)
     Array.from({ length: pageCount - 1 }, (_, i) => i + 1).map(async (i) => {
       const page = await fetchLeadPage(userId, i);
       all = [...all, ...page].sort((a, b) => (a.leadNum ?? 0) - (b.leadNum ?? 0));
-      onPage?.(all);
+      emit(all);
     }),
   );
 
