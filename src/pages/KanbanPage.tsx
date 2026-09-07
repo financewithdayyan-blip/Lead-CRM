@@ -696,7 +696,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
-  const { data: leads = [], isLoading: leadsLoading, isFetching: leadsFetching, isError: leadsErrored, refetch: refetchLeads } = useLeads(targetUserId);
+  const { data: leads = [], isLoading: leadsLoading, isFetching: leadsFetching, isError: leadsErrored, error: leadsError, refetch: refetchLeads } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const { data: receivedShares = {} } = useReceivedLeadShares();
   // SMS is an admin-only feature — no message-count query at all for callers.
@@ -1011,7 +1011,8 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
             </p>
           ) : leadsErrored ? (
             <p className="flex items-center gap-1.5 text-sm text-danger">
-              <AlertTriangle size={13} /> Couldn't load your leads.
+              <AlertTriangle size={13} /> Couldn't load your leads
+              {leadsError instanceof Error && leadsError.message ? `: ${leadsError.message}` : '.'}
               <button onClick={() => refetchLeads()} className="font-medium underline hover:no-underline">
                 Retry
               </button>
