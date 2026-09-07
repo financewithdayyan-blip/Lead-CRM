@@ -25,9 +25,9 @@ const PAGE = 1000;
 // (corporate proxy, flaky wifi, a router that chokes on a sudden burst of
 // simultaneous connections to one host) doesn't always cope the same way,
 // and an account that keeps growing means this burst only gets bigger over
-// time. Bounding concurrency trades a little peak parallelism for requests
-// that reliably complete instead of stalling as a group.
-const MAX_CONCURRENT_PAGES = 6;
+// time. 10 is a middle ground: meaningfully faster than the original safer
+// value of 6, while still well short of firing every page at once.
+const MAX_CONCURRENT_PAGES = 10;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -38,6 +38,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // looked exactly like "all my leads vanished" even though nothing was lost
 // server-side. Retrying the one page that failed, instead of the whole
 // fetch, fixes that without adding retries every request doesn't need.
+//
+// 4 attempts (not the original 3) with a longer max backoff — an account
+// large enough to need 15+ pages has 15+ independent chances for a transient
+// blip on any one of them, and since one page exhausting its retries fails
+// the WHOLE multi-thousand-lead fetch (surfaced to the user as "couldn't
+// load"), each individual page needs to be meaningfully more persistent
+// than a single request would otherwise bother being.
+const MAX_PAGE_ATTEMPTS = 4;
 async function fetchLeadPage(userId: string, i: number, attempt = 0): Promise<Lead[]> {
   const { data, error } = await supabase
     .from('leads')
@@ -46,8 +54,8 @@ async function fetchLeadPage(userId: string, i: number, attempt = 0): Promise<Le
     .order('lead_num', { ascending: true })
     .range(i * PAGE, i * PAGE + PAGE - 1);
   if (error) {
-    if (attempt >= 2) throw error;
-    await sleep(400 * (attempt + 1));
+    if (attempt >= MAX_PAGE_ATTEMPTS - 1) throw error;
+    await sleep(Math.min(600 * 2 ** attempt, 4000));
     return fetchLeadPage(userId, i, attempt + 1);
   }
   return data.map(dbToLead);
