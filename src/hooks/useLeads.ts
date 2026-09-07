@@ -20,20 +20,17 @@ const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 const PAGE = 1000;
 // Caps how many page requests are ever in flight together for one fetch.
-// This isn't a network-burst concern like it first looked — it's CPU
-// contention: the leads table's RLS policy calls a SECURITY DEFINER
-// function (is_team_overseer, two nested subqueries) per row, combined
-// across three separate SELECT policies, and every authenticated query on
-// this project has an 8-second statement_timeout. A service-role query
-// (which bypasses RLS entirely) measured 2ms — real, RLS-evaluated queries
-// pay a genuinely different cost. Confirmed live: raising this from 6 to 10
-// produced a wave of real HTTP 500s (Postgres killing queries past 8s under
-// the added concurrent CPU load), visible in the browser console. Lower
-// than the original value on purpose, until the RLS policy itself gets
-// optimized (a separate, security-sensitive change, not rushed into this
-// fix) — fewer concurrent heavy queries means more headroom for each one to
-// finish inside the timeout.
-const MAX_CONCURRENT_PAGES = 4;
+// Was dropped to 4 after raising it caused a real wave of HTTP 500s — traced
+// to the leads RLS policy re-evaluating a couple of STABLE functions
+// (current_role(), auth.uid()) per row instead of once per query, which
+// under concurrent load pushed some queries past the project's 8-second
+// statement_timeout (migration 0138 fixes this at the source: verified via
+// EXPLAIN ANALYZE as the real authenticated role, the same 1000-row query
+// went from 89ms to 3.9ms — matching the service-role-bypassed baseline).
+// With the actual cost fixed, back up near the original value; kept at 8
+// rather than pushed straight back to 10 since that's still untested at
+// this new, much lower per-query cost.
+const MAX_CONCURRENT_PAGES = 8;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
