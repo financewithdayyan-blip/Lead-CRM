@@ -19,15 +19,21 @@ const LEAD_LIST_SELECT =
 const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 const PAGE = 1000;
-// Caps how many page requests are ever in flight together for one fetch. A
-// clean server-to-server test happily fires 18+ requests at once (measured:
-// under 3s for an 18-page account) — a real browser on a real network
-// (corporate proxy, flaky wifi, a router that chokes on a sudden burst of
-// simultaneous connections to one host) doesn't always cope the same way,
-// and an account that keeps growing means this burst only gets bigger over
-// time. 10 is a middle ground: meaningfully faster than the original safer
-// value of 6, while still well short of firing every page at once.
-const MAX_CONCURRENT_PAGES = 10;
+// Caps how many page requests are ever in flight together for one fetch.
+// This isn't a network-burst concern like it first looked — it's CPU
+// contention: the leads table's RLS policy calls a SECURITY DEFINER
+// function (is_team_overseer, two nested subqueries) per row, combined
+// across three separate SELECT policies, and every authenticated query on
+// this project has an 8-second statement_timeout. A service-role query
+// (which bypasses RLS entirely) measured 2ms — real, RLS-evaluated queries
+// pay a genuinely different cost. Confirmed live: raising this from 6 to 10
+// produced a wave of real HTTP 500s (Postgres killing queries past 8s under
+// the added concurrent CPU load), visible in the browser console. Lower
+// than the original value on purpose, until the RLS policy itself gets
+// optimized (a separate, security-sensitive change, not rushed into this
+// fix) — fewer concurrent heavy queries means more headroom for each one to
+// finish inside the timeout.
+const MAX_CONCURRENT_PAGES = 4;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
