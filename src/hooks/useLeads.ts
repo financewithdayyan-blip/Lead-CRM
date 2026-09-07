@@ -19,6 +19,15 @@ const LEAD_LIST_SELECT =
 const LEAD_DETAIL_SELECT = '*, lead_tags(tag_id), lead_comps(*), lead_files(*)';
 
 const PAGE = 1000;
+// Caps how many page requests are ever in flight together for one fetch. A
+// clean server-to-server test happily fires 18+ requests at once (measured:
+// under 3s for an 18-page account) — a real browser on a real network
+// (corporate proxy, flaky wifi, a router that chokes on a sudden burst of
+// simultaneous connections to one host) doesn't always cope the same way,
+// and an account that keeps growing means this burst only gets bigger over
+// time. Bounding concurrency trades a little peak parallelism for requests
+// that reliably complete instead of stalling as a group.
+const MAX_CONCURRENT_PAGES = 6;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -104,16 +113,23 @@ async function fetchLeadsPaged(userId: string, onPage?: (soFar: Lead[]) => void,
   emit(all);
   if (pageCount === 1) return all;
 
-  // The remaining pages still fire in parallel — updating `all` is a single
-  // synchronous statement per page with no `await` inside it, so concurrent
-  // resolutions can't interleave and lose one page's rows to another's.
-  await Promise.all(
-    Array.from({ length: pageCount - 1 }, (_, i) => i + 1).map(async (i) => {
+  // A bounded worker pool instead of firing every remaining page at once —
+  // never more than MAX_CONCURRENT_PAGES requests in flight together,
+  // regardless of how many pages the account needs overall. Updating `all`
+  // is still a single synchronous statement per page with no `await`
+  // inside it, so concurrent resolutions can't interleave and lose one
+  // page's rows to another's.
+  const remaining = Array.from({ length: pageCount - 1 }, (_, i) => i + 1);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < remaining.length) {
+      const i = remaining[nextIndex++];
       const page = await fetchLeadPage(userId, i);
       all = [...all, ...page].sort((a, b) => (a.leadNum ?? 0) - (b.leadNum ?? 0));
       emit(all);
-    }),
-  );
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_PAGES, remaining.length) }, worker));
 
   return all;
 }

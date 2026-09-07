@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { Phone, Eye, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon } from 'lucide-react';
+import { Phone, Eye, Share2, Trash2, Copy, Check, Download, Users, CalendarClock, MessageSquare, BellRing, Loader2, MapPin, Sparkles, X as XIcon, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useLeads, useDeleteLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useTags } from '@/hooks/useTags';
 import { useReceivedLeadShares, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
@@ -696,7 +696,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
-  const { data: leads = [] } = useLeads(targetUserId);
+  const { data: leads = [], isLoading: leadsLoading, isFetching: leadsFetching, isError: leadsErrored, refetch: refetchLeads } = useLeads(targetUserId);
   const { data: tags = [] } = useTags(targetUserId);
   const { data: receivedShares = {} } = useReceivedLeadShares();
   // SMS is an admin-only feature — no message-count query at all for callers.
@@ -1005,10 +1005,28 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       <div className="mb-1 flex flex-nowrap items-center justify-between gap-3">
         <div className="shrink-0">
           <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
-          <p className="text-sm text-text-3">
-            {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {visibleStages.length} stages
-            {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
-          </p>
+          {leadsLoading ? (
+            <p className="flex items-center gap-1.5 text-sm text-text-3">
+              <Loader2 size={13} className="animate-spin" /> Loading leads…
+            </p>
+          ) : leadsErrored ? (
+            <p className="flex items-center gap-1.5 text-sm text-danger">
+              <AlertTriangle size={13} /> Couldn't load your leads.
+              <button onClick={() => refetchLeads()} className="font-medium underline hover:no-underline">
+                Retry
+              </button>
+            </p>
+          ) : (
+            <p className="flex items-center gap-1.5 text-sm text-text-3">
+              {filtered.length} lead{filtered.length !== 1 ? 's' : ''} across {visibleStages.length} stages
+              {viewOnly && ' · you can edit, move, or delete leads here, but not log calls for them'}
+              {leadsFetching && (
+                <span className="flex items-center gap-1 text-text-3" title="Checking for changes since you were last here">
+                  <Loader2 size={11} className="animate-spin" /> updating…
+                </span>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 flex-nowrap items-center gap-2">
           <input

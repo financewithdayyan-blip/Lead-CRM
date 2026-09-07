@@ -244,7 +244,7 @@ export function DashboardView({
    * member's individual dashboard. */
   showSmsStats?: boolean;
 }) {
-  const { data: leads = [] } = useLeads(userId);
+  const { data: leads = [], isFetching: leadsFetching, isError: leadsErrored } = useLeads(userId);
   const { data: calendarStripLeads = [] } = useCalendarStripLeads(userId);
   // The account's real total, straight from the DB — leads itself can lag
   // behind reality for a while (see useLeads' own staleTime), and a raw
@@ -1365,7 +1365,17 @@ export function DashboardView({
             <div className="space-y-3">
               {showSmsStats && (
                 <div className="card chart-layer">
-                  <CardHeader icon={Gauge} title="Pipeline" sub="live headcount — matches the Kanban board" />
+                  <CardHeader
+                    icon={Gauge}
+                    title="Pipeline"
+                    sub={
+                      leadsErrored
+                        ? "Couldn't refresh — showing the last data that loaded"
+                        : leadsFetching
+                          ? 'live headcount — checking for changes…'
+                          : 'live headcount — matches the Kanban board'
+                    }
+                  />
                   <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-[13px] text-text-3">Loading funnel…</div>}>
                     <div className="mt-3">
                       <PipelineFunnel stages={funnel.stages} offFunnel={funnel.offFunnel} totalLeads={funnel.totalLeads} coldCount={funnel.coldCount} />
