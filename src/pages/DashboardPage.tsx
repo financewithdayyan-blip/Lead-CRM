@@ -654,7 +654,10 @@ export function DashboardView({
     const total = leads.length;
     const contactedOrBeyond = leads.filter((l) => l.stage !== 'new').length;
     const qualified = qualifiedPlusIds.size;
-    const contracts = leads.filter((l) => l.stage === 'contract').length;
+    // Contract, In Title, and Closed are the three phases of the same deal
+    // (see funnelBucket above and revenueInPipelineTrend below) — a lead
+    // that's progressed past Contract shouldn't disappear from this count.
+    const contracts = leads.filter((l) => l.stage === 'contract' || l.stage === 'in_title' || l.stage === 'closed').length;
     const optedOut = leads.filter((l) => l.optedOut).length;
     const inConversation = leads.filter((l) => l.stage === 'replied').length;
 
