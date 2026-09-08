@@ -260,7 +260,6 @@ ${relatedSection(related, coverUrl)}
     bodyHtml: `
 <div class="blog-hero">
   <div class="blog-hero-inner">
-    <div class="blog-hero-word">Blog</div>
     <h1>Straight answers for sellers under pressure.</h1>
   </div>
 </div>
