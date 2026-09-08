@@ -14,6 +14,7 @@ export interface WebLead {
   timeline: string | null;
   notes: string | null;
   isRead: boolean;
+  photoUrls: string[] | null;
 }
 
 function rowToWebLead(row: Record<string, unknown>): WebLead {
@@ -29,6 +30,7 @@ function rowToWebLead(row: Record<string, unknown>): WebLead {
     timeline: row.timeline as string | null,
     notes: row.notes as string | null,
     isRead: row.is_read as boolean,
+    photoUrls: (row.photo_urls as string[] | null) ?? null,
   };
 }
 

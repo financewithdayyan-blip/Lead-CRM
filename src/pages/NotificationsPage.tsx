@@ -300,6 +300,15 @@ export function NotificationsPage() {
           {l.propertyAddress ? <><br />{l.propertyAddress}</> : null}
           {l.situation || l.timeline ? <><br />{[l.situation, l.timeline].filter(Boolean).join(' · ')}</> : null}
           {l.notes ? <><br /><span className="italic">"{l.notes}"</span></> : null}
+          {l.photoUrls?.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {l.photoUrls.map((url) => (
+                <a key={url} href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                  <img src={url} alt="Property" className="h-12 w-12 rounded-md object-cover border border-slate-200" />
+                </a>
+              ))}
+            </div>
+          ) : null}
         </>
       ),
       meta: eventTime(l.createdAt, todayIso),
