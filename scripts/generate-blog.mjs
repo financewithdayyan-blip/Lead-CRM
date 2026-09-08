@@ -274,9 +274,13 @@ ${relatedSection(related, coverUrl)}
       </div>
       ${
         allTags.length
-          ? `<div class="blog-filter-chips" id="blogFilterChips">
+          ? `<div class="blog-filter-row">
+        <button type="button" class="blog-filter-nav-btn" data-dir="prev" aria-label="Scroll tags left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <div class="blog-filter-chips" id="blogFilterChips">
         <button type="button" class="blog-filter-chip active" data-tag="all">All</button>
         ${allTags.map((t) => `<button type="button" class="blog-filter-chip" data-tag="${slugify(t)}">${escapeHtml(t)}</button>`).join('\n        ')}
+        </div>
+        <button type="button" class="blog-filter-nav-btn" data-dir="next" aria-label="Scroll tags right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
       </div>`
           : ''
       }
@@ -319,6 +323,14 @@ ${relatedSection(related, coverUrl)}
   var input = document.getElementById('blogSearchInput');
   var chips = document.querySelectorAll('.blog-filter-chip');
   var activeTag = 'all';
+
+  var chipTrack = document.getElementById('blogFilterChips');
+  var chipPrev = document.querySelector('.blog-filter-nav-btn[data-dir="prev"]');
+  var chipNext = document.querySelector('.blog-filter-nav-btn[data-dir="next"]');
+  if (chipTrack && chipPrev && chipNext) {
+    chipPrev.addEventListener('click', function () { chipTrack.scrollBy({ left: -220, behavior: 'smooth' }); });
+    chipNext.addEventListener('click', function () { chipTrack.scrollBy({ left: 220, behavior: 'smooth' }); });
+  }
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, function(c){
