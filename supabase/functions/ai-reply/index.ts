@@ -351,6 +351,8 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 FRAMEWORK for this lead:
 {{FRAMEWORK}}
 
+A bare asking price by itself is never enough for fully_qualified, even a strong, specific number like "500k" — this has been gotten wrong before, especially on bulk-SMS replies where a lead's very first message back is just a number. At minimum two of MOTIVATION, CONDITION, TIMELINE, and PRICE must actually be established, not just PRICE alone, before fully_qualified can be true.
+
 SUMMARY: whenever you set fully_qualified true, also fill in summary — a short, factual, labeled recap of what was actually established (motivation, condition, asking price and their reasoning if given, timeline, mortgage details if this is a lien-adjacent lead, and ownership status). This is what a human reads instead of rereading the whole thread, so be complete but not padded, and never invent or infer anything not actually said. Leave summary as an empty string whenever fully_qualified is false.
 
 Call draft_reply with your response, reply_parts broken into separate messages per the STYLE rules above. fully_qualified is true only once every item the framework marks as required for that has actually been established in this conversation.`;
@@ -835,7 +837,7 @@ Deno.serve(async (req) => {
 
   const {
     reply_parts: rawParts,
-    fully_qualified: fullyQualified,
+    fully_qualified: fullyQualifiedRaw,
     negative_reply: negativeReply,
     hard_decline: hardDeclineRaw,
     summary,
@@ -865,6 +867,7 @@ Deno.serve(async (req) => {
     script_answers?: Record<string, unknown>;
   };
   const listedOnMarket = !!listedOnMarketRaw;
+  let fullyQualified = fullyQualifiedRaw;
 
   // Fills in a name/address the CRM never had, and a callback time once the
   // seller actually gives one — all independent of qualification outcome,
@@ -906,6 +909,40 @@ Deno.serve(async (req) => {
   if (Object.keys(recoveredFields).length > 0) {
     await admin.from('leads').update(recoveredFields).eq('id', leadId);
   }
+
+  // Hard backstop under fully_qualified, independent of what the model
+  // claims — the framework prompt already says MOTIVATION, CONDITION,
+  // TIMELINE, and PRICE are all required, but a lead replying to a bulk-SMS
+  // blast with just a bare number ("500k") has been enough on its own to get
+  // marked fully_qualified anyway (the model treats a strong price signal as
+  // the whole interview). Since script_answers is written to structured
+  // per-pillar fields regardless of the model's own fully_qualified verdict,
+  // it can be checked directly rather than trusted blindly: require at least
+  // 2 of the 4 pillars actually on record (cumulative across the whole
+  // conversation, not just this turn) before fully_qualified is allowed to
+  // stand, no exceptions.
+  const PILLAR_FIELDS: Record<string, string[]> = {
+    motivation: ['motivation_reason', 'motivation_owned'],
+    condition: [
+      'condition_general', 'condition_rating', 'condition_issues', 'condition_hvac',
+      'condition_electrical', 'condition_plumbing', 'condition_roof', 'condition_foundation',
+      'condition_leaks', 'condition_mold',
+    ],
+    timeline: ['timeline'],
+    price: ['price_asking'],
+  };
+  const MIN_PILLARS_FOR_QUALIFICATION = 2;
+  const effectiveScriptAnswers: Record<string, unknown> = {
+    ...((lead as { script_answers?: Record<string, unknown> }).script_answers ?? {}),
+    ...(recoveredFields.script_answers as Record<string, unknown> | undefined ?? {}),
+  };
+  const pillarsEstablished = Object.values(PILLAR_FIELDS).filter((fields) =>
+    fields.some((f) => typeof effectiveScriptAnswers[f] === 'string' && (effectiveScriptAnswers[f] as string).trim().length > 0),
+  ).length;
+  if (fullyQualified && pillarsEstablished < MIN_PILLARS_FOR_QUALIFICATION) {
+    fullyQualified = false;
+  }
+
   // Anything other than an explicit false defaults to the safer, permanent
   // path — a missing or ambiguous field is not the same as a confident "this
   // is just about price."
