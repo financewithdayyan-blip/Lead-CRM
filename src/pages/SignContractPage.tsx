@@ -13,7 +13,7 @@ import {
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
 import { formatCurrency } from '@/lib/currency';
-import { formatSignatureName, loadSignatureFont, renderTypedSignature, SIGNATURE_FONTS } from '@/lib/typedSignature';
+import { formatSignatureName, loadSignatureFont, renderTypedSignature, SIGNATURE_FONTS, fontsForRole } from '@/lib/typedSignature';
 import { roleLabel, type ContractField, type PartyRole, type PartyRoleDef } from '@/hooks/useDocTemplates';
 
 const MAX_PAGE_WIDTH = 680;
@@ -280,6 +280,7 @@ export function SignContractPage() {
     // for them, or "they typed their own name" stops being real evidence of
     // intent to sign. See typed_signature_name (0140) for how this is kept
     // in the audit trail.
+    setSignatureFontId(fontsForRole(party.role)[0].id);
     setFieldInputs((prev) => {
       const next = { ...prev };
       for (const f of myPendingFields) {
@@ -587,7 +588,7 @@ export function SignContractPage() {
 
               {fontPickerOpen && (
                 <div className="absolute inset-x-0 z-10 mt-1 overflow-hidden rounded-md border border-border bg-white py-1 shadow-popover">
-                  {SIGNATURE_FONTS.map((font) => (
+                  {fontsForRole(party.role).map((font) => (
                     <button
                       key={font.id}
                       type="button"

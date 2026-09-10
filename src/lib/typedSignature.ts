@@ -19,6 +19,22 @@ export const SIGNATURE_FONTS: SignatureFontOption[] = [
   { id: 'sacramento', label: 'Sacramento', family: 'Sacramento' },
 ];
 
+// Split the pool in two, non-overlapping, so a buyer and seller signing the
+// same document can never land on the same script by coincidence — a real
+// contract can end up with both signatures right next to each other, and
+// they need to read as visually two different people at a glance, not just
+// two different names in the same handwriting. 'other'/custom roles (a
+// witness, an ad-hoc reviewer) get the full set — separation only matters
+// for the two parties actually transacting.
+const BUYER_FONTS = [SIGNATURE_FONTS[0], SIGNATURE_FONTS[1]];
+const SELLER_FONTS = [SIGNATURE_FONTS[2], SIGNATURE_FONTS[3]];
+
+export function fontsForRole(role: string): SignatureFontOption[] {
+  if (role === 'buyer') return BUYER_FONTS;
+  if (role === 'seller') return SELLER_FONTS;
+  return SIGNATURE_FONTS;
+}
+
 const SIGNATURE_FONT_HREF =
   'https://fonts.googleapis.com/css2?family=Great+Vibes&family=Allura&family=Parisienne&family=Sacramento&display=swap';
 
