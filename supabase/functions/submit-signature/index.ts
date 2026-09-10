@@ -414,8 +414,15 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
-    const { token, signatureDataUrl, fieldValues: submittedFieldValues } = await req.json();
+    const { token, signatureDataUrl, signatureName, fieldValues: submittedFieldValues } = await req.json();
     if (!token) return json({ error: 'Missing token' }, 400);
+    // A rendered signature image with no typed name behind it isn't a real
+    // signature — the client only ever sends signatureDataUrl once it has
+    // rendered actual typed text (see SignContractPage), so a request
+    // carrying one without the other means the UI's own gating was bypassed.
+    if (signatureDataUrl && !signatureName?.trim()) {
+      return json({ error: 'A typed name is required to sign.' }, 400);
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -465,7 +472,12 @@ Deno.serve(async (req) => {
 
     const { error: updateErr } = await admin
       .from('contract_signing_parties')
-      .update({ status: 'signed', signature_data_url: signatureDataUrl ?? null, signed_at: signedAt })
+      .update({
+        status: 'signed',
+        signature_data_url: signatureDataUrl ?? null,
+        typed_signature_name: signatureName?.trim() || null,
+        signed_at: signedAt,
+      })
       .eq('id', party.id);
     if (updateErr) throw updateErr;
 

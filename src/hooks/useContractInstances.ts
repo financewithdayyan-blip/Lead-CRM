@@ -51,6 +51,9 @@ export interface ContractInstance {
     accessToken: string;
     signOrder: number;
     signatureDataUrl: string | null;
+    /** The literal text this party typed to sign — distinct from `name`
+     * (whatever was on file beforehand), kept as its own audit record. */
+    typedSignatureName: string | null;
     signedAt: string | null;
     declinedAt: string | null;
     declinedReason: string | null;
@@ -94,6 +97,7 @@ function fromRow(r: any): ContractInstance {
       accessToken: p.access_token,
       signOrder: p.sign_order,
       signatureDataUrl: p.signature_data_url,
+      typedSignatureName: p.typed_signature_name ?? null,
       signedAt: p.signed_at,
       declinedAt: p.declined_at ?? null,
       declinedReason: p.declined_reason,
@@ -315,6 +319,7 @@ export function useSubmitSignature() {
     mutationFn: async ({
       token,
       signatureDataUrl,
+      signatureName,
       fieldValues,
     }: {
       token: string;
@@ -322,10 +327,14 @@ export function useSubmitSignature() {
        * mapped — they still have to formally complete their turn, just
        * without drawing/typing anything. */
       signatureDataUrl?: string;
+      /** The literal text the signer typed — kept alongside the rendered
+       * signatureDataUrl image as a durable, queryable audit record of what
+       * they actually entered, not just its cursive-font rendering. */
+      signatureName?: string;
       fieldValues?: Record<string, string>;
     }) => {
       const { data, error } = await supabase.functions.invoke('submit-signature', {
-        body: { token, signatureDataUrl, fieldValues },
+        body: { token, signatureDataUrl, signatureName, fieldValues },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);

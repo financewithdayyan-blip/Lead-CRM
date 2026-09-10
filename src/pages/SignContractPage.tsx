@@ -275,7 +275,11 @@ export function SignContractPage() {
   useEffect(() => {
     if (!ready || seededRef.current || !party) return;
     seededRef.current = true;
-    setSignatureName(party.name);
+    // Deliberately NOT pre-filled with party.name — the signature itself has
+    // to be something the signer actually typed, not text the system wrote
+    // for them, or "they typed their own name" stops being real evidence of
+    // intent to sign. See typed_signature_name (0140) for how this is kept
+    // in the audit trail.
     setFieldInputs((prev) => {
       const next = { ...prev };
       for (const f of myPendingFields) {
@@ -302,7 +306,12 @@ export function SignContractPage() {
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
     }
-    await submitSignature.mutateAsync({ token, signatureDataUrl: dataUrl, fieldValues: formatted });
+    await submitSignature.mutateAsync({
+      token,
+      signatureDataUrl: dataUrl,
+      signatureName: needsSignature ? signatureName.trim() : undefined,
+      fieldValues: formatted,
+    });
     setSubmitted(true);
   }
 

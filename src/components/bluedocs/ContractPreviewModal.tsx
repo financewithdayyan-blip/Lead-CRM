@@ -102,6 +102,11 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                         </span>
                         {party ? ` (${party.name})` : ''} {e.eventType === 'signed' ? 'signed the document' : 'opened the signing link'}
                       </div>
+                      {e.eventType === 'signed' && party?.typedSignatureName ? (
+                        <div className="mt-0.5 text-[11px] text-text-2">
+                          Typed <span className="font-medium">"{party.typedSignatureName}"</span> to sign
+                        </div>
+                      ) : null}
                       <div className="mt-0.5 text-[11px] text-text-3">
                         {formatDateTime(e.createdAt)}
                         {e.ipAddress ? ` · ${e.ipAddress}` : ''}
