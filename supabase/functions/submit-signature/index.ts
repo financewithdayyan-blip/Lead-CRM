@@ -527,7 +527,7 @@ Deno.serve(async (req) => {
               address,
               link,
             });
-            await sendEmail(nextParty.email, `Your turn to sign — ${docName}`, html);
+            await sendEmail(nextParty.email, `Your turn to sign - ${docName}`, html);
             sentAny = true;
           } catch (emailErr) {
             console.error('Blue Docs next-signer email failed:', emailErr);
@@ -768,7 +768,7 @@ Deno.serve(async (req) => {
       if (p.send_email && p.email) {
         try {
           const html = signedCompleteEmailHtml({ name: p.name, address: instance.property_address ?? '', link: partyLink });
-          await sendEmail(p.email, `Contract signed — ${instance.property_address ?? 'your property'}`, html);
+          await sendEmail(p.email, `Contract signed - ${instance.property_address ?? 'your property'}`, html);
         } catch (emailErr) {
           console.error(`Blue Docs completion email failed for party ${p.id}:`, emailErr);
         }

@@ -395,7 +395,7 @@ Deno.serve(async (req) => {
           address: propertyAddress.trim(),
           link,
         });
-        await sendEmail(firstParty.email, `${docKind} ready for your signature — ${propertyAddress.trim()}`, html);
+        await sendEmail(firstParty.email, `${docKind} ready for your signature - ${propertyAddress.trim()}`, html);
         emailResult.sent = true;
       } catch (emailErr) {
         console.error('Blue Docs invite email failed:', emailErr);

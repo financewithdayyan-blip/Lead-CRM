@@ -176,7 +176,7 @@ ${fallbackLink(link)}`,
 
     await sendEmail(
       email.trim(),
-      `Off-Market Deal — ${propType}${area ? ` in ${area}` : ''}`,
+      `Off-Market Deal - ${propType}${area ? ` in ${area}` : ''}`,
       html,
     );
 
