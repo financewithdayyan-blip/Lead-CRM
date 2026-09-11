@@ -177,9 +177,13 @@ Deno.serve(async (req) => {
       if (lead.awaiting_owner_info) {
         const alreadyReminded = (outbound ?? []).some((a) => (a.meta as any)?.reminder === true);
         if (alreadyReminded) {
+          // Going quiet isn't an explicit opt-out request (no STOP, no "never
+          // contact me again", no do-not-call claim) — just silence — so
+          // this stops pursuing the lead without blocking every future
+          // campaign account-wide the way opted_out:true would.
           await admin
             .from('leads')
-            .update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true, awaiting_owner_info: false, next_reminder_at: null })
+            .update({ stage: 'dead_declined', ai_reply_paused: true, awaiting_owner_info: false, next_reminder_at: null })
             .eq('id', lead.id);
           declined++;
           continue;

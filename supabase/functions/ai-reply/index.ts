@@ -267,7 +267,7 @@ Read their message and the conversation so far, then reply naturally, the way a 
 - If photos haven't come in yet (not in this message, not earlier in the conversation): respond naturally to whatever they actually said — a delay, a question, chit-chat. Don't ask for a callback time yet, that comes after photos. If they suggest you (or anyone from the company) visit, drive by, or see the property in person instead: never agree to this or imply it will happen, under any circumstance — say you don't need to see it in person, photos work fine. If they say they can't get the photos themselves (out of state, no access, etc.) and you haven't already suggested this: ask once whether someone local — an ex, a neighbor, a property manager, a tenant, anyone nearby — could walk through and send some instead. If that's also not possible, or you already asked and they said no, stop pushing for photos — move straight into asking for a callback time instead, same as if photos had arrived.
 - Once photos are in (this message or already in the conversation) and they have NOT yet given a real day/time to call about the offer: if this message is what just delivered the photos, thank them briefly, then ask what's a good time to call them to go over the offer. If photos already came in earlier and you haven't asked yet, ask now. If you already asked and they're just chatting, respond naturally and don't re-ask.
 - Once they actually give a specific day and time to call about the offer: fill in scheduled_callback_at and scheduled_callback_note — an ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY'S DATE above. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank. This is not done just by asking — only fill these in once they've actually given a real answer.
-- If they're declining or asking not to be contacted again, in any phrasing: reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Set hard_decline false only if the decline is clearly and specifically about the price/offer amount and nothing else; true for every other kind of decline, including if unsure.
+- If they're declining or asking not to be contacted again, in any phrasing: reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Set hard_decline false only if the decline is clearly and specifically about the price/offer amount and nothing else; true for every other kind of decline, including if unsure. Separately, set explicit_opt_out true only if they said something equivalent to "never contact me again" or explicitly claimed their number is on a do-not-call list — false for every other decline, no matter how firm or final-sounding, since this one blocks every future campaign account-wide, not just this conversation.
 - Anything touching on who actually ends up owning or buying the property, why there's an inspection, or how the deal works behind the scenes: never mention wholesaling, assigning the contract, or a separate buyer/investor being involved in any way — from the seller's side, they are dealing with you and your company alone, start to finish. If asked whether there's an inspection, say yes, that's a standard part of closing, without saying who does it or why. Stay vague and reassuring rather than explaining the mechanics.
 
 STYLE:
@@ -345,6 +345,7 @@ SPECIAL CASES — these came from real conversations going wrong, follow them ex
 - Negative or declining, or an explicit request to not be contacted again (in any phrasing, not just a bare "STOP" — plain STOP-style keywords are handled separately and never reach you): reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Also set hard_decline:
   - false only if the decline is clearly and specifically about the price or offer amount (e.g. "too low", "not enough", "lowball", "insulting offer") and nothing else — not a refusal to sell at all, just this number. This stops you from texting them further without marking them permanently unreachable, since a different number or a human follow-up might still work.
   - true for every other kind of decline — not interested, wrong time, doesn't want to sell, tired of being contacted, or anything not clearly and only about price. If genuinely unsure which one this is, set hard_decline true: treat it as the permanent, safer option rather than guess.
+  - separately, also set explicit_opt_out true, but only if they said something equivalent to "never contact me again" or explicitly claimed their number is on a do-not-call list — this blocks every future campaign across the whole account, not just this conversation, so it takes real certainty. A firm, angry, sarcastic, or final-sounding decline that isn't one of those two specific things is hard_decline true / explicit_opt_out false, not both true.
 
 - Says or implies the property is currently listed for sale on the open market — with a realtor/agent, or specifically on Zillow, Realtor.com, or Redfin, or phrasing like "it's already listed" or "we have it listed": stop the qualification framework immediately, right on this reply — do not continue with MOTIVATION, CONDITION, TIMELINE, PRICE, DECISION, or PHOTOS, and do not ask about any of that again even if they bring up something from it themselves later. This isn't a decline, so do not set negative_reply. Instead, reply briefly acknowledging what they said, then ask what's a good time for someone from the team to give them a call to talk it over directly. If they name a real day and time in this same message, fill in scheduled_callback_at and scheduled_callback_note exactly like the CALLBACK step does. Set listed_on_market true. Do not set fully_qualified true for this — the interview itself was never completed, a human is taking this one over directly instead.
 {{LEARNED_CASES}}
@@ -673,6 +674,11 @@ Deno.serve(async (req) => {
                     description:
                       'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else. True for every other kind of decline, and true whenever unsure.',
                   },
+                  explicit_opt_out: {
+                    type: 'boolean',
+                    description:
+                      'A much narrower flag than hard_decline — this specifically blocks the lead from ever being contacted again by anything, not just this conversation, so it needs real certainty, not a guess. True only if they explicitly say something equivalent to "never contact me again" (in any phrasing, e.g. "stop reaching out for good", "take me off every list", "don\'t ever call or text me again") or explicitly say their number is on a do-not-call list/registry. False for every other kind of decline, no matter how firm, angry, or final-sounding ("not interested", "go away", "leave me alone", swearing, sarcasm) — those still end the conversation via hard_decline, they just don\'t mean never contact this person again through any channel. When unsure, false.',
+                  },
                   scheduled_callback_at: {
                     type: 'string',
                     description:
@@ -723,6 +729,11 @@ Deno.serve(async (req) => {
                     type: 'boolean',
                     description:
                       'Only meaningful when negative_reply is true. False only if the decline is clearly and specifically about the price/offer amount and nothing else, not a refusal to sell at all. True for every other kind of decline, including the wrong-number/not-their-property dead-end case (immediately, on the first such reply), and true whenever unsure.',
+                  },
+                  explicit_opt_out: {
+                    type: 'boolean',
+                    description:
+                      'A much narrower flag than hard_decline — this specifically blocks the lead from ever being contacted again by anything, not just this conversation, so it needs real certainty, not a guess. True only if they explicitly say something equivalent to "never contact me again" (in any phrasing, e.g. "stop reaching out for good", "take me off every list", "don\'t ever call or text me again") or explicitly say their number is on a do-not-call list/registry. False for every other kind of decline, no matter how firm, angry, or final-sounding ("not interested", "go away", "leave me alone", swearing, sarcasm, the wrong-number dead-end case) — those still end the conversation via hard_decline, they just don\'t mean never contact this person again through any channel. When unsure, false.',
                   },
                   awaiting_owner_info: {
                     type: 'boolean',
@@ -840,6 +851,7 @@ Deno.serve(async (req) => {
     fully_qualified: fullyQualifiedRaw,
     negative_reply: negativeReply,
     hard_decline: hardDeclineRaw,
+    explicit_opt_out: explicitOptOutRaw,
     summary,
     confirmed_first_name: confirmedFirstName,
     confirmed_address: confirmedAddress,
@@ -856,6 +868,7 @@ Deno.serve(async (req) => {
     fully_qualified?: boolean;
     negative_reply: boolean;
     hard_decline?: boolean;
+    explicit_opt_out?: boolean;
     summary?: string;
     confirmed_first_name?: string;
     confirmed_address?: string;
@@ -947,6 +960,15 @@ Deno.serve(async (req) => {
   // path — a missing or ambiguous field is not the same as a confident "this
   // is just about price."
   const hardDecline = hardDeclineRaw !== false;
+  // Opposite default direction from hardDecline on purpose — that one
+  // defaults to the safer "stop texting this lead" outcome when unsure,
+  // but this one gates opted_out, which suppresses every FUTURE campaign
+  // across the whole account, not just this conversation. Defaulting that
+  // true on any ambiguous firm-sounding decline ("go away", "haha blocked",
+  // frustrated venting) is what caused real leads to get silently
+  // blacklisted over something short of an actual opt-out request — so this
+  // only becomes true when the model is confident enough to say so.
+  const explicitOptOut = !!explicitOptOutRaw;
 
   let replyParts = (Array.isArray(rawParts) ? rawParts : [])
     .map((p) => humanizePunctuation(String(p).trim()))
@@ -1050,11 +1072,14 @@ Deno.serve(async (req) => {
   // negative_reply is terminal for the AI on this lead either way — it never
   // texts them again regardless of which branch below fires. hard_decline
   // decides how terminal: a genuine refusal (or a confirmed wrong number)
-  // marks Dead + opted_out, excluded from all future contact for good. A
-  // decline that's specifically about the price, and nothing else, instead
-  // goes to On Hold — the AI backs off, but a human can still follow up
-  // later with a different number or offer, since this isn't "there is no
-  // real lead at that number," it's "not at this price."
+  // marks Dead, stopping THIS lead's conversation for good. Whether it's
+  // also excluded from every future campaign account-wide is a separate,
+  // much narrower question — explicit_opt_out — since a firm "not
+  // interested" isn't the same as "never contact me through any channel
+  // again." A decline that's specifically about the price, and nothing
+  // else, instead goes to On Hold — the AI backs off, but a human can still
+  // follow up later with a different number or offer, since this isn't
+  // "there is no real lead at that number," it's "not at this price."
   //
   // listed_on_market also pauses the AI immediately, same as fully_qualified,
   // but for the opposite reason — the interview was interrupted, not
@@ -1072,7 +1097,7 @@ Deno.serve(async (req) => {
   // leaves Replied once qualified, matching AI_ACTIVE_STAGES above.
   if (negativeReply) {
     if (hardDecline) {
-      await admin.from('leads').update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true }).eq('id', leadId);
+      await admin.from('leads').update({ stage: 'dead_declined', opted_out: explicitOptOut, ai_reply_paused: true }).eq('id', leadId);
     } else {
       // Only the price-specific decline goes On Hold rather than Dead — a
       // human can revisit later with a different number or offer. That's

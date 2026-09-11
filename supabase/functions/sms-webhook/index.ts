@@ -526,22 +526,30 @@ Deno.serve(async (req) => {
 
       // Deterministic paths — checked before anything else touches this lead.
       // Each ends the conversation without ever reaching the AI: no draft, no
-      // reply, straight to Dead + opted_out + paused.
-      const deterministicStop = isHardStopKeyword(body) || isDeclinePhrase(body) || isProfanity(body);
+      // reply, straight to Dead + paused. Only the keyword/phrase matches are
+      // an actual explicit opt-out request (stop-list compliance keywords,
+      // or a plain-English "don't contact me"/"remove my number" — see
+      // DECLINE_CORE_PHRASES) and get opted_out:true, which blocks every
+      // future campaign account-wide, not just this conversation. Profanity
+      // alone doesn't meet that bar — someone swearing in frustration isn't
+      // the same as an explicit permanent do-not-contact request — so it
+      // still ends this conversation without blacklisting the lead outright.
+      const isExplicitOptOut = isHardStopKeyword(body) || isDeclinePhrase(body);
+      const deterministicStop = isExplicitOptOut || isProfanity(body);
 
       if (deterministicStop) {
         await admin
           .from('leads')
-          .update({ stage: 'dead_declined', opted_out: true, ai_reply_paused: true })
+          .update({ stage: 'dead_declined', opted_out: isExplicitOptOut, ai_reply_paused: true })
           .eq('id', lead.id);
         await admin.from('lead_activities').insert({
           lead_id: lead.id,
           user_id: lead.user_id,
           type: 'sms',
           body,
-          meta: { direction: 'inbound', from: fromRaw, to: toRaw, hasAttachments: attachments.length > 0, autoOptOut: true },
+          meta: { direction: 'inbound', from: fromRaw, to: toRaw, hasAttachments: attachments.length > 0, autoOptOut: isExplicitOptOut },
         });
-        return json({ ok: true, matched: true, optedOut: true });
+        return json({ ok: true, matched: true, optedOut: isExplicitOptOut });
       }
 
       // Only advance forward. A lead already past 'replied' (in Negotiation,
