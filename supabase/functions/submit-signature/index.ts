@@ -203,19 +203,6 @@ ${fallbackLink(link)}`;
   return emailShell(`${docName} is ready for your signature`, body);
 }
 
-function signedCompleteEmailHtml(opts: { name: string; address: string; link: string }): string {
-  const { name, address, link } = opts;
-  const body = `
-<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#10b981;">Fully Executed</p>
-<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">&#127881; Congrats, ${name.split(' ')[0]} — it's signed!</h1>
-<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Every party has signed the contract for your property. You can download your fully executed copy below.</p>
-${addressCallout(address)}
-${ctaButton(link, 'Download Signed Contract', '#0B1E33', '#ffffff')}
-<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Thanks for signing,<br>Dayyan</p>
-${fallbackLink(link)}`;
-  return emailShell(`Your contract for ${address} has been fully signed`, body);
-}
-
 interface ContractField {
   id: string;
   page: number;
@@ -775,14 +762,6 @@ Deno.serve(async (req) => {
           await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(partyLink));
         } catch (smsErr) {
           console.error(`Blue Docs completion SMS failed for party ${p.id}:`, smsErr);
-        }
-      }
-      if (p.send_email && p.email) {
-        try {
-          const html = signedCompleteEmailHtml({ name: p.name, address: instance.property_address ?? '', link: partyLink });
-          await sendEmail(p.email, `Contract signed - ${instance.property_address ?? 'your property'}`, html);
-        } catch (emailErr) {
-          console.error(`Blue Docs completion email failed for party ${p.id}:`, emailErr);
         }
       }
     }
