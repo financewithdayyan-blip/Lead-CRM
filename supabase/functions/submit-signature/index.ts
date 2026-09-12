@@ -126,7 +126,12 @@ const COMPLETED_MESSAGE = (link: string) =>
 // above). Every call site wraps this in try/catch, same as sendBlueDocsSms —
 // a failed email must never fail the signer's own already-recorded
 // signature or cost another party their own notification. ──────────────────
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: { filename: string; contentType: string; encoding: 'binary'; content: Uint8Array }[],
+) {
   const client = new SMTPClient({
     connection: {
       hostname: SMTP_HOST,
@@ -137,7 +142,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   });
   try {
     await withTimeout(
-      client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, content: 'auto', html }),
+      client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, content: 'auto', html, attachments }),
       'SMTP send',
     );
   } finally {
@@ -201,6 +206,24 @@ ${ctaButton(link, 'Review &amp; Sign Document', '#C9A24B', '#0B1E33')}
 <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Sign it and let's start moving with it.<br>Thanks,<br>Dayyan</p>
 ${fallbackLink(link)}`;
   return emailShell(`${docName} is ready for your signature`, body);
+}
+
+/** The fully-executed completion email — sent alongside a PDF attachment
+ * of the actual signed copy (finalBytes, already on hand from the
+ * certificate-of-completion build below), not just a link. The download
+ * link stays too as a fallback for whichever mail client/filter strips or
+ * blocks the attachment. */
+function signedCompleteEmailHtml(opts: { name: string; address: string; link: string }): string {
+  const { name, address, link } = opts;
+  const body = `
+<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#10b981;">Fully Executed</p>
+<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">&#127881; Congrats, ${name.split(' ')[0]} — it's signed!</h1>
+<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Every party has signed the contract for your property. Your fully executed copy is attached to this email, or you can download it below.</p>
+${addressCallout(address)}
+${ctaButton(link, 'Download Signed Contract', '#0B1E33', '#ffffff')}
+<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Thanks for signing,<br>Dayyan</p>
+${fallbackLink(link)}`;
+  return emailShell(`Your contract for ${address} has been fully signed`, body);
 }
 
 interface ContractField {
@@ -752,9 +775,12 @@ Deno.serve(async (req) => {
     // Notify everyone it's done, each with their own link back to their
     // signing page — that page shows the download button once it sees the
     // contract's now-'signed' status (see SignContractPage's fullyDone).
-    // Downloading only ever happens from there, not automatically in-browser
-    // right when someone finishes signing. Each send is wrapped individually
-    // so one party's Zoom hiccup doesn't cost every other party their text.
+    // The email additionally carries finalBytes itself as a PDF attachment
+    // (already on hand from the certificate build above, no extra fetch),
+    // so a signer has their copy in hand without needing to click through.
+    // Each send is wrapped individually so one party's Zoom hiccup doesn't
+    // cost every other party their text, and a failed email attachment
+    // doesn't cost them the SMS.
     for (const p of updatedParties) {
       const partyLink = `https://www.bluebirdacquisition.com/crm/sign/${p.access_token}`;
       if (p.send_sms && p.phone) {
@@ -762,6 +788,16 @@ Deno.serve(async (req) => {
           await sendBlueDocsSms(p.phone, COMPLETED_MESSAGE(partyLink));
         } catch (smsErr) {
           console.error(`Blue Docs completion SMS failed for party ${p.id}:`, smsErr);
+        }
+      }
+      if (p.send_email && p.email) {
+        try {
+          const html = signedCompleteEmailHtml({ name: p.name, address: instance.property_address ?? '', link: partyLink });
+          await sendEmail(p.email, `Contract signed - ${instance.property_address ?? 'your property'}`, html, [
+            { filename: 'Signed Contract.pdf', contentType: 'application/pdf', encoding: 'binary', content: finalBytes },
+          ]);
+        } catch (emailErr) {
+          console.error(`Blue Docs completion email failed for party ${p.id}:`, emailErr);
         }
       }
     }
