@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { useGenerateContract, type DeliveryResult } from '@/hooks/useContractInstances';
+import { useGenerateContract, useUpdateContractInstance, type ContractInstance, type DeliveryResult } from '@/hooks/useContractInstances';
 import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatCurrency } from '@/lib/currency';
 import type { DocTemplate } from '@/hooks/useDocTemplates';
+
+/** Strips a formatted "$410,000" back to "410000" — the reverse of
+ * formatCurrency, needed when seeding the edit form from a stored
+ * fieldValues that was already stamped through formatCurrency on the way
+ * in (see stamp() below). The input only ever displays raw digits, with
+ * the $ shown as a separate decorative prefix. */
+function stripCurrency(formatted: string): string {
+  return formatted.replace(/[^0-9.]/g, '');
+}
 
 // Blue Docs always sends/receives from slot 2 — see BLUEDOCS_NUMBER in
 // create-contract-instance/submit-signature (ZOOM_FROM_NUMBER_2). Used only
@@ -100,14 +109,26 @@ const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency
  */
 export function FillCashDealContractModal({
   template,
+  instance,
   onClose,
   onSent,
+  onSaved,
 }: {
-  template: DocTemplate;
+  template: Pick<DocTemplate, 'id' | 'name' | 'partyRoles'>;
+  /** Present only when editing an already-sent contract in place, instead
+   * of creating a new one — see EnvelopesTab's Edit action. Every field
+   * below gets seeded from this instance's existing values/parties on
+   * mount, and submitting calls update-contract-instance instead of
+   * create-contract-instance. */
+  instance?: ContractInstance;
   onClose: () => void;
-  onSent: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
+  /** Create mode only. */
+  onSent?: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
+  /** Edit mode only. */
+  onSaved?: () => void;
 }) {
   const generate = useGenerateContract();
+  const update = useUpdateContractInstance();
   const buyerRole = template.partyRoles[0]?.id;
   const { data: numberLabels } = useSmsNumberLabels();
   const defaultBuyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
@@ -149,6 +170,55 @@ export function FillCashDealContractModal({
   useEffect(() => {
     if (defaultBuyerPhone && !buyerPhone) setBuyerPhone(defaultBuyerPhone);
   }, [defaultBuyerPhone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Edit mode: seed every field from the existing instance once, on mount.
+  // instance's identity is stable for this modal's whole lifetime (the
+  // parent only ever opens one edit target at a time), so this is a
+  // one-shot init, not a live sync — the user's own typing afterward should
+  // never get clobbered by a re-run.
+  useEffect(() => {
+    if (!instance) return;
+    const fv = instance.fieldValues;
+    const raw = (key: FieldKey) => fv[FIELD_MAP[key][0]] ?? '';
+    const seller = instance.parties.find((p) => p.role === 'seller');
+    const coSeller = instance.parties.find((p) => p.role === CO_SELLER_ROLE);
+    const buyer = instance.parties.find((p) => p.role === buyerRole);
+
+    if (seller) {
+      setSellerName(seller.name);
+      setSellerPhone(seller.phone ?? '');
+      setSellerEmail(seller.email ?? '');
+      setSellerSendSms(seller.sendSms);
+      setSellerSendEmail(seller.sendEmail);
+    }
+    if (coSeller) {
+      setOwnerCount(2);
+      setCoSellerName(coSeller.name);
+      setCoSellerPhone(coSeller.phone ?? '');
+      setCoSellerEmail(coSeller.email ?? '');
+      setCoSellerSendSms(coSeller.sendSms);
+      setCoSellerSendEmail(coSeller.sendEmail);
+    }
+    if (buyer) {
+      setBuyerName(buyer.name);
+      setBuyerPhone(buyer.phone ?? '');
+      setBuyerEmail(buyer.email ?? '');
+      setBuyerSendSms(buyer.sendSms);
+      setBuyerSendEmail(buyer.sendEmail);
+    }
+    setValues({
+      sellerName: raw('sellerName'),
+      buyerName: raw('buyerName'),
+      address: raw('address'),
+      purchasePrice: stripCurrency(raw('purchasePrice')),
+      emdAmount: stripCurrency(raw('emdAmount')),
+      titleCompany: raw('titleCompany'),
+      inspectionPeriod: raw('inspectionPeriod'),
+      closingDate: raw('closingDate'),
+      governingState: raw('governingState'),
+      specialProvisions: raw('specialProvisions'),
+    });
+  }, [instance]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setValue(key: FieldKey, v: string) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -206,6 +276,18 @@ export function FillCashDealContractModal({
         },
       ];
 
+      if (instance) {
+        await update.mutateAsync({
+          instanceId: instance.id,
+          name: template.name,
+          propertyAddress: values.address.trim(),
+          fieldValues,
+          parties,
+        });
+        onSaved?.();
+        return;
+      }
+
       const { parties: created, delivery } = await generate.mutateAsync({
         templateId: template.id,
         name: template.name,
@@ -214,24 +296,25 @@ export function FillCashDealContractModal({
         parties,
       });
       const first = [...created].sort((a, b) => a.sign_order - b.sign_order)[0];
-      onSent({
+      onSent?.({
         label: `Seller${first.name ? ` — ${first.name}` : ''}`,
         url: `${window.location.origin}/crm/sign/${first.access_token}`,
         delivery,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong sending this.');
+      setError(e instanceof Error ? e.message : `Something went wrong ${instance ? 'saving' : 'sending'} this.`);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal open onClose={onClose} title="Fill Contract Details" width="md">
+    <Modal open onClose={onClose} title={instance ? 'Edit Contract Details' : 'Fill Contract Details'} width="md">
       <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         <p className="text-[12px] text-text-3">
-          Fill in the deal terms below — this goes straight to the Seller to sign. Once they sign, you'll be notified
-          to sign last.
+          {instance
+            ? 'Update the deal terms below — this updates the contract your parties already have, no new link or message goes out. Only available while nobody has signed yet.'
+            : "Fill in the deal terms below — this goes straight to the Seller to sign. Once they sign, you'll be notified to sign last."}
         </p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -402,7 +485,7 @@ export function FillCashDealContractModal({
           </button>
           <button className="btn btn-primary" disabled={!canSubmit || submitting} onClick={handleSubmit}>
             {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-            Create & Send to Seller
+            {instance ? 'Save Changes' : 'Create & Send to Seller'}
           </button>
         </div>
       </div>

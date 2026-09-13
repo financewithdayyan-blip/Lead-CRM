@@ -9,6 +9,21 @@ import { formatDateTime } from '@/lib/utils';
 
 const PAGE_WIDTH = 620;
 
+// Mirrors EVENT_LABELS in submit-signature (the Certificate of Completion's
+// own copy) — kept separate since this one reads as an action verb inline
+// in a sentence ("... signed the document") rather than a standalone label.
+const EVENT_ACTION_TEXT: Record<string, string> = {
+  signed: 'signed the document',
+  viewed: 'opened the signing link',
+  sent: 'was sent the invitation',
+  consented: 'consented to sign electronically',
+  declined: 'declined to sign',
+  reminder_sent: 'was sent a reminder',
+  voided: 'voided the envelope',
+  expired: 'the signing link expired',
+  edited: 'edited the contract terms',
+};
+
 export function ContractPreviewModal({ instance, onClose }: { instance: ContractInstance; onClose: () => void }) {
   const [tab, setTab] = useState<'document' | 'audit'>('document');
   const getSignedUrl = useSignedTemplateUrl();
@@ -100,7 +115,7 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                         <span className="font-medium">
                           {party ? roleLabel(party.role, instance.templateType ?? 'contract', instance.templatePartyRoles) : 'Unknown party'}
                         </span>
-                        {party ? ` (${party.name})` : ''} {e.eventType === 'signed' ? 'signed the document' : 'opened the signing link'}
+                        {party ? ` (${party.name})` : ''} {EVENT_ACTION_TEXT[e.eventType] ?? 'opened the signing link'}
                       </div>
                       {e.eventType === 'signed' && party?.typedSignatureName ? (
                         <div className="mt-0.5 text-[11px] text-text-2">

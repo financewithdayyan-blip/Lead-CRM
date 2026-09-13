@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ContractInstanceRow } from '@/components/bluedocs/ContractInstanceRow';
 import { ContractPreviewModal } from '@/components/bluedocs/ContractPreviewModal';
+import { FillCashDealContractModal } from '@/components/bluedocs/FillCashDealContractModal';
 import {
   useContractInstances,
   useDeleteContractInstance,
@@ -41,6 +42,7 @@ export function EnvelopesTab() {
   const [previewTarget, setPreviewTarget] = useState<ContractInstance | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<ContractInstance | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -111,6 +113,7 @@ export function EnvelopesTab() {
               onDownload={download}
               onDelete={() => setDeleteTarget(c.id)}
               onVoid={() => setVoidTarget(c.id)}
+              onEdit={() => setEditTarget(c)}
             />
           ))}
         </div>
@@ -143,6 +146,15 @@ export function EnvelopesTab() {
       />
 
       {previewTarget && <ContractPreviewModal instance={previewTarget} onClose={() => setPreviewTarget(null)} />}
+
+      {editTarget && (
+        <FillCashDealContractModal
+          template={{ id: editTarget.templateId ?? '', name: editTarget.name, partyRoles: editTarget.templatePartyRoles }}
+          instance={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => setEditTarget(null)}
+        />
+      )}
     </div>
   );
 }

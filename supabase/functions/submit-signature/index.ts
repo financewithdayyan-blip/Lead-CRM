@@ -659,6 +659,7 @@ Deno.serve(async (req) => {
       reminder_sent: 'Reminder Sent',
       voided: 'Envelope Voided',
       expired: 'Signing Link Expired',
+      edited: 'Contract Terms Edited',
     };
 
     const partyLabelById = new Map(

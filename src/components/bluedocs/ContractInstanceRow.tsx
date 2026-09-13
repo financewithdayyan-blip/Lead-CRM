@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Ban, Bell, Check, CheckCircle2, ChevronDown, Clock, Copy, Download, Eye, Loader2, MapPin, PartyPopper, Send, Trash2 } from 'lucide-react';
+import { Ban, Bell, Check, CheckCircle2, ChevronDown, Clock, Copy, Download, Eye, Loader2, MapPin, PartyPopper, Pencil, Send, Trash2 } from 'lucide-react';
 import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { PURCHASE_CONTRACT_TYPES, roleLabel } from '@/hooks/useDocTemplates';
 import { CASH_DEAL_ADDRESS_FIELD_ID, CASH_DEAL_TEMPLATE_ID } from '@/components/bluedocs/FillCashDealContractModal';
@@ -66,6 +66,7 @@ export function ContractInstanceRow({
   onDownload,
   onDelete,
   onVoid,
+  onEdit,
 }: {
   instance: ContractInstance;
   showTemplateName?: boolean;
@@ -75,6 +76,9 @@ export function ContractInstanceRow({
   /** Omitted entirely for a template's own Sign Inbox list, where voiding
    * isn't offered — only the global Envelopes dashboard passes this. */
   onVoid?: () => void;
+  /** Omitted the same way as onVoid where editing isn't offered. Only ever
+   * shown for a Cash Deal contract nobody has signed yet — see canEdit. */
+  onEdit?: () => void;
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
   const [reminded, setReminded] = useState(false);
@@ -134,6 +138,11 @@ export function ContractInstanceRow({
   const signed = c.status === 'signed';
   const voidedOrDeclined = c.status === 'voided' || c.status === 'declined';
   const canVoid = onVoid && !signed && !voidedOrDeclined && c.status !== 'expired';
+  // Editing terms in place only ever makes sense before anyone's actually
+  // signed — see update-contract-instance's own server-side version of this
+  // exact check, which is the one that actually matters; this just keeps
+  // the button from appearing somewhere it'd immediately fail.
+  const canEdit = onEdit && c.templateId === CASH_DEAL_TEMPLATE_ID && c.status === 'sent' && !c.parties.some((p) => p.status === 'signed');
   const badge = STATUS_BADGE[c.status];
   const BadgeIcon = badge?.icon;
   const typeLabel = PURCHASE_CONTRACT_TYPES.find((o) => o.key === c.templateContractType)?.label;
@@ -193,6 +202,11 @@ export function ContractInstanceRow({
                 <Bell size={12} />
               )}
               {reminded ? 'Sent' : 'Send Reminder'}
+            </button>
+          )}
+          {canEdit && (
+            <button className="btn !px-2 !py-1 text-[11px]" title="Edit the deal terms — only available before anyone signs" onClick={onEdit}>
+              <Pencil size={12} /> Edit
             </button>
           )}
           {canVoid && (

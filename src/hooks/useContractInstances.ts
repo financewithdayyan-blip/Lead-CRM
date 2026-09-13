@@ -168,6 +168,44 @@ export function useGenerateContract() {
   });
 }
 
+/** Corrects an already-sent contract's terms/party info in place — no new
+ * send, existing signing links keep working unchanged. Server-side refuses
+ * once any party has actually signed (see update-contract-instance) — this
+ * is only ever a pre-signature correction, never a way to alter what
+ * someone already agreed to. */
+export function useUpdateContractInstance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      instanceId: string;
+      name?: string;
+      propertyAddress: string;
+      fieldValues: Record<string, string>;
+      parties: ContractParty[];
+    }) => {
+      const { data, error } = await supabase.functions.invoke('update-contract-instance', {
+        body: {
+          instanceId: input.instanceId,
+          name: input.name,
+          propertyAddress: input.propertyAddress,
+          fieldValues: input.fieldValues,
+          parties: input.parties.map((p) => ({
+            role: p.role, name: p.name, phone: p.phone, email: p.email,
+            sendSms: p.sendSms, sendEmail: p.sendEmail, signOrder: p.signOrder,
+          })),
+        },
+      });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as { ok: true };
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract_instances'] }),
+  });
+}
+
 /** Per-channel outcome of the first signer's invite send — see
  * create-contract-instance. Lets the UI tell the admin what actually
  * happened instead of a blanket "sent" regardless of outcome. */
@@ -405,7 +443,7 @@ export function useRecordConsent() {
 export interface ContractAuditEvent {
   id: string;
   partyId: string | null;
-  eventType: 'viewed' | 'consented' | 'signed' | 'sent' | 'reminder_sent' | 'declined' | 'voided' | 'expired';
+  eventType: 'viewed' | 'consented' | 'signed' | 'sent' | 'reminder_sent' | 'declined' | 'voided' | 'expired' | 'edited';
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
