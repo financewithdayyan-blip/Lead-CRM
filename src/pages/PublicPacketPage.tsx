@@ -352,18 +352,39 @@ function VideoGrid({ videos }: { videos: PacketVideoClip[] }) {
   );
 }
 
-function isValidGatePhone(raw: string): boolean {
-  const digits = raw.replace(/\D/g, '');
-  return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+/** Renders up to 10 raw local digits as +1XXX-XXX-XXXX — same convention as
+ * formatPhone (src/lib/utils) used everywhere else this app displays a
+ * number, so what a viewer types here looks identical to how it'll show up
+ * in the Visitors table. The +1 is a fixed, non-editable prefix — the
+ * actual input state is always just the raw digits (see the input's
+ * onChange below), never this rendered string, or re-parsing the prefix's
+ * own "1" back out as if it were a typed digit corrupts every keystroke
+ * after the first. */
+function formatGatePhone(digits: string): string {
+  if (!digits) return '+1';
+  let out = `+1${digits.slice(0, 3)}`;
+  if (digits.length > 3) out += `-${digits.slice(3, 6)}`;
+  if (digits.length > 6) out += `-${digits.slice(6, 10)}`;
+  return out;
 }
 
-/** Name-and-phone wall, shown before any packet content when the admin enables it. */
-function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) => void }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+function isValidGatePhone(digits: string): boolean {
+  return digits.length === 10;
+}
+
+/** Name-and-phone wall, shown before any packet content when the admin
+ * enables it — also re-shown to a returning visitor whose saved identity
+ * predates the phone field, so initialName lets them pick up without
+ * retyping what's already on file. */
+function LeadCaptureGate({ initialName, onSubmit }: { initialName?: string; onSubmit: (identity: ViewerIdentity) => void }) {
+  const [name, setName] = useState(initialName ?? '');
+  // Raw local digits only (max 10) — the source of truth. +1 and the
+  // hyphens are a pure display transform (formatGatePhone), never stored
+  // or re-parsed as part of this state.
+  const [phoneDigits, setPhoneDigits] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const nameValid = name.trim().length > 1;
-  const phoneValid = isValidGatePhone(phone);
+  const phoneValid = isValidGatePhone(phoneDigits);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-4">
@@ -372,7 +393,7 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
         onSubmit={(e) => {
           e.preventDefault();
           setSubmitted(true);
-          if (nameValid && phoneValid) onSubmit({ name: name.trim(), phone: phone.trim() });
+          if (nameValid && phoneValid) onSubmit({ name: name.trim(), phone: formatGatePhone(phoneDigits) });
         }}
       >
         <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Investment Opportunity</div>
@@ -391,9 +412,15 @@ function LeadCaptureGate({ onSubmit }: { onSubmit: (identity: ViewerIdentity) =>
           className={`input mt-2 ${submitted && !phoneValid ? '!border-danger' : ''}`}
           type="tel"
           inputMode="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Your phone number"
+          value={formatGatePhone(phoneDigits)}
+          onChange={(e) => {
+            // Strip the fixed +1 prefix before reading digits back out, so
+            // its own "1" is never mistaken for something the visitor typed.
+            const withoutPrefix = e.target.value.startsWith('+1') ? e.target.value.slice(2) : e.target.value;
+            setPhoneDigits(withoutPrefix.replace(/\D/g, '').slice(0, 10));
+          }}
+          placeholder="+1"
+          maxLength={14}
         />
         {submitted && !phoneValid && (
           <p className="mt-1 text-[12px] text-danger">Enter a valid 10-digit phone number.</p>
@@ -555,7 +582,13 @@ export function PublicPacketPage() {
   const [mainImageLoading, setMainImageLoading] = useState(false);
   const loggedRef = useRef(false);
 
-  const gated = !!packet?.requireLeadCapture && !identity;
+  // A stored identity from before the gate asked for a phone number (or one
+  // otherwise missing it) is treated as incomplete, not satisfied — without
+  // this, a returning visitor whose localStorage identity predates the
+  // phone field would skip the gate forever and never get asked, which is
+  // exactly why the Visitors table was showing name-only rows with no
+  // contact info despite the gate itself correctly collecting phone today.
+  const gated = !!packet?.requireLeadCapture && (!identity || !identity.phone);
 
   // Counts toward the admin's live viewer number for as long as this page is
   // mounted. Suppressed behind the capture gate — someone staring at a form
@@ -729,6 +762,7 @@ export function PublicPacketPage() {
   if (gated) {
     return (
       <LeadCaptureGate
+        initialName={identity?.name}
         onSubmit={(id) => {
           saveViewerIdentity(slug!, id);
           setIdentity(id);
