@@ -184,6 +184,25 @@ export function filterOutNonIndividuals(
   return { individuals, entityFilteredCount };
 }
 
+/** Drops rows with no usable phone at all — a lead with a name/address but
+ * neither phone nor phone2 blank can't be called or texted, so it's dead
+ * weight on every board rather than a real contact. mapRowsToLeads already
+ * requires a name OR a phone to keep a row (catching fully blank lines);
+ * this catches the "has a name, has no way to reach them" case those don't. */
+export function filterOutMissingPhones(
+  mapped: MappedCsvLead[],
+): { withPhone: MappedCsvLead[]; missingPhoneCount: number } {
+  let missingPhoneCount = 0;
+  const withPhone = mapped.filter((lead) => {
+    if (!lead.phone.trim() && !lead.phone2.trim()) {
+      missingPhoneCount++;
+      return false;
+    }
+    return true;
+  });
+  return { withPhone, missingPhoneCount };
+}
+
 /** Matches on Phone Number 1 only — the one this CRM actually calls/texts.
  * A secondary number (phone2, or anything beyond it on the CSV side) is
  * never used for dedup, on either side of the comparison: an existing

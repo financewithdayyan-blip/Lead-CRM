@@ -4,8 +4,8 @@ import { Modal } from '@/components/ui/Modal';
 import { useBulkCreateLeads, useImportDedupeLeads } from '@/hooks/useLeads';
 import { useCreateTag, useTags, nextTagColor } from '@/hooks/useTags';
 import {
-  CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, filterOutNonIndividuals, guessColumnMapping,
-  mapRowsToLeads, parseLeadsFile, type CsvParseResult,
+  CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, filterOutMissingPhones, filterOutNonIndividuals,
+  guessColumnMapping, mapRowsToLeads, parseLeadsFile, type CsvParseResult,
 } from '@/lib/csv';
 import { getErrorMessage } from '@/lib/utils';
 import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
@@ -55,8 +55,12 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   // automatically on every import now — never real individual contacts,
   // see filterOutNonIndividuals/entityDetection for how this was derived.
   const { individuals: previewIndividuals, entityFilteredCount } = filterOutNonIndividuals(previewMapped);
+  // A lead with neither a primary nor a secondary phone can't be called or
+  // texted at all — dropped automatically for the same reason entities are,
+  // see filterOutMissingPhones.
+  const { withPhone, missingPhoneCount } = filterOutMissingPhones(previewIndividuals);
   const dedupeAgainst = existingLeads.filter((l) => DEDUPE_STAGES.includes(l.stage));
-  const { unique, duplicateCount } = dedupeAgainstExisting(previewIndividuals, dedupeAgainst);
+  const { unique, duplicateCount } = dedupeAgainstExisting(withPhone, dedupeAgainst);
   // A source is required for every import — either a mapped CSV column
   // (per-row) or a batch fallback covering the whole file.
   const sourceMissing = mapping.source == null && !batchSource.trim();
@@ -255,6 +259,11 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
                 {entityFilteredCount > 0 && (
                   <div className="mt-1 text-warning">
                     {entityFilteredCount} business/entity record(s) skipped automatically — LLCs, corporations, government agencies, churches, and similar aren't real individual contacts.
+                  </div>
+                )}
+                {missingPhoneCount > 0 && (
+                  <div className="mt-1 text-warning">
+                    {missingPhoneCount} record(s) skipped automatically — no phone number (primary or secondary) to call or text.
                   </div>
                 )}
                 {duplicateCount > 0 && (

@@ -193,7 +193,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-text-2">{formatPhone(lead.phone)}</td>
+                  <td className="px-3 py-2.5 text-text-2">{formatPhone(lead.phone || lead.phone2 || '')}</td>
                   <td className="max-w-[220px] truncate px-3 py-2.5 text-text-2">{lead.address}</td>
                   <td className="px-3 py-2.5">
                     <StageBadge stage={lead.stage} />

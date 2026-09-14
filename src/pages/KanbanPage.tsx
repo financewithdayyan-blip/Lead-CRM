@@ -283,11 +283,15 @@ function KanbanCardVisual({
   lifted?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  // Falls back to the secondary number whenever the primary is blank, so a
+  // lead imported with only phone2 populated still shows/works like any
+  // other card instead of looking contact-less.
+  const contactPhone = lead.phone || lead.phone2 || '';
 
   function copyPhone(e: React.MouseEvent) {
     e.stopPropagation();
-    if (!lead.phone) return;
-    navigator.clipboard.writeText(lead.phone).then(() => {
+    if (!contactPhone) return;
+    navigator.clipboard.writeText(contactPhone).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -359,7 +363,7 @@ function KanbanCardVisual({
           </div>
           <div className="mt-1 flex items-center justify-between gap-1">
             <div className={`flex min-w-0 items-center gap-1.5 ${sx.sub}`}>
-              <span className="font-mono tabular-nums">{formatPhone(lead.phone)}</span>
+              <span className="font-mono tabular-nums">{formatPhone(contactPhone)}</span>
               {messageCount > 0 && (
                 <span
                   className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${sx.badge}`}
@@ -373,7 +377,7 @@ function KanbanCardVisual({
                 own — same copy/edit/delete, just no longer a dedicated
                 strip under every card. */}
             <div className="flex shrink-0 items-center gap-0.5">
-              {lead.phone && (
+              {contactPhone && (
                 <button
                   onClick={copyPhone}
                   className={`rounded p-1 transition-colors ${copied ? 'text-success' : sx.iconBtn}`}
@@ -468,7 +472,7 @@ function KanbanCardVisual({
           )}
         </div>
       </div>
-      {(!viewOnly || canSms) && lead.phone && !NO_CONTACT_STAGES.includes(lead.stage) && (
+      {(!viewOnly || canSms) && contactPhone && !NO_CONTACT_STAGES.includes(lead.stage) && (
         <div className={`mt-1 flex gap-1 border-t pt-1 ${sx.divider}`}>
           {!viewOnly && (
             <button
@@ -678,7 +682,7 @@ const KanbanColumn = memo(function KanbanColumn({
               spotlight={spotlightIds.has(l.id)}
               canSms={canSms}
               onToggleSelect={() => onToggleSelect(l.id)}
-              onCall={() => onCall(l.id, l.phone)}
+              onCall={() => onCall(l.id, l.phone || l.phone2 || '')}
               onText={() => onText(l.id)}
               onOpen={() => onOpen(l.id)}
               onDelete={() => onDelete(l.id)}
