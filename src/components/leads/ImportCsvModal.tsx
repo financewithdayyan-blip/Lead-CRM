@@ -3,7 +3,10 @@ import { Upload } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useBulkCreateLeads, useImportDedupeLeads } from '@/hooks/useLeads';
 import { useCreateTag, useTags, nextTagColor } from '@/hooks/useTags';
-import { CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, guessColumnMapping, mapRowsToLeads, parseCsvFile, type CsvParseResult } from '@/lib/csv';
+import {
+  CSV_FIELD_GUESSES, cellAt, dedupeAgainstExisting, filterOutNonIndividuals, guessColumnMapping,
+  mapRowsToLeads, parseLeadsFile, type CsvParseResult,
+} from '@/lib/csv';
 import { getErrorMessage } from '@/lib/utils';
 import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
 import type { LeadStage } from '@/types/domain';
@@ -38,18 +41,22 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   async function handleFile(file: File) {
     setError(null);
     try {
-      const result = await parseCsvFile(file);
+      const result = await parseLeadsFile(file);
       setParsed(result);
       setMapping(guessColumnMapping(result.headers));
       setStep('mapping');
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to parse CSV.'));
+      setError(getErrorMessage(err, 'Failed to parse the file.'));
     }
   }
 
   const previewMapped = parsed ? mapRowsToLeads(parsed.rows, mapping) : [];
+  // LLCs/corporations/government agencies/churches/etc are skipped
+  // automatically on every import now — never real individual contacts,
+  // see filterOutNonIndividuals/entityDetection for how this was derived.
+  const { individuals: previewIndividuals, entityFilteredCount } = filterOutNonIndividuals(previewMapped);
   const dedupeAgainst = existingLeads.filter((l) => DEDUPE_STAGES.includes(l.stage));
-  const { unique, duplicateCount } = dedupeAgainstExisting(previewMapped, dedupeAgainst);
+  const { unique, duplicateCount } = dedupeAgainstExisting(previewIndividuals, dedupeAgainst);
   // A source is required for every import — either a mapped CSV column
   // (per-row) or a batch fallback covering the whole file.
   const sourceMissing = mapping.source == null && !batchSource.trim();
@@ -107,18 +114,18 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
   }
 
   return (
-    <Modal open onClose={onClose} title="Import Leads from CSV" width="lg">
+    <Modal open onClose={onClose} title="Import Leads" width="lg">
       {error && <div className="mb-4 rounded-md bg-danger-dim px-3 py-2 text-[13px] text-danger">{error}</div>}
 
       {step === 'upload' && (
         <div>
           <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border-2 text-text-3 hover:border-primary hover:text-primary">
             <Upload size={24} />
-            <span className="text-sm">Click to choose a CSV file</span>
+            <span className="text-sm">Click to choose a CSV or Excel file</span>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               className="hidden"
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
@@ -245,6 +252,11 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
                 <div className="text-text">
                   {unique.length} new lead{unique.length !== 1 ? 's' : ''} will be imported.
                 </div>
+                {entityFilteredCount > 0 && (
+                  <div className="mt-1 text-warning">
+                    {entityFilteredCount} business/entity record(s) skipped automatically — LLCs, corporations, government agencies, churches, and similar aren't real individual contacts.
+                  </div>
+                )}
                 {duplicateCount > 0 && (
                   <div className="mt-1 text-warning">
                     {duplicateCount} duplicate(s) skipped — phone number matches a lead you've already Replied to, Qualified, Negotiated, Contracted, or Closed.

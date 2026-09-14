@@ -1,26 +1,73 @@
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { expandStreetSuffix, extractPhones, formatPhone, normalizePhoneDigits, parseAuctionDate } from './utils';
+import { isNonIndividualEntity } from './entityDetection';
 
 export interface CsvParseResult {
   headers: string[];
   rows: string[][];
 }
 
+function rowsFromParsedData(data: string[][]): CsvParseResult {
+  const filtered = data.filter((row) => row.some((c) => (c ?? '').trim().length > 0));
+  if (filtered.length < 2) {
+    throw new Error('File must have a header row and at least one data row.');
+  }
+  return { headers: filtered[0].map((h) => (h ?? '').trim()), rows: filtered.slice(1) };
+}
+
 export function parseCsvFile(file: File): Promise<CsvParseResult> {
   return new Promise((resolve, reject) => {
     Papa.parse<string[]>(file, {
       complete: (result) => {
-        const data = (result.data as string[][]).filter((row) => row.some((c) => (c ?? '').trim().length > 0));
-        if (data.length < 2) {
-          reject(new Error('CSV must have a header row and at least one data row.'));
-          return;
+        try {
+          resolve(rowsFromParsedData(result.data as string[][]));
+        } catch (e) {
+          reject(e);
         }
-        resolve({ headers: data[0].map((h) => (h ?? '').trim()), rows: data.slice(1) });
       },
       error: reject,
       skipEmptyLines: true,
     });
   });
+}
+
+/** .xlsx/.xls — reads the first sheet only, cells coerced to plain strings
+ * (raw: false) so a date or number cell comes through already formatted
+ * the same way it would from a CSV export, rather than an Excel serial
+ * number or a Date object neither mapRowsToLeads nor the auction-date
+ * parser expects. */
+export function parseXlsxFile(file: File): Promise<CsvParseResult> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read the Excel file.'));
+    reader.onload = () => {
+      try {
+        const workbook = XLSX.read(reader.result, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+          reject(new Error('That Excel file has no sheets.'));
+          return;
+        }
+        const sheet = workbook.Sheets[firstSheetName];
+        const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
+        resolve(rowsFromParsedData(data as string[][]));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error('Failed to parse the Excel file.'));
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+export function isXlsxFile(file: File): boolean {
+  return /\.xlsx?$/i.test(file.name);
+}
+
+/** Single entry point for either format — picks the parser by file
+ * extension so callers don't need to branch themselves. */
+export function parseLeadsFile(file: File): Promise<CsvParseResult> {
+  return isXlsxFile(file) ? parseXlsxFile(file) : parseCsvFile(file);
 }
 
 export const CSV_FIELD_GUESSES: Array<{ key: string; label: string; patterns: RegExp[]; optional: boolean }> = [
@@ -115,6 +162,26 @@ export function mapRowsToLeads(rows: string[][], mapping: Record<string, number 
         notes: cellAt(r, mapping.notes),
       };
     });
+}
+
+/** Auto-skips LLCs/corporations/government agencies/churches/charities/etc
+ * on every import, not just the CSV that prompted this — built from a
+ * manual, name-by-name review of a real bad import (see
+ * src/lib/entityDetection.ts's own header for the full story). A real
+ * individual or a personal trust is never filtered; only records that
+ * read as a business/institution rather than a person. */
+export function filterOutNonIndividuals(
+  mapped: MappedCsvLead[],
+): { individuals: MappedCsvLead[]; entityFilteredCount: number } {
+  let entityFilteredCount = 0;
+  const individuals = mapped.filter((lead) => {
+    if (isNonIndividualEntity(lead.firstName, lead.lastName)) {
+      entityFilteredCount++;
+      return false;
+    }
+    return true;
+  });
+  return { individuals, entityFilteredCount };
 }
 
 /** Matches on Phone Number 1 only — the one this CRM actually calls/texts.

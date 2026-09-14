@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Share2, Trash2, Upload, UserPlus } from 'lucide-react';
 import { useLeadsPage, useLeadsTotalCount } from '@/hooks/useLeads';
@@ -10,10 +10,14 @@ import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { AddLeadModal } from '@/components/leads/AddLeadModal';
-import { ImportCsvModal } from '@/components/leads/ImportCsvModal';
 import { DeleteLeadsModal } from '@/components/leads/DeleteLeadsModal';
 import { STAGE_CONFIG, type LeadStage } from '@/types/domain';
 import { formatPhone, getErrorMessage } from '@/lib/utils';
+
+// Lazy — pulls in the xlsx (SheetJS) library, which is heavy and only ever
+// needed once someone actually opens the import modal, not on every visit
+// to the Leads page.
+const ImportCsvModal = lazy(() => import('@/components/leads/ImportCsvModal').then((m) => ({ default: m.ImportCsvModal })));
 
 export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
@@ -85,7 +89,7 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
         </div>
         <div className="flex gap-2">
           <button className="btn" onClick={() => setShowImport(true)}>
-            <Upload size={14} /> Import CSV
+            <Upload size={14} /> Import Leads
           </button>
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
             <Plus size={14} /> Add Lead
@@ -261,7 +265,11 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
       )}
 
       {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} targetUserId={targetUserId} />}
-      {showImport && <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />}
+      {showImport && (
+        <Suspense fallback={null}>
+          <ImportCsvModal onClose={() => setShowImport(false)} targetUserId={targetUserId} />
+        </Suspense>
+      )}
       {showDelete && (
         <DeleteLeadsModal
           selectedLeads={leads.filter((l) => selected.has(l.id))}
