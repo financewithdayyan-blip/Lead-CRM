@@ -375,7 +375,10 @@ function isValidGatePhone(digits: string): boolean {
 /** Name-and-phone wall, shown before any packet content when the admin
  * enables it — also re-shown to a returning visitor whose saved identity
  * predates the phone field, so initialName lets them pick up without
- * retyping what's already on file. */
+ * retyping what's already on file. Two columns on wider screens: the deal
+ * itself (property, stats, headline numbers) on one side to build
+ * conviction, the actual ask (name + phone) on the other — stacked on
+ * mobile, deal info first. */
 function LeadCaptureGate({
   initialName,
   propType,
@@ -385,7 +388,8 @@ function LeadCaptureGate({
   city,
   state,
   zip,
-  heroImagePath,
+  narrative,
+  dealStats,
   onSubmit,
 }: {
   initialName?: string;
@@ -396,11 +400,11 @@ function LeadCaptureGate({
   city?: string | null;
   state?: string | null;
   zip?: string | null;
-  /** Storage path of the packet's first photo, if any — shown blurred
-   * behind the gate as a teaser, never sharp enough to make out details
-   * (the point is "there's a real property behind this," not to give away
-   * anything the gate itself is there to hold back). */
-  heroImagePath?: string | null;
+  narrative?: string | null;
+  /** The same purchase price / ARV / repairs / equity figures the unlocked
+   * packet's own hero leads with (see statItems below) — reused as-is so
+   * the numbers on the gate and the numbers after it never disagree. */
+  dealStats?: { label: string; value: string; valueClass: string }[];
   onSubmit: (identity: ViewerIdentity) => void;
 }) {
   const [name, setName] = useState(initialName ?? '');
@@ -413,75 +417,105 @@ function LeadCaptureGate({
   const phoneValid = isValidGatePhone(phoneDigits);
 
   const areaLine = [city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : '');
-  const eyebrow = propType && areaLine.trim() ? `${propType} — ${areaLine.trim()}` : propType || 'Investment Opportunity';
   const statPills = [
     beds != null ? `${beds} bed${beds === 1 ? '' : 's'}` : null,
     baths != null ? `${baths} bath${baths === 1 ? '' : 's'}` : null,
     sqft != null ? `${sqft.toLocaleString()} sqft` : null,
   ].filter(Boolean) as string[];
+  // First non-blank line only — a one-line teaser, not the full multi-line
+  // condition writeup that's part of what filling the form unlocks.
+  const narrativeExcerpt = narrative
+    ?.split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-4">
-      {heroImagePath && (
-        <>
-          <div
-            className="absolute inset-0 scale-110 bg-cover bg-center opacity-60 blur-xl"
-            style={{ backgroundImage: `url(${packetImageUrl(heroImagePath, PACKET_IMAGE_SIZES.small)})` }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-sidebar-2/75 via-sidebar/60 to-[#081527]/75" />
-        </>
-      )}
-      <form
-        className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-7 shadow-2xl"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitted(true);
-          if (nameValid && phoneValid) onSubmit({ name: name.trim(), phone: formatGatePhone(phoneDigits) });
-        }}
-      >
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</div>
-        <h1 className="mt-1.5 font-serif text-[20px] font-semibold leading-tight text-text">Who's viewing?</h1>
-        {statPills.length > 0 && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {statPills.map((s) => (
-              <span key={s} className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                {s}
-              </span>
-            ))}
-          </div>
-        )}
-        <p className="mt-3 text-[13px] leading-snug text-text-3">
-          Every number, photo, and detail on this deal is already in the packet — fill this in and see exactly what
-          I've got.
-        </p>
-        <input
-          className="input mt-4"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your name"
-          autoFocus
-        />
-        <input
-          className={`input mt-2 ${submitted && !phoneValid ? '!border-danger' : ''}`}
-          type="tel"
-          inputMode="tel"
-          value={formatGatePhone(phoneDigits)}
-          onChange={(e) => {
-            // Strip the fixed +1 prefix before reading digits back out, so
-            // its own "1" is never mistaken for something the visitor typed.
-            const withoutPrefix = e.target.value.startsWith('+1') ? e.target.value.slice(2) : e.target.value;
-            setPhoneDigits(withoutPrefix.replace(/\D/g, '').slice(0, 10));
+    <div className="flex min-h-screen items-center justify-center bg-surface-2 p-4">
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl shadow-2xl md:grid md:grid-cols-[1.15fr_1fr]">
+        {/* The deal — same navy/gold treatment as the unlocked packet's own hero. */}
+        <div
+          className="relative overflow-hidden bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-7 text-white"
+          style={{
+            backgroundImage:
+              'radial-gradient(ellipse 900px 500px at 82% 8%, rgba(201,162,75,.28), transparent 60%), repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 1px, transparent 1px 74px), linear-gradient(200deg, #0d3a63 0%, #0B1E33 45%, #081527 100%)',
           }}
-          placeholder="+1"
-          maxLength={14}
-        />
-        {submitted && !phoneValid && (
-          <p className="mt-1 text-[12px] text-danger">Enter a valid 10-digit phone number.</p>
-        )}
-        <button type="submit" className="btn btn-primary mt-3 w-full justify-center">
-          View Deal Packet
-        </button>
-      </form>
+        >
+          <div className="flex items-center gap-2.5 text-[10.5px] font-bold uppercase tracking-[0.2em] text-accent">
+            <span className="h-px w-[18px] bg-accent" />
+            Investment Opportunity
+          </div>
+          <h1 className="mt-3 font-serif text-[24px] font-semibold leading-[1.1] tracking-tight">
+            {propType || 'Property'}
+          </h1>
+          <div className="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-[#AEC2D8]">
+            <MapPin size={13} className="shrink-0" />
+            {areaLine.trim() || 'Location available on enquiry'}
+          </div>
+          {statPills.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {statPills.map((s) => (
+                <span key={s} className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/90">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+          {narrativeExcerpt && <p className="mt-3 text-[12.5px] leading-snug text-[#AEC2D8]">{narrativeExcerpt}</p>}
+          {dealStats && dealStats.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {dealStats.map((s) => (
+                <div key={s.label} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.07] p-2.5">
+                  <div className="truncate text-[9.5px] font-bold uppercase tracking-wide text-[#8CA0B8]">{s.label}</div>
+                  <div className={`mt-0.5 truncate font-serif text-[16px] font-bold ${s.valueClass}`}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* The ask. */}
+        <form
+          className="flex flex-col justify-center bg-surface p-7"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmitted(true);
+            if (nameValid && phoneValid) onSubmit({ name: name.trim(), phone: formatGatePhone(phoneDigits) });
+          }}
+        >
+          <h2 className="font-serif text-[19px] font-semibold leading-tight text-text">Who's viewing?</h2>
+          <p className="mt-1 text-[13px] leading-snug text-text-3">
+            Every number, photo, and detail on this deal is already in the packet — fill this in and see exactly what
+            I've got.
+          </p>
+          <input
+            className="input mt-4"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            autoFocus
+          />
+          <input
+            className={`input mt-2 ${submitted && !phoneValid ? '!border-danger' : ''}`}
+            type="tel"
+            inputMode="tel"
+            value={formatGatePhone(phoneDigits)}
+            onChange={(e) => {
+              // Strip the fixed +1 prefix before reading digits back out, so
+              // its own "1" is never mistaken for something the visitor typed.
+              const withoutPrefix = e.target.value.startsWith('+1') ? e.target.value.slice(2) : e.target.value;
+              setPhoneDigits(withoutPrefix.replace(/\D/g, '').slice(0, 10));
+            }}
+            placeholder="+1"
+            maxLength={14}
+          />
+          {submitted && !phoneValid && (
+            <p className="mt-1 text-[12px] text-danger">Enter a valid 10-digit phone number.</p>
+          )}
+          <button type="submit" className="btn btn-primary mt-3 w-full justify-center">
+            View Deal Packet
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -823,7 +857,8 @@ export function PublicPacketPage() {
         city={area?.city}
         state={area?.state}
         zip={area?.zip}
-        heroImagePath={packet.images[0]?.storagePath}
+        narrative={packet.narrative}
+        dealStats={statItems}
         onSubmit={(id) => {
           saveViewerIdentity(slug!, id);
           setIdentity(id);
