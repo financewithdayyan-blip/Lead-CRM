@@ -376,7 +376,33 @@ function isValidGatePhone(digits: string): boolean {
  * enables it — also re-shown to a returning visitor whose saved identity
  * predates the phone field, so initialName lets them pick up without
  * retyping what's already on file. */
-function LeadCaptureGate({ initialName, onSubmit }: { initialName?: string; onSubmit: (identity: ViewerIdentity) => void }) {
+function LeadCaptureGate({
+  initialName,
+  propType,
+  beds,
+  baths,
+  sqft,
+  city,
+  state,
+  zip,
+  heroImagePath,
+  onSubmit,
+}: {
+  initialName?: string;
+  propType?: string | null;
+  beds?: number | null;
+  baths?: number | null;
+  sqft?: number | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  /** Storage path of the packet's first photo, if any — shown blurred
+   * behind the gate as a teaser, never sharp enough to make out details
+   * (the point is "there's a real property behind this," not to give away
+   * anything the gate itself is there to hold back). */
+  heroImagePath?: string | null;
+  onSubmit: (identity: ViewerIdentity) => void;
+}) {
   const [name, setName] = useState(initialName ?? '');
   // Raw local digits only (max 10) — the source of truth. +1 and the
   // hyphens are a pure display transform (formatGatePhone), never stored
@@ -386,20 +412,47 @@ function LeadCaptureGate({ initialName, onSubmit }: { initialName?: string; onSu
   const nameValid = name.trim().length > 1;
   const phoneValid = isValidGatePhone(phoneDigits);
 
+  const areaLine = [city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : '');
+  const eyebrow = propType && areaLine.trim() ? `${propType} — ${areaLine.trim()}` : propType || 'Investment Opportunity';
+  const statPills = [
+    beds != null ? `${beds} bed${beds === 1 ? '' : 's'}` : null,
+    baths != null ? `${baths} bath${baths === 1 ? '' : 's'}` : null,
+    sqft != null ? `${sqft.toLocaleString()} sqft` : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-4">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] p-4">
+      {heroImagePath && (
+        <>
+          <div
+            className="absolute inset-0 scale-110 bg-cover bg-center opacity-60 blur-xl"
+            style={{ backgroundImage: `url(${packetImageUrl(heroImagePath, PACKET_IMAGE_SIZES.small)})` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-sidebar-2/75 via-sidebar/60 to-[#081527]/75" />
+        </>
+      )}
       <form
-        className="w-full max-w-sm rounded-2xl border border-border bg-surface p-7 shadow-2xl"
+        className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-7 shadow-2xl"
         onSubmit={(e) => {
           e.preventDefault();
           setSubmitted(true);
           if (nameValid && phoneValid) onSubmit({ name: name.trim(), phone: formatGatePhone(phoneDigits) });
         }}
       >
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Investment Opportunity</div>
-        <h1 className="mt-1.5 font-serif text-[19px] font-semibold text-text">Who's viewing?</h1>
-        <p className="mt-1 text-[13px] leading-snug text-text-3">
-          Your name and phone — the full packet opens straight away.
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</div>
+        <h1 className="mt-1.5 font-serif text-[20px] font-semibold leading-tight text-text">Who's viewing?</h1>
+        {statPills.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {statPills.map((s) => (
+              <span key={s} className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-[13px] leading-snug text-text-3">
+          Every number, photo, and detail on this deal is already in the packet — fill this in and see exactly what
+          I've got.
         </p>
         <input
           className="input mt-4"
@@ -426,7 +479,7 @@ function LeadCaptureGate({ initialName, onSubmit }: { initialName?: string; onSu
           <p className="mt-1 text-[12px] text-danger">Enter a valid 10-digit phone number.</p>
         )}
         <button type="submit" className="btn btn-primary mt-3 w-full justify-center">
-          View deal packet
+          View Deal Packet
         </button>
       </form>
     </div>
@@ -763,6 +816,14 @@ export function PublicPacketPage() {
     return (
       <LeadCaptureGate
         initialName={identity?.name}
+        propType={packet.propType}
+        beds={packet.beds}
+        baths={packet.baths}
+        sqft={packet.sqft}
+        city={area?.city}
+        state={area?.state}
+        zip={area?.zip}
+        heroImagePath={packet.images[0]?.storagePath}
         onSubmit={(id) => {
           saveViewerIdentity(slug!, id);
           setIdentity(id);
