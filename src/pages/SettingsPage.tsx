@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { Bot, CalendarRange, CreditCard, DollarSign, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Tag, Target, Trash2, User } from 'lucide-react';
+import { Bell, Bot, CalendarRange, CreditCard, DollarSign, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Tag, Target, Trash2, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTags, useCreateTag, useDeleteTag, nextTagColor } from '@/hooks/useTags';
 import { useMarketingSpend, useCreateMarketingSpend, useDeleteMarketingSpend } from '@/hooks/useMarketingSpend';
 import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
 import { useUpdateProfile } from '@/hooks/useProfile';
+import { useDeviceSubscriptionStatus, useSubscribeToPush, useUnsubscribeFromPush } from '@/hooks/usePushNotifications';
 import { useBusinessCard } from '@/hooks/useBusinessCard';
 import { TagPill } from '@/components/ui/TagPill';
 import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
@@ -67,6 +68,10 @@ export function SettingsPage() {
 
   const [fullName, setFullName] = useState(profile?.fullName ?? '');
   const [fullNameSaved, setFullNameSaved] = useState(false);
+  const { status: pushStatus, refresh: refreshPushStatus } = useDeviceSubscriptionStatus();
+  const subscribeToPush = useSubscribeToPush();
+  const unsubscribeFromPush = useUnsubscribeFromPush();
+  const [pushError, setPushError] = useState<string | null>(null);
   const [dailyGoal, setDailyGoal] = useState(String(profile?.dailyGoal ?? 20));
   const [dailyGoalSaved, setDailyGoalSaved] = useState(false);
   const [monthlyGoal, setMonthlyGoal] = useState(String(profile?.monthlyGoal ?? 400));
@@ -123,6 +128,18 @@ export function SettingsPage() {
     const name = fullName.trim();
     if (!name) return;
     updateProfile.mutate({ fullName: name }, { onSuccess: () => flash(setFullNameSaved) });
+  }
+
+  function togglePush() {
+    setPushError(null);
+    if (pushStatus === 'subscribed') {
+      unsubscribeFromPush.mutate(undefined, { onSuccess: refreshPushStatus });
+    } else {
+      subscribeToPush.mutate(undefined, {
+        onSuccess: refreshPushStatus,
+        onError: (e) => setPushError(e instanceof Error ? e.message : 'Could not enable push notifications.'),
+      });
+    }
   }
 
   function saveDailyGoal() {
@@ -259,6 +276,34 @@ export function SettingsPage() {
                   </button>
                   {fullNameSaved && <span className="text-[11px] text-success">✓ Saved</span>}
                 </div>
+              </div>
+
+              <div className="card">
+                <CardHeader icon={Bell} title="Push Notifications" />
+                <p className="mt-1 text-[13px] text-text-2">
+                  Get a real notification on this device — even with the CRM closed — for things like a new website
+                  inquiry, a contract signer declining, or an AI reply failing. This is per-device: enabling it here
+                  only covers the browser you're using right now.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  {pushStatus === 'unsupported' ? (
+                    <span className="text-[12px] text-text-3">This browser doesn't support push notifications.</span>
+                  ) : (
+                    <button
+                      className={`btn ${pushStatus === 'subscribed' ? '' : 'btn-primary'}`}
+                      disabled={pushStatus === 'checking' || subscribeToPush.isPending || unsubscribeFromPush.isPending}
+                      onClick={togglePush}
+                    >
+                      {subscribeToPush.isPending || unsubscribeFromPush.isPending
+                        ? 'Working…'
+                        : pushStatus === 'subscribed'
+                          ? 'Disable on this device'
+                          : 'Enable on this device'}
+                    </button>
+                  )}
+                  {pushStatus === 'subscribed' && <span className="text-[11px] text-success">✓ Enabled on this device</span>}
+                </div>
+                {pushError && <p className="mt-2 text-[12px] text-danger">{pushError}</p>}
               </div>
             </div>
           </div>
