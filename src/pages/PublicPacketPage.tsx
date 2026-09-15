@@ -18,7 +18,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useAddPacketComment, useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp } from '@/hooks/usePublicPacket';
+import { useAddPacketComment, useLogPacketView, usePacketArea, usePublicPacket, type PublicPacketComp, type RevealedAddress } from '@/hooks/usePublicPacket';
 // Leaflet plus its CSS is a meaningful chunk, and a packet with no mapped
 // addresses never needs it.
 const PacketMap = lazy(() => import('@/components/packets/PacketMap').then((m) => ({ default: m.PacketMap })));
@@ -668,6 +668,10 @@ export function PublicPacketPage() {
   // anything was happening while the new one loaded, which read as frozen.
   const [mainImageLoading, setMainImageLoading] = useState(false);
   const loggedRef = useRef(false);
+  // Set once log_packet_view comes back with a non-null address — i.e. once
+  // we have the visitor's name and phone, whether just captured by the gate
+  // or already on file from an earlier visit. Null the whole time before that.
+  const [revealedAddress, setRevealedAddress] = useState<RevealedAddress | null>(null);
 
   // A stored identity from before the gate asked for a phone number (or one
   // otherwise missing it) is treated as incomplete, not satisfied — without
@@ -724,7 +728,10 @@ export function PublicPacketPage() {
   useEffect(() => {
     if (!slug || !packet || gated || loggedRef.current) return;
     loggedRef.current = true;
-    logView.mutate({ slug, identity });
+    logView.mutate(
+      { slug, identity },
+      { onSuccess: (data) => { if (data?.address) setRevealedAddress(data); } },
+    );
   }, [slug, packet, gated, identity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const repairTotalValue = useMemo(
@@ -1147,7 +1154,11 @@ export function PublicPacketPage() {
           </h1>
           <div className="mt-2.5 flex items-center gap-1.5 text-[14px] font-medium text-[#AEC2D8]">
             <MapPin size={14} className="shrink-0" />
-            {areaLine || 'Location available on enquiry'}
+            {revealedAddress?.address
+              ? [revealedAddress.address, [revealedAddress.city, revealedAddress.state].filter(Boolean).join(', ') + (revealedAddress.zip ? ` ${revealedAddress.zip}` : '')]
+                  .filter(Boolean)
+                  .join(', ')
+              : areaLine || 'Location available on enquiry'}
           </div>
         </div>
 

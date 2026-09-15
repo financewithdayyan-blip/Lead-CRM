@@ -84,10 +84,22 @@ export function usePacketArea(slug: string | undefined) {
   });
 }
 
+export interface RevealedAddress {
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+}
+
+/** Logs the view and, once we have the visitor's name and phone (whether
+ * just captured by the gate this call, or already on file from an earlier
+ * visit), the full street address comes back in that same response — see
+ * the log_packet_view migration for why this is one round trip rather than
+ * a separate address lookup. Null until then. */
 export function useLogPacketView() {
   return useMutation({
     mutationFn: async ({ slug, identity }: { slug: string; identity?: ViewerIdentity | null }) => {
-      const { error } = await supabase.rpc('log_packet_view', {
+      const { data, error } = await supabase.rpc('log_packet_view', {
         p_slug: slug,
         p_viewer_token: getViewerToken(),
         p_viewer_name: identity?.name ?? null,
@@ -96,6 +108,7 @@ export function useLogPacketView() {
         p_user_agent: navigator.userAgent,
       });
       if (error) throw error;
+      return (data as RevealedAddress | null) ?? null;
     },
   });
 }
