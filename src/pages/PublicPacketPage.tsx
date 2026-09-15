@@ -868,7 +868,11 @@ export function PublicPacketPage() {
         state={area?.state}
         zip={area?.zip}
         narrative={packet.narrative}
-        dealStats={statItems}
+        // The full hero (after the gate) shows all four; the gate itself is
+        // just a teaser, so it sticks to the two headline numbers rather
+        // than giving away the repair scope and margin before someone's
+        // even said who they are.
+        dealStats={statItems.filter((s) => s.label === 'Sale Price' || s.label === 'ARV')}
         onSubmit={(id) => {
           saveViewerIdentity(slug!, id);
           setIdentity(id);
