@@ -12,7 +12,9 @@ import {
   Layers,
   Loader2,
   Lock,
+  Mail,
   MapPin,
+  Phone,
   Send,
   X,
   Zap,
@@ -672,6 +674,7 @@ export function PublicPacketPage() {
   // we have the visitor's name and phone, whether just captured by the gate
   // or already on file from an earlier visit. Null the whole time before that.
   const [revealedAddress, setRevealedAddress] = useState<RevealedAddress | null>(null);
+  const [wantsToBuy, setWantsToBuy] = useState(false);
 
   // A stored identity from before the gate asked for a phone number (or one
   // otherwise missing it) is treated as incomplete, not satisfied — without
@@ -1197,6 +1200,26 @@ export function PublicPacketPage() {
             {packet.yearBuilt != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">Built {packet.yearBuilt}</span>}
           </div>
         )}
+
+        <div className="mb-7 rounded-xl border border-accent/30 bg-accent-dim p-4">
+          {wantsToBuy ? (
+            <div>
+              <div className="text-[13px] font-semibold text-text">Let's make it happen.</div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <a href="tel:+16293399189" className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-accent-hover hover:underline">
+                  <Phone size={14} /> +1 (629) 339-9189
+                </a>
+                <a href="mailto:dayyan@bluebirdacquisition.com" className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-accent-hover hover:underline">
+                  <Mail size={14} /> dayyan@bluebirdacquisition.com
+                </a>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setWantsToBuy(true)} className="btn btn-primary w-full justify-center sm:w-auto">
+              I Want to Buy This
+            </button>
+          )}
+        </div>
 
         <div className="space-y-8 pb-2">
           {sections.map((s, i) => (
