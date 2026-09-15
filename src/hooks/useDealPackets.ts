@@ -755,6 +755,7 @@ export function useDeletePacket() {
  * structure) rather than trusting anything from the client, so this call only
  * ever needs the packet id, the recipient, and an optional personal note. */
 export function useSendPacketEmail() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ packetId, email, note }: { packetId: string; email: string; note?: string }) => {
       const { data, error } = await supabase.functions.invoke('send-packet-email', {
@@ -767,6 +768,11 @@ export function useSendPacketEmail() {
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },
+    // The new row lands via a service-role insert inside the edge function,
+    // invisible to this client's own cache — without this, the "Emailed to"
+    // table in PacketAnalytics keeps showing whatever it last fetched until
+    // something else happens to refetch it.
+    onSuccess: (_data, { packetId }) => qc.invalidateQueries({ queryKey: ['packet_email_shares', packetId] }),
   });
 }
 
