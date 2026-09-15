@@ -145,7 +145,25 @@ Deno.serve(async (req) => {
     if (packetErr || !packet) return json({ error: 'Packet not found, or you don\'t have access to it.' }, 404);
     if (packet.status !== 'active') return json({ error: 'Only an active packet can be emailed — activate it first.' }, 400);
 
-    const link = `https://www.bluebirdacquisition.com/crm/deal/${packet.slug}`;
+    // Every link in this email — CTA button and the plaintext fallback —
+    // routes through track-packet-email-click rather than straight at the
+    // packet, and a hidden pixel points at track-packet-email-open, so
+    // "opened the email" / "opened the link" on the packet's analytics are
+    // real server-recorded facts, not something the client claims. Row
+    // must exist before the email goes out — a very fast open shouldn't be
+    // able to race a tracking_token that doesn't exist yet.
+    const trackingToken = crypto.randomUUID();
+    const { error: shareErr } = await admin.from('packet_email_shares').insert({
+      packet_id: packet.id,
+      user_id: userData.user.id,
+      to_email: email.trim(),
+      note: note?.trim() || null,
+      tracking_token: trackingToken,
+    });
+    if (shareErr) throw shareErr;
+
+    const link = `${SUPABASE_URL}/functions/v1/track-packet-email-click?t=${trackingToken}`;
+    const pixelUrl = `${SUPABASE_URL}/functions/v1/track-packet-email-open?t=${trackingToken}`;
     const propType = packet.prop_type || 'Property';
     const area = [packet.city, packet.state].filter(Boolean).join(', ');
     const dealTypeLabels = ((packet.deal_types ?? []) as string[]).map((t) => DEAL_TYPE_LABELS[t]).filter(Boolean);
@@ -171,7 +189,8 @@ ${noteHtml}
 ${factCallout(facts)}
 ${ctaButton(link, 'View Full Deal Packet')}
 <p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Let me know if you want to move on it.<br>Thanks,<br>Dayyan</p>
-${fallbackLink(link)}`,
+${fallbackLink(link)}
+<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;" />`,
     );
 
     await sendEmail(

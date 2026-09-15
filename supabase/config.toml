@@ -50,6 +50,12 @@ verify_jwt = false
 [functions.auto-score-leads]
 verify_jwt = false
 
+[functions.track-packet-email-click]
+verify_jwt = false
+
+[functions.track-packet-email-open]
+verify_jwt = false
+
 [functions.invite-user]
 verify_jwt = true
 

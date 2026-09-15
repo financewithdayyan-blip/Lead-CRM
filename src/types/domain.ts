@@ -495,6 +495,21 @@ export interface PacketComment {
   createdAt: string;
 }
 
+/** One "email this packet" send — who it went to, and whether the email
+ * itself has been opened and/or the link inside it clicked, both recorded
+ * server-side by the tracking pixel/redirect, never claimed by the client. */
+export interface PacketEmailShare {
+  id: string;
+  packetId: string;
+  toEmail: string;
+  note: string | null;
+  createdAt: string;
+  emailOpenedAt: string | null;
+  emailOpenCount: number;
+  linkClickedAt: string | null;
+  linkClickCount: number;
+}
+
 export interface TeamInvite {
   id: string;
   ownerId: string;

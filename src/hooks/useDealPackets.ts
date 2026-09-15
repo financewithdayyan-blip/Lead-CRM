@@ -8,6 +8,7 @@ import type {
   Lead,
   PacketComment,
   PacketComp,
+  PacketEmailShare,
   PacketImage,
   PacketRepair,
   PacketStatus,
@@ -100,6 +101,20 @@ function dbToComment(row: any): PacketComment {
     viewerEmail: row.viewer_email,
     body: row.body,
     createdAt: row.created_at,
+  };
+}
+
+function dbToEmailShare(row: any): PacketEmailShare {
+  return {
+    id: row.id,
+    packetId: row.packet_id,
+    toEmail: row.to_email,
+    note: row.note,
+    createdAt: row.created_at,
+    emailOpenedAt: row.email_opened_at,
+    emailOpenCount: row.email_open_count,
+    linkClickedAt: row.link_clicked_at,
+    linkClickCount: row.link_click_count,
   };
 }
 
@@ -919,23 +934,27 @@ export function usePacketComments(packetId: string | undefined) {
   });
 }
 
-/** Unique viewers plus a daily series for the views-over-time chart. */
-export function summarizeViews(views: PacketView[], days = 14) {
+/** Every "email this packet" send for this packet, most recent first — see
+ * send-packet-email and the two track-packet-email-* functions for how
+ * emailOpenedAt/linkClickedAt actually get set. */
+export function usePacketEmailShares(packetId: string | undefined) {
+  return useQuery({
+    queryKey: ['packet_email_shares', packetId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('packet_email_shares')
+        .select('*')
+        .eq('packet_id', packetId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map(dbToEmailShare);
+    },
+    enabled: !!packetId,
+  });
+}
+
+/** Total + unique-viewer counts. */
+export function summarizeViews(views: PacketView[]) {
   const unique = new Set(views.map((v) => v.viewerToken)).size;
-
-  const counts = new Map<string, number>();
-  for (const v of views) {
-    const day = v.createdAt.slice(0, 10);
-    counts.set(day, (counts.get(day) ?? 0) + 1);
-  }
-
-  const series: { date: string; views: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const iso = d.toISOString().slice(0, 10);
-    series.push({ date: iso, views: counts.get(iso) ?? 0 });
-  }
-
-  return { total: views.length, unique, series };
+  return { total: views.length, unique };
 }
