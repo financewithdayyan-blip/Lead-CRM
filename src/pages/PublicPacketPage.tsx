@@ -1152,9 +1152,30 @@ export function PublicPacketPage() {
             <span className="h-px w-[22px] bg-accent" />
             Investment Opportunity
           </div>
-          <h1 className="mt-3.5 font-serif text-[32px] font-semibold leading-[1.05] tracking-tight sm:text-[44px]">
-            {packet.propType || 'Property'}
-          </h1>
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <h1 className="mt-3.5 font-serif text-[32px] font-semibold leading-[1.05] tracking-tight sm:text-[44px]">
+              {packet.propType || 'Property'}
+            </h1>
+            <div className="mt-3.5 shrink-0">
+              {wantsToBuy ? (
+                <div className="rounded-xl border border-accent/40 bg-white/10 px-4 py-3 backdrop-blur-sm">
+                  <div className="text-[12px] font-semibold text-white">Let's make it happen.</div>
+                  <div className="mt-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
+                    <a href="tel:+16293399189" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline">
+                      <Phone size={13} /> +1 (629) 339-9189
+                    </a>
+                    <a href="mailto:dayyan@bluebirdacquisition.com" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline">
+                      <Mail size={13} /> dayyan@bluebirdacquisition.com
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setWantsToBuy(true)} className="btn btn-primary">
+                  I Want to Buy This
+                </button>
+              )}
+            </div>
+          </div>
           <div className="mt-2.5 flex items-center gap-1.5 text-[14px] font-medium text-[#AEC2D8]">
             <MapPin size={14} className="shrink-0" />
             {revealedAddress?.address
@@ -1200,26 +1221,6 @@ export function PublicPacketPage() {
             {packet.yearBuilt != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">Built {packet.yearBuilt}</span>}
           </div>
         )}
-
-        <div className="mb-7 rounded-xl border border-accent/30 bg-accent-dim p-4">
-          {wantsToBuy ? (
-            <div>
-              <div className="text-[13px] font-semibold text-text">Let's make it happen.</div>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <a href="tel:+16293399189" className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-accent-hover hover:underline">
-                  <Phone size={14} /> +1 (629) 339-9189
-                </a>
-                <a href="mailto:dayyan@bluebirdacquisition.com" className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-accent-hover hover:underline">
-                  <Mail size={14} /> dayyan@bluebirdacquisition.com
-                </a>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setWantsToBuy(true)} className="btn btn-primary w-full justify-center sm:w-auto">
-              I Want to Buy This
-            </button>
-          )}
-        </div>
 
         <div className="space-y-8 pb-2">
           {sections.map((s, i) => (
