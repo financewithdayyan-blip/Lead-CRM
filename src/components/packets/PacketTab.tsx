@@ -82,25 +82,35 @@ export function EmailPacketModal({ packet, onClose }: { packet: DealPacket; onCl
 
 type ResendStatus = 'sending' | 'sent' | 'error';
 
-/** Resends the packet to every distinct address it's ever been emailed to
- * (own history off packet_email_shares), one at a time — a shared SMTP
- * relay connection per send already; firing 30+ at once would just hammer
- * it, and sequential lets each recipient's own success/failure show up
- * live instead of all-or-nothing. */
+/** Resends the packet only to addresses that have never shown any sign of
+ * life — never opened the email, never opened the packet link, on any past
+ * send (own history off packet_email_shares) — one at a time, since a
+ * shared SMTP relay connection per send already; firing 30+ at once would
+ * just hammer it, and sequential lets each recipient's own success/failure
+ * show up live instead of all-or-nothing. Anyone who's engaged even once
+ * doesn't need a nudge, so a resend campaign skips them automatically
+ * rather than pestering someone who's already looked. */
 export function ResendPacketModal({ packet, onClose }: { packet: DealPacket; onClose: () => void }) {
   const { data: shares = [] } = usePacketEmailShares(packet.id);
   const sendEmail = useSendPacketEmail();
 
-  const recipients = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
+  const { recipients, engagedCount } = useMemo(() => {
+    const byEmail = new Map<string, { display: string; engaged: boolean }>();
     for (const s of shares) {
       const key = s.toEmail.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      out.push(s.toEmail.trim());
+      if (!key) continue;
+      const existing = byEmail.get(key);
+      const engaged = !!s.emailOpenedAt || !!s.linkClickedAt;
+      byEmail.set(key, {
+        display: existing?.display ?? s.toEmail.trim(),
+        engaged: (existing?.engaged ?? false) || engaged,
+      });
     }
-    return out;
+    const all = Array.from(byEmail.values());
+    return {
+      recipients: all.filter((r) => !r.engaged).map((r) => r.display),
+      engagedCount: all.filter((r) => r.engaged).length,
+    };
   }, [shares]);
 
   const [statuses, setStatuses] = useState<Record<string, ResendStatus>>({});
@@ -126,12 +136,24 @@ export function ResendPacketModal({ packet, onClose }: { packet: DealPacket; onC
       {!started ? (
         <div className="space-y-3">
           <p className="text-[13px] text-text-2">
-            Resend to everyone you've previously emailed this packet to — {recipients.length} address
+            Resend only to those who haven't opened the email or the packet yet — {recipients.length} address
             {recipients.length !== 1 ? 'es' : ''}.
+            {engagedCount > 0 && (
+              <span className="text-text-3">
+                {' '}
+                ({engagedCount} skipped — already opened it.)
+              </span>
+            )}
           </p>
           <div className="max-h-40 overflow-y-auto rounded-md border border-border-2 bg-surface-3 p-2 text-[12px] text-text-2">
             {recipients.length === 0
-              ? <span className="text-text-3">No one to resend to yet — email this packet at least once first.</span>
+              ? (
+                <span className="text-text-3">
+                  {engagedCount > 0
+                    ? 'Everyone this was emailed to has already opened it — nothing to resend.'
+                    : 'No one to resend to yet — email this packet at least once first.'}
+                </span>
+              )
               : recipients.map((e) => <div key={e} className="truncate py-0.5">{e}</div>)}
           </div>
           <div className="flex justify-end gap-2 pt-1">
