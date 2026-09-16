@@ -476,7 +476,17 @@ export function packetImageUrl(
 ): string {
   return supabase.storage
     .from('packet-images')
-    .getPublicUrl(storagePath, size ? { transform: { resize: 'cover', quality: 70, ...size } } : undefined)
+    // 'contain' — not 'cover' — because every caller only ever passes a
+    // width, never a height. Supabase/imgproxy's 'cover' mode assumes both
+    // dimensions are given to know what to crop to; fed only a width, it
+    // was found scaling that one axis down and leaving the other alone —
+    // e.g. a 1200x1600 photo requested at width 640 came back 640x1600,
+    // visibly squashed. 'contain' scales proportionally with no such
+    // assumption, so the file just gets smaller with its aspect ratio
+    // intact; every call site already applies its own object-cover/
+    // object-contain in CSS, which is what actually crops/fits it to
+    // whatever box it's rendered into.
+    .getPublicUrl(storagePath, size ? { transform: { resize: 'contain', quality: 70, ...size } } : undefined)
     .data.publicUrl;
 }
 
