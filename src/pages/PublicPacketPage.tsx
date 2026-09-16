@@ -743,19 +743,23 @@ export function PublicPacketPage() {
     );
   }, [slug, packet, gated, identity]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Shows the sticky bar once firstSectionRef has scrolled above the
-  // viewport — boundingClientRect.top < 0 is what distinguishes "scrolled
-  // past it" from "haven't reached it yet" (isIntersecting is false in
-  // both cases).
+  // Shows the sticky bar once firstSectionRef's bottom edge has scrolled
+  // above the viewport — a plain scroll listener rather than
+  // IntersectionObserver, deliberately: fewer surprises across older/
+  // embedded mobile browser engines, and easy to reason about directly.
   useEffect(() => {
-    const el = firstSectionRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowStickyBar(!entry.isIntersecting && entry.boundingClientRect.top < 0),
-      { threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    function checkScroll() {
+      const el = firstSectionRef.current;
+      if (!el) return;
+      setShowStickyBar(el.getBoundingClientRect().bottom < 0);
+    }
+    checkScroll();
+    window.addEventListener('scroll', checkScroll, { passive: true });
+    window.addEventListener('resize', checkScroll);
+    return () => {
+      window.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
   }, [gated]);
 
   const repairTotalValue = useMemo(
@@ -1246,44 +1250,45 @@ export function PublicPacketPage() {
         </div>
       )}
 
-      {/* Condensed recap, fixed to the viewport top but hidden until the
+      {/* Condensed recap, fixed to the viewport top, mounted only once the
           first section (the photos, when there are any) has scrolled past —
           showing it immediately would just repeat the hero right above it.
-          Once visible, the address/specs and the Buy action stay reachable
-          the rest of the way down the page. */}
-      <div
-        className={`fixed inset-x-0 top-0 z-20 border-b border-white/10 bg-sidebar/95 text-white backdrop-blur-md shadow-[0_4px_16px_-4px_rgba(11,30,51,0.4)] transition-transform duration-200 ${
-          showStickyBar ? 'translate-y-0' : '-translate-y-full'
-        }`}
-      >
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-2.5 sm:px-8">
-          <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
-            <span className="text-white">{fullLocationLine}</span>
-            {specsLine && (
-              <>
-                <span className="mx-2 text-white/30">·</span>
-                <span className="text-[#AEC2D8]">{specsLine}</span>
-              </>
-            )}
-          </div>
-          <div className="shrink-0">
-            {wantsToBuy ? (
-              <div className="flex items-center gap-3 text-[12px] font-semibold">
-                <a href="tel:+16293399189" className="inline-flex items-center gap-1 text-accent hover:underline">
-                  <Phone size={12} /> <span className="hidden sm:inline">+1 (629) 339-9189</span>
-                </a>
-                <a href="mailto:dayyan@bluebirdacquisition.com" className="hidden items-center gap-1 text-accent hover:underline sm:inline-flex">
-                  <Mail size={12} /> Email
-                </a>
-              </div>
-            ) : (
-              <button onClick={() => setWantsToBuy(true)} className="btn btn-primary !px-3 !py-1.5 text-[12.5px] whitespace-nowrap">
-                Buy This Deal
-              </button>
-            )}
+          A plain conditional mount rather than a translate-based show/hide:
+          no position:fixed + transform compositing quirks to worry about on
+          any given browser, at the cost of the slide-in transition. Once
+          mounted, the address/specs and the Buy action stay reachable the
+          rest of the way down the page. */}
+      {showStickyBar && (
+        <div className="fixed inset-x-0 top-0 z-20 border-b border-white/10 bg-sidebar/95 text-white backdrop-blur-md shadow-[0_4px_16px_-4px_rgba(11,30,51,0.4)]">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-2.5 sm:px-8">
+            <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+              <span className="text-white">{fullLocationLine}</span>
+              {specsLine && (
+                <>
+                  <span className="mx-2 text-white/30">·</span>
+                  <span className="text-[#AEC2D8]">{specsLine}</span>
+                </>
+              )}
+            </div>
+            <div className="shrink-0">
+              {wantsToBuy ? (
+                <div className="flex items-center gap-3 text-[12px] font-semibold">
+                  <a href="tel:+16293399189" className="inline-flex items-center gap-1 text-accent hover:underline">
+                    <Phone size={12} /> <span className="hidden sm:inline">+1 (629) 339-9189</span>
+                  </a>
+                  <a href="mailto:dayyan@bluebirdacquisition.com" className="hidden items-center gap-1 text-accent hover:underline sm:inline-flex">
+                    <Mail size={12} /> Email
+                  </a>
+                </div>
+              ) : (
+                <button onClick={() => setWantsToBuy(true)} className="btn btn-primary !px-3 !py-1.5 text-[12.5px] whitespace-nowrap">
+                  Buy This Deal
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <main className={`mx-auto max-w-5xl px-5 sm:px-8 ${statItems.length > 0 ? 'pt-6' : 'pt-8'}`}>
         {(packet.leadStatus || packet.beds != null || packet.baths != null || packet.sqft != null || packet.yearBuilt != null) && (
