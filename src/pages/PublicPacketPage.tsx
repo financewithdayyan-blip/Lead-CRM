@@ -882,6 +882,22 @@ export function PublicPacketPage() {
   }
 
   const areaLine = [area?.city, area?.state, area?.zip].filter(Boolean).join(', ');
+  // Same location string the hero shows — full street address once
+  // revealed, coarse city/state/zip until then. Shared with the sticky
+  // header bar so the two never drift apart.
+  const fullLocationLine = revealedAddress?.address
+    ? [revealedAddress.address, [revealedAddress.city, revealedAddress.state].filter(Boolean).join(', ') + (revealedAddress.zip ? ` ${revealedAddress.zip}` : '')]
+        .filter(Boolean)
+        .join(', ')
+    : areaLine || 'Location available on enquiry';
+  const specsLine = [
+    packet.propType,
+    packet.beds != null ? `${packet.beds} bed` : null,
+    packet.baths != null ? `${packet.baths} bath` : null,
+    packet.sqft != null ? `${packet.sqft.toLocaleString()} sqft` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   // Every content section below, in reading order, skipped whenever the admin
   // left that part empty. Numbering comes from position in this list, not a
@@ -1182,11 +1198,7 @@ export function PublicPacketPage() {
           </div>
           <div className="mt-2.5 flex items-center gap-1.5 text-[14px] font-medium text-[#AEC2D8]">
             <MapPin size={14} className="shrink-0" />
-            {revealedAddress?.address
-              ? [revealedAddress.address, [revealedAddress.city, revealedAddress.state].filter(Boolean).join(', ') + (revealedAddress.zip ? ` ${revealedAddress.zip}` : '')]
-                  .filter(Boolean)
-                  .join(', ')
-              : areaLine || 'Location available on enquiry'}
+            {fullLocationLine}
           </div>
         </div>
 
@@ -1212,6 +1224,39 @@ export function PublicPacketPage() {
           </div>
         </div>
       )}
+
+      {/* Condensed recap that sticks to the viewport top once the hero
+          scrolls past — the address/specs and the Buy action stay reachable
+          the whole time someone's reading through photos/comps below. */}
+      <div className="sticky top-0 z-20 border-b border-white/10 bg-sidebar/95 text-white backdrop-blur-md shadow-[0_4px_16px_-4px_rgba(11,30,51,0.4)]">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-2.5 sm:px-8">
+          <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+            <span className="text-white">{fullLocationLine}</span>
+            {specsLine && (
+              <>
+                <span className="mx-2 text-white/30">·</span>
+                <span className="text-[#AEC2D8]">{specsLine}</span>
+              </>
+            )}
+          </div>
+          <div className="shrink-0">
+            {wantsToBuy ? (
+              <div className="flex items-center gap-3 text-[12px] font-semibold">
+                <a href="tel:+16293399189" className="inline-flex items-center gap-1 text-accent hover:underline">
+                  <Phone size={12} /> <span className="hidden sm:inline">+1 (629) 339-9189</span>
+                </a>
+                <a href="mailto:dayyan@bluebirdacquisition.com" className="hidden items-center gap-1 text-accent hover:underline sm:inline-flex">
+                  <Mail size={12} /> Email
+                </a>
+              </div>
+            ) : (
+              <button onClick={() => setWantsToBuy(true)} className="btn btn-primary !px-3 !py-1.5 text-[12.5px] whitespace-nowrap">
+                Buy This Deal
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       <main className={`mx-auto max-w-5xl px-5 sm:px-8 ${statItems.length > 0 ? 'pt-6' : 'pt-8'}`}>
         {(packet.leadStatus || packet.beds != null || packet.baths != null || packet.sqft != null || packet.yearBuilt != null) && (
