@@ -675,6 +675,12 @@ export function PublicPacketPage() {
   // or already on file from an earlier visit. Null the whole time before that.
   const [revealedAddress, setRevealedAddress] = useState<RevealedAddress | null>(null);
   const [wantsToBuy, setWantsToBuy] = useState(false);
+  // The sticky recap bar only appears once the visitor has scrolled past
+  // the first content section (the photos, when there are any) — showing
+  // it right away would just repeat what the hero right above it already
+  // says. firstSectionRef marks where that section ends.
+  const firstSectionRef = useRef<HTMLDivElement>(null);
+  const [showStickyBar, setShowStickyBar] = useState(false);
 
   // A stored identity from before the gate asked for a phone number (or one
   // otherwise missing it) is treated as incomplete, not satisfied — without
@@ -736,6 +742,21 @@ export function PublicPacketPage() {
       { onSuccess: (data) => { if (data?.address) setRevealedAddress(data); } },
     );
   }, [slug, packet, gated, identity]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Shows the sticky bar once firstSectionRef has scrolled above the
+  // viewport — boundingClientRect.top < 0 is what distinguishes "scrolled
+  // past it" from "haven't reached it yet" (isIntersecting is false in
+  // both cases).
+  useEffect(() => {
+    const el = firstSectionRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyBar(!entry.isIntersecting && entry.boundingClientRect.top < 0),
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [gated]);
 
   const repairTotalValue = useMemo(
     () => (packet?.repairs ?? []).reduce((s, r) => s + (Number(r.cost) || 0), 0),
@@ -1225,10 +1246,16 @@ export function PublicPacketPage() {
         </div>
       )}
 
-      {/* Condensed recap that sticks to the viewport top once the hero
-          scrolls past — the address/specs and the Buy action stay reachable
-          the whole time someone's reading through photos/comps below. */}
-      <div className="sticky top-0 z-20 border-b border-white/10 bg-sidebar/95 text-white backdrop-blur-md shadow-[0_4px_16px_-4px_rgba(11,30,51,0.4)]">
+      {/* Condensed recap, fixed to the viewport top but hidden until the
+          first section (the photos, when there are any) has scrolled past —
+          showing it immediately would just repeat the hero right above it.
+          Once visible, the address/specs and the Buy action stay reachable
+          the rest of the way down the page. */}
+      <div
+        className={`fixed inset-x-0 top-0 z-20 border-b border-white/10 bg-sidebar/95 text-white backdrop-blur-md shadow-[0_4px_16px_-4px_rgba(11,30,51,0.4)] transition-transform duration-200 ${
+          showStickyBar ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-2.5 sm:px-8">
           <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
             <span className="text-white">{fullLocationLine}</span>
@@ -1273,7 +1300,7 @@ export function PublicPacketPage() {
 
         <div className="space-y-8 pb-2">
           {sections.map((s, i) => (
-            <div key={s.title}>
+            <div key={s.title} ref={i === 0 ? firstSectionRef : undefined}>
               <SectionHead num={i + 1} title={s.title} />
               {s.body}
             </div>
