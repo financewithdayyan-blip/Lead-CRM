@@ -1277,7 +1277,7 @@ export function PublicPacketPage() {
                     <Phone size={12} /> <span className="hidden sm:inline">+1 (629) 339-9189</span>
                   </a>
                   <a href="mailto:dayyan@bluebirdacquisition.com" className="hidden items-center gap-1 text-accent hover:underline sm:inline-flex">
-                    <Mail size={12} /> Email
+                    <Mail size={12} /> dayyan@bluebirdacquisition.com
                   </a>
                 </div>
               ) : (
