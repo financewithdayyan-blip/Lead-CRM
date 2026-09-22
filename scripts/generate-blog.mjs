@@ -129,8 +129,16 @@ async function main() {
   await mkdir(BLOG_DIR, { recursive: true });
   await mkdir(TAG_DIR, { recursive: true });
 
-  const coverUrl = (coverImagePath) =>
-    coverImagePath ? admin.storage.from('blog-images').getPublicUrl(coverImagePath).data.publicUrl : null;
+  // cover_image_path is usually a path inside the blog-images bucket, but a
+  // full URL (an external, hotlink-safe image — e.g. a public-domain/CC0
+  // Wikimedia Commons file) is passed through as-is instead of being run
+  // through getPublicUrl, which would otherwise mangle it by treating the
+  // whole URL as a bucket-relative path.
+  const coverUrl = (coverImagePath) => {
+    if (!coverImagePath) return null;
+    if (/^https?:\/\//i.test(coverImagePath)) return coverImagePath;
+    return admin.storage.from('blog-images').getPublicUrl(coverImagePath).data.publicUrl;
+  };
 
   const tagMap = new Map(); // tag -> posts[]
   for (const post of posts) {
