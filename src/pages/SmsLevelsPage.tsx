@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, Gauge, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Gauge, Lock } from 'lucide-react';
 import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { useSmsLevelProgress } from '@/hooks/useSmsLevelProgress';
 import { SmsLevelCard } from '@/components/sms/SmsLevelCard';
@@ -19,8 +19,7 @@ export function SmsLevelsPage() {
   const { data: settings } = useSmsSendSettings();
   const { data: progress } = useSmsLevelProgress(settings?.dailyLimitLevelStartedAt ?? null);
 
-  const activeLevel = settings?.dailyLimitLevel ?? 0;
-  const unlockedLevel = settings?.dailyLimitUnlockedLevel ?? 0;
+  const currentLevel = settings?.dailyLimitLevel ?? 0;
 
   return (
     <div>
@@ -34,7 +33,7 @@ export function SmsLevelsPage() {
           </h1>
           <p className="text-sm text-text-3">
             One pooled 10DLC level for the whole account — the daily limit is total texts per day across every
-            configured number combined, not per number. Levels 1-9 promote automatically; there's nothing to click.
+            configured number combined, not per number. Fully automatic; there's nothing to click.
           </p>
         </div>
       </div>
@@ -45,10 +44,9 @@ export function SmsLevelsPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {SMS_DLC_LEVELS.map((level) => {
-          const isUnlocked = level <= unlockedLevel;
-          const isActive = level === activeLevel;
-          const isNext = level === unlockedLevel + 1;
-          const isManualStart = level === 1 && unlockedLevel === 0;
+          const isActive = level === currentLevel;
+          const isPast = level < currentLevel;
+          const isNext = level === currentLevel + 1;
 
           let statusLabel = 'Locked';
           let statusIcon = Lock;
@@ -57,14 +55,10 @@ export function SmsLevelsPage() {
             statusLabel = 'Active';
             statusIcon = CheckCircle2;
             statusColor = 'text-success';
-          } else if (isUnlocked) {
-            statusLabel = 'Unlocked';
-            statusIcon = Circle;
+          } else if (isPast) {
+            statusLabel = 'Passed';
+            statusIcon = CheckCircle2;
             statusColor = 'text-primary';
-          } else if (isManualStart) {
-            statusLabel = 'Ready to start';
-            statusIcon = Circle;
-            statusColor = 'text-success';
           } else if (isNext) {
             statusLabel = 'Next up';
             statusIcon = Lock;
@@ -79,13 +73,9 @@ export function SmsLevelsPage() {
           return (
             <div
               key={level}
-              className={`card !p-4 ${isActive ? 'border-primary/50 ring-1 ring-primary/30' : isUnlocked ? 'border-primary/20' : ''}`}
+              className={`card !p-4 ${isActive ? 'border-primary/50 ring-1 ring-primary/30' : isPast ? 'border-primary/20' : ''}`}
             >
-              <CardHeader
-                icon={Gauge}
-                title={`Level ${level}`}
-                tone={isActive ? 'primary' : isUnlocked ? 'primary' : 'accent'}
-              />
+              <CardHeader icon={Gauge} title={`Level ${level}`} tone={isActive || isPast ? 'primary' : 'accent'} />
 
               <div className="mt-3 grid grid-cols-1 gap-2.5">
                 <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
@@ -108,7 +98,7 @@ export function SmsLevelsPage() {
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">Requirements</div>
                   {level === 1 ? (
                     <div className="mt-0.5 text-[12px] text-text-2">
-                      Always available — no prior sending history required.
+                      Automatic as soon as the account is set up — no prior sending history required.
                     </div>
                   ) : (
                     <ul className="mt-1 space-y-1 text-[12px] text-text-2">

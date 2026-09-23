@@ -2,21 +2,25 @@
  * 10DLC numbers start heavily throttled by carriers and gain daily-send
  * throughput gradually as the number's trust score/vetting matures — this
  * table mirrors that real-world progression instead of an admin typing a
- * guessed flat daily number. A number's level only climbs one step at a
- * time (see SmsNumberLevelsCard's "unlock next level"), matching how
- * carrier throughput actually increases over time rather than jumping.
+ * guessed flat daily number. Fully automatic now (see auto_promote_sms_
+ * levels, 0154/0156) — nothing in the UI sets this by hand.
+ *
+ * Mirrored in SQL by sms_dlc_level_limit() — keep both in sync if this
+ * table ever changes.
  */
 export const SMS_DLC_LEVEL_DAILY_LIMITS: Record<number, number> = {
-  1: 200,
-  2: 350,
-  3: 500,
-  4: 700,
-  5: 950,
-  6: 1250,
-  7: 1600,
-  8: 2000,
-  9: 2450,
-  10: 3000,
+  1: 250,
+  2: 500,
+  3: 750,
+  4: 1000,
+  5: 1300,
+  6: 1600,
+  7: 2000,
+  8: 2500,
+  9: 3000,
+  10: 3500,
+  11: 4000,
+  12: 5000,
 };
 
 export const SMS_DLC_LEVELS = Object.keys(SMS_DLC_LEVEL_DAILY_LIMITS)
