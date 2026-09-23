@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/logo-mark.svg" />
     <title>BlueBird CRM</title>
+    <!-- Lets "Add to Home Screen" install this as a standalone app instead
+         of a bookmark — iOS Safari only exposes push notification
+         permissions to a site running standalone from the home screen, never
+         to a page open in a regular Safari tab (see usePushNotifications.ts). -->
+    <link rel="manifest" href="/crm.webmanifest" />
+    <meta name="theme-color" content="#0B1E33" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BlueBird CRM" />
     <!-- Defense-in-depth alongside robots.txt's Disallow: /crm — that stops
          crawling, this stops indexing even if a /crm URL is ever discovered
          some other way (e.g. a stray backlink). The app is behind auth
