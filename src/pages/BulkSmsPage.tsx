@@ -10,11 +10,8 @@ import {
   useResumeBulkSmsJob,
 } from '@/hooks/useSms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Modal } from '@/components/ui/Modal';
-import { SmsLevelCard } from '@/components/sms/SmsLevelCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, formatDuration, formatTime } from '@/lib/utils';
-import { SMS_DLC_LEVELS, SMS_DLC_LEVEL_DAILY_LIMITS } from '@/lib/smsDlcLevels';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
 const STATUS_CONFIG: Record<BulkSmsItemStatus, { label: string; color: string; icon: typeof Clock }> = {
@@ -56,7 +53,6 @@ function BulkSmsHistory() {
   const { data: jobs = [], isLoading } = useBulkSmsJobs();
   const deleteJob = useDeleteBulkSmsJob();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [levelsGuideOpen, setLevelsGuideOpen] = useState(false);
 
   const totals = useMemo(() => {
     const totalSent = jobs.reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
@@ -82,7 +78,7 @@ function BulkSmsHistory() {
         </div>
         <div className="flex gap-2">
           {profile?.role === 'admin' && (
-            <button className="btn" onClick={() => setLevelsGuideOpen(true)}>
+            <button className="btn" onClick={() => navigate('/bulk-sms/levels')}>
               <Gauge size={14} /> Levels
             </button>
           )}
@@ -91,39 +87,6 @@ function BulkSmsHistory() {
           </button>
         </div>
       </div>
-
-      {profile?.role === 'admin' && (
-        <Modal open={levelsGuideOpen} onClose={() => setLevelsGuideOpen(false)} title="Sending Levels" width="sm">
-          <p className="text-[13px] text-text-2">
-            One pooled 10DLC level for the whole account — the daily limit below is total texts per day across every
-            configured number combined, not per number.
-          </p>
-          <div className="my-4 border-t border-border" />
-          <SmsLevelCard />
-          <div className="my-4 border-t border-border" />
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">All 10 levels</div>
-          <table className="mt-2 w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-border-2 text-left text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                <th className="py-1.5">Level</th>
-                <th className="py-1.5">Daily limit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SMS_DLC_LEVELS.map((level) => (
-                <tr key={level} className="border-b border-border-2 last:border-0">
-                  <td className="py-1.5 text-text">Level {level}</td>
-                  <td className="py-1.5 font-mono text-text-2">{SMS_DLC_LEVEL_DAILY_LIMITS[level].toLocaleString()}/day</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-4 text-[12px] text-text-3">
-            Moves up one level at a time — reaching the next one needs that day's target actually hit (across every
-            number combined) on 6 of the last 7 days, 1 miss allowed.
-          </p>
-        </Modal>
-      )}
 
       {jobs.length > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

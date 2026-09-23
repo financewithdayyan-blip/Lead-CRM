@@ -19,6 +19,7 @@ const LeadsPage = lazy(() => import('@/pages/LeadsPage').then((m) => ({ default:
 const LeadProfilePage = lazy(() => import('@/pages/LeadProfilePage').then((m) => ({ default: m.LeadProfilePage })));
 const KanbanPage = lazy(() => import('@/pages/KanbanPage').then((m) => ({ default: m.KanbanPage })));
 const BulkSmsPage = lazy(() => import('@/pages/BulkSmsPage').then((m) => ({ default: m.BulkSmsPage })));
+const SmsLevelsPage = lazy(() => import('@/pages/SmsLevelsPage').then((m) => ({ default: m.SmsLevelsPage })));
 const CallHistoryPage = lazy(() => import('@/pages/CallHistoryPage').then((m) => ({ default: m.CallHistoryPage })));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -91,6 +92,7 @@ export default function App() {
                         {/* Bulk SMS is admin-only — callers are cold-calling
                             only, so this sits behind the same guard as /team. */}
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />
+                        <Route path="/bulk-sms/levels" element={<SmsLevelsPage />} />
                         <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
                         <Route path="/blue-docs" element={<BlueDocsPage />} />
                         <Route path="/disposition" element={<DispositionPage />} />
