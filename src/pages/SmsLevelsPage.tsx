@@ -1,14 +1,46 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Gauge, Lock } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Circle, Gauge, Lock, Minus } from 'lucide-react';
 import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { useSmsLevelProgress } from '@/hooks/useSmsLevelProgress';
 import { SmsLevelCard } from '@/components/sms/SmsLevelCard';
-import { CardHeader } from '@/components/ui/CardHeader';
 import { SMS_DLC_LEVELS, SMS_DLC_LEVEL_DAILY_LIMITS } from '@/lib/smsDlcLevels';
 
 const MIN_DAYS = 10;
 const MIN_DELIVERY_RATE = 60;
 const MIN_REPLY_RATE = 15;
+
+type Status = 'active' | 'passed' | 'next' | 'locked';
+
+const STATUS_STYLE: Record<Status, { label: string; icon: typeof Lock; badge: string; iconBadge: string; cardBorder: string }> = {
+  active: {
+    label: 'Active',
+    icon: CheckCircle2,
+    badge: 'bg-success/15 text-success',
+    iconBadge: 'bg-primary/15 text-primary',
+    cardBorder: 'border-primary ring-1 ring-primary/30',
+  },
+  passed: {
+    label: 'Passed',
+    icon: Check,
+    badge: 'bg-primary/15 text-primary',
+    iconBadge: 'bg-primary/10 text-primary',
+    cardBorder: 'border-primary/20',
+  },
+  next: {
+    label: 'Next up',
+    icon: Lock,
+    badge: 'bg-warning/15 text-warning',
+    iconBadge: 'bg-warning/10 text-warning',
+    cardBorder: 'border-warning/30',
+  },
+  locked: {
+    label: 'Locked',
+    icon: Lock,
+    badge: 'bg-bg-2 text-text-3',
+    iconBadge: 'bg-bg-2 text-text-3',
+    cardBorder: 'border-border opacity-70',
+  },
+};
 
 /** Full detail page for the account's pooled 10DLC sending level — one card
  * per level instead of the old compact reference table, since "everything
@@ -44,100 +76,81 @@ export function SmsLevelsPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {SMS_DLC_LEVELS.map((level) => {
-          const isActive = level === currentLevel;
-          const isPast = level < currentLevel;
-          const isNext = level === currentLevel + 1;
-
-          let statusLabel = 'Locked';
-          let statusIcon = Lock;
-          let statusColor = 'text-text-3';
-          if (isActive) {
-            statusLabel = 'Active';
-            statusIcon = CheckCircle2;
-            statusColor = 'text-success';
-          } else if (isPast) {
-            statusLabel = 'Passed';
-            statusIcon = CheckCircle2;
-            statusColor = 'text-primary';
-          } else if (isNext) {
-            statusLabel = 'Next up';
-            statusIcon = Lock;
-            statusColor = 'text-warning';
-          }
-          const StatusIcon = statusIcon;
+          const status: Status = level === currentLevel ? 'active' : level < currentLevel ? 'passed' : level === currentLevel + 1 ? 'next' : 'locked';
+          const style = STATUS_STYLE[status];
+          const StatusIcon = style.icon;
 
           const daysOk = (progress?.daysElapsed ?? 0) >= MIN_DAYS;
           const deliveryOk = (progress?.deliveryRate ?? 0) >= MIN_DELIVERY_RATE;
           const replyOk = (progress?.replyRate ?? 0) >= MIN_REPLY_RATE;
 
+          // Whatever's already earned (active/passed) shows fully checked —
+          // those requirements were already met to get here. Only the "next
+          // up" card evaluates live against current progress; anything
+          // further out just shows the plain, un-evaluated requirement.
+          const earned = status === 'active' || status === 'passed';
+
           return (
-            <div
-              key={level}
-              className={`card !p-4 ${isActive ? 'border-primary/50 ring-1 ring-primary/30' : isPast ? 'border-primary/20' : ''}`}
-            >
-              <CardHeader icon={Gauge} title={`Level ${level}`} tone={isActive || isPast ? 'primary' : 'accent'} />
+            <div key={level} className={`card relative overflow-hidden !p-0 ${style.cardBorder}`}>
+              {status === 'active' && <div className="h-1 w-full bg-primary" />}
 
-              <div className="mt-3 grid grid-cols-1 gap-2.5">
-                <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">Daily limit</div>
-                  <div className="font-mono text-lg font-semibold tabular-nums text-text">
+              <div className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${style.iconBadge}`}>
+                      <Gauge size={15} />
+                    </span>
+                    <span className="text-sm font-semibold text-text">Level {level}</span>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${style.badge}`}>
+                    <StatusIcon size={11} />
+                    {style.label}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-baseline gap-1.5">
+                  <span className="font-mono text-3xl font-bold tabular-nums text-text">
                     {SMS_DLC_LEVEL_DAILY_LIMITS[level].toLocaleString()}
-                    <span className="ml-1 text-[12px] font-normal text-text-3">texts/day, whole account</span>
-                  </div>
+                  </span>
+                  <span className="text-[12px] text-text-3">texts/day</span>
                 </div>
+                <div className="text-[11px] text-text-3">whole account, pooled across every number</div>
 
-                <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">Status</div>
-                  <div className={`mt-0.5 flex items-center gap-1.5 text-[13px] font-medium ${statusColor}`}>
-                    <StatusIcon size={13} />
-                    {statusLabel}
-                  </div>
-                </div>
-
-                <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">Requirements</div>
+                <div className="mt-4 border-t border-border-2 pt-3">
                   {level === 1 ? (
-                    <div className="mt-0.5 text-[12px] text-text-2">
-                      Automatic as soon as the account is set up — no prior sending history required.
+                    <div className="flex items-center gap-1.5 text-[12px] font-medium text-success">
+                      <CheckCircle2 size={13} /> No prior history required
                     </div>
                   ) : (
-                    <ul className="mt-1 space-y-1 text-[12px] text-text-2">
-                      <li className="flex items-center justify-between gap-2">
-                        <span>Minimum {MIN_DAYS} days at Level {level - 1}</span>
-                        {isNext && progress && (
-                          <span className={daysOk ? 'font-medium text-success' : 'font-medium text-text'}>
-                            {Math.min(progress.daysElapsed, MIN_DAYS)}/{MIN_DAYS}
-                          </span>
-                        )}
-                      </li>
-                      <li className="flex items-center justify-between gap-2">
-                        <span>Consistent sending</span>
-                        {isNext && progress && <span className="font-medium text-text">{progress.daysActive}/10 days</span>}
-                      </li>
-                      <li className="flex items-center justify-between gap-2">
-                        <span>Delivery rate {MIN_DELIVERY_RATE}%+</span>
-                        {isNext && progress && (
-                          <span className={deliveryOk ? 'font-medium text-success' : 'font-medium text-text'}>
-                            {progress.deliveryRate}%
-                          </span>
-                        )}
-                      </li>
-                      <li className="flex items-center justify-between gap-2">
-                        <span>Reply rate {MIN_REPLY_RATE}%+</span>
-                        {isNext && progress && (
-                          <span className={replyOk ? 'font-medium text-success' : 'font-medium text-text'}>
-                            {progress.replyRate}%
-                          </span>
-                        )}
-                      </li>
-                      {isNext && (
-                        <li className="pt-1 text-[11px] text-text-3">
-                          {daysOk && deliveryOk && replyOk
-                            ? 'All met — promotes automatically on the next daily check.'
-                            : 'Checked once a day — promotes on its own once every requirement is met.'}
-                        </li>
-                      )}
-                    </ul>
+                    <div className="space-y-1.5">
+                      <RequirementRow
+                        label={`${MIN_DAYS}+ days at Level ${level - 1}`}
+                        state={earned ? 'met' : status === 'next' ? (daysOk ? 'met' : 'unmet') : 'plain'}
+                        value={status === 'next' && progress ? `${Math.min(progress.daysElapsed, MIN_DAYS)}/${MIN_DAYS}` : undefined}
+                      />
+                      <RequirementRow
+                        label="Consistent sending"
+                        state="neutral"
+                        value={status === 'next' && progress ? `${progress.daysActive}/10 days` : undefined}
+                      />
+                      <RequirementRow
+                        label={`Delivery rate ${MIN_DELIVERY_RATE}%+`}
+                        state={earned ? 'met' : status === 'next' ? (deliveryOk ? 'met' : 'unmet') : 'plain'}
+                        value={status === 'next' && progress ? `${progress.deliveryRate}%` : undefined}
+                      />
+                      <RequirementRow
+                        label={`Reply rate ${MIN_REPLY_RATE}%+`}
+                        state={earned ? 'met' : status === 'next' ? (replyOk ? 'met' : 'unmet') : 'plain'}
+                        value={status === 'next' && progress ? `${progress.replyRate}%` : undefined}
+                      />
+                    </div>
+                  )}
+                  {status === 'next' && (
+                    <div className={`mt-2.5 text-[11px] ${daysOk && deliveryOk && replyOk ? 'font-medium text-success' : 'text-text-3'}`}>
+                      {daysOk && deliveryOk && replyOk
+                        ? 'All met — promotes automatically on the next daily check.'
+                        : 'Checked once a day — promotes on its own once every requirement is met.'}
+                    </div>
                   )}
                 </div>
               </div>
@@ -145,6 +158,29 @@ export function SmsLevelsPage() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function RequirementRow({
+  label,
+  state,
+  value,
+}: {
+  label: string;
+  state: 'met' | 'unmet' | 'plain' | 'neutral';
+  value?: string;
+}) {
+  const Icon = state === 'met' ? Check : state === 'unmet' ? Circle : Minus;
+  const iconColor = state === 'met' ? 'text-success' : state === 'unmet' ? 'text-warning' : 'text-text-3';
+  const textColor = state === 'met' ? 'text-text' : state === 'plain' ? 'text-text-3' : 'text-text-2';
+  return (
+    <div className="flex items-center justify-between gap-2 text-[12px]">
+      <span className={`flex items-center gap-1.5 ${textColor}`}>
+        <Icon size={12} className={`shrink-0 ${iconColor}`} />
+        {label}
+      </span>
+      {value && <span className={`font-mono font-medium tabular-nums ${state === 'met' ? 'text-success' : 'text-text'}`}>{value}</span>}
     </div>
   );
 }
