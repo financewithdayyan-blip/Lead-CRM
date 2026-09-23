@@ -74,22 +74,11 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [defaultTemplate, setDefaultTemplate] = useState('');
   const [templatesByTag, setTemplatesByTag] = useState<Record<string, string>>({});
-  const [dailyLimits, setDailyLimits] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
   const defaultTextareaRef = useRef<HTMLTextAreaElement>(null);
   const tagTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-
-  // Pre-fills from the saved Settings default, once, the same guarded
-  // pattern used for the message templates below — never overwrites
-  // something the admin has already changed once the setting loads in.
-  const settingsSeededRef = useRef(false);
-  useEffect(() => {
-    if (settingsSeededRef.current || !sendSettings) return;
-    settingsSeededRef.current = true;
-    setDailyLimits(Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, String(sendSettings.dailyLimits[k] ?? 0)])));
-  }, [sendSettings]);
 
   // The window restricts genuine bulk sends only — selecting a single lead
   // here behaves like the thread view's manual reply and always goes through,
@@ -136,12 +125,10 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
       // than waiting out the whole batch inside this modal before anything
       // is visible at all.
       const perMessageDelayMs = sendSettings?.perMessageDelayMs ?? DEFAULT_SMS_SEND_SETTINGS.perMessageDelayMs;
-      const normalizedLimits = Object.fromEntries(
-        SMS_NUMBER_KEYS.map((k) => [k, Math.max(0, Number(dailyLimits[k]) || 0)]),
-      );
+      const dailyLimit = sendSettings?.dailyLimit ?? DEFAULT_SMS_SEND_SETTINGS.dailyLimit;
       const job = await createJob.mutateAsync({
         leads,
-        config: { templatesByTag, defaultTemplate, fromKey, dailyLimits: normalizedLimits, perMessageDelayMs },
+        config: { templatesByTag, defaultTemplate, fromKey, dailyLimit, perMessageDelayMs },
       });
 
       // That's the whole client-side job — bulk-sms-dispatcher (a pg_cron
@@ -196,8 +183,8 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
 
           {leads.length > 1 ? (
             <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[12px] text-text-2">
-              Rotates through every configured sending number one lead at a time (1, 2, 3, 4, 1, 2, …), skipping a
-              number once it hits its own daily limit below.
+              Rotates through every configured sending number one lead at a time (1, 2, 3, 4, 1, 2, …) until the
+              account's daily limit below is reached.
             </div>
           ) : (
             <div>
@@ -274,26 +261,16 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
             </div>
           )}
 
-          <div>
-            <span className="label">Daily limit per number</span>
-            <p className="mt-1 mb-2 text-[11px] text-text-3">
-              The most texts each number will send per day (resets at midnight Pakistan time) before this send
-              rotates to the next one. Pre-filled from Settings — change it there to update the default for every
-              future send.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {SMS_NUMBER_KEYS.map((key) => (
-                <label key={key} className="block w-[100px]">
-                  <span className="text-[11px] text-text-3">Number {key}</span>
-                  <input
-                    className="input"
-                    inputMode="numeric"
-                    value={dailyLimits[key] ?? ''}
-                    onChange={(e) => setDailyLimits((prev) => ({ ...prev, [key]: e.target.value }))}
-                  />
-                </label>
-              ))}
-            </div>
+          <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-[13px] text-text-2">
+            {sendSettings?.dailyLimit ? (
+              <>
+                <strong className="text-text">{sendSettings.dailyLimit.toLocaleString()}</strong> texts/day across
+                every number combined (resets at midnight Pakistan time) — manage the level this comes from on the
+                Bulk SMS page.
+              </>
+            ) : (
+              'No daily limit set — manage sending levels on the Bulk SMS page.'
+            )}
           </div>
 
           {error && (

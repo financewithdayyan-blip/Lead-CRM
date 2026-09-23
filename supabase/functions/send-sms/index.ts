@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
       defaultTemplate = '',
       fromKey = '1',
       perMessageDelayMs = 400,
-      dailyLimits = {},
+      dailyLimit = 0,
       jobId: jobIdIn,
       isManualReply = false,
       overrideNumber = false,
@@ -293,10 +293,10 @@ Deno.serve(async (req) => {
       defaultTemplate: string;
       fromKey: string;
       perMessageDelayMs?: number;
-      /** Per-number daily cap (resets at midnight PKT — see sends_in_window),
-       * keyed '1'-'4' matching NUMBERS above. Missing or <= 0 for a key means
-       * unlimited for that number. */
-      dailyLimits?: Record<string, number>;
+      /** Total SMS per day across every configured number combined (resets
+       * at midnight PKT — see sends_in_window). Missing or <= 0 means
+       * unlimited. */
+      dailyLimit?: number;
       jobId?: string;
       /** A human replying by hand from the lead's own SMS Thread, not bulk
        * cold outreach — folds useSendManualReply's own follow-up "pause AI
@@ -402,24 +402,25 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Each number's own remaining capacity for today (PKT) against its own
-    // configured limit, checked once up front. A number already at its cap
-    // is simply skipped by the rotation below rather than blocking the whole
-    // run — and a number with no limit set (or 0) never even gets checked,
-    // same as the old "dailyLimit <= 0" unlimited case, just per-number now.
-    const dailyRemaining = new Map<string, number>();
-    await withTimeout(Promise.all(
-      senders.map(async ([key, n]) => {
-        const limit = dailyLimits[key] ?? 0;
-        if (limit <= 0) return;
-        const { data: used } = await admin
-          .rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 })
-          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
-        dailyRemaining.set(key, Math.max(0, limit - Number(used ?? 0)));
-      }),
-    ), 'daily limit check');
-    if (senders.every(([key]) => (dailyLimits[key] ?? 0) > 0 && (dailyRemaining.get(key) ?? 0) <= 0)) {
-      return bail('Every configured number has already reached its own daily limit.', 422);
+    // One pooled cap for the whole account, not per-number — sum every
+    // configured number's sends today and compare against the single
+    // dailyLimit. A number no longer has its own individual cap; the level
+    // ladder (see SmsLevelCard) only ever sets this one account-wide value.
+    let totalRemaining = Infinity;
+    if (dailyLimit > 0) {
+      const usedPerSender = await withTimeout(
+        Promise.all(
+          senders.map(([, n]) =>
+            admin.rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 }).abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+          ),
+        ),
+        'daily limit check',
+      );
+      const totalUsed = usedPerSender.reduce((sum, r) => sum + Number(r.data ?? 0), 0);
+      totalRemaining = Math.max(0, dailyLimit - totalUsed);
+      if (totalRemaining <= 0) {
+        return bail('The daily SMS limit has already been reached.', 422);
+      }
     }
 
     const token = await withTimeout(zoomToken(), 'Zoom auth');
@@ -441,35 +442,31 @@ Deno.serve(async (req) => {
     // the perNumber summary in the response.
     const sentByNumber = new Map<string, number>(senders.map(([key]) => [key, 0]));
     // Reflects the plan itself, written during phase 1 — this is what the
-    // daily-cap and target-share checks below actually gate on, since with
-    // sending split into its own concurrent phase 2, "has this number
-    // already sent enough" has to be answered from what's been assigned to
-    // it so far in this batch, not from completed sends that haven't
-    // happened yet.
-    const assignedCount = new Map<string, number>(senders.map(([key]) => [key, 0]));
+    // daily-cap check below actually gates on, since with sending split
+    // into its own concurrent phase 2, "is there still capacity" has to be
+    // answered from what's been assigned so far in this batch, not from
+    // completed sends that haven't happened yet. Pooled across every
+    // number now, not per-key — the account has one shared budget.
+    let assignedTotal = 0;
 
     // True round robin — each non-pinned lead in sequence gets the NEXT
     // number in rotation (1,2,3,4,1,2,3,4,...), not "fill number 1's whole
-    // share, then move to number 2". A number that's hit its own daily cap
-    // is simply skipped when its turn in the rotation comes up, rather than
-    // picked — the rotation itself keeps moving past it for later leads too.
+    // share, then move to number 2". Once the pooled daily cap is reached,
+    // every sender simply stops having capacity at once.
     let rotation = 0;
 
-    function hasCapacity(key: string): boolean {
-      if ((dailyLimits[key] ?? 0) <= 0) return true;
-      return (assignedCount.get(key) ?? 0) < (dailyRemaining.get(key) ?? 0);
+    function hasCapacity(): boolean {
+      if (dailyLimit <= 0) return true;
+      return assignedTotal < totalRemaining;
     }
 
-    /** Next sender index in rotation with capacity, or -1 if every number is
-     * at its cap. Doesn't advance `rotation` itself — only actually assigning
-     * a lead does that, so a capacity-skip here doesn't throw off the
-     * sequence for leads after it. */
+    /** Next sender index in rotation with capacity, or -1 if the account's
+     * pooled daily cap has been reached. Doesn't advance `rotation` itself —
+     * only actually assigning a lead does that, so a capacity-skip here
+     * doesn't throw off the sequence for leads after it. */
     function nextSender(): number {
-      for (let i = 0; i < senders.length; i++) {
-        const idx = (rotation + i) % senders.length;
-        if (hasCapacity(senders[idx][0])) return idx;
-      }
-      return -1;
+      if (!hasCapacity()) return -1;
+      return rotation % senders.length;
     }
 
     // ── Phase 1: plan — decide every lead's outcome (skip) or sender
@@ -530,8 +527,8 @@ Deno.serve(async (req) => {
       const isPinned = leadIds.length > 1 && isActiveKey(pinned) && senders.some(([k]) => k === pinned);
 
       if (isPinned) {
-        if (!hasCapacity(pinned!)) {
-          markSkipped(lead.id, 'assigned number has reached its daily limit');
+        if (!hasCapacity()) {
+          markSkipped(lead.id, 'daily SMS limit reached');
           continue;
         }
         key = pinned!;
@@ -539,13 +536,13 @@ Deno.serve(async (req) => {
       } else {
         const idx = nextSender();
         if (idx === -1) {
-          markSkipped(lead.id, 'every configured number has reached its daily limit');
+          markSkipped(lead.id, 'daily SMS limit reached');
           continue;
         }
         [key, from] = senders[idx];
         rotation = (idx + 1) % senders.length;
       }
-      assignedCount.set(key, (assignedCount.get(key) ?? 0) + 1);
+      assignedTotal++;
 
       const message = render(template, {
         first_name: lead.first_name,

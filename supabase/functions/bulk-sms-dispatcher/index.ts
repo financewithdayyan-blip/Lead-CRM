@@ -251,12 +251,12 @@ Deno.serve(async (req) => {
       templatesByTag?: Record<string, string>;
       defaultTemplate?: string;
       perMessageDelayMs?: number;
-      dailyLimits?: Record<string, number>;
+      dailyLimit?: number;
     };
     const templatesByTag = config.templatesByTag ?? {};
     const defaultTemplate = config.defaultTemplate ?? '';
     const perMessageDelayMs = config.perMessageDelayMs ?? 400;
-    const dailyLimits = config.dailyLimits ?? {};
+    const dailyLimit = config.dailyLimit ?? 0;
 
     // Same lead-fetch chunking as send-sms, for the same reason (a huge
     // .in('id', leadIds) URL hangs rather than erroring) — moot at
@@ -286,20 +286,27 @@ Deno.serve(async (req) => {
       return json({ ok: true, jobId: job.id, failed: true, reason: 'no sending numbers configured' });
     }
 
-    const dailyRemaining = new Map<string, number>();
-    await withTimeout(Promise.all(
-      senders.map(async ([key, n]) => {
-        const limit = dailyLimits[key] ?? 0;
-        if (limit <= 0) return;
-        const { data: used } = await admin.rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 })
-          .abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS));
-        dailyRemaining.set(key, Math.max(0, limit - Number(used ?? 0)));
-      }),
-    ), 'daily limit check');
-    if (senders.every(([key]) => (dailyLimits[key] ?? 0) > 0 && (dailyRemaining.get(key) ?? 0) <= 0)) {
-      // Not a job failure — every number's cap resets at midnight PKT, and
-      // the next tick will simply find capacity again once it does.
-      return json({ ok: true, jobId: job.id, skipped: true, reason: 'every configured number at its daily limit' });
+    // One pooled cap for the whole account, not per-number — sum every
+    // configured number's sends today and compare against the single
+    // dailyLimit. A number no longer has its own individual cap; the level
+    // ladder (see SmsLevelCard) only ever sets this one account-wide value.
+    let totalRemaining = Infinity;
+    if (dailyLimit > 0) {
+      const usedPerSender = await withTimeout(
+        Promise.all(
+          senders.map(([, n]) =>
+            admin.rpc('sends_in_window', { p_sent_from: n.phone, p_hours: 24 }).abortSignal(AbortSignal.timeout(FETCH_TIMEOUT_MS)),
+          ),
+        ),
+        'daily limit check',
+      );
+      const totalUsed = usedPerSender.reduce((sum, r) => sum + Number(r.data ?? 0), 0);
+      totalRemaining = Math.max(0, dailyLimit - totalUsed);
+      if (totalRemaining <= 0) {
+        // Not a job failure — the cap resets at midnight PKT, and the next
+        // tick will simply find capacity again once it does.
+        return json({ ok: true, jobId: job.id, skipped: true, reason: 'daily SMS limit reached' });
+      }
     }
 
     const token = await withTimeout(zoomToken(), 'Zoom auth');
@@ -310,20 +317,19 @@ Deno.serve(async (req) => {
     const sent: string[] = [];
     const skipped: { leadId: string; reason: string }[] = [];
     const failed: { leadId: string; error: string }[] = [];
-    const assignedCount = new Map<string, number>(senders.map(([key]) => [key, 0]));
+    let assignedTotal = 0;
     let rotation = 0;
 
-    function hasCapacity(key: string): boolean {
-      if ((dailyLimits[key] ?? 0) <= 0) return true;
-      return (assignedCount.get(key) ?? 0) < (dailyRemaining.get(key) ?? 0);
+    // Capacity is pooled now, not per-key — every sender shares the same
+    // remaining budget, so this no longer depends on which one is asking.
+    function hasCapacity(): boolean {
+      if (dailyLimit <= 0) return true;
+      return assignedTotal < totalRemaining;
     }
 
     function nextSender(): number {
-      for (let i = 0; i < senders.length; i++) {
-        const idx = (rotation + i) % senders.length;
-        if (hasCapacity(senders[idx][0])) return idx;
-      }
-      return -1;
+      if (!hasCapacity()) return -1;
+      return rotation % senders.length;
     }
 
     type Planned = {
@@ -360,16 +366,16 @@ Deno.serve(async (req) => {
       const isPinned = isActiveKey(pinned) && senders.some(([k]) => k === pinned);
 
       if (isPinned) {
-        if (!hasCapacity(pinned!)) { markSkipped(lead.id, 'assigned number has reached its daily limit'); continue; }
+        if (!hasCapacity()) { markSkipped(lead.id, 'daily SMS limit reached'); continue; }
         key = pinned!;
         from = NUMBERS[pinned!];
       } else {
         const idx = nextSender();
-        if (idx === -1) { markSkipped(lead.id, 'every configured number has reached its daily limit'); continue; }
+        if (idx === -1) { markSkipped(lead.id, 'daily SMS limit reached'); continue; }
         [key, from] = senders[idx];
         rotation = (idx + 1) % senders.length;
       }
-      assignedCount.set(key, (assignedCount.get(key) ?? 0) + 1);
+      assignedTotal++;
 
       const message = render(template, {
         first_name: lead.first_name, last_name: lead.last_name,
