@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Pause, RotateCw, Send, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Gauge, Loader2, Pause, RotateCw, Send, Trash2, X } from 'lucide-react';
 import {
   useBulkSmsJob,
   useBulkSmsJobItems,
@@ -10,9 +10,11 @@ import {
   useResumeBulkSmsJob,
 } from '@/hooks/useSms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
 import { SmsNumberLevelsCard } from '@/components/sms/SmsNumberLevelsCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, formatDuration, formatTime } from '@/lib/utils';
+import { SMS_DLC_LEVELS, SMS_DLC_LEVEL_DAILY_LIMITS } from '@/lib/smsDlcLevels';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
 const STATUS_CONFIG: Record<BulkSmsItemStatus, { label: string; color: string; icon: typeof Clock }> = {
@@ -54,6 +56,7 @@ function BulkSmsHistory() {
   const { data: jobs = [], isLoading } = useBulkSmsJobs();
   const deleteJob = useDeleteBulkSmsJob();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [levelsGuideOpen, setLevelsGuideOpen] = useState(false);
 
   const totals = useMemo(() => {
     const totalSent = jobs.reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
@@ -77,9 +80,16 @@ function BulkSmsHistory() {
             Select leads in the Pipeline and start a send from there — every run shows up here.
           </p>
         </div>
-        <button className="btn" onClick={() => navigate('/kanban')}>
-          Go to Pipeline
-        </button>
+        <div className="flex gap-2">
+          {profile?.role === 'admin' && (
+            <button className="btn" onClick={() => setLevelsGuideOpen(true)}>
+              <Gauge size={14} /> Levels
+            </button>
+          )}
+          <button className="btn" onClick={() => navigate('/kanban')}>
+            Go to Pipeline
+          </button>
+        </div>
       </div>
 
       {profile?.role === 'admin' && (
@@ -87,6 +97,34 @@ function BulkSmsHistory() {
           <SmsNumberLevelsCard />
         </div>
       )}
+
+      <Modal open={levelsGuideOpen} onClose={() => setLevelsGuideOpen(false)} title="10DLC Sending Levels" width="sm">
+        <p className="text-[13px] text-text-2">
+          Each phone number carries its own carrier-assigned trust score, so every number climbs this ladder on its
+          own — Number 1 can sit at Level 5 while Number 3 is still on Level 1, depending on each one's real sending
+          history. That's why the card above shows six separate ladders instead of one shared level.
+        </p>
+        <table className="mt-4 w-full text-[13px]">
+          <thead>
+            <tr className="border-b border-border-2 text-left text-[11px] font-semibold uppercase tracking-wide text-text-3">
+              <th className="py-1.5">Level</th>
+              <th className="py-1.5">Daily limit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SMS_DLC_LEVELS.map((level) => (
+              <tr key={level} className="border-b border-border-2 last:border-0">
+                <td className="py-1.5 text-text">Level {level}</td>
+                <td className="py-1.5 font-mono text-text-2">{SMS_DLC_LEVEL_DAILY_LIMITS[level].toLocaleString()}/day</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-4 text-[12px] text-text-3">
+          A number moves up one level at a time — reaching the next one needs that day's target actually hit on 6 of
+          the last 7 days (1 miss allowed), same as the note on the Sending Levels card.
+        </p>
+      </Modal>
 
       {jobs.length > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
