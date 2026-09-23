@@ -10,6 +10,8 @@ import {
   useResumeBulkSmsJob,
 } from '@/hooks/useSms';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { SmsNumberLevelsCard } from '@/components/sms/SmsNumberLevelsCard';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, formatDuration, formatTime } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
@@ -48,6 +50,7 @@ export function BulkSmsPage() {
  * recent first, since there's no jobId to land on until one is picked. */
 function BulkSmsHistory() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { data: jobs = [], isLoading } = useBulkSmsJobs();
   const deleteJob = useDeleteBulkSmsJob();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -78,6 +81,12 @@ function BulkSmsHistory() {
           Go to Pipeline
         </button>
       </div>
+
+      {profile?.role === 'admin' && (
+        <div className="mb-4">
+          <SmsNumberLevelsCard />
+        </div>
+      )}
 
       {jobs.length > 0 && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

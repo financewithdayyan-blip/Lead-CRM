@@ -45,6 +45,7 @@ import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useMarketingSpend } from '@/hooks/useMarketingSpend';
+import { MarketingSpendEditor } from '@/components/dashboard/MarketingSpendEditor';
 import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVelocity } from '@/hooks/useSalesKpis';
 import { isMajorCity } from '@/lib/majorCities';
 
@@ -1550,6 +1551,10 @@ export function DashboardView({
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div className="mt-3">
+                <MarketingSpendEditor />
               </div>
 
               <div className="card chart-layer mt-3">

@@ -16,16 +16,9 @@ export interface SmsSendSettings {
   /** The highest level each number has ever earned — only ever goes up.
    * Dialing a number's active level back down (including to "No cap") never
    * erases this, so earned unlock progress toward the next level survives.
-   * See BulkSmsSettingsEditor's 6-of-7-days unlock rule. */
+   * See SmsNumberLevelsCard's 6-of-7-days unlock rule. */
   dailyLimitUnlockedLevels: Record<string, number>;
   perMessageDelayMs: number;
-  /** Caps how many leads a single bulk send will ever queue, regardless of
-   * how many were selected in the Pipeline — 0 means no cap. Separate from
-   * dailyLimits above: that's a per-number daily send cap enforced
-   * server-side; this trims the selection itself before a job is even
-   * created, so selecting an entire large column doesn't have to also mean
-   * remembering to trim it by hand first. */
-  dailyTotalLimit: number;
 }
 
 /** Matches the table's own column defaults — used before the row has ever
@@ -35,7 +28,6 @@ export const DEFAULT_SMS_SEND_SETTINGS: SmsSendSettings = {
   dailyLimitLevels: {},
   dailyLimitUnlockedLevels: {},
   perMessageDelayMs: 400,
-  dailyTotalLimit: 0,
 };
 
 /** The bulk-SMS sending defaults BulkSmsModal pre-fills from, so an admin
@@ -48,7 +40,7 @@ export function useSmsSendSettings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sms_send_settings')
-        .select('daily_limits, daily_limit_levels, daily_limit_unlocked_levels, per_message_delay_ms, daily_total_limit')
+        .select('daily_limits, daily_limit_levels, daily_limit_unlocked_levels, per_message_delay_ms')
         .eq('user_id', session!.user.id)
         .maybeSingle();
       if (error) throw error;
@@ -59,7 +51,6 @@ export function useSmsSendSettings() {
           (data?.daily_limit_unlocked_levels as Record<string, number>) ??
           DEFAULT_SMS_SEND_SETTINGS.dailyLimitUnlockedLevels,
         perMessageDelayMs: data?.per_message_delay_ms ?? DEFAULT_SMS_SEND_SETTINGS.perMessageDelayMs,
-        dailyTotalLimit: data?.daily_total_limit ?? DEFAULT_SMS_SEND_SETTINGS.dailyTotalLimit,
       } as SmsSendSettings;
     },
     enabled: !!session?.user.id,
@@ -78,7 +69,6 @@ export function useSaveSmsSendSettings() {
           daily_limit_levels: settings.dailyLimitLevels,
           daily_limit_unlocked_levels: settings.dailyLimitUnlockedLevels,
           per_message_delay_ms: settings.perMessageDelayMs,
-          daily_total_limit: settings.dailyTotalLimit,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id' },

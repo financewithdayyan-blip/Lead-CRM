@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 
 /** Per-phone daily send counts for the last 7 complete PKT calendar days
  * (today excluded — it's still in progress). A day with zero sends simply
- * has no entry, which BulkSmsSettingsEditor treats the same as "missed" when
+ * has no entry, which SmsNumberLevelsCard treats the same as "missed" when
  * checking a level's 6-of-7-days unlock rule — see sms_daily_send_counts. */
 export function useSmsLevelUnlockProgress(phones: (string | null | undefined)[]) {
   const validPhones = Array.from(new Set(phones.filter((p): p is string => !!p))).sort();

@@ -3,7 +3,7 @@
  * throughput gradually as the number's trust score/vetting matures — this
  * table mirrors that real-world progression instead of an admin typing a
  * guessed flat daily number. A number's level only climbs one step at a
- * time (see BulkSmsSettingsEditor's "unlock next level"), matching how
+ * time (see SmsNumberLevelsCard's "unlock next level"), matching how
  * carrier throughput actually increases over time rather than jumping.
  */
 export const SMS_DLC_LEVEL_DAILY_LIMITS: Record<number, number> = {

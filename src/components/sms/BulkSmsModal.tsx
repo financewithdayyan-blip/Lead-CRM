@@ -66,18 +66,10 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
   const { data: sendSettings } = useSmsSendSettings();
   const createJob = useCreateBulkSmsJob();
 
-  // Caps how many of the selected leads this send will ever actually queue,
-  // so selecting an entire large Kanban column (e.g. all 7,000 in Cold) is
-  // safe to do by hand — the first dailyTotalLimit leads (in selection
-  // order) go into the job, the rest are simply left selected but untouched.
-  // Only kicks in for a genuine bulk send, same as the window check below —
-  // a single manual send is never capped.
-  const dailyTotalLimit = sendSettings?.dailyTotalLimit ?? 0;
-  const isCapped = dailyTotalLimit > 0 && selectedLeads.length > 1 && selectedLeads.length > dailyTotalLimit;
-  const leads = useMemo(
-    () => (isCapped ? selectedLeads.slice(0, dailyTotalLimit) : selectedLeads),
-    [selectedLeads, isCapped, dailyTotalLimit],
-  );
+  // No longer capped by a separate aggregate daily total — each number's
+  // own level-based daily limit (see BulkSmsPage) already governs how much
+  // actually goes out.
+  const leads = selectedLeads;
 
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [defaultTemplate, setDefaultTemplate] = useState('');
@@ -191,17 +183,6 @@ export function BulkSmsModal({ leads: selectedLeads, onClose }: { leads: Lead[];
                   : 'Outside the cold-outreach window (7pm-6am Pakistan time).'}{' '}
                 Opens in {nextWindowOpensIn()}. The send will be rejected until then — this only applies to bulk
                 sends, not AI replies to inbound texts.
-              </div>
-            </div>
-          )}
-
-          {isCapped && (
-            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-dim px-3 py-2 text-[13px] text-warning">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-              <div>
-                {selectedLeads.length.toLocaleString()} leads were selected, capped to the first{' '}
-                {dailyTotalLimit.toLocaleString()} per your daily SMS limit (Settings → Bulk SMS). The rest stay
-                selected in the Pipeline — send again tomorrow, or raise the limit in Settings.
               </div>
             </div>
           )}

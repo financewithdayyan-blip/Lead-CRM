@@ -1,19 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { useSmsNumberLabels, useSaveSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
+import { useSmsSendSettings, useSaveSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { SMS_NUMBER_KEYS } from '@/lib/smsNumbers';
 
 /** Maps each Zoom sending slot (1-6) to its real phone number, purely for
  * display — e.g. so the SMS tab can show "Sending from 217-408-2781" instead
  * of "Sending from Number 3". Not read by any edge function; the real
- * numbers those send from live in Deno env vars server-side. */
+ * numbers those send from live in Deno env vars server-side.
+ *
+ * Also owns the per-message delay — a genuine one-time account default,
+ * unlike the per-number level ladder (see SmsNumberLevelsCard, on the Bulk
+ * SMS page — that's status you check right before sending, not settings).
+ * Saving here reads the rest of sms_send_settings from the query and passes
+ * it straight through unchanged, so it can never clobber the levels/limits
+ * that card owns. */
 export function SmsNumberLabelsEditor() {
   const { data: numbers } = useSmsNumberLabels();
-  const save = useSaveSmsNumberLabels();
+  const saveLabels = useSaveSmsNumberLabels();
+  const { data: sendSettings } = useSmsSendSettings();
+  const saveSendSettings = useSaveSmsSendSettings();
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
+  const [delaySeconds, setDelaySeconds] = useState('0.4');
   const [saved, setSaved] = useState(false);
   const seededRef = useRef(false);
+  const delaySeededRef = useRef(false);
 
   useEffect(() => {
     if (!numbers || seededRef.current) return;
@@ -22,16 +34,25 @@ export function SmsNumberLabelsEditor() {
     setLabels(Object.fromEntries(SMS_NUMBER_KEYS.map((k) => [k, numbers[k]?.label ?? ''])));
   }, [numbers]);
 
+  useEffect(() => {
+    if (!sendSettings || delaySeededRef.current) return;
+    delaySeededRef.current = true;
+    setDelaySeconds(String(sendSettings.perMessageDelayMs / 1000));
+  }, [sendSettings]);
+
+  const normalizedDelayMs = Math.max(0, Math.round((Number(delaySeconds) || 0) * 1000));
   const dirty =
-    !!numbers &&
-    SMS_NUMBER_KEYS.some(
-      (k) => (phones[k] ?? '') !== (numbers[k]?.phoneNumber ?? '') || (labels[k] ?? '') !== (numbers[k]?.label ?? ''),
-    );
+    (!!numbers &&
+      SMS_NUMBER_KEYS.some(
+        (k) => (phones[k] ?? '') !== (numbers[k]?.phoneNumber ?? '') || (labels[k] ?? '') !== (numbers[k]?.label ?? ''),
+      )) ||
+    (!!sendSettings && normalizedDelayMs !== sendSettings.perMessageDelayMs);
 
   async function handleSave() {
-    await save.mutateAsync(
-      SMS_NUMBER_KEYS.map((k) => ({ slot: k, phoneNumber: phones[k] ?? '', label: labels[k] ?? '' })),
-    );
+    await Promise.all([
+      saveLabels.mutateAsync(SMS_NUMBER_KEYS.map((k) => ({ slot: k, phoneNumber: phones[k] ?? '', label: labels[k] ?? '' }))),
+      sendSettings ? saveSendSettings.mutateAsync({ ...sendSettings, perMessageDelayMs: normalizedDelayMs }) : Promise.resolve(),
+    ]);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
@@ -40,10 +61,9 @@ export function SmsNumberLabelsEditor() {
     <div className="card">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-text">SMS sending numbers</div>
+          <div className="text-sm font-semibold text-text">Bulk SMS sending defaults</div>
           <p className="mt-1 text-[13px] text-text-2">
-            The real phone number behind each sending slot, so the SMS tab can show it instead of "Number 3". Label
-            is optional.
+            The real phone number behind each sending slot, plus the pause between messages during a bulk send.
           </p>
         </div>
         {saved && (
@@ -73,9 +93,31 @@ export function SmsNumberLabelsEditor() {
         ))}
       </div>
 
+      <div className="mt-4">
+        <label className="block max-w-[200px]">
+          <span className="label">Delay between messages</span>
+          <div className="flex items-center gap-1.5">
+            <input
+              className="input"
+              inputMode="decimal"
+              value={delaySeconds}
+              onChange={(e) => setDelaySeconds(e.target.value)}
+            />
+            <span className="text-[12px] text-text-3">sec</span>
+          </div>
+          <p className="mt-1 text-[11px] text-text-3">
+            Pause between each text sent from the same number, so a bulk run doesn't fire messages back to back.
+          </p>
+        </label>
+      </div>
+
       <div className="mt-3 flex justify-end">
-        <button className="btn btn-primary !px-3 !py-1 text-[12px]" onClick={handleSave} disabled={!dirty || save.isPending}>
-          {save.isPending ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+        <button
+          className="btn btn-primary !px-3 !py-1 text-[12px]"
+          onClick={handleSave}
+          disabled={!dirty || saveLabels.isPending || saveSendSettings.isPending}
+        >
+          {saveLabels.isPending || saveSendSettings.isPending ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
         </button>
       </div>
     </div>
