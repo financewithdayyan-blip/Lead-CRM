@@ -1,6 +1,20 @@
 // Push notification service worker — registered at scope '/crm/' only
 // (see usePushNotifications.ts), not the origin default, since this origin
 // also serves the public marketing site from the same deployment.
+//
+// No fetch handler and nothing cached here, so there's no reason for a new
+// version to wait behind an old one still controlling open tabs — skip
+// straight to activating and taking control. Without this, a tab open from
+// before a sw.js update sits on the old worker until closed/reopened, and
+// pushManager.subscribe() fails with "no active Service Worker" in the
+// meantime since the newly-registered worker never leaves "waiting".
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 self.addEventListener('push', (event) => {
   let data = {};

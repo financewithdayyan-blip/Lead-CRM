@@ -17,9 +17,34 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/** register() resolving only means registration was accepted — the worker
+ * still has to go through install → activate, and pushManager.subscribe()
+ * throws ("no active Service Worker") if called before that finishes. Most
+ * of the time this is instant, but on a first-ever subscribe (or right
+ * after a sw.js update) the race is real, so wait for 'activated' before
+ * handing the registration back. Bounded so a stuck worker fails fast
+ * through subscribe()'s own error instead of hanging the mutation forever. */
+function waitForActive(registration: ServiceWorkerRegistration): Promise<void> {
+  if (registration.active) return Promise.resolve();
+  const worker = registration.installing || registration.waiting;
+  if (!worker) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, 10_000);
+    worker.addEventListener('statechange', function onStateChange() {
+      if (worker.state === 'activated' || worker.state === 'redundant') {
+        clearTimeout(timeout);
+        worker.removeEventListener('statechange', onStateChange);
+        resolve();
+      }
+    });
+  });
+}
+
 async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null;
-  return navigator.serviceWorker.register('/sw.js', { scope: SW_SCOPE });
+  const registration = await navigator.serviceWorker.register('/sw.js', { scope: SW_SCOPE });
+  await waitForActive(registration);
+  return registration;
 }
 
 /** Whether *this specific device/browser* already has an active push
