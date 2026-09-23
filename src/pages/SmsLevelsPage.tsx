@@ -1,15 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Circle, Gauge, Lock } from 'lucide-react';
 import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
-import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
-import { useSmsLevelUnlockProgress } from '@/hooks/useSmsLevelUnlockProgress';
+import { useSmsLevelProgress } from '@/hooks/useSmsLevelProgress';
 import { SmsLevelCard } from '@/components/sms/SmsLevelCard';
 import { CardHeader } from '@/components/ui/CardHeader';
-import { SMS_NUMBER_KEYS } from '@/lib/smsNumbers';
 import { SMS_DLC_LEVELS, SMS_DLC_LEVEL_DAILY_LIMITS } from '@/lib/smsDlcLevels';
 
-const UNLOCK_WINDOW_DAYS = 7;
-const UNLOCK_MIN_DAYS_MET = 6;
+const MIN_DAYS = 10;
+const MIN_DELIVERY_RATE = 60;
+const MIN_REPLY_RATE = 15;
 
 /** Full detail page for the account's pooled 10DLC sending level — one card
  * per level instead of the old compact reference table, since "everything
@@ -18,9 +17,7 @@ const UNLOCK_MIN_DAYS_MET = 6;
 export function SmsLevelsPage() {
   const navigate = useNavigate();
   const { data: settings } = useSmsSendSettings();
-  const { data: labels } = useSmsNumberLabels();
-  const phones = SMS_NUMBER_KEYS.map((k) => labels?.[k]?.phoneNumber ?? null);
-  const { data: dailyCounts = [] } = useSmsLevelUnlockProgress(phones);
+  const { data: progress } = useSmsLevelProgress(settings?.dailyLimitLevelStartedAt ?? null);
 
   const activeLevel = settings?.dailyLimitLevel ?? 0;
   const unlockedLevel = settings?.dailyLimitUnlockedLevel ?? 0;
@@ -37,7 +34,7 @@ export function SmsLevelsPage() {
           </h1>
           <p className="text-sm text-text-3">
             One pooled 10DLC level for the whole account — the daily limit is total texts per day across every
-            configured number combined, not per number.
+            configured number combined, not per number. Levels 1-9 promote automatically; there's nothing to click.
           </p>
         </div>
       </div>
@@ -51,9 +48,7 @@ export function SmsLevelsPage() {
           const isUnlocked = level <= unlockedLevel;
           const isActive = level === activeLevel;
           const isNext = level === unlockedLevel + 1;
-
-          const prevTarget = level > 1 ? SMS_DLC_LEVEL_DAILY_LIMITS[level - 1] : null;
-          const metDays = isNext && prevTarget ? dailyCounts.filter((c) => c >= prevTarget).length : 0;
+          const isManualStart = level === 1 && unlockedLevel === 0;
 
           let statusLabel = 'Locked';
           let statusIcon = Lock;
@@ -66,12 +61,20 @@ export function SmsLevelsPage() {
             statusLabel = 'Unlocked';
             statusIcon = Circle;
             statusColor = 'text-primary';
+          } else if (isManualStart) {
+            statusLabel = 'Ready to start';
+            statusIcon = Circle;
+            statusColor = 'text-success';
           } else if (isNext) {
             statusLabel = 'Next up';
             statusIcon = Lock;
             statusColor = 'text-warning';
           }
           const StatusIcon = statusIcon;
+
+          const daysOk = (progress?.daysElapsed ?? 0) >= MIN_DAYS;
+          const deliveryOk = (progress?.deliveryRate ?? 0) >= MIN_DELIVERY_RATE;
+          const replyOk = (progress?.replyRate ?? 0) >= MIN_REPLY_RATE;
 
           return (
             <div
@@ -102,22 +105,46 @@ export function SmsLevelsPage() {
                 </div>
 
                 <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">To unlock</div>
-                  <div className="mt-0.5 text-[12px] text-text-2">
-                    {level === 1 ? (
-                      'Always available — no prior sending history required.'
-                    ) : (
-                      <>
-                        Hit {prevTarget!.toLocaleString()}/day (Level {level - 1}'s target) on {UNLOCK_MIN_DAYS_MET} of
-                        the last {UNLOCK_WINDOW_DAYS} days, across every number combined.
-                        {isNext && (
-                          <div className="mt-1 font-medium text-text">
-                            Progress: {metDays}/{UNLOCK_WINDOW_DAYS} days met
-                          </div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">Requirements</div>
+                  {level === 1 ? (
+                    <div className="mt-0.5 text-[12px] text-text-2">
+                      Always available — no prior sending history required.
+                    </div>
+                  ) : (
+                    <ul className="mt-1 space-y-1 text-[12px] text-text-2">
+                      <li className="flex items-center justify-between gap-2">
+                        <span>Minimum {MIN_DAYS} days at Level {level - 1}</span>
+                        {isNext && progress && (
+                          <span className={daysOk ? 'font-medium text-success' : 'font-medium text-text'}>
+                            {Math.min(progress.daysElapsed, MIN_DAYS)}/{MIN_DAYS}
+                          </span>
                         )}
-                      </>
-                    )}
-                  </div>
+                      </li>
+                      <li className="flex items-center justify-between gap-2">
+                        <span>Delivery rate {MIN_DELIVERY_RATE}%+</span>
+                        {isNext && progress && (
+                          <span className={deliveryOk ? 'font-medium text-success' : 'font-medium text-text'}>
+                            {progress.deliveryRate}%
+                          </span>
+                        )}
+                      </li>
+                      <li className="flex items-center justify-between gap-2">
+                        <span>Reply rate {MIN_REPLY_RATE}%+</span>
+                        {isNext && progress && (
+                          <span className={replyOk ? 'font-medium text-success' : 'font-medium text-text'}>
+                            {progress.replyRate}%
+                          </span>
+                        )}
+                      </li>
+                      {isNext && (
+                        <li className="pt-1 text-[11px] text-text-3">
+                          {daysOk && deliveryOk && replyOk
+                            ? 'All met — promotes automatically on the next daily check.'
+                            : 'Checked once a day — promotes on its own once every requirement is met.'}
+                        </li>
+                      )}
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>
