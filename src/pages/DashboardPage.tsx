@@ -44,8 +44,6 @@ import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { useMarketingSpend } from '@/hooks/useMarketingSpend';
-import { MarketingSpendEditor } from '@/components/dashboard/MarketingSpendEditor';
 import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVelocity } from '@/hooks/useSalesKpis';
 import { isMajorCity } from '@/lib/majorCities';
 
@@ -263,7 +261,6 @@ export function DashboardView({
   const { data: smsDeliveryLog = [] } = useSmsDeliveryLog(showSmsStats);
   const { data: buyerPhones = new Set<string>() } = useCashBuyerPhones(showSmsStats);
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: marketingSpend = [] } = useMarketingSpend();
   const { data: orgLeads = [] } = useOrgLeads(showSmsStats);
   const { data: orgActivities = [] } = useOrgActivities(showSmsStats);
 
@@ -366,17 +363,6 @@ export function DashboardView({
       .slice(-12)
       .map(([iso, count]) => ({ label: new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count }));
   }, [leads]);
-
-  // ── Marketing: spend logged + how much of the lead base is source-tagged —
-  // deliberately NOT a $/lead or $/deal ratio. $444 logged (mostly software
-  // costs, not ad spend) against thousands of leads would produce a
-  // technically-real but practically meaningless number. Shown as plain
-  // totals until there's enough real, representative spend data to divide.
-  const marketingSnapshot = useMemo(() => {
-    const totalSpend = marketingSpend.reduce((sum, s) => sum + Number(s.amount), 0);
-    const tagged = leads.filter((l) => l.source && l.source.trim()).length;
-    return { totalSpend, tagged, total: leads.length, taggedPct: leads.length > 0 ? (tagged / leads.length) * 100 : 0 };
-  }, [marketingSpend, leads]);
 
   // ── Marketing: which states/cities/zips are actually converting — scored
   // by real deal outcomes, not raw reply chatter, so spend/outreach can be
@@ -1488,73 +1474,37 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Marketing</SectionLabel>
-              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
-                <div className="card lg:col-span-2">
-                  <CardHeader icon={Megaphone} title="Lead Volume" sub="new leads per week, last 12 weeks" />
-                  {(() => {
-                    const max = Math.max(...leadVolumeTrend.map((w) => w.count), 1);
-                    return (
-                      // `items-stretch` (the default, made explicit here) so
-                      // each week column actually inherits this row's 120px
-                      // height — with `items-end` instead, a column had no
-                      // definite height of its own, so the child below with
-                      // height:{pct}% had nothing real to be a percentage
-                      // of and rendered at 0px regardless of lead count.
-                      <div className="mt-4 flex items-stretch gap-1.5" style={{ height: 120 }}>
-                        {leadVolumeTrend.map((w) => (
-                          <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
-                            {/* A faint full-height track behind the bar so a genuinely
-                                small week (real leads, just few of them) still reads as
-                                "a little" against the axis, not indistinguishable from
-                                zero next to a much bigger historical import spike. */}
-                            <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
-                              <div
-                                className="w-full rounded-t-sm bg-primary"
-                                style={{ height: `${Math.max((w.count / max) * 100, 4)}%` }}
-                                title={`${w.label}: ${w.count} lead${w.count === 1 ? '' : 's'}`}
-                              />
-                            </div>
-                            <div className="text-[9px] text-text-3">{w.label}</div>
+              <div className="card">
+                <CardHeader icon={Megaphone} title="Lead Volume" sub="new leads per week, last 12 weeks" />
+                {(() => {
+                  const max = Math.max(...leadVolumeTrend.map((w) => w.count), 1);
+                  return (
+                    // `items-stretch` (the default, made explicit here) so
+                    // each week column actually inherits this row's 120px
+                    // height — with `items-end` instead, a column had no
+                    // definite height of its own, so the child below with
+                    // height:{pct}% had nothing real to be a percentage
+                    // of and rendered at 0px regardless of lead count.
+                    <div className="mt-4 flex items-stretch gap-1.5" style={{ height: 120 }}>
+                      {leadVolumeTrend.map((w) => (
+                        <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
+                          {/* A faint full-height track behind the bar so a genuinely
+                              small week (real leads, just few of them) still reads as
+                              "a little" against the axis, not indistinguishable from
+                              zero next to a much bigger historical import spike. */}
+                          <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
+                            <div
+                              className="w-full rounded-t-sm bg-primary"
+                              style={{ height: `${Math.max((w.count / max) * 100, 4)}%` }}
+                              title={`${w.label}: ${w.count} lead${w.count === 1 ? '' : 's'}`}
+                            />
                           </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="card">
-                  <CardHeader icon={DollarSign} title="Spend & Source Coverage" tone="accent" />
-                  <div className="mt-3 space-y-3">
-                    <div>
-                      <div className="text-[11px] text-text-3">Marketing spend logged</div>
-                      <div className="font-mono text-xl font-semibold tabular-nums text-text">
-                        ${marketingSnapshot.totalSpend.toLocaleString()}
-                      </div>
+                          <div className="text-[9px] text-text-3">{w.label}</div>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <div className="mb-1 flex items-center justify-between text-[11px] text-text-3">
-                        <span>Leads with a source tagged</span>
-                        <span className="font-mono tabular-nums">
-                          {marketingSnapshot.tagged.toLocaleString()} / {marketingSnapshot.total.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-surface-3">
-                        <div
-                          className="h-full rounded-full bg-accent"
-                          style={{ width: `${marketingSnapshot.taggedPct > 0 ? Math.max(marketingSnapshot.taggedPct, 2) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-text-3">
-                      Cost Per Lead and CAC need more real spend logged and more leads tagged with a source before
-                      they'd mean anything — shown as plain totals for now, not a $/lead ratio.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <MarketingSpendEditor />
+                  );
+                })()}
               </div>
 
               <div className="card chart-layer mt-3">
