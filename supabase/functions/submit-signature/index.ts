@@ -773,6 +773,26 @@ Deno.serve(async (req) => {
       .eq('id', instance.id);
     if (finalizeErr) throw finalizeErr;
 
+    // Push to every admin's device the moment the last signature lands —
+    // same fan-out shape as decline-signature's own notification. Wrapped so
+    // a notification-insert hiccup never costs the signer their completed
+    // contract (everything above this point already succeeded).
+    try {
+      const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+      if (admins?.length) {
+        await admin.from('lc_notifications').insert(
+          admins.map((a) => ({
+            user_id: a.id,
+            type: 'contract_signed',
+            title: 'Contract fully signed',
+            body: `${instance.name ?? 'A document'}${instance.property_address ? ` — ${instance.property_address}` : ''} is complete.`,
+          })),
+        );
+      }
+    } catch (notifyErr) {
+      console.error('contract_signed notification failed:', notifyErr);
+    }
+
     // Notify everyone it's done, each with their own link back to their
     // signing page — that page shows the download button once it sees the
     // contract's now-'signed' status (see SignContractPage's fullyDone).
