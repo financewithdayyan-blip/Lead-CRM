@@ -2,16 +2,16 @@ import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { useSmsLevelProgress } from '@/hooks/useSmsLevelProgress';
 import { SMS_DLC_LEVEL_DAILY_LIMITS, SMS_DLC_MAX_LEVEL } from '@/lib/smsDlcLevels';
 
-const MIN_DAYS = 10;
+const MIN_DAYS = 7;
 const MIN_DELIVERY_RATE = 60;
 const MIN_REPLY_RATE = 15;
 
 /** One pooled 10DLC level for the whole account — total SMS/day across
  * every configured number combined. Fully automatic, read-only display:
- * auto_promote_sms_levels (0154/0156) bootstraps a fresh account straight
- * to Level 1 and promotes it from there on its own once it's held a level
- * for 10+ days with a 60%+ delivery rate and 15%+ reply rate — there is
- * nothing here to click or save. */
+ * auto_promote_sms_levels (0154/0156/0158) bootstraps a fresh account
+ * straight to Level 1 and promotes it from there on its own once it's held
+ * a level for 7+ days with a 60%+ delivery rate and 15%+ reply rate —
+ * there is nothing here to click or save. */
 export function SmsLevelCard() {
   const { data: settings } = useSmsSendSettings();
   const { data: progress } = useSmsLevelProgress(settings?.dailyLimitLevelStartedAt ?? null);
@@ -34,7 +34,7 @@ export function SmsLevelCard() {
       ) : (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <MiniStat label="Current level" value={`Level ${currentLevel}`} sub={`${SMS_DLC_LEVEL_DAILY_LIMITS[currentLevel]}/day`} />
-          <MiniStat label="Consistent days" value={progress ? `${progress.daysActive}/10` : '—'} sub="days with a real send" />
+          <MiniStat label="Consistent days" value={progress ? `${progress.daysActive}/${MIN_DAYS}` : '—'} sub="days with a real send" />
           <MiniStat
             label="Reply rate"
             value={progress ? `${progress.replyRate}%` : '—'}
