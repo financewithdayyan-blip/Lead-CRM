@@ -121,6 +121,10 @@ export function SmsLevelsPage() {
                         )}
                       </li>
                       <li className="flex items-center justify-between gap-2">
+                        <span>Consistent sending</span>
+                        {isNext && progress && <span className="font-medium text-text">{progress.daysActive}/10 days</span>}
+                      </li>
+                      <li className="flex items-center justify-between gap-2">
                         <span>Delivery rate {MIN_DELIVERY_RATE}%+</span>
                         {isNext && progress && (
                           <span className={deliveryOk ? 'font-medium text-success' : 'font-medium text-text'}>

@@ -145,37 +145,64 @@ export function SmsLevelCard() {
         })}
       </div>
 
-      <div className="mt-2 text-[12px] text-text-3">
-        {unlockedLevel === 0 ? (
-          <span>No level unlocked yet — click Level 1 to start the ladder at {SMS_DLC_LEVEL_DAILY_LIMITS[1]}/day.</span>
-        ) : (
-          <>
-            <span className="font-medium text-text-2">
-              {activeLevel === 0 ? 'No daily cap right now' : `Active: Level ${activeLevel} — ${SMS_DLC_LEVEL_DAILY_LIMITS[activeLevel]}/day total`}
-            </span>
-            {unlockedLevel < SMS_DLC_MAX_LEVEL && progress && (
-              <>
-                {' · '}
-                {readyToPromote ? (
-                  <span className="text-success">Ready — Level {nextLevel} auto-promotes on the next daily check.</span>
-                ) : (
-                  <span>
-                    Toward Level {nextLevel}: {Math.min(progress.daysElapsed, MIN_DAYS)}/{MIN_DAYS} days,{' '}
-                    {progress.deliveryRate}% delivery (need {MIN_DELIVERY_RATE}%+), {progress.replyRate}% reply (need{' '}
-                    {MIN_REPLY_RATE}%+)
-                  </span>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
+      {unlockedLevel === 0 ? (
+        <p className="mt-2 text-[12px] text-text-3">
+          No level unlocked yet — click Level 1 to start the ladder at {SMS_DLC_LEVEL_DAILY_LIMITS[1]}/day.
+        </p>
+      ) : (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <MiniStat
+            label="Current level"
+            value={activeLevel === 0 ? 'No cap' : `Level ${activeLevel}`}
+            sub={activeLevel === 0 ? 'no daily cap' : `${SMS_DLC_LEVEL_DAILY_LIMITS[activeLevel]}/day`}
+          />
+          <MiniStat
+            label="Consistent days"
+            value={progress ? `${progress.daysActive}/10` : '—'}
+            sub="days with a real send"
+          />
+          <MiniStat
+            label="Reply rate"
+            value={progress ? `${progress.replyRate}%` : '—'}
+            sub={`need ${MIN_REPLY_RATE}%+`}
+            good={progress ? progress.replyRate >= MIN_REPLY_RATE : undefined}
+          />
+          <MiniStat
+            label="Delivery rate"
+            value={progress ? `${progress.deliveryRate}%` : '—'}
+            sub={`need ${MIN_DELIVERY_RATE}%+`}
+            good={progress ? progress.deliveryRate >= MIN_DELIVERY_RATE : undefined}
+          />
+        </div>
+      )}
+
+      {unlockedLevel > 0 && unlockedLevel < SMS_DLC_MAX_LEVEL && (
+        <p className="mt-2 text-[11px] text-text-3">
+          {readyToPromote ? (
+            <span className="font-medium text-success">Ready — Level {nextLevel} auto-promotes on the next daily check.</span>
+          ) : (
+            <>Toward Level {nextLevel}: needs {MIN_DAYS}+ days at this level, {MIN_DELIVERY_RATE}%+ delivery, and {MIN_REPLY_RATE}%+ reply, all at once.</>
+          )}
+        </p>
+      )}
 
       <div className="mt-3 flex justify-end">
         <button className="btn btn-primary !px-3 !py-1 text-[12px]" onClick={handleSave} disabled={!dirty || save.isPending}>
           {save.isPending ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
         </button>
       </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, sub, good }: { label: string; value: string; sub: string; good?: boolean }) {
+  return (
+    <div className="rounded-md border border-border-2 bg-surface-3 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+      <div className={`font-mono text-base font-semibold tabular-nums ${good === true ? 'text-success' : 'text-text'}`}>
+        {value}
+      </div>
+      <div className="text-[10px] text-text-3">{sub}</div>
     </div>
   );
 }
