@@ -68,10 +68,17 @@ function ZoomedDocumentView({
   partyRoles?: PartyRoleDef[];
   onClose: () => void;
 }) {
-  const zoomWidth = Math.min(Math.max(window.innerWidth * 2.3, 900), 1100);
+  // Scales to the actual device instead of a flat 900–1100px regardless of
+  // screen size — on a ~380px phone that old fixed width meant panning
+  // nearly two and a half screens' worth sideways just to find content,
+  // which read as broken rather than "easier to read." 1.8x the viewport is
+  // genuinely bigger than the shrunk-to-fit main view while staying a
+  // manageable pan distance; the 1400px cap keeps it from ballooning on a
+  // wide desktop window where this feature barely matters anyway.
+  const zoomWidth = Math.min(Math.max(window.innerWidth * 1.8, 600), 1400);
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-black/90" onClick={onClose}>
-      <div className="sticky top-0 z-10 flex justify-end bg-gradient-to-b from-black/70 to-transparent p-3">
+    <div className="fixed inset-0 z-50 overflow-auto bg-slate-950" onClick={onClose}>
+      <div className="sticky top-0 z-10 flex justify-end bg-slate-950/95 p-3 backdrop-blur">
         <button
           className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
           onClick={onClose}
@@ -80,8 +87,14 @@ function ZoomedDocumentView({
           <X size={18} />
         </button>
       </div>
-      <div className="flex justify-center px-3 pb-10" onClick={(e) => e.stopPropagation()}>
-        <div>
+      {/* Left-aligned, not centered — a page wider than the viewport inside
+          a centered flex container starts scrolled to show mostly blank
+          overflow padding rather than the actual content, which is exactly
+          what made this look like it opened to an empty page. Starting at
+          the left edge means the top-left of the document is what's
+          actually on screen the moment this opens. */}
+      <div className="flex justify-start px-3 pb-10" onClick={(e) => e.stopPropagation()}>
+        <div className="rounded-md bg-white shadow-2xl">
           {pageNums.map((n) => (
             <ContractDocumentPage
               key={n}
