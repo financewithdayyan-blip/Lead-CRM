@@ -23,26 +23,30 @@ const BLUEDOCS_SMS_SLOT = '2';
 
 // The Cash Deal PSA's own field IDs, captured off its live `doc_templates.fields`
 // mapping — see supabase/functions/create-contract-instance for how these land
-// on the final PDF. "Buyer Full Name" appears twice on the document (the intro
-// sentence and the signature block), so one input backs both. If this template
-// is ever re-mapped in the field editor, these IDs need updating to match.
+// on the final PDF. Re-mapped 2026-10-06 for the "Millionaire PSA" template
+// (Seller/Buyer Full Name both appear twice — the intro sentence on page 1 and
+// the printed-name line in the signature block on page 6 — so one input backs
+// both). If this template is ever re-mapped in the field editor, these IDs
+// need updating to match.
 export const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
 const FIELD_MAP = {
-  sellerName: ['b2e3512b-b59f-4bd4-a6b0-bf4b5e3d4e62', '3b83cbd2-1ab1-4893-9be0-1df6427aed6c'],
-  buyerName: ['3c839999-501a-4f5b-b96e-6d39b42ba852', 'b7ad40ae-f2bf-4389-b591-8c604c69349a'],
-  address: ['a6f081eb-564c-4291-974b-124f599add42'],
-  purchasePrice: ['1cb52efd-968b-4014-a222-5a0f0c8c4b81'],
-  emdAmount: ['019eec79-9553-4112-a254-ed07680fe9c6'],
-  titleCompany: ['ac919451-c9ba-44fe-894d-90b4f6000458'],
-  inspectionPeriod: ['260c07b8-994a-471b-a872-e3f87d274c9a'],
-  closingDate: ['2395b34f-cd9c-4d69-89e3-4dcc19fdbec0'],
-  governingState: ['f3760950-c478-4586-8a7e-84a3b7b3605c'],
-  // Section 12 of the PSA. The template used to print a static "N/A" here —
-  // the base PDF was redacted and this field added over that blank space so
-  // it's a real input instead: left blank by default, filled in with an
-  // actual clause when there is one, or typed as "N/A" by hand when there
-  // isn't (never auto-filled — that's a deliberate call, not an oversight).
-  specialProvisions: ['e049a020-d544-485e-94fc-815db5fd7215'],
+  sellerName: ['131dbd71-4898-4b86-ae49-c9bc51d6fe49', '8986af33-e41c-4188-b979-31f75ae13900'],
+  buyerName: ['a1b3d33f-756f-4754-bd51-cad21d313ef7', '4c27c427-6024-40df-8204-87cf87ebe32f'],
+  address: ['07774d27-ebae-4976-bdd2-f8ee70f9ba35'],
+  purchasePrice: ['b95b1ea0-a8f0-4fda-a0db-91b232299515'],
+  emdAmount: ['c1654e71-3c41-4216-8c91-8130873deec7'],
+  titleCompany: ['e9566337-b341-4d88-a02c-e4bcd0ea16c0'],
+  // "Option Period" on this template (was "Inspection Period" on the old one)
+  // — same concept, Buyer's business days to inspect before Earnest Money
+  // goes hard.
+  inspectionPeriod: ['ddff239d-497e-4f6e-be3b-8d3cc879cff3'],
+  closingDate: ['ebfb718b-a8d6-4017-b426-732dac8fec12'],
+  governingState: ['30716627-1ebe-4a1b-9f1e-7875bf6b1226'],
+  // Section 13 of the PSA (the "Clause" paragraph field) — left blank by
+  // default, filled in with an actual clause when there is one, or typed as
+  // "N/A" by hand when there isn't (never auto-filled — that's a deliberate
+  // call, not an oversight).
+  specialProvisions: ['9080db6f-8758-4b5b-9ed3-7edf56a2b38e'],
 } as const;
 // The one field id needed outside this form: ContractInstanceRow's address
 // fallback matches by field ID rather than label, since a contract created
@@ -54,12 +58,41 @@ export const CASH_DEAL_ADDRESS_FIELD_ID = FIELD_MAP.address[0];
 type FieldKey = keyof typeof FIELD_MAP;
 const CURRENCY_KEYS: FieldKey[] = ['purchasePrice', 'emdAmount'];
 
-// A co-owner's signature — added to the blank space below the seller's
-// existing signature block on page 3, since this document only ever printed
-// one "Seller" signature line. There's no second printed name/date line to
-// go with it, so a co-seller only ever needs to provide their signature —
-// their name still goes into the single combined Seller Full Name field
-// above, typed by whoever fills this form (e.g. "Jane Doe and John Doe").
+// Section 11 ("Tenant Occupancy & Possession") and Section 12 ("Marketing &
+// Compensation") are both real checkboxes on this template (tickmark-type
+// fields) — mutually exclusive within each section, so these render as radio
+// groups below rather than going through FIELD_MAP/FIELD_ROWS like a normal
+// typed value. Only the one selected box's field gets written "true"; every
+// other box in the group is simply left out of fieldValues, which the
+// signing/stamping pipeline renders as unchecked.
+const TENANT_OCCUPANCY_OPTIONS = [
+  { key: 'vacant', label: 'Vacant at Closing', fieldId: 'e0a41df0-15e9-49ba-8e69-30e33884c5c5' },
+  { key: 'buyerAssumesLease', label: 'Buyer Assumes Lease', fieldId: 'bd262f10-1c8b-4735-be3b-27b6f6cb5052' },
+  { key: 'postClosing', label: 'Post-Closing Occupancy', fieldId: '3e3d34c4-b0ef-462e-b947-a185165c5d38' },
+] as const;
+type TenantOccupancyKey = (typeof TENANT_OCCUPANCY_OPTIONS)[number]['key'];
+
+const MARKETING_OPTIONS = [
+  { key: 'notApplicable', label: 'Not Applicable', fieldId: 'e51d5bd0-bd69-4c79-80bf-a518eb2f8a50' },
+  { key: 'listingAgent', label: "Seller's Listing Agent", fieldId: '23eef1ee-11b4-4a07-9cfb-66036593407d' },
+] as const;
+type MarketingKey = (typeof MARKETING_OPTIONS)[number]['key'];
+
+// Only shown/sent when "Post-Closing Occupancy" is selected above — the two
+// blanks on that line ("...remain up to ___ days under a written leaseback;
+// $___ withheld from proceeds..."). The days field already exists on the
+// template. The withheld-amount field does not yet — it still needs to be
+// placed in the mapper (page 4, right after the leaseback-days box) before
+// this can actually reach the document; the input below stays disabled with
+// an explanatory note until LEASEBACK_WITHHELD_FIELD_ID is filled in.
+const LEASEBACK_DAYS_FIELD_ID = '64fe7084-fdf5-4f77-9229-6ec3a460e3d9';
+const LEASEBACK_WITHHELD_FIELD_ID: string | null = null;
+
+// A co-owner's signature — needs its own signature field on the template
+// tagged with this role (see the Co-Seller Signature field added in the
+// mapper on page 6). Their name still goes into the single combined Seller
+// Full Name field above, typed by whoever fills this form (e.g. "Jane Doe
+// and John Doe").
 const CO_SELLER_ROLE = 'seller_2';
 
 // The template's one extra role — Dayyan's own final signature, kept distinct
@@ -94,7 +127,7 @@ const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency
   { key: 'purchasePrice', label: 'Purchase Price', type: 'currency', placeholder: '410000' },
   { key: 'emdAmount', label: 'Earnest Money Deposit', type: 'currency', placeholder: '1000' },
   { key: 'titleCompany', label: 'Title Company', type: 'text', placeholder: 'e.g. Bluebird Title Co.' },
-  { key: 'inspectionPeriod', label: 'Inspection Period (business days)', type: 'text', placeholder: 'e.g. 10' },
+  { key: 'inspectionPeriod', label: 'Option Period (business days)', type: 'text', placeholder: 'e.g. 10' },
   { key: 'closingDate', label: 'Closing Date', type: 'date' },
   { key: 'governingState', label: 'Governing State', type: 'state', placeholder: 'Start typing a state…' },
 ];
@@ -161,6 +194,10 @@ export function FillCashDealContractModal({
     governingState: '',
     specialProvisions: '',
   });
+  const [tenantOccupancy, setTenantOccupancy] = useState<TenantOccupancyKey | null>(null);
+  const [marketing, setMarketing] = useState<MarketingKey | null>(null);
+  const [leasebackDays, setLeasebackDays] = useState('');
+  const [leasebackWithheld, setLeasebackWithheld] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,6 +255,10 @@ export function FillCashDealContractModal({
       governingState: raw('governingState'),
       specialProvisions: raw('specialProvisions'),
     });
+    setTenantOccupancy(TENANT_OCCUPANCY_OPTIONS.find((o) => fv[o.fieldId] === 'true')?.key ?? null);
+    setMarketing(MARKETING_OPTIONS.find((o) => fv[o.fieldId] === 'true')?.key ?? null);
+    setLeasebackDays(fv[LEASEBACK_DAYS_FIELD_ID] ?? '');
+    setLeasebackWithheld(LEASEBACK_WITHHELD_FIELD_ID ? stripCurrency(fv[LEASEBACK_WITHHELD_FIELD_ID] ?? '') : '');
   }, [instance]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setValue(key: FieldKey, v: string) {
@@ -256,6 +297,17 @@ export function FillCashDealContractModal({
       stamp('buyerName', buyerName.trim());
       for (const row of FIELD_ROWS) stamp(row.key, values[row.key].trim());
       stamp('specialProvisions', values.specialProvisions.trim());
+
+      const tenantOption = TENANT_OCCUPANCY_OPTIONS.find((o) => o.key === tenantOccupancy);
+      if (tenantOption) fieldValues[tenantOption.fieldId] = 'true';
+      const marketingOption = MARKETING_OPTIONS.find((o) => o.key === marketing);
+      if (marketingOption) fieldValues[marketingOption.fieldId] = 'true';
+      if (tenantOccupancy === 'postClosing') {
+        if (leasebackDays.trim()) fieldValues[LEASEBACK_DAYS_FIELD_ID] = leasebackDays.trim();
+        if (leasebackWithheld.trim() && LEASEBACK_WITHHELD_FIELD_ID) {
+          fieldValues[LEASEBACK_WITHHELD_FIELD_ID] = formatCurrency(leasebackWithheld.trim());
+        }
+      }
 
       const parties = [
         {
@@ -466,6 +518,84 @@ export function FillCashDealContractModal({
             )}
           </div>
         ))}
+
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-text-2">Tenant Occupancy &amp; Possession</label>
+          <div className="space-y-1.5">
+            {TENANT_OCCUPANCY_OPTIONS.map((opt) => (
+              <label key={opt.key} className="flex items-center gap-2 text-[12.5px] text-text-2">
+                <input
+                  type="radio"
+                  name="tenantOccupancy"
+                  checked={tenantOccupancy === opt.key}
+                  onChange={() => setTenantOccupancy(opt.key)}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          {tenantOccupancy && (
+            <button
+              type="button"
+              className="mt-1 text-[11px] text-text-3 underline hover:text-text-2"
+              onClick={() => setTenantOccupancy(null)}
+            >
+              Clear selection
+            </button>
+          )}
+
+          {tenantOccupancy === 'postClosing' && (
+            <div className="mt-2 grid grid-cols-2 gap-3 rounded-md border border-border-2 bg-surface-3 p-3">
+              <div>
+                <label className="mb-1 block text-[11.5px] font-medium text-text-2">Leaseback Days</label>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  placeholder="e.g. 14"
+                  value={leasebackDays}
+                  onChange={(e) => setLeasebackDays(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11.5px] font-medium text-text-2">Amount Withheld</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">$</span>
+                  <input
+                    className="input pl-6"
+                    inputMode="decimal"
+                    placeholder="e.g. 5000"
+                    value={leasebackWithheld}
+                    onChange={(e) => setLeasebackWithheld(e.target.value)}
+                    disabled={!LEASEBACK_WITHHELD_FIELD_ID}
+                  />
+                </div>
+                {!LEASEBACK_WITHHELD_FIELD_ID && (
+                  <p className="mt-1 text-[10.5px] text-warning">
+                    Not wired up yet — this field still needs to be placed on the template.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-[12px] font-medium text-text-2">Marketing &amp; Compensation</label>
+          <div className="space-y-1.5">
+            {MARKETING_OPTIONS.map((opt) => (
+              <label key={opt.key} className="flex items-center gap-2 text-[12.5px] text-text-2">
+                <input type="radio" name="marketing" checked={marketing === opt.key} onChange={() => setMarketing(opt.key)} />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+          {marketing && (
+            <button type="button" className="mt-1 text-[11px] text-text-3 underline hover:text-text-2" onClick={() => setMarketing(null)}>
+              Clear selection
+            </button>
+          )}
+          <p className="mt-1 text-[11px] text-text-3">Leave both unselected if neither applies — the contract itself treats that as Not Applicable.</p>
+        </div>
 
         <div>
           <label className="mb-1 block text-[12px] font-medium text-text-2">Special Provisions</label>
