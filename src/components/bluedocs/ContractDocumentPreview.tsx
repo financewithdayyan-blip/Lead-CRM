@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
+import { Check } from 'lucide-react';
 import { renderPdfPageToCanvas, type pdfjsLib } from '@/lib/pdfjs';
 import { roleLabel, roleColor, type ContractField, type PartyRole, type PartyRoleDef } from '@/hooks/useDocTemplates';
 
 /**
  * Renders one page of a contract with every mapped field overlaid — filled
- * text as plain values, a signature image wherever that role has actually
- * signed, and a dashed placeholder otherwise. Shared by the signer's own
- * page (activeRole = whoever is currently signing, so their own pending
- * field reads "Sign below") and the admin's read-only preview (no
- * activeRole — every unsigned field just shows whose signature is missing).
+ * text as plain values, a checkmark wherever a tickmark field was checked, a
+ * signature image wherever that specific box has actually been signed, and a
+ * dashed placeholder otherwise. Shared by the signer's own page (activeRole =
+ * whoever is currently signing, so their own pending fields are clickable/
+ * editable) and the admin's read-only preview (no activeRole — every unsigned
+ * field just shows whose signature is missing).
  */
 export function ContractDocumentPage({
   pdf,
@@ -22,12 +24,23 @@ export function ContractDocumentPage({
   partyRoles = [],
   editableValues,
   onEditableChange,
+  signatureReady,
+  onSignField,
 }: {
   pdf: pdfjsLib.PDFDocumentProxy;
   pageNum: number;
   pageWidth: number;
   fields: ContractField[];
+  /** Saved values keyed by field id — now the source of truth for signature
+   * and tickmark fields too, not just text-like ones (a signature value is
+   * the rendered PNG data URL for that exact box, so two signature fields
+   * for the same signer can hold two independently-completed images). */
   fieldValues: Record<string, string>;
+  /** Legacy fallback only: before per-field signing, one image was stored
+   * per role on contract_signing_parties and reused for every signature
+   * field that role had. Kept so an already-completed envelope signed under
+   * the old model still renders correctly; a new submission always writes
+   * into fieldValues instead, so this has nothing to contribute there. */
   signatures: Array<{ role: PartyRole; signatureDataUrl: string }>;
   activeRole?: PartyRole;
   /** Only changes wording ("Us" vs "Buyer") — the underlying role stored on
@@ -42,6 +55,15 @@ export function ContractDocumentPage({
    * fields, positioned right on the document where that field was mapped. */
   editableValues?: Record<string, string>;
   onEditableChange?: (fieldId: string, value: string) => void;
+  /** Whether the signer has chosen a signature style yet — purely changes
+   * the placeholder copy on an unsigned box ("Choose your signature below
+   * first" vs "Tap to sign") so it's never a dead end with no explanation. */
+  signatureReady?: boolean;
+  /** Fires when the signer taps one of their own unsigned signature boxes —
+   * this is what makes signing go box by box instead of one typed name
+   * silently stamping every signature field for that role. Each field is its
+   * own click, its own stored value, and (server-side) its own audit event. */
+  onSignField?: (fieldId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -116,14 +138,49 @@ export function ContractDocumentPage({
           );
         }
 
+        if (f.type === 'tickmark') {
+          const checked = fieldValues[f.id] === 'true';
+          const isMine = f.role === activeRole;
+          if (isMine && !checked && editableValues && onEditableChange) {
+            return (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={editableValues[f.id] === 'true'}
+                onClick={() => onEditableChange(f.id, editableValues[f.id] === 'true' ? 'false' : 'true')}
+                className="absolute flex items-center justify-center rounded-sm border-2 bg-white/95"
+                style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: roleColor(f.role) }}
+              >
+                {editableValues[f.id] === 'true' && <Check className="h-full w-full p-[12%]" style={{ color: roleColor(f.role) }} />}
+              </button>
+            );
+          }
+          // Already saved (checked=true) or someone else's box — read-only.
+          return (
+            <div
+              key={f.id}
+              className="absolute flex items-center justify-center rounded-sm border-2 bg-white/60"
+              style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: roleColor(f.role) }}
+            >
+              {checked && <Check className="h-full w-full p-[12%]" style={{ color: roleColor(f.role) }} />}
+            </div>
+          );
+        }
+
         if (f.type !== 'signature') return null;
 
-        const sig = signatures.find((s) => s.role === f.role);
-        if (sig) {
+        // Per-field value first — this is one specific box's own completed
+        // signature, not whatever that role last signed elsewhere. Falls
+        // back to the legacy one-per-role image only when no per-field value
+        // was ever recorded (an envelope completed before this existed).
+        const ownValue = fieldValues[f.id];
+        const legacySig = !ownValue ? signatures.find((s) => s.role === f.role) : undefined;
+        const imageUrl = ownValue || legacySig?.signatureDataUrl;
+        if (imageUrl) {
           return (
             <img
               key={f.id}
-              src={sig.signatureDataUrl}
+              src={imageUrl}
               alt=""
               className="absolute object-contain"
               style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%` }}
@@ -132,6 +189,23 @@ export function ContractDocumentPage({
         }
 
         const isMine = f.role === activeRole;
+        if (isMine && onSignField) {
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onSignField(f.id)}
+              disabled={!signatureReady}
+              className="absolute rounded-sm border-2 border-dashed bg-white/70 text-left transition-colors hover:bg-white disabled:cursor-not-allowed"
+              style={{ borderColor: roleColor(f.role), left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%` }}
+            >
+              <span className="pointer-events-none px-1 text-[9px] font-semibold" style={{ color: roleColor(f.role) }}>
+                {signatureReady ? 'Tap to sign ✍' : 'Choose your signature below first'}
+              </span>
+            </button>
+          );
+        }
+
         return (
           <div
             key={f.id}

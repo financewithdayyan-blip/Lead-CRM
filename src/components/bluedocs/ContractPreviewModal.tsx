@@ -22,6 +22,7 @@ const EVENT_ACTION_TEXT: Record<string, string> = {
   voided: 'voided the envelope',
   expired: 'the signing link expired',
   edited: 'edited the contract terms',
+  field_signed: 'signed a signature field',
 };
 
 export function ContractPreviewModal({ instance, onClose }: { instance: ContractInstance; onClose: () => void }) {
@@ -43,6 +44,7 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
     .map((p) => ({ role: p.role, signatureDataUrl: p.signatureDataUrl! }));
 
   const partyById = new Map(instance.parties.map((p) => [p.id, p]));
+  const fieldById = new Map(instance.templateFields.map((f) => [f.id, f]));
 
   return (
     <Modal open onClose={onClose} title={instance.name} width="lg">
@@ -105,17 +107,24 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
             <div className="space-y-2">
               {events.map((e) => {
                 const party = e.partyId ? partyById.get(e.partyId) : undefined;
+                const signedField = e.eventType === 'field_signed' && e.fieldId ? fieldById.get(e.fieldId) : undefined;
+                const actionText =
+                  e.eventType === 'field_signed'
+                    ? signedField
+                      ? `signed the "${signedField.label}" field`
+                      : 'signed a signature field'
+                    : EVENT_ACTION_TEXT[e.eventType] ?? 'opened the signing link';
                 return (
                   <div key={e.id} className="flex items-start gap-3 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
                     <span
-                      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${e.eventType === 'signed' ? 'bg-success' : 'bg-info'}`}
+                      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${e.eventType === 'signed' || e.eventType === 'field_signed' ? 'bg-success' : 'bg-info'}`}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] text-text">
                         <span className="font-medium">
                           {party ? roleLabel(party.role, instance.templateType ?? 'contract', instance.templatePartyRoles) : 'Unknown party'}
                         </span>
-                        {party ? ` (${party.name})` : ''} {EVENT_ACTION_TEXT[e.eventType] ?? 'opened the signing link'}
+                        {party ? ` (${party.name})` : ''} {actionText}
                       </div>
                       {e.eventType === 'signed' && party?.typedSignatureName ? (
                         <div className="mt-0.5 text-[11px] text-text-2">

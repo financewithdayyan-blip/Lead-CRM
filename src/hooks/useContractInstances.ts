@@ -359,20 +359,31 @@ export function useSubmitSignature() {
       signatureDataUrl,
       signatureName,
       fieldValues,
+      signatureFieldValues,
     }: {
       token: string;
       /** Omitted entirely when this party's role has no signature field
        * mapped — they still have to formally complete their turn, just
-       * without drawing/typing anything. */
+       * without drawing/typing anything. Otherwise this is just one
+       * representative copy of whatever's in signatureFieldValues below —
+       * kept on the party record itself for the certificate's "Signed by"
+       * line and for any already-signed envelope still being read the old,
+       * one-image-per-role way. */
       signatureDataUrl?: string;
       /** The literal text the signer typed — kept alongside the rendered
        * signatureDataUrl image as a durable, queryable audit record of what
        * they actually entered, not just its cursive-font rendering. */
       signatureName?: string;
       fieldValues?: Record<string, string>;
+      /** Every signature box this signer individually tapped, keyed by that
+       * field's own id — this is what actually fixes the "one signature
+       * fills every signature field" bug: each field gets its own value and
+       * (server-side) its own field_signed audit event, instead of every
+       * signature-type field for this role rendering the same single image. */
+      signatureFieldValues?: Record<string, string>;
     }) => {
       const { data, error } = await supabase.functions.invoke('submit-signature', {
-        body: { token, signatureDataUrl, signatureName, fieldValues },
+        body: { token, signatureDataUrl, signatureName, fieldValues, signatureFieldValues },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);
@@ -443,10 +454,14 @@ export function useRecordConsent() {
 export interface ContractAuditEvent {
   id: string;
   partyId: string | null;
-  eventType: 'viewed' | 'consented' | 'signed' | 'sent' | 'reminder_sent' | 'declined' | 'voided' | 'expired' | 'edited';
+  eventType: 'viewed' | 'consented' | 'signed' | 'sent' | 'reminder_sent' | 'declined' | 'voided' | 'expired' | 'edited' | 'field_signed';
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
+  /** Only set on 'field_signed' events — which specific signature box this
+   * was, so the admin audit view can name it instead of just saying "signed"
+   * once per field with no way to tell them apart. */
+  fieldId: string | null;
 }
 
 export function useContractAuditEvents(instanceId: string | undefined) {
@@ -455,7 +470,7 @@ export function useContractAuditEvents(instanceId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('contract_audit_events')
-        .select('id, party_id, event_type, ip_address, user_agent, created_at')
+        .select('id, party_id, event_type, ip_address, user_agent, created_at, field_id')
         .eq('contract_instance_id', instanceId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -466,6 +481,7 @@ export function useContractAuditEvents(instanceId: string | undefined) {
           eventType: r.event_type,
           ipAddress: r.ip_address,
           userAgent: r.user_agent,
+          fieldId: r.field_id ?? null,
           createdAt: r.created_at,
         }),
       );

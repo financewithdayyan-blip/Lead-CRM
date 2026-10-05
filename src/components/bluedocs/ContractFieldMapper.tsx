@@ -3,6 +3,7 @@ import {
   AlignLeft,
   Calendar,
   Check,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -38,6 +39,7 @@ const FIELD_DEFAULTS: Record<ContractFieldType, { w: number; h: number; label: s
   date: { w: 12, h: 3.5, label: 'Date' },
   paragraph: { w: 32, h: 12, label: 'Clause' },
   signature: { w: 20, h: 6, label: 'Signature' },
+  tickmark: { w: 4, h: 2.2, label: 'Checkbox' },
 };
 
 const FIELD_TYPE_BUTTONS: Array<{ type: ContractFieldType; label: string; icon: typeof Type }> = [
@@ -46,6 +48,7 @@ const FIELD_TYPE_BUTTONS: Array<{ type: ContractFieldType; label: string; icon: 
   { type: 'currency', label: 'Currency', icon: DollarSign },
   { type: 'date', label: 'Date', icon: Calendar },
   { type: 'paragraph', label: 'Paragraph', icon: AlignLeft },
+  { type: 'tickmark', label: 'Checkbox', icon: CheckSquare },
   { type: 'signature', label: 'Signature', icon: PenLine },
 ];
 

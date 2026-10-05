@@ -19,7 +19,7 @@ import { roleLabel, type ContractField, type PartyRole, type PartyRoleDef } from
 const MAX_PAGE_WIDTH = 680;
 const PAGE_CONTAINER_MAX = 720;
 const PAGE_CONTAINER_PADDING = 32; // px-4 on each side
-const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph']);
+const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph', 'tickmark']);
 
 /** The document was always rendered at a fixed 680px, which overflowed the
  * viewport on a phone and forced sideways scrolling to reach fields. This
@@ -203,6 +203,13 @@ export function SignContractPage() {
   const [finalPdf, setFinalPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
+  // One rendered signature image per signature-type field this signer has
+  // individually tapped — not one image reused for every signature box of
+  // their role. Each entry here is both this field's value on submit and, on
+  // screen right now, the proof that THIS specific box was signed, not just
+  // that the signer typed a name somewhere on the page.
+  const [signatureFieldValues, setSignatureFieldValues] = useState<Record<string, string>>({});
+  const [signingFieldId, setSigningFieldId] = useState<string | null>(null);
   const [signatureName, setSignatureName] = useState('');
   const [signatureFontId, setSignatureFontId] = useState(SIGNATURE_FONTS[0].id);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
@@ -272,6 +279,18 @@ export function SignContractPage() {
     [party],
   );
 
+  // Every signature box belonging to me that isn't already signed — each one
+  // needs its own tap, not just one typed name at the bottom of the page.
+  // "Already signed" checks the server-saved value first so a field already
+  // completed in an earlier visit (party.fieldValues) doesn't ask again.
+  const myPendingSignatureFields = useMemo(
+    () =>
+      (party?.templateFields ?? []).filter(
+        (f) => f.type === 'signature' && f.role === party?.role && !party?.fieldValues[f.id] && !signatureFieldValues[f.id],
+      ),
+    [party, signatureFieldValues],
+  );
+
   useEffect(() => {
     if (!ready || seededRef.current || !party) return;
     seededRef.current = true;
@@ -293,25 +312,64 @@ export function SignContractPage() {
   const numPages = pdf?.numPages ?? 0;
   const pageNums = useMemo(() => Array.from({ length: numPages }, (_, i) => i + 1), [numPages]);
 
-  const filledCount = myPendingFields.filter((f) => fieldInputs[f.id]?.trim()).length;
-  const allFieldsFilled = filledCount === myPendingFields.length;
+  // A tickmark only counts as filled once it's actually checked — "false" is
+  // a non-empty string, so the generic non-empty check below would wrongly
+  // count an unchecked (or checked-then-unchecked) box as done.
+  const filledCount = myPendingFields.filter((f) =>
+    f.type === 'tickmark' ? fieldInputs[f.id] === 'true' : fieldInputs[f.id]?.trim(),
+  ).length;
+  const allTextFieldsFilled = filledCount === myPendingFields.length;
+  // Combined progress across both the text-like fields above and every
+  // signature box — this is what the header badge and the bottom-bar
+  // "fill in every field" hint actually count now, not just the former.
+  const totalPending = myPendingFields.length + myPendingSignatureFields.length;
+  const totalFilled = filledCount + Object.keys(signatureFieldValues).length;
+  const allFieldsFilled = allTextFieldsFilled && myPendingSignatureFields.length === 0;
+  // What the document actually renders — the server-saved values plus
+  // whichever of this signer's own boxes they've tapped so far this visit,
+  // so a freshly-signed box shows its image immediately, before Submit.
+  const mergedFieldValues = useMemo(
+    () => ({ ...(party?.fieldValues ?? {}), ...signatureFieldValues }),
+    [party?.fieldValues, signatureFieldValues],
+  );
   const signatureReady = !!signatureName.trim();
-  const canSubmit = allFieldsFilled && (!needsSignature || signatureReady);
+  const canSubmit = allFieldsFilled;
   const selectedFont = SIGNATURE_FONTS.find((f) => f.id === signatureFontId) ?? SIGNATURE_FONTS[0];
   const displaySignatureName = formatSignatureName(signatureName);
 
+  // Tapping one of the signer's own signature boxes on the document — each
+  // tap renders and saves that ONE field's image, so two signature fields
+  // for the same party need two taps, each its own record, instead of one
+  // typed name silently filling every signature field for that role.
+  async function handleSignField(fieldId: string) {
+    if (!signatureReady || signingFieldId) return;
+    setSigningFieldId(fieldId);
+    try {
+      const dataUrl = await renderTypedSignature(displaySignatureName, selectedFont.family);
+      setSignatureFieldValues((prev) => ({ ...prev, [fieldId]: dataUrl }));
+    } finally {
+      setSigningFieldId(null);
+    }
+  }
+
   async function handleSubmit() {
     if (!token || !canSubmit) return;
-    const dataUrl = needsSignature ? await renderTypedSignature(displaySignatureName, selectedFont.family) : undefined;
     const formatted = { ...fieldInputs };
     for (const f of myPendingFields) {
       if (f.type === 'currency' && formatted[f.id]) formatted[f.id] = formatCurrency(formatted[f.id]);
     }
+    // One representative image/name still goes on the party record itself
+    // (the certificate's "Signed by" line, and the legacy per-role display
+    // for anyone viewing this envelope under the old model) — every box this
+    // signer completed renders the same typed name in the same style, so any
+    // one of them stands in for "how this party signed."
+    const representativeDataUrl = needsSignature ? Object.values(signatureFieldValues)[0] : undefined;
     await submitSignature.mutateAsync({
       token,
-      signatureDataUrl: dataUrl,
+      signatureDataUrl: representativeDataUrl,
       signatureName: needsSignature ? signatureName.trim() : undefined,
       fieldValues: formatted,
+      signatureFieldValues: needsSignature ? signatureFieldValues : undefined,
     });
     setSubmitted(true);
   }
@@ -504,16 +562,16 @@ export function SignContractPage() {
               </div>
             </div>
           </div>
-          {myPendingFields.length > 0 && (
+          {totalPending > 0 && (
             <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-primary">
-              {filledCount}/{myPendingFields.length} fields
+              {totalFilled}/{totalPending} fields
             </span>
           )}
         </div>
       </div>
 
       <div className="mx-auto max-w-[720px] px-4 py-5">
-        {myPendingFields.length > 0 && (
+        {totalPending > 0 && (
           <p className="mb-4 text-[13px] text-text-3">Fill in the highlighted fields below, then {needsSignature ? 'sign' : 'confirm'}.</p>
         )}
 
@@ -537,13 +595,15 @@ export function SignContractPage() {
                   pageNum={n}
                   pageWidth={pageWidth}
                   fields={party.templateFields}
-                  fieldValues={party.fieldValues}
+                  fieldValues={mergedFieldValues}
                   signatures={party.otherSignatures}
                   activeRole={party.role}
                   docType={party.templateType}
                   partyRoles={party.templatePartyRoles}
                   editableValues={fieldInputs}
                   onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
+                  signatureReady={signatureReady}
+                  onSignField={handleSignField}
                 />
               ))}
             </div>
@@ -552,7 +612,7 @@ export function SignContractPage() {
                 pdf={pdf}
                 pageNums={pageNums}
                 fields={party.templateFields}
-                fieldValues={party.fieldValues}
+                fieldValues={mergedFieldValues}
                 signatures={party.otherSignatures}
                 activeRole={party.role}
                 docType={party.templateType}
@@ -566,6 +626,10 @@ export function SignContractPage() {
         {needsSignature ? (
           <div className="rounded-md border border-border bg-white p-4 shadow-card">
             <div className="text-[13px] font-semibold text-text">Your signature</div>
+            <p className="mt-1 text-[12px] text-text-3">
+              Choose your name and style below, then tap each signature box on the document above to sign it
+              {myPendingSignatureFields.length > 1 ? ` — this document has ${myPendingSignatureFields.length} left` : ''}.
+            </p>
 
             <input
               className="input mt-2.5"

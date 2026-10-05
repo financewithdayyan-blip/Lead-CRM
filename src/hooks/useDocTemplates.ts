@@ -13,7 +13,7 @@ export const PURCHASE_CONTRACT_TYPES: Array<{ key: ContractType; label: string }
   { key: 'subject_to', label: 'Subject-To' },
   { key: 'seller_finance', label: 'Seller Finance' },
 ];
-export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
+export type ContractFieldType = 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph' | 'tickmark';
 // 'buyer' and 'seller' are the two built-in roles every template starts
 // with. A template can define any number of extra roles at mapping time
 // (id is arbitrary, e.g. "extra_1") — see DocTemplate.partyRoles. A signing

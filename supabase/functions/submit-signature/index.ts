@@ -233,7 +233,7 @@ interface ContractField {
   yPct: number;
   wPct: number;
   hPct: number;
-  type: 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph';
+  type: 'text' | 'signature' | 'date' | 'full_name' | 'currency' | 'paragraph' | 'tickmark';
   // 'buyer' | 'seller', or a template-defined extra role id (e.g. "extra_1").
   role: string;
   label: string;
@@ -424,7 +424,25 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
-    const { token, signatureDataUrl, signatureName, fieldValues: submittedFieldValues } = await req.json();
+    const {
+      token,
+      signatureDataUrl,
+      signatureName,
+      fieldValues: submittedFieldValues,
+      signatureFieldValues,
+    }: {
+      token: string;
+      signatureDataUrl?: string;
+      signatureName?: string;
+      fieldValues?: Record<string, string>;
+      // One rendered image per signature box this party individually
+      // signed — see SignContractPage's handleSignField. Merged into the
+      // same field_values column as every other field type below, and each
+      // key here also gets its own 'field_signed' audit event, which is what
+      // actually fixes "signing once fills every signature field for this
+      // role": each field now has its own value and its own audit record.
+      signatureFieldValues?: Record<string, string>;
+    } = await req.json();
     if (!token) return json({ error: 'Missing token' }, 400);
     // A rendered signature image with no typed name behind it isn't a real
     // signature — the client only ever sends signatureDataUrl once it has
@@ -500,16 +518,39 @@ Deno.serve(async (req) => {
     });
 
     // Whatever this party typed into their own fields (name, amount, etc.)
-    // merges into the shared field_values — the next party (and the final
-    // flattened PDF) reads this same column, so it has to land before either.
-    if (submittedFieldValues && typeof submittedFieldValues === 'object' && Object.keys(submittedFieldValues).length > 0) {
+    // and every signature box they individually signed both merge into the
+    // same shared field_values column — a signature field's "value" is just
+    // its rendered image data URL, stored and read back exactly like any
+    // other field's typed value. The next party (and the final flattened
+    // PDF) read this same column, so it has to land before either.
+    const allSubmittedFieldValues = { ...(submittedFieldValues ?? {}), ...(signatureFieldValues ?? {}) };
+    if (Object.keys(allSubmittedFieldValues).length > 0) {
       const { data: currentInstance } = await admin
         .from('contract_instances')
         .select('field_values')
         .eq('id', party.contract_instance_id)
         .single();
-      const merged = { ...(currentInstance?.field_values ?? {}), ...submittedFieldValues };
+      const merged = { ...(currentInstance?.field_values ?? {}), ...allSubmittedFieldValues };
       await admin.from('contract_instances').update({ field_values: merged }).eq('id', party.contract_instance_id);
+    }
+
+    // One audit event per signature box this party actually completed in
+    // this submission — the whole point of going box by box. Each row is
+    // independently timestamped and IP/user-agent-stamped, tagged with its
+    // own field id, so two signature fields for the same party are two
+    // distinct, individually attributable records instead of one blanket
+    // "signed" event covering however many boxes that role happened to have.
+    if (signatureFieldValues && Object.keys(signatureFieldValues).length > 0) {
+      await admin.from('contract_audit_events').insert(
+        Object.keys(signatureFieldValues).map((fieldId) => ({
+          contract_instance_id: party.contract_instance_id,
+          party_id: party.id,
+          event_type: 'field_signed',
+          field_id: fieldId,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+        })),
+      );
     }
 
     const updatedParties = (allParties ?? []).map((p) =>
@@ -629,12 +670,33 @@ Deno.serve(async (req) => {
           page.drawText(line, { x: x + 2, y: lineY, size: fontSize, font, color: rgb(0.05, 0.05, 0.05) });
           lineY -= lineHeight;
         }
+      } else if (field.type === 'tickmark') {
+        if (fieldValues[field.id] !== 'true') continue;
+        // A plain checkmark stroke, not a text glyph — StandardFonts.Helvetica
+        // is WinAnsi-encoded and doesn't reliably render U+2713 across every
+        // PDF viewer, so this draws the same two-stroke check by hand.
+        const pad = Math.min(boxW, boxH) * 0.22;
+        const x1 = x + pad;
+        const y1 = y + boxH * 0.45;
+        const x2 = x + boxW * 0.42;
+        const y2 = y + pad;
+        const x3 = x + boxW - pad;
+        const y3 = y + boxH - pad;
+        page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: Math.max(1.5, boxH * 0.12), color: rgb(...INK) });
+        page.drawLine({ start: { x: x2, y: y2 }, end: { x: x3, y: y3 }, thickness: Math.max(1.5, boxH * 0.12), color: rgb(...INK) });
       } else if (field.type === 'signature') {
+        // This specific box's own value first — the actual fix for "one
+        // signature fills every signature field for this role." Falls back
+        // to the party's single legacy image only when this field was never
+        // individually signed (an envelope completed before per-field
+        // signing existed, or a stray pre-existing signature field with no
+        // recorded value of its own).
         const p = partyByRole.get(field.role);
-        if (!p?.signature_data_url) continue;
+        const signatureSource = fieldValues[field.id] || p?.signature_data_url;
+        if (!signatureSource) continue;
         try {
-          const imgBytes = dataUrlToBytes(p.signature_data_url);
-          const img = p.signature_data_url.includes('image/jpeg') ? await pdfDoc.embedJpg(imgBytes) : await pdfDoc.embedPng(imgBytes);
+          const imgBytes = dataUrlToBytes(signatureSource);
+          const img = signatureSource.includes('image/jpeg') ? await pdfDoc.embedJpg(imgBytes) : await pdfDoc.embedPng(imgBytes);
           page.drawImage(img, { x, y, width: boxW, height: boxH });
         } catch {
           // A malformed signature image shouldn't fail the whole document —
@@ -646,9 +708,11 @@ Deno.serve(async (req) => {
     // ── Append the signing certificate / audit trail page(s). ────────────────
     const { data: auditEvents } = await admin
       .from('contract_audit_events')
-      .select('party_id, event_type, ip_address, user_agent, created_at')
+      .select('party_id, event_type, ip_address, user_agent, created_at, field_id')
       .eq('contract_instance_id', instance.id)
       .order('created_at', { ascending: true });
+
+    const fieldLabelById = new Map((template.fields ?? []).map((f) => [f.id, f.label]));
 
     const EVENT_LABELS: Record<string, string> = {
       sent: 'Invitation Sent',
@@ -660,20 +724,27 @@ Deno.serve(async (req) => {
       voided: 'Envelope Voided',
       expired: 'Signing Link Expired',
       edited: 'Contract Terms Edited',
+      field_signed: 'Signature Field Signed',
     };
 
     const partyLabelById = new Map(
       updatedParties.map((p) => [p.id, `${roleWordFor(p.role, template.type, partyRoles)} — ${p.name}`]),
     );
-    // The signed event is the closest thing to a per-field timestamp/IP that
-    // actually exists (see the Fields Completed section below) — there is no
-    // finer-grained "this exact field was typed at this exact second" capture
-    // anywhere in the system, so every field a party filled is honestly
-    // attributed to the moment and location they actually pressed Sign.
+    // The signed event remains the best available timestamp/IP for the
+    // non-signature fields a party filled — there's still no finer-grained
+    // "this exact text field was typed at this exact second" capture, so
+    // those stay honestly attributed to the moment they pressed Sign.
+    // Signature fields now have the real thing: a field_signed event per
+    // box, so each one gets its own timestamp instead of borrowing the
+    // party's single signing moment.
     const signedEventByParty = new Map<string, { ip: string | null; ua: string | null; at: string }>();
+    const fieldSignedEventByFieldId = new Map<string, { ip: string | null; ua: string | null; at: string }>();
     for (const e of auditEvents ?? []) {
       if (e.event_type === 'signed' && e.party_id) {
         signedEventByParty.set(e.party_id, { ip: e.ip_address, ua: e.user_agent, at: e.created_at });
+      }
+      if (e.event_type === 'field_signed' && e.field_id) {
+        fieldSignedEventByFieldId.set(e.field_id, { ip: e.ip_address, ua: e.user_agent, at: e.created_at });
       }
     }
 
@@ -722,7 +793,11 @@ Deno.serve(async (req) => {
     }
     for (const evt of auditEvents ?? []) {
       const who = evt.party_id ? (partyLabelById.get(evt.party_id) ?? 'Unknown party') : 'System';
-      const label = EVENT_LABELS[evt.event_type] ?? evt.event_type;
+      let label = EVENT_LABELS[evt.event_type] ?? evt.event_type;
+      if (evt.event_type === 'field_signed' && evt.field_id) {
+        const fieldLabel = fieldLabelById.get(evt.field_id);
+        if (fieldLabel) label = `Signed "${fieldLabel}"`;
+      }
       cert.line(who, { size: 9.5, color: INK, bold: true });
       cert.line(`${label} — ${formatWhen(evt.created_at)}`, { size: 9 });
       if (evt.ip_address) cert.line(`IP Address: ${evt.ip_address}`, { size: 8, color: SLATE_DIM });
@@ -732,7 +807,17 @@ Deno.serve(async (req) => {
     cert.gap(4);
     cert.divider();
 
-    const fieldsWithValues = (template.fields ?? []).filter((f) => f.type !== 'signature' && fieldValues[f.id]);
+    // A tickmark's value is the literal string "true"/"false" — only a
+    // checked box counts as "completed" here, same as the signing page's
+    // own required-field gating. A signature field's value is a full image
+    // data URL, useless printed verbatim, so it gets a plain "Signed
+    // electronically" line instead of its raw value like every other type.
+    const fieldsWithValues = (template.fields ?? []).filter((f) => {
+      const v = fieldValues[f.id];
+      if (!v) return false;
+      if (f.type === 'tickmark') return v === 'true';
+      return true;
+    });
     if (fieldsWithValues.length > 0) {
       cert.eyebrow('Fields Completed');
       const fieldsByRole = new Map<string, ContractField[]>();
@@ -751,7 +836,18 @@ Deno.serve(async (req) => {
         }
         cert.gap(3);
         for (const f of fields) {
-          cert.keyValue(f.label, fieldValues[f.id], { size: 9 });
+          const displayValue = f.type === 'signature' ? 'Signed electronically' : f.type === 'tickmark' ? 'Checked' : fieldValues[f.id];
+          cert.keyValue(f.label, displayValue, { size: 9 });
+          // A signature field gets its own field-level timestamp/IP right
+          // underneath it when one was actually recorded — the one place in
+          // this certificate where "completed" means something more precise
+          // than "sometime during this party's single Sign action."
+          if (f.type === 'signature') {
+            const fieldEvent = fieldSignedEventByFieldId.get(f.id);
+            if (fieldEvent) {
+              cert.line(`Signed — ${formatWhen(fieldEvent.at)}${fieldEvent.ip ? ` · IP ${fieldEvent.ip}` : ''}`, { size: 7.5, color: SLATE_DIM });
+            }
+          }
         }
         cert.gap(8);
       }
