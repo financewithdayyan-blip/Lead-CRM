@@ -13,7 +13,7 @@
 // briefly served a 2.112.1 build with a broken denonext auth-js subpath,
 // which failed every fresh bundle regardless of this function's own code.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, LineCapStyle, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -674,16 +674,22 @@ Deno.serve(async (req) => {
         if (fieldValues[field.id] !== 'true') continue;
         // A plain checkmark stroke, not a text glyph — StandardFonts.Helvetica
         // is WinAnsi-encoded and doesn't reliably render U+2713 across every
-        // PDF viewer, so this draws the same two-stroke check by hand.
-        const pad = Math.min(boxW, boxH) * 0.22;
+        // PDF viewer, so this draws the same two-stroke check by hand. The
+        // printed checkbox glyph on these templates is small, so this is
+        // deliberately drawn bold and slightly past the box's own edges
+        // (negative pad) — a faint check confined exactly to a tiny ☐ reads
+        // as barely-there next to the surrounding body text; a real pen tick
+        // overruns the box, and this is drawn to match that.
+        const pad = -Math.min(boxW, boxH) * 0.12;
         const x1 = x + pad;
         const y1 = y + boxH * 0.45;
         const x2 = x + boxW * 0.42;
         const y2 = y + pad;
         const x3 = x + boxW - pad;
         const y3 = y + boxH - pad;
-        page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: Math.max(1.5, boxH * 0.12), color: rgb(...INK) });
-        page.drawLine({ start: { x: x2, y: y2 }, end: { x: x3, y: y3 }, thickness: Math.max(1.5, boxH * 0.12), color: rgb(...INK) });
+        const thickness = Math.max(2.5, boxH * 0.22);
+        page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness, color: rgb(...INK), lineCap: LineCapStyle.Round });
+        page.drawLine({ start: { x: x2, y: y2 }, end: { x: x3, y: y3 }, thickness, color: rgb(...INK), lineCap: LineCapStyle.Round });
       } else if (field.type === 'signature') {
         // This specific box's own value first — the actual fix for "one
         // signature fills every signature field for this role." Falls back

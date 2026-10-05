@@ -145,16 +145,32 @@ export function ContractDocumentPage({
           const checked = fieldValues[f.id] === 'true';
           const isMine = f.role === activeRole;
           if (isMine && !checked && editableValues && onEditableChange) {
+            const isChecked = editableValues[f.id] === 'true';
             return (
               <button
                 key={f.id}
                 type="button"
-                aria-pressed={editableValues[f.id] === 'true'}
-                onClick={() => onEditableChange(f.id, editableValues[f.id] === 'true' ? 'false' : 'true')}
-                className="absolute flex items-center justify-center rounded-sm border-2 bg-white/95"
-                style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: roleColor(f.role) }}
+                aria-pressed={isChecked}
+                onClick={() => onEditableChange(f.id, isChecked ? 'false' : 'true')}
+                className="absolute flex items-center justify-center overflow-visible rounded-sm border-2"
+                style={{
+                  left: `${f.xPct}%`,
+                  top: `${f.yPct}%`,
+                  width: `${f.wPct}%`,
+                  height: `${f.hPct}%`,
+                  borderColor: roleColor(f.role),
+                  background: isChecked ? `${roleColor(f.role)}26` : 'rgba(255,255,255,0.95)',
+                }}
               >
-                {editableValues[f.id] === 'true' && <Check className="h-full w-full p-[12%]" style={{ color: roleColor(f.role) }} />}
+                {/* The printed checkbox glyph is tiny, so a checkmark sized to
+                    fit inside it reads as faint next to the surrounding body
+                    text — this deliberately draws bigger than the box itself
+                    (scale + negative margin) so a checked box is unmistakable
+                    at a glance, the way a real pen tick overruns a small
+                    printed box. */}
+                {isChecked && (
+                  <Check className="h-[220%] w-[220%]" strokeWidth={4} style={{ color: roleColor(f.role) }} />
+                )}
               </button>
             );
           }
@@ -162,10 +178,17 @@ export function ContractDocumentPage({
           return (
             <div
               key={f.id}
-              className="absolute flex items-center justify-center rounded-sm border-2 bg-white/60"
-              style={{ left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%`, borderColor: roleColor(f.role) }}
+              className="absolute flex items-center justify-center overflow-visible rounded-sm border-2"
+              style={{
+                left: `${f.xPct}%`,
+                top: `${f.yPct}%`,
+                width: `${f.wPct}%`,
+                height: `${f.hPct}%`,
+                borderColor: roleColor(f.role),
+                background: checked ? `${roleColor(f.role)}26` : 'rgba(255,255,255,0.6)',
+              }}
             >
-              {checked && <Check className="h-full w-full p-[12%]" style={{ color: roleColor(f.role) }} />}
+              {checked && <Check className="h-[220%] w-[220%]" strokeWidth={4} style={{ color: roleColor(f.role) }} />}
             </div>
           );
         }
