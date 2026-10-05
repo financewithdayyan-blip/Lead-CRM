@@ -24,8 +24,8 @@ export function ContractDocumentPage({
   partyRoles = [],
   editableValues,
   onEditableChange,
-  signatureReady,
   onSignField,
+  remainingSignatureCount,
 }: {
   pdf: pdfjsLib.PDFDocumentProxy;
   pageNum: number;
@@ -55,15 +55,18 @@ export function ContractDocumentPage({
    * fields, positioned right on the document where that field was mapped. */
   editableValues?: Record<string, string>;
   onEditableChange?: (fieldId: string, value: string) => void;
-  /** Whether the signer has chosen a signature style yet — purely changes
-   * the placeholder copy on an unsigned box ("Choose your signature below
-   * first" vs "Tap to sign") so it's never a dead end with no explanation. */
-  signatureReady?: boolean;
   /** Fires when the signer taps one of their own unsigned signature boxes —
    * this is what makes signing go box by box instead of one typed name
    * silently stamping every signature field for that role. Each field is its
-   * own click, its own stored value, and (server-side) its own audit event. */
+   * own click, its own stored value, and (server-side) its own audit event.
+   * Always tappable — the first tap of the visit opens the name/style
+   * popup, every tap after that signs immediately. */
   onSignField?: (fieldId: string) => void;
+  /** How many of the signer's own signature boxes (including this one, if
+   * still unsigned) are still outstanding — drives the "N more to go" hint
+   * on every unsigned box so a multi-signature document doesn't feel like
+   * it ended after the first tap. */
+  remainingSignatureCount?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -190,17 +193,20 @@ export function ContractDocumentPage({
 
         const isMine = f.role === activeRole;
         if (isMine && onSignField) {
+          const label =
+            remainingSignatureCount && remainingSignatureCount > 1
+              ? `Tap to sign ✍ — ${remainingSignatureCount} more to go`
+              : 'Tap to sign ✍';
           return (
             <button
               key={f.id}
               type="button"
               onClick={() => onSignField(f.id)}
-              disabled={!signatureReady}
-              className="absolute rounded-sm border-2 border-dashed bg-white/70 text-left transition-colors hover:bg-white disabled:cursor-not-allowed"
+              className="absolute rounded-sm border-2 border-dashed bg-white/70 text-left transition-colors hover:bg-white"
               style={{ borderColor: roleColor(f.role), left: `${f.xPct}%`, top: `${f.yPct}%`, width: `${f.wPct}%`, height: `${f.hPct}%` }}
             >
               <span className="pointer-events-none px-1 text-[9px] font-semibold" style={{ color: roleColor(f.role) }}>
-                {signatureReady ? 'Tap to sign ✍' : 'Choose your signature below first'}
+                {label}
               </span>
             </button>
           );

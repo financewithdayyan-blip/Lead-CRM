@@ -5,7 +5,6 @@ import {
   usePublicSigningParty,
   useSigningPdfUrl,
   useSubmitSignature,
-  useDeclineSignature,
   useLogSigningView,
   useRecordConsent,
   useSignedFinalDocUrl,
@@ -187,12 +186,8 @@ export function SignContractPage() {
   const { data: party, isLoading, isError } = usePublicSigningParty(token);
   const getPdfUrl = useSigningPdfUrl();
   const submitSignature = useSubmitSignature();
-  const declineSignature = useDeclineSignature();
   const logView = useLogSigningView();
   const recordConsent = useRecordConsent();
-  const [declineOpen, setDeclineOpen] = useState(false);
-  const [declineReason, setDeclineReason] = useState('');
-  const [declined, setDeclined] = useState(false);
   const [justConsented, setJustConsented] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
 
@@ -210,6 +205,11 @@ export function SignContractPage() {
   // that the signer typed a name somewhere on the page.
   const [signatureFieldValues, setSignatureFieldValues] = useState<Record<string, string>>({});
   const [signingFieldId, setSigningFieldId] = useState<string | null>(null);
+  // Which field is waiting on the "pick your name and style" popup — only
+  // ever set on the very first tap of a session (no name adopted yet).
+  // Every tap after that signs immediately, reusing the name/style already
+  // chosen, instead of asking again for every single box.
+  const [pendingSignFieldId, setPendingSignFieldId] = useState<string | null>(null);
   const [signatureName, setSignatureName] = useState('');
   const [signatureFontId, setSignatureFontId] = useState(SIGNATURE_FONTS[0].id);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
@@ -332,17 +332,16 @@ export function SignContractPage() {
     () => ({ ...(party?.fieldValues ?? {}), ...signatureFieldValues }),
     [party?.fieldValues, signatureFieldValues],
   );
-  const signatureReady = !!signatureName.trim();
   const canSubmit = allFieldsFilled;
   const selectedFont = SIGNATURE_FONTS.find((f) => f.id === signatureFontId) ?? SIGNATURE_FONTS[0];
   const displaySignatureName = formatSignatureName(signatureName);
 
-  // Tapping one of the signer's own signature boxes on the document — each
-  // tap renders and saves that ONE field's image, so two signature fields
-  // for the same party need two taps, each its own record, instead of one
-  // typed name silently filling every signature field for that role.
-  async function handleSignField(fieldId: string) {
-    if (!signatureReady || signingFieldId) return;
+  // Renders and saves one field's signature image — each signature box gets
+  // its own call here, so two signature fields for the same party end up as
+  // two distinct records instead of one typed name silently filling every
+  // signature field for that role.
+  async function signField(fieldId: string) {
+    if (signingFieldId) return;
     setSigningFieldId(fieldId);
     try {
       const dataUrl = await renderTypedSignature(displaySignatureName, selectedFont.family);
@@ -350,6 +349,27 @@ export function SignContractPage() {
     } finally {
       setSigningFieldId(null);
     }
+  }
+
+  // Tapping one of the signer's own signature boxes. The first tap of the
+  // visit has no adopted name/style yet, so it opens the popup to collect
+  // one; every tap after that already knows both and signs immediately —
+  // most signers are on a phone, and re-typing a full name for every box on
+  // a multi-page contract is exactly the friction this is meant to avoid.
+  function handleTapSignatureField(fieldId: string) {
+    if (signingFieldId) return;
+    if (!signatureName.trim()) {
+      setPendingSignFieldId(fieldId);
+      return;
+    }
+    void signField(fieldId);
+  }
+
+  async function confirmPendingSignature() {
+    if (!pendingSignFieldId || !signatureName.trim() || signingFieldId) return;
+    const fieldId = pendingSignFieldId;
+    setPendingSignFieldId(null);
+    await signField(fieldId);
   }
 
   async function handleSubmit() {
@@ -384,16 +404,6 @@ export function SignContractPage() {
         icon={<FileText size={24} />}
         title="This link is no longer valid"
         body="It may have already been used, or the contract it points to was removed. Reach out to whoever sent it if that's unexpected."
-      />
-    );
-  }
-
-  if (declined) {
-    return (
-      <StatusScreen
-        icon={<FileText size={24} />}
-        title="You've declined to sign"
-        body="Whoever sent this has been notified. No further action is needed from you."
       />
     );
   }
@@ -602,8 +612,8 @@ export function SignContractPage() {
                   partyRoles={party.templatePartyRoles}
                   editableValues={fieldInputs}
                   onEditableChange={(id, value) => setFieldInputs((prev) => ({ ...prev, [id]: value }))}
-                  signatureReady={signatureReady}
-                  onSignField={handleSignField}
+                  onSignField={handleTapSignatureField}
+                  remainingSignatureCount={myPendingSignatureFields.length}
                 />
               ))}
             </div>
@@ -623,15 +633,25 @@ export function SignContractPage() {
           </>
         )}
 
-        {needsSignature ? (
+        {!needsSignature && (
           <div className="rounded-md border border-border bg-white p-4 shadow-card">
-            <div className="text-[13px] font-semibold text-text">Your signature</div>
-            <p className="mt-1 text-[12px] text-text-3">
-              Choose your name and style below, then tap each signature box on the document above to sign it
-              {myPendingSignatureFields.length > 1 ? ` — this document has ${myPendingSignatureFields.length} left` : ''}.
-            </p>
+            <p className="text-[13px] text-text-2">Nothing here needs your signature — just confirm below once you've reviewed everything above.</p>
+          </div>
+        )}
+      </div>
+
+      {/* The "adopt your signature" popup — only ever shown once, on the
+          first signature box tapped. Every box tapped after this signs
+          immediately with the name/style chosen here, no second trip
+          through this popup. */}
+      {pendingSignFieldId && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setPendingSignFieldId(null)}>
+          <div className="w-full max-w-sm rounded-t-xl bg-white p-4 shadow-popover sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[14px] font-semibold text-text">Sign this document</div>
+            <p className="mt-1 text-[12px] text-text-3">Type your name and pick a style — every signature box on this document will use it.</p>
 
             <input
+              autoFocus
               className="input mt-2.5"
               placeholder="Type your full name"
               value={signatureName}
@@ -677,51 +697,23 @@ export function SignContractPage() {
             <div className="mt-2.5 flex h-24 items-center justify-center rounded-md border border-dashed border-border-2 bg-surface-3">
               <span style={{ fontFamily: `"${selectedFont.family}", cursive`, fontSize: 40, color: '#111827' }}>{displaySignatureName || ' '}</span>
             </div>
-          </div>
-        ) : (
-          <div className="rounded-md border border-border bg-white p-4 shadow-card">
-            <p className="text-[13px] text-text-2">Nothing here needs your signature — just confirm below once you've reviewed everything above.</p>
-          </div>
-        )}
 
-        <div className="mt-4 text-center">
-          {!declineOpen ? (
-            <button className="text-[12px] font-medium text-text-3 hover:text-text-2" onClick={() => setDeclineOpen(true)}>
-              I can't sign this
-            </button>
-          ) : (
-            <div className="rounded-md border border-dashed border-border-2 bg-surface-3 p-3 text-left">
-              <p className="mb-2 text-[12.5px] text-text-2">
-                Let us know why — this stops the document for everyone, so whoever sent it can follow up.
-              </p>
-              <textarea
-                className="input min-h-16 text-[13px]"
-                placeholder="Optional — what's the issue?"
-                value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)}
-              />
-              <div className="mt-2 flex justify-end gap-2">
-                <button className="text-[12px] font-medium text-text-3 hover:text-text-2" onClick={() => setDeclineOpen(false)}>
-                  Never mind
-                </button>
-                <button
-                  className="btn !bg-danger !text-white !py-1.5 !px-3 text-[12.5px] disabled:opacity-50"
-                  disabled={declineSignature.isPending}
-                  onClick={() =>
-                    token &&
-                    declineSignature.mutate(
-                      { token, reason: declineReason.trim() || undefined },
-                      { onSuccess: () => setDeclined(true) },
-                    )
-                  }
-                >
-                  {declineSignature.isPending ? 'Submitting…' : 'Confirm decline'}
-                </button>
-              </div>
+            <div className="mt-3 flex gap-2">
+              <button className="btn flex-1" onClick={() => setPendingSignFieldId(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary flex-1"
+                disabled={!signatureName.trim() || !!signingFieldId}
+                onClick={confirmPendingSignature}
+              >
+                {signingFieldId ? <Loader2 size={14} className="animate-spin" /> : null}
+                Sign
+              </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Sticky bottom action bar — the submit button stays reachable on a
           long, multi-page contract instead of requiring a scroll back down.
@@ -739,7 +731,7 @@ export function SignContractPage() {
             onClick={handleSubmit}
           >
             {submitSignature.isPending ? <Loader2 size={15} className="animate-spin" /> : null}
-            {submitSignature.isPending ? 'Submitting…' : needsSignature ? 'Sign & Submit' : 'Confirm & Submit'}
+            {submitSignature.isPending ? 'Submitting…' : needsSignature ? 'Submit' : 'Confirm & Submit'}
           </button>
         </div>
       </div>
