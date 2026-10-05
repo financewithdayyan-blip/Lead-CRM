@@ -23,6 +23,7 @@ const EVENT_ACTION_TEXT: Record<string, string> = {
   expired: 'the signing link expired',
   edited: 'edited the contract terms',
   field_signed: 'signed a signature field',
+  signature_remembered: 'chose to reuse their signature for the rest of the document',
 };
 
 export function ContractPreviewModal({ instance, onClose }: { instance: ContractInstance; onClose: () => void }) {

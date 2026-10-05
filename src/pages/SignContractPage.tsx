@@ -205,11 +205,17 @@ export function SignContractPage() {
   // that the signer typed a name somewhere on the page.
   const [signatureFieldValues, setSignatureFieldValues] = useState<Record<string, string>>({});
   const [signingFieldId, setSigningFieldId] = useState<string | null>(null);
-  // Which field is waiting on the "pick your name and style" popup — only
-  // ever set on the very first tap of a session (no name adopted yet).
-  // Every tap after that signs immediately, reusing the name/style already
-  // chosen, instead of asking again for every single box.
+  // Which field is waiting on the "pick your name and style" popup. Opens on
+  // every tap of an unsigned signature box by default — the more deliberate,
+  // audit-defensible behavior — unless the signer has explicitly opted into
+  // signatureRemembered below, in which case later taps skip straight to
+  // signField.
   const [pendingSignFieldId, setPendingSignFieldId] = useState<string | null>(null);
+  // Explicit, logged opt-out of the per-box popup (see the "Remember my
+  // signature" checkbox) — defaults to false so every box gets its own
+  // deliberate confirmation unless the signer actively chooses otherwise.
+  // A one-way latch for this visit: once true, it stays true.
+  const [signatureRemembered, setSignatureRemembered] = useState(false);
   const [signatureName, setSignatureName] = useState('');
   const [signatureFontId, setSignatureFontId] = useState(SIGNATURE_FONTS[0].id);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
@@ -351,18 +357,19 @@ export function SignContractPage() {
     }
   }
 
-  // Tapping one of the signer's own signature boxes. The first tap of the
-  // visit has no adopted name/style yet, so it opens the popup to collect
-  // one; every tap after that already knows both and signs immediately —
-  // most signers are on a phone, and re-typing a full name for every box on
-  // a multi-page contract is exactly the friction this is meant to avoid.
+  // Tapping one of the signer's own signature boxes. Opens the popup every
+  // time by default, even if a name/style was already chosen on an earlier
+  // box — a fresh, deliberate confirmation per field is stronger evidence of
+  // intent than silently reusing an earlier one. Only skips straight to
+  // signing once the signer has explicitly checked "Remember my signature"
+  // in that popup.
   function handleTapSignatureField(fieldId: string) {
     if (signingFieldId) return;
-    if (!signatureName.trim()) {
-      setPendingSignFieldId(fieldId);
+    if (signatureRemembered && signatureName.trim()) {
+      void signField(fieldId);
       return;
     }
-    void signField(fieldId);
+    setPendingSignFieldId(fieldId);
   }
 
   async function confirmPendingSignature() {
@@ -390,6 +397,7 @@ export function SignContractPage() {
       signatureName: needsSignature ? signatureName.trim() : undefined,
       fieldValues: formatted,
       signatureFieldValues: needsSignature ? signatureFieldValues : undefined,
+      signatureRememberedConsent: needsSignature ? signatureRemembered : undefined,
     });
     setSubmitted(true);
   }
@@ -640,15 +648,16 @@ export function SignContractPage() {
         )}
       </div>
 
-      {/* The "adopt your signature" popup — only ever shown once, on the
-          first signature box tapped. Every box tapped after this signs
-          immediately with the name/style chosen here, no second trip
-          through this popup. */}
+      {/* The "sign this field" popup — opens on every unsigned signature box
+          by default, one deliberate confirmation per field, unless the
+          signer has explicitly checked "Remember my signature" below (a
+          one-way opt-out for this visit, logged as its own audit event on
+          submit). */}
       {pendingSignFieldId && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setPendingSignFieldId(null)}>
           <div className="w-full max-w-sm rounded-t-xl bg-white p-4 shadow-popover sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[14px] font-semibold text-text">Sign this document</div>
-            <p className="mt-1 text-[12px] text-text-3">Type your name and pick a style — every signature box on this document will use it.</p>
+            <div className="text-[14px] font-semibold text-text">Sign this field</div>
+            <p className="mt-1 text-[12px] text-text-3">Type your name and pick a style, then confirm to sign this specific box.</p>
 
             <input
               autoFocus
@@ -697,6 +706,22 @@ export function SignContractPage() {
             <div className="mt-2.5 flex h-24 items-center justify-center rounded-md border border-dashed border-border-2 bg-surface-3">
               <span style={{ fontFamily: `"${selectedFont.family}", cursive`, fontSize: 40, color: '#111827' }}>{displaySignatureName || ' '}</span>
             </div>
+
+            {myPendingSignatureFields.length > 1 && (
+              <label className="mt-2.5 flex items-start gap-2 text-[11.5px] text-text-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={signatureRemembered}
+                  onChange={(e) => setSignatureRemembered(e.target.checked)}
+                />
+                <span>
+                  Remember my signature for the other {myPendingSignatureFields.length - 1} signature{' '}
+                  {myPendingSignatureFields.length - 1 === 1 ? 'field' : 'fields'} on this document — otherwise we'll
+                  ask you to confirm each one. We'll keep a record that you chose this.
+                </span>
+              </label>
+            )}
 
             <div className="mt-3 flex gap-2">
               <button className="btn flex-1" onClick={() => setPendingSignFieldId(null)}>

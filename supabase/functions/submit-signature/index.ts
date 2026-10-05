@@ -430,6 +430,7 @@ Deno.serve(async (req) => {
       signatureName,
       fieldValues: submittedFieldValues,
       signatureFieldValues,
+      signatureRememberedConsent,
     }: {
       token: string;
       signatureDataUrl?: string;
@@ -442,6 +443,11 @@ Deno.serve(async (req) => {
       // actually fixes "signing once fills every signature field for this
       // role": each field now has its own value and its own audit record.
       signatureFieldValues?: Record<string, string>;
+      // True only when the signer explicitly checked "Remember my
+      // signature" in the per-field popup, opting out of confirming each
+      // remaining signature box individually — see the migration note on
+      // why this gets its own audit event instead of being implicit.
+      signatureRememberedConsent?: boolean;
     } = await req.json();
     if (!token) return json({ error: 'Missing token' }, 400);
     // A rendered signature image with no typed name behind it isn't a real
@@ -551,6 +557,20 @@ Deno.serve(async (req) => {
           user_agent: userAgent,
         })),
       );
+    }
+
+    // The explicit, logged record of opting out of per-field confirmation —
+    // a real step down in deliberateness from confirming every box, so it
+    // gets its own distinct audit event rather than disappearing into the
+    // field_signed rows above.
+    if (signatureRememberedConsent) {
+      await admin.from('contract_audit_events').insert({
+        contract_instance_id: party.contract_instance_id,
+        party_id: party.id,
+        event_type: 'signature_remembered',
+        ip_address: ipAddress,
+        user_agent: userAgent,
+      });
     }
 
     const updatedParties = (allParties ?? []).map((p) =>
@@ -731,6 +751,7 @@ Deno.serve(async (req) => {
       expired: 'Signing Link Expired',
       edited: 'Contract Terms Edited',
       field_signed: 'Signature Field Signed',
+      signature_remembered: 'Chose to Reuse Signature for Remaining Fields',
     };
 
     const partyLabelById = new Map(

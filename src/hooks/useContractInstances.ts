@@ -360,6 +360,7 @@ export function useSubmitSignature() {
       signatureName,
       fieldValues,
       signatureFieldValues,
+      signatureRememberedConsent,
     }: {
       token: string;
       /** Omitted entirely when this party's role has no signature field
@@ -381,9 +382,14 @@ export function useSubmitSignature() {
        * (server-side) its own field_signed audit event, instead of every
        * signature-type field for this role rendering the same single image. */
       signatureFieldValues?: Record<string, string>;
+      /** True only when the signer explicitly checked "Remember my
+       * signature" in the per-field popup, opting out of confirming every
+       * remaining signature box individually — recorded as its own
+       * 'signature_remembered' audit event rather than left implicit. */
+      signatureRememberedConsent?: boolean;
     }) => {
       const { data, error } = await supabase.functions.invoke('submit-signature', {
-        body: { token, signatureDataUrl, signatureName, fieldValues, signatureFieldValues },
+        body: { token, signatureDataUrl, signatureName, fieldValues, signatureFieldValues, signatureRememberedConsent },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);
@@ -454,7 +460,18 @@ export function useRecordConsent() {
 export interface ContractAuditEvent {
   id: string;
   partyId: string | null;
-  eventType: 'viewed' | 'consented' | 'signed' | 'sent' | 'reminder_sent' | 'declined' | 'voided' | 'expired' | 'edited' | 'field_signed';
+  eventType:
+    | 'viewed'
+    | 'consented'
+    | 'signed'
+    | 'sent'
+    | 'reminder_sent'
+    | 'declined'
+    | 'voided'
+    | 'expired'
+    | 'edited'
+    | 'field_signed'
+    | 'signature_remembered';
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
