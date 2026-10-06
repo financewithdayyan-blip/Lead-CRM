@@ -103,7 +103,15 @@ export interface RepStat {
   qualifyRate: number;
 }
 
-const QUALIFIED_PLUS: LeadStage[] = ['initial_contact', 'followup', 'negotiation', 'contract', 'in_title', 'closed'];
+const QUALIFIED_PLUS: LeadStage[] = [
+  'initial_contact',
+  'followup',
+  'negotiation',
+  'contract',
+  'inspection_walkthrough',
+  'in_title',
+  'closed',
+];
 
 /** Calls made, qualify rate, and contracts closed per rep — the
  * accountability view a business with more than one caller actually needs;
@@ -130,7 +138,9 @@ export function computeRepLeaderboard(
   const stats: RepStat[] = [];
   for (const [userId, { leads: userLeads, calls }] of byUser) {
     const qualified = userLeads.filter((l) => QUALIFIED_PLUS.includes(l.stage)).length;
-    const contracts = userLeads.filter((l) => l.stage === 'contract' || l.stage === 'in_title' || l.stage === 'closed').length;
+    const contracts = userLeads.filter(
+      (l) => l.stage === 'contract' || l.stage === 'inspection_walkthrough' || l.stage === 'in_title' || l.stage === 'closed',
+    ).length;
     stats.push({
       userId,
       name: nameById.get(userId) ?? 'You',
@@ -194,7 +204,7 @@ export function computeDealVelocity(leads: KpiLead[], activities: KpiActivity[])
   }
 
   const newToQualified = avgGap('new', ['initial_contact', 'followup']);
-  const qualifiedToContract = avgGap('followup', ['contract', 'in_title', 'closed']);
+  const qualifiedToContract = avgGap('followup', ['contract', 'inspection_walkthrough', 'in_title', 'closed']);
 
   return [
     { fromLabel: 'New Lead', toLabel: 'Qualified', avgDays: newToQualified.avgDays, sampleSize: newToQualified.sampleSize },

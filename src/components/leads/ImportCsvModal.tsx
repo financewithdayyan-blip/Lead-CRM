@@ -18,7 +18,16 @@ import type { LeadStage } from '@/types/domain';
 // worth another shot rather than getting silently skipped. Same reasoning
 // the code already applied to Dead/Declined alone; this just extends it to
 // every stage that isn't actually a real, live relationship with the lead.
-const DEDUPE_STAGES: LeadStage[] = ['replied', 'initial_contact', 'followup', 'negotiation', 'contract', 'in_title', 'closed'];
+const DEDUPE_STAGES: LeadStage[] = [
+  'replied',
+  'initial_contact',
+  'followup',
+  'negotiation',
+  'contract',
+  'inspection_walkthrough',
+  'in_title',
+  'closed',
+];
 
 type Step = 'upload' | 'mapping' | 'tags';
 

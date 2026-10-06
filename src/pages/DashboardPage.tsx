@@ -114,7 +114,7 @@ function funnelBucket(stage: LeadStage): FunnelKey | null {
   // In Title / Closed are downstream of Contract — no separate bars for them
   // here, but a lead that's moved past Contract still needs to keep counting
   // toward "reached Contract or further," not fall out of the funnel.
-  if (stage === 'contract' || stage === 'in_title' || stage === 'closed') return 'contract';
+  if (stage === 'contract' || stage === 'inspection_walkthrough' || stage === 'in_title' || stage === 'closed') return 'contract';
   return null;
 }
 
@@ -407,8 +407,16 @@ export function DashboardView({
 
     const repliedLeadIds = new Set(inboundMessages.filter((m) => !m.isReaction && m.leadId).map((m) => m.leadId as string));
 
-    const MAP_QUALIFIED_STAGES: LeadStage[] = ['initial_contact', 'followup', 'negotiation', 'contract', 'in_title', 'closed'];
-    const MAP_CONTRACT_STAGES: LeadStage[] = ['contract', 'in_title', 'closed'];
+    const MAP_QUALIFIED_STAGES: LeadStage[] = [
+      'initial_contact',
+      'followup',
+      'negotiation',
+      'contract',
+      'inspection_walkthrough',
+      'in_title',
+      'closed',
+    ];
+    const MAP_CONTRACT_STAGES: LeadStage[] = ['contract', 'inspection_walkthrough', 'in_title', 'closed'];
 
     interface ContractProperty {
       id: string;
@@ -644,7 +652,9 @@ export function DashboardView({
     // Contract, In Title, and Closed are the three phases of the same deal
     // (see funnelBucket above and revenueInPipelineTrend below) — a lead
     // that's progressed past Contract shouldn't disappear from this count.
-    const contracts = leads.filter((l) => l.stage === 'contract' || l.stage === 'in_title' || l.stage === 'closed').length;
+    const contracts = leads.filter(
+      (l) => l.stage === 'contract' || l.stage === 'inspection_walkthrough' || l.stage === 'in_title' || l.stage === 'closed',
+    ).length;
     const optedOut = leads.filter((l) => l.optedOut).length;
     const inConversation = leads.filter((l) => l.stage === 'replied').length;
 
@@ -809,7 +819,7 @@ export function DashboardView({
   // contract track, and correctly stops counting once it left. Only leads
   // with an assignment fee actually entered contribute anything.
   const revenueInPipelineTrend = useMemo(() => {
-    const CONTRACT_PLUS_STAGES = new Set(['contract', 'in_title', 'closed']);
+    const CONTRACT_PLUS_STAGES = new Set(['contract', 'inspection_walkthrough', 'in_title', 'closed']);
     const CLOSED_STAGE = 'closed';
 
     const transitionsByLead = new Map<string, Array<{ at: number; to: string }>>();

@@ -11,6 +11,7 @@ export type LeadStage =
   | 'followup'
   | 'negotiation'
   | 'contract'
+  | 'inspection_walkthrough'
   | 'in_title'
   | 'closed'
   | 'dead_declined'
@@ -26,6 +27,7 @@ export const STAGE_ORDER: LeadStage[] = [
   'followup',
   'negotiation',
   'contract',
+  'inspection_walkthrough',
   'in_title',
   'closed',
   'dead_declined',
@@ -35,10 +37,13 @@ export const STAGE_ORDER: LeadStage[] = [
 
 // Admins track deals past Contract through to close, and don't need a
 // column/option for a cold-calling concern — callers get the reverse:
-// Voicemail, but no In Title / Closed. Shared by the Kanban board's columns
-// and the lead profile's manual stage picker so both stay consistent.
+// Voicemail, but no Inspection & Walkthrough / In Title / Closed. Shared by
+// the Kanban board's columns and the lead profile's manual stage picker so
+// both stay consistent.
 export function visibleStagesFor(isAdmin: boolean): LeadStage[] {
-  return STAGE_ORDER.filter((s) => (isAdmin ? s !== 'voicemail' : s !== 'in_title' && s !== 'closed'));
+  return STAGE_ORDER.filter((s) =>
+    isAdmin ? s !== 'voicemail' : s !== 'inspection_walkthrough' && s !== 'in_title' && s !== 'closed',
+  );
 }
 
 export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> = {
@@ -55,7 +60,9 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   followup: { label: 'Qualified', color: '#c084fc' },
   negotiation: { label: 'Negotiation', color: '#fb923c' },
   contract: { label: 'Contract', color: '#10b981' },
-  // Post-contract, admin-only stages — a deal in title work, then closed.
+  // Post-contract, admin-only stages — inspection/walkthrough, then title
+  // work, then closed.
+  inspection_walkthrough: { label: 'Inspection & Walkthrough', color: '#ec4899' },
   in_title: { label: 'In Title', color: '#6366f1' },
   closed: { label: 'Closed', color: '#C9A24B' },
   dead_declined: { label: 'Dead / Declined', color: '#ef4444' },
