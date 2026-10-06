@@ -3,9 +3,17 @@ import { Trash2 } from 'lucide-react';
 import { RepairPicker } from '@/components/packets/RepairPicker';
 import { repairIcon } from '@/lib/repairCatalog';
 import { useLeadRepairs, useCreateLeadRepair, useUpdateLeadRepair, useDeleteLeadRepair } from '@/hooks/useLeadRepairs';
+import { useUpdateLead } from '@/hooks/useLeads';
 import { formatCurrency } from '@/lib/utils';
 import type { LeadRepair } from '@/types/domain';
 import type { Lead } from '@/types/domain';
+
+// MAO = ARV x 90% - (2x repairs — a conservative multiplier since actual
+// rehab cost commonly runs double the initial estimate) - a flat $10k
+// minimum wholesale fee.
+const MAO_ARV_PCT = 0.9;
+const MAO_REPAIR_MULTIPLIER = 2;
+const MAO_MIN_FEE = 10000;
 
 /** Local-buffered so typing a cost doesn't fire a mutation (and a cache
  *  invalidation + refetch) on every keystroke — committing on blur means one
@@ -37,9 +45,12 @@ export function RepairEstimateSection({ lead }: { lead: Lead }) {
   const createRepair = useCreateLeadRepair();
   const updateRepair = useUpdateLeadRepair();
   const deleteRepair = useDeleteLeadRepair();
+  const updateLead = useUpdateLead();
+  const [offerApplied, setOfferApplied] = useState(false);
 
   const total = repairs.reduce((sum, r) => sum + r.cost, 0);
   const maxCost = Math.max(...repairs.map((r) => r.cost), 1);
+  const mao = lead.arv != null ? lead.arv * MAO_ARV_PCT - MAO_REPAIR_MULTIPLIER * total - MAO_MIN_FEE : null;
 
   function handleAdd(item: string) {
     createRepair.mutate({ leadId: lead.id, item, cost: 0, sortOrder: repairs.length });
@@ -85,6 +96,29 @@ export function RepairEstimateSection({ lead }: { lead: Lead }) {
 
       <div className="mt-3">
         <RepairPicker existingItems={repairs.map((r) => r.item)} onAdd={handleAdd} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
+        <div className="text-[13px] text-text-2">
+          Max Allowable Offer <span className="text-[11.5px] text-text-3">(ARV × 90% − 2× repairs − $10k fee)</span>:{' '}
+          <span className={`font-semibold ${mao != null && mao < 0 ? 'text-danger' : 'text-text'}`}>
+            {mao != null ? formatCurrency(mao) : '— (set ARV first)'}
+          </span>
+        </div>
+        {mao != null && (
+          <button
+            className="text-[12px] font-medium text-primary hover:underline"
+            onClick={() =>
+              updateLead.mutate(
+                { id: lead.id, maxOffer: Math.round(mao) },
+                { onSuccess: () => { setOfferApplied(true); setTimeout(() => setOfferApplied(false), 2000); } },
+              )
+            }
+            disabled={updateLead.isPending}
+          >
+            {offerApplied ? '✓ Set as Cash Offer' : 'Use this as Cash Offer'}
+          </button>
+        )}
       </div>
     </div>
   );
