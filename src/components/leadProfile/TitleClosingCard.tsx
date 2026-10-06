@@ -7,7 +7,14 @@ export function TitleClosingCard({ lead }: { lead: Lead }) {
   const checklist = lead.titleChecklist ?? {};
   const doneCount = TITLE_CHECKLIST_STEPS.filter((s) => checklist[s.key]?.done).length;
 
+  // Each toggle replaces the whole title_checklist column from a snapshot
+  // of the lead prop, rather than merging server-side — two clicks fired
+  // before the first one's result lands would both compute their patch from
+  // the same stale snapshot, and whichever request resolves last silently
+  // wins, dropping the other's change. Disabling while a save is in flight
+  // closes that window instead of requiring a real server-side JSON merge.
   function toggle(key: (typeof TITLE_CHECKLIST_STEPS)[number]['key']) {
+    if (updateLead.isPending) return;
     const current = checklist[key]?.done ?? false;
     updateLead.mutate({
       id: lead.id,
@@ -40,7 +47,13 @@ export function TitleClosingCard({ lead }: { lead: Lead }) {
           return (
             <label key={step.key} className="flex cursor-pointer items-center justify-between gap-3 py-2">
               <span className="flex items-center gap-2.5">
-                <input type="checkbox" checked={!!entry?.done} onChange={() => toggle(step.key)} className="h-3.5 w-3.5 cursor-pointer accent-primary" />
+                <input
+                  type="checkbox"
+                  checked={!!entry?.done}
+                  onChange={() => toggle(step.key)}
+                  disabled={updateLead.isPending}
+                  className="h-3.5 w-3.5 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-60"
+                />
                 <span className={`text-[13px] ${entry?.done ? 'text-text' : 'text-text-2'}`}>{step.label}</span>
               </span>
               <span className="text-[11.5px] text-text-3">{entry?.done && entry.completedAt ? formatDate(entry.completedAt) : '—'}</span>

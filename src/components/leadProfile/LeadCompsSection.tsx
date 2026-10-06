@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { useUpsertComps } from '@/hooks/useLeads';
+import { useUpdateLead, useUpsertComps } from '@/hooks/useLeads';
 import { estimateComparableArv } from '@/hooks/useDealPackets';
 import { formatCurrency } from '@/lib/utils';
 import type { Comp, CompKind, Lead } from '@/types/domain';
@@ -32,8 +32,10 @@ const EMPTY_ROW = (kind: CompKind): CompRow => ({ kind, address: '', price: null
 
 export function LeadCompsSection({ lead }: { lead: Lead }) {
   const upsertComps = useUpsertComps();
+  const updateLead = useUpdateLead();
   const [rows, setRows] = useState<CompRow[]>(() => (lead.comps ?? []).map(toRow));
   const [saved, setSaved] = useState(false);
+  const [arvApplied, setArvApplied] = useState(false);
 
   const suggested = useMemo(
     () => estimateComparableArv(rows.map((r) => ({ kind: r.kind, salePrice: r.price, sqft: r.sqft })), lead.sqft),
@@ -99,10 +101,26 @@ export function LeadCompsSection({ lead }: { lead: Lead }) {
         ))}
       </div>
 
-      <div className="mt-4 border-t border-border pt-2.5 text-[13px] text-text-2">
-        Suggested ARV from comps:{' '}
-        <span className="font-semibold text-text">{suggested ? formatCurrency(suggested.value) : '—'}</span>
-        {suggested && <span className="ml-1.5 text-[11.5px] text-text-3">({suggested.soldCount} comp{suggested.soldCount === 1 ? '' : 's'})</span>}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
+        <div className="text-[13px] text-text-2">
+          Suggested ARV from comps:{' '}
+          <span className="font-semibold text-text">{suggested ? formatCurrency(suggested.value) : '—'}</span>
+          {suggested && <span className="ml-1.5 text-[11.5px] text-text-3">({suggested.soldCount} comp{suggested.soldCount === 1 ? '' : 's'})</span>}
+        </div>
+        {suggested && (
+          <button
+            className="text-[12px] font-medium text-primary hover:underline"
+            onClick={() =>
+              updateLead.mutate(
+                { id: lead.id, arv: suggested.value },
+                { onSuccess: () => { setArvApplied(true); setTimeout(() => setArvApplied(false), 2000); } },
+              )
+            }
+            disabled={updateLead.isPending}
+          >
+            {arvApplied ? '✓ Set as lead ARV' : 'Use this as lead ARV'}
+          </button>
+        )}
       </div>
     </div>
   );

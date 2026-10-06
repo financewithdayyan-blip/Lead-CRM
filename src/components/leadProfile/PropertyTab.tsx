@@ -128,6 +128,7 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
     monthlyPayment: lead.monthlyPayment?.toString() ?? '',
     backTaxes: lead.backTaxes?.toString() ?? '',
     auctionDate: lead.auctionDate ?? '',
+    arv: lead.arv?.toString() ?? '',
   });
   const [repairs, setRepairs] = useState(lead.repairs ?? {});
 
@@ -150,6 +151,7 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
         monthlyPayment: form.monthlyPayment ? Number(form.monthlyPayment) : null,
         backTaxes: form.backTaxes ? Number(form.backTaxes) : null,
         auctionDate: form.auctionDate || null,
+        arv: form.arv ? Number(form.arv) : null,
         repairs,
       },
       { onSuccess: () => setEditing(false) },
@@ -238,6 +240,10 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
             <div>
               <label className="label">Back Taxes</label>
               <input className="input" inputMode="decimal" value={form.backTaxes} onChange={(e) => set('backTaxes', e.target.value.replace(/[^0-9.]/g, ''))} />
+            </div>
+            <div>
+              <label className="label">ARV</label>
+              <input className="input" inputMode="decimal" value={form.arv} onChange={(e) => set('arv', e.target.value.replace(/[^0-9.]/g, ''))} />
             </div>
             <div>
               <label className="label">Auction Date</label>

@@ -1,9 +1,36 @@
+import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { RepairPicker } from '@/components/packets/RepairPicker';
 import { repairIcon } from '@/lib/repairCatalog';
 import { useLeadRepairs, useCreateLeadRepair, useUpdateLeadRepair, useDeleteLeadRepair } from '@/hooks/useLeadRepairs';
 import { formatCurrency } from '@/lib/utils';
+import type { LeadRepair } from '@/types/domain';
 import type { Lead } from '@/types/domain';
+
+/** Local-buffered so typing a cost doesn't fire a mutation (and a cache
+ *  invalidation + refetch) on every keystroke — committing on blur means one
+ *  request per edit instead of one per digit, and avoids the final saved
+ *  value depending on which keystroke's request happens to resolve last. */
+function RepairCostInput({ repair, onCommit }: { repair: LeadRepair; onCommit: (cost: number) => void }) {
+  const [value, setValue] = useState(repair.cost ? String(repair.cost) : '');
+
+  function commit() {
+    const n = Number(value.replace(/[^0-9.]/g, ''));
+    if (!Number.isNaN(n) && n !== repair.cost) onCommit(n);
+  }
+
+  return (
+    <input
+      className="input !w-20 shrink-0 !py-1 text-[12.5px]"
+      inputMode="decimal"
+      value={value}
+      placeholder="0"
+      onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ''))}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+    />
+  );
+}
 
 export function RepairEstimateSection({ lead }: { lead: Lead }) {
   const { data: repairs = [] } = useLeadRepairs(lead.id);
@@ -43,16 +70,7 @@ export function RepairEstimateSection({ lead }: { lead: Lead }) {
                     <div className="h-full rounded-full bg-primary" style={{ width: `${(r.cost / maxCost) * 100}%` }} />
                   </div>
                 </div>
-                <input
-                  className="input !w-20 shrink-0 !py-1 text-[12.5px]"
-                  inputMode="decimal"
-                  value={r.cost || ''}
-                  placeholder="0"
-                  onChange={(e) => {
-                    const n = Number(e.target.value.replace(/[^0-9.]/g, ''));
-                    if (!Number.isNaN(n)) updateRepair.mutate({ id: r.id, leadId: lead.id, cost: n });
-                  }}
-                />
+                <RepairCostInput repair={r} onCommit={(cost) => updateRepair.mutate({ id: r.id, leadId: lead.id, cost })} />
                 <button
                   className="shrink-0 text-text-3 opacity-0 hover:text-danger group-hover:opacity-100"
                   onClick={() => deleteRepair.mutate({ id: r.id, leadId: lead.id })}
