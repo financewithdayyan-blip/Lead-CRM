@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { MessageSquareText, Phone, PhoneCall } from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { Modal } from '@/components/ui/Modal';
@@ -33,11 +32,7 @@ export function ContactSidebarCard({
   onCall: (phone: string | null | undefined) => void;
 }) {
   const updateLead = useUpdateLead();
-  const [searchParams] = useSearchParams();
-  // Lets a link elsewhere (e.g. a Kanban card's "Text" action) land straight
-  // on this lead with the Text thread already open, via `?openSms=1` —
-  // texting is admin-only, same gate the old dedicated SMS tab had.
-  const [smsOpen, setSmsOpen] = useState(isAdmin && searchParams.get('openSms') === '1');
+  const [smsOpen, setSmsOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preferred, setPreferred] = useState(lead.preferredContactMethod ?? '');
   const [bestTime, setBestTime] = useState(lead.bestTimeToContact ?? '');

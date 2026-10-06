@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, RefreshCw, Share2, ArrowRightLeft, Sparkles, PhoneCall } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags } from '@/hooks/useLeads';
@@ -24,6 +24,7 @@ import { UnderwritingTab } from '@/components/leadProfile/UnderwritingTab';
 import { DealTab } from '@/components/leadProfile/DealTab';
 import { ActivityTab } from '@/components/leadProfile/ActivityTab';
 import { EditContactModal } from '@/components/leadProfile/EditContactModal';
+import { SmsThreadTab } from '@/components/sms/SmsThreadTab';
 
 function AiScoreCard({ lead }: { lead: Lead }) {
   const scoreLead = useScoreLead();
@@ -296,10 +297,11 @@ function ShareMenu({
   );
 }
 
-const TABS = ['overview', 'property', 'underwriting', 'deal', 'activity'] as const;
+const TABS = ['overview', 'sms', 'property', 'underwriting', 'deal', 'activity'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
+  sms: 'SMS',
   property: 'Property',
   underwriting: 'Underwriting',
   deal: 'Deal',
@@ -326,7 +328,12 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
     addActivity.mutate({ leadId: lead.id, type: 'call', body: 'Quick call logged from lead profile' });
     window.location.href = `zoomphonecall://${e164}`;
   };
-  const [tab, setTab] = useState<TabKey>('overview');
+  // Lets a link elsewhere (e.g. a Kanban card's "Text" action) land straight
+  // on the SMS tab via `?openSms=1` instead of always opening on Overview.
+  // Read once at mount — this page doesn't re-init the tab if the query
+  // string changes underneath an already-open profile.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<TabKey>(isAdmin && searchParams.get('openSms') === '1' ? 'sms' : 'overview');
   if (isLoading) return <div className="text-text-3">Loading…</div>;
   if (!lead) return <div className="text-text-3">Lead not found.</div>;
 
@@ -449,7 +456,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-border">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -465,6 +472,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0">
           {tab === 'overview' && <OverviewTab lead={lead} onJumpToProperty={() => setTab('property')} />}
+          {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
           {tab === 'property' && <PropertyTab lead={lead} />}
           {tab === 'underwriting' && <UnderwritingTab lead={lead} />}
           {tab === 'deal' && <DealTab lead={lead} />}
