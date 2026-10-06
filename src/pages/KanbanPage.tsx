@@ -345,9 +345,13 @@ function KanbanCardVisual({
         <div {...dragProps} className={`min-w-0 flex-1 ${dragProps ? 'cursor-grab active:cursor-grabbing' : ''}`}>
           <div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5">
             <div className="flex min-w-0 items-center gap-1.5">
-              <span className={`truncate font-medium ${themed ? theme!.text : 'text-text'}`}>
+              <Link
+                to={href}
+                onClick={(e) => e.stopPropagation()}
+                className={`truncate font-medium hover:underline ${themed ? theme!.text : 'text-text'}`}
+              >
                 {lead.firstName} {lead.lastName}
-              </span>
+              </Link>
               {/* The only marker on the spotlighted card now — no card-color
                   change, just this badge naming the actual score. */}
               {spotlight && lead.aiScore !== null && (
