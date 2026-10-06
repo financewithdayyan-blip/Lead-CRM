@@ -272,6 +272,9 @@ export function DashboardView({
   // window someone actually wants (a single bad day, this week, this
   // quarter), not locked to the same range as every other card.
   const [smsRange, setSmsRange] = useState<SmsRangeKey>('7d');
+  // Pipeline Activity gets the same independent-range treatment — same
+  // reasoning as smsRange above.
+  const [activityRange, setActivityRange] = useState<SmsRangeKey>('30d');
 
   const calls = useMemo(() => activities.filter((a) => a.type === 'call'), [activities]);
 
@@ -758,10 +761,11 @@ export function DashboardView({
     };
   }, [leads, calls, tags, activities, sendLog, inboundMessages, qualifiedPlusIds, cutoff]);
 
-  // Chart granularity follows the same global range rather than a second,
-  // independent control — Today and 7D both read as a 7-day chart since a
-  // single-day trend isn't a trend, and 90D/All cap at 90 days of buckets.
-  const trendDayCount = dateRange === '30d' ? 30 : dateRange === '90d' || dateRange === 'all' ? 90 : 7;
+  // Driven by its own activityRange toggle rather than the page-wide range
+  // — 90D and Lifetime both cap at 90 days of buckets (a daily trend chart
+  // stretching years back isn't useful or fast to render).
+  const trendDayCount =
+    activityRange === '1d' ? 1 : activityRange === '7d' ? 7 : activityRange === '30d' ? 30 : 90;
 
   const activityTrend = useMemo(() => {
     const days: Array<{ iso: string; label: string; sent: number; replies: number; qualified: number }> = [];
@@ -1381,7 +1385,26 @@ export function DashboardView({
             <div className="space-y-3">
               {showSmsStats && (
                 <div className="card chart-layer">
-                  <CardHeader icon={Waypoints} title="Pipeline Activity" sub={`SMS sent and replies, newly qualified as bubbles · ${rangeLabel}`} />
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <CardHeader
+                      icon={Waypoints}
+                      title="Pipeline Activity"
+                      sub={`SMS sent and replies, newly qualified as bubbles · ${SMS_RANGE_OPTIONS.find((r) => r.key === activityRange)?.label}`}
+                    />
+                    <div className="flex shrink-0 gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
+                      {SMS_RANGE_OPTIONS.map((r) => (
+                        <button
+                          key={r.key}
+                          onClick={() => setActivityRange(r.key)}
+                          className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                            activityRange === r.key ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text-2'
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <Suspense fallback={<div className="flex h-[280px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3">
                       <PipelineActivityChart data={activityTrend} />
