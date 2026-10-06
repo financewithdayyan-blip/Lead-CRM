@@ -458,8 +458,15 @@ export function useLead(id: string | undefined) {
     },
     // Most navigations to a lead profile come from a page that already loaded
     // the full leads list (Leads table, Kanban, Dashboard), so render from that
-    // cache instantly instead of waiting on a fresh network round-trip.
+    // cache instantly instead of waiting on a fresh network round-trip. But
+    // that list cache only ever carries LEAD_LIST_SELECT's trimmed columns
+    // (no arv/beds/baths/sqft/condition/etc) — initialDataUpdatedAt: 0 marks
+    // it as already-stale so this still kicks off a real LEAD_DETAIL_SELECT
+    // fetch in the background right away, instead of treating the trimmed
+    // seed as fresh for the next 5 minutes and silently showing every
+    // detail-only field as empty until it happens to expire.
     initialData: () => qc.getQueryData<Lead[]>(['leads', session?.user.id])?.find((l) => l.id === id),
+    initialDataUpdatedAt: 0,
     enabled: !!id,
   });
 }
