@@ -49,10 +49,16 @@ function isPartyReady(p: PartyDraft): boolean {
  */
 export function SendContractModal({
   template,
+  leadId,
+  initialAddress,
   onClose,
   onSent,
 }: {
   template: DocTemplate;
+  /** See FillCashDealContractModal's leadId — same create-contract-instance
+   * param, links the created contract back to this lead. */
+  leadId?: string;
+  initialAddress?: string;
   onClose: () => void;
   onSent: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
 }) {
@@ -60,7 +66,7 @@ export function SendContractModal({
   const firstRoleLabel = roleLabel('buyer', template.type);
 
   const [name, setName] = useState(template.name);
-  const [propertyAddress, setPropertyAddress] = useState('');
+  const [propertyAddress, setPropertyAddress] = useState(initialAddress ?? '');
   const [parties, setParties] = useState<PartyDraft[]>([
     { key: 'buyer', role: 'buyer', name: '', phone: '', email: '', sendSms: true, sendEmail: false },
     { key: 'seller', role: 'seller', name: '', phone: '', email: '', sendSms: true, sendEmail: false },
@@ -101,6 +107,7 @@ export function SendContractModal({
     try {
       const { parties: created, delivery } = await generate.mutateAsync({
         templateId: template.id,
+        leadId,
         name: name.trim(),
         propertyAddress: propertyAddress.trim(),
         fieldValues: {},

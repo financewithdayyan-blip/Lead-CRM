@@ -86,10 +86,16 @@ const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency
  */
 export function FillNovationContractModal({
   template,
+  leadId,
+  initialSeller,
   onClose,
   onSent,
 }: {
   template: DocTemplate;
+  /** See FillCashDealContractModal's leadId — same create-contract-instance
+   * param, links the created contract back to this lead. */
+  leadId?: string;
+  initialSeller?: { name: string; phone: string; email: string };
   onClose: () => void;
   onSent: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
 }) {
@@ -98,9 +104,9 @@ export function FillNovationContractModal({
   const { data: numberLabels } = useSmsNumberLabels();
   const defaultBuyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
 
-  const [sellerName, setSellerName] = useState('');
-  const [sellerPhone, setSellerPhone] = useState('');
-  const [sellerEmail, setSellerEmail] = useState('');
+  const [sellerName, setSellerName] = useState(initialSeller?.name ?? '');
+  const [sellerPhone, setSellerPhone] = useState(initialSeller?.phone ?? '');
+  const [sellerEmail, setSellerEmail] = useState(initialSeller?.email ?? '');
   const [sellerSendSms, setSellerSendSms] = useState(true);
   const [sellerSendEmail, setSellerSendEmail] = useState(false);
   const [ownerCount, setOwnerCount] = useState<1 | 2>(1);
@@ -196,6 +202,7 @@ export function FillNovationContractModal({
 
       const { parties: created, delivery } = await generate.mutateAsync({
         templateId: template.id,
+        leadId,
         name: template.name,
         propertyAddress: [values.streetAddress.trim(), values.cityStateZip.trim()].filter(Boolean).join(', '),
         fieldValues,

@@ -9,7 +9,7 @@ export function DealTab({ lead }: { lead: Lead }) {
     <div className="space-y-5">
       <OfferSummaryStrip lead={lead} />
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <ContractStatusCard leadId={lead.id} />
+        <ContractStatusCard lead={lead} />
         <TitleClosingCard lead={lead} />
       </div>
       <PacketTab lead={lead} />

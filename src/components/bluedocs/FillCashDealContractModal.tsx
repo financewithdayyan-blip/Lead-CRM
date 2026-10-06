@@ -143,6 +143,10 @@ const FIELD_ROWS: Array<{ key: FieldKey; label: string; type: 'text' | 'currency
 export function FillCashDealContractModal({
   template,
   instance,
+  leadId,
+  initialSeller,
+  initialAddress,
+  initialPurchasePrice,
   onClose,
   onSent,
   onSaved,
@@ -154,6 +158,18 @@ export function FillCashDealContractModal({
    * mount, and submitting calls update-contract-instance instead of
    * create-contract-instance. */
   instance?: ContractInstance;
+  /** Links the created contract_instances row back to this lead (see
+   * create-contract-instance, which already accepts and stores this — only
+   * the Lead Profile's "Create Contract" entry point actually passes it
+   * today) so the Deal tab's Contract card can find it afterward. Create
+   * mode only; ignored when editing an existing instance. */
+  leadId?: string;
+  /** Pre-fills the seller fields from a lead's own contact info — create
+   * mode only, skipped entirely when editing (the edit-mode effect below
+   * always wins since it re-seeds from the instance after mount). */
+  initialSeller?: { name: string; phone: string; email: string };
+  initialAddress?: string;
+  initialPurchasePrice?: string;
   onClose: () => void;
   /** Create mode only. */
   onSent?: (link: { label: string; url: string; delivery: DeliveryResult }) => void;
@@ -166,9 +182,9 @@ export function FillCashDealContractModal({
   const { data: numberLabels } = useSmsNumberLabels();
   const defaultBuyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
 
-  const [sellerName, setSellerName] = useState('');
-  const [sellerPhone, setSellerPhone] = useState('');
-  const [sellerEmail, setSellerEmail] = useState('');
+  const [sellerName, setSellerName] = useState(initialSeller?.name ?? '');
+  const [sellerPhone, setSellerPhone] = useState(initialSeller?.phone ?? '');
+  const [sellerEmail, setSellerEmail] = useState(initialSeller?.email ?? '');
   const [sellerSendSms, setSellerSendSms] = useState(true);
   const [sellerSendEmail, setSellerSendEmail] = useState(false);
   const [ownerCount, setOwnerCount] = useState<1 | 2>(1);
@@ -185,8 +201,8 @@ export function FillCashDealContractModal({
   const [values, setValues] = useState<Record<FieldKey, string>>({
     sellerName: '',
     buyerName: '',
-    address: '',
-    purchasePrice: '',
+    address: initialAddress ?? '',
+    purchasePrice: initialPurchasePrice ?? '',
     emdAmount: '',
     titleCompany: '',
     inspectionPeriod: '',
@@ -342,6 +358,7 @@ export function FillCashDealContractModal({
 
       const { parties: created, delivery } = await generate.mutateAsync({
         templateId: template.id,
+        leadId,
         name: template.name,
         propertyAddress: values.address.trim(),
         fieldValues,

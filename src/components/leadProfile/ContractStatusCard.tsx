@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { useContractInstancesForLead } from '@/hooks/useContractInstances';
+import { CreateContractButton } from './CreateContractButton';
+import type { Lead } from '@/types/domain';
 
 const STEPS = ['Drafted', 'Sent for signature', 'Seller signed', 'Fully executed'];
 
@@ -10,8 +12,8 @@ const TERMINAL_LABEL: Record<string, string> = {
   expired: 'Expired',
 };
 
-export function ContractStatusCard({ leadId }: { leadId: string }) {
-  const { data: instances = [], isLoading } = useContractInstancesForLead(leadId);
+export function ContractStatusCard({ lead }: { lead: Lead }) {
+  const { data: instances = [], isLoading } = useContractInstancesForLead(lead.id);
 
   const active = instances.find((i) => !(i.status in TERMINAL_LABEL)) ?? instances[0];
   const priorCount = instances.length - (active ? 1 : 0);
@@ -42,18 +44,20 @@ export function ContractStatusCard({ leadId }: { leadId: string }) {
       {isLoading && <div className="mt-3 text-[13px] text-text-3">Loading…</div>}
 
       {!isLoading && !active && (
-        <div className="mt-3 text-[13px] text-text-3">
-          No contract started yet.{' '}
-          <Link to="/blue-docs" className="font-medium text-primary hover:underline">
-            Send one from Blue Docs
-          </Link>
-          .
+        <div className="mt-3">
+          <p className="mb-3 text-[13px] text-text-3">No contract started yet.</p>
+          <CreateContractButton lead={lead} />
         </div>
       )}
 
       {active && terminalLabel && (
-        <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-danger-dim px-2.5 py-1 text-[12.5px] font-medium text-danger">
-          {terminalLabel}
+        <div className="mt-3 space-y-3">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-danger-dim px-2.5 py-1 text-[12.5px] font-medium text-danger">
+            {terminalLabel}
+          </div>
+          <div>
+            <CreateContractButton lead={lead} />
+          </div>
         </div>
       )}
 
