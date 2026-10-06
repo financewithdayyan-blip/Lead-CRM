@@ -17,6 +17,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ 
 const LeadsPage = lazy(() => import('@/pages/LeadsPage').then((m) => ({ default: m.LeadsPage })));
 const LeadProfilePage = lazy(() => import('@/pages/LeadProfilePage').then((m) => ({ default: m.LeadProfilePage })));
 const KanbanPage = lazy(() => import('@/pages/KanbanPage').then((m) => ({ default: m.KanbanPage })));
+const CalendarPage = lazy(() => import('@/pages/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const BulkSmsPage = lazy(() => import('@/pages/BulkSmsPage').then((m) => ({ default: m.BulkSmsPage })));
 const SmsLevelsPage = lazy(() => import('@/pages/SmsLevelsPage').then((m) => ({ default: m.SmsLevelsPage })));
 const CallHistoryPage = lazy(() => import('@/pages/CallHistoryPage').then((m) => ({ default: m.CallHistoryPage })));
@@ -27,6 +28,7 @@ const MemberDashboardPage = lazy(() => import('@/pages/MemberDashboardPage').the
 const MemberLeadsPage = lazy(() => import('@/pages/MemberLeadsPage').then((m) => ({ default: m.MemberLeadsPage })));
 const MemberLeadProfilePage = lazy(() => import('@/pages/MemberLeadProfilePage').then((m) => ({ default: m.MemberLeadProfilePage })));
 const MemberKanbanPage = lazy(() => import('@/pages/MemberKanbanPage').then((m) => ({ default: m.MemberKanbanPage })));
+const MemberCalendarPage = lazy(() => import('@/pages/MemberCalendarPage').then((m) => ({ default: m.MemberCalendarPage })));
 const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then((m) => ({ default: m.MemberSettingsPage })));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
@@ -81,6 +83,7 @@ export default function App() {
                       <Route path="/leads" element={<LeadsPage />} />
                       <Route path="/leads/:id" element={<LeadProfilePage />} />
                       <Route path="/kanban" element={<KanbanPage />} />
+                      <Route path="/calendar" element={<CalendarPage />} />
                       <Route path="/calls" element={<CallHistoryPage />} />
                       <Route path="/notifications" element={<NotificationsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
@@ -102,6 +105,7 @@ export default function App() {
                         <Route path="/team/:memberId/leads" element={<MemberLeadsPage />} />
                         <Route path="/team/:memberId/leads/:id" element={<MemberLeadProfilePage />} />
                         <Route path="/team/:memberId/kanban" element={<MemberKanbanPage />} />
+                        <Route path="/team/:memberId/calendar" element={<MemberCalendarPage />} />
                         <Route path="/team/:memberId/settings" element={<MemberSettingsPage />} />
                       </Route>
                     </Route>

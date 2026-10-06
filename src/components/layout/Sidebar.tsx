@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
   Bell,
+  CalendarDays,
   ChevronUp,
   LayoutDashboard,
   Users,
@@ -282,11 +283,13 @@ export function Sidebar() {
         { to: `/team/${viewingId}`, label: 'Dashboard', icon: LayoutDashboard },
         { to: `/team/${viewingId}/leads`, label: 'Leads', icon: Users },
         { to: `/team/${viewingId}/kanban`, label: 'Kanban', icon: Kanban },
+        { to: `/team/${viewingId}/calendar`, label: 'Calendar', icon: CalendarDays },
       ]
     : [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/leads', label: 'Leads', icon: Users },
         { to: '/kanban', label: 'Kanban', icon: Kanban },
+        { to: '/calendar', label: 'Calendar', icon: CalendarDays },
         { to: '/calls', label: 'Call History', icon: History },
       ];
 

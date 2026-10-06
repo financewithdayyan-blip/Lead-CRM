@@ -1,4 +1,23 @@
-import type { AuctionTier, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, MarketingSpendEntry, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import type { AuctionTier, CalendarEvent, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, MarketingSpendEntry, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import { leadDisplayName } from '@/lib/utils';
+
+export function dbToCalendarEvent(row: any): CalendarEvent {
+  const lead = row.lead;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    leadId: row.lead_id,
+    leadName: lead ? leadDisplayName(lead.first_name, lead.last_name) : null,
+    eventType: row.event_type,
+    title: row.title,
+    location: row.location,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    notes: row.notes,
+    createdAt: row.created_at,
+    editable: true,
+  };
+}
 
 export function dbToTag(row: any): Tag {
   return { id: row.id, userId: row.user_id, name: row.name, colorBg: row.color_bg, colorText: row.color_text };

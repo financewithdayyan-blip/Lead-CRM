@@ -72,6 +72,35 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
   others: { label: 'Others', color: '#94a3b8' },
 };
 
+export type CalendarEventType = 'walkthrough' | 'call' | 'signing' | 'closing';
+
+export const CALENDAR_EVENT_TYPE_CONFIG: Record<CalendarEventType, { label: string; color: string }> = {
+  // Colors reuse the matching Kanban stage's own color where one exists, so
+  // the same concept (a walkthrough, a signed contract, a closed deal) reads
+  // the same on the calendar as it does on the board.
+  walkthrough: { label: 'Walkthrough', color: '#ec4899' },
+  call: { label: 'Call', color: '#38bdf8' },
+  signing: { label: 'Signing', color: '#10b981' },
+  closing: { label: 'Closing', color: '#C9A24B' },
+};
+
+export interface CalendarEvent {
+  id: string;
+  userId: string;
+  leadId: string | null;
+  leadName: string | null;
+  eventType: CalendarEventType;
+  title: string;
+  location: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  /** False for events synthesized from a lead's own scheduled-callback /
+   *  next-follow-up fields — those are edited on the lead itself, not here. */
+  editable: boolean;
+}
+
 export interface Tag {
   id: string;
   userId: string;
