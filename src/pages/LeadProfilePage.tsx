@@ -1,27 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Archive, ChevronDown, DollarSign, Hash, MessageSquareText, Pencil, Plus, Send, Trash2, Upload, ExternalLink, Share2, ArrowRightLeft, Sparkles, RefreshCw, PhoneCall, Loader2, CheckCircle2, Circle, User, Video } from 'lucide-react';
-import { CardHeader } from '@/components/ui/CardHeader';
-import { RadialGauge } from '@/components/ui/RadialGauge';
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Pencil, RefreshCw, Share2, ArrowRightLeft, Sparkles, PhoneCall } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
-import { useActivities, useAddActivity, useDeleteActivity, useUpdateActivity } from '@/hooks/useActivities';
-import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from '@/hooks/useTasks';
-import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl, useSignedFileUrls } from '@/hooks/useLeadFiles';
+import { useAddActivity } from '@/hooks/useActivities';
 import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { STAGE_CONFIG, visibleStagesFor, type ActivityType, type Lead, type LeadActivity, type LeadStage, type Tag } from '@/types/domain';
-import { daysUntil, formatPhone, formatDate, formatDateTime, formatClockTime, isImageFile, isVideoFile, localIsoDate, toE164 } from '@/lib/utils';
+import { STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
+import { formatPhone, toE164 } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
-import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
-import { PacketTab } from '@/components/packets/PacketTab';
-import { SmsThreadTab } from '@/components/sms/SmsThreadTab';
 import { scoreColor } from '@/lib/aiScore';
+import { ContactSidebarCard } from '@/components/leadProfile/ContactSidebarCard';
+import { TasksSidebarCard } from '@/components/leadProfile/TasksSidebarCard';
+import { OwnerSidebarCard } from '@/components/leadProfile/OwnerSidebarCard';
+import { OverviewTab } from '@/components/leadProfile/OverviewTab';
+import { PropertyTab } from '@/components/leadProfile/PropertyTab';
+import { UnderwritingTab } from '@/components/leadProfile/UnderwritingTab';
+import { DealTab } from '@/components/leadProfile/DealTab';
+import { ActivityTab } from '@/components/leadProfile/ActivityTab';
+import { EditContactModal } from '@/components/leadProfile/EditContactModal';
 
 function AiScoreCard({ lead }: { lead: Lead }) {
   const scoreLead = useScoreLead();
@@ -294,269 +296,15 @@ function ShareMenu({
   );
 }
 
-const ACTIVITY_LABEL: Record<ActivityType, string> = {
-  note: 'Note',
-  call: 'Call',
-  email: 'Email',
-  meeting: 'Meeting',
-  sms: 'Text',
-  stage_change: 'Stage changed',
-};
-
-// 'property' is deliberately not a tab any more — Property Details is now
-// edited directly on Overview (see PropertyEditCard), so there's no second
-// place left that needs its own tab. 'activity' isn't a tab either —
-// notes have their own chat on Overview, call/stage-change logging happens
-// automatically elsewhere, and the raw activity feed itself is a backend
-// record now rather than a page anyone navigates to.
-const TABS = ['overview', 'sms', 'tasks', 'files', 'packet'] as const;
+const TABS = ['overview', 'property', 'underwriting', 'deal', 'activity'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
   overview: 'Overview',
-  packet: 'Deal Packet',
-  sms: 'SMS',
-  tasks: 'Tasks',
-  files: 'Files',
+  property: 'Property',
+  underwriting: 'Underwriting',
+  deal: 'Deal',
+  activity: 'Activity',
 };
-
-/** The old separate Framework tab only ever displayed these questions and
- * answers read-only (no edit inputs anywhere in it — answers come from the
- * call script / AI conversation, not typed in here), so folding it into
- * Overview as an expand-to-read accordion loses nothing: every step, every
- * question, every recorded answer is still here, just collapsed until
- * clicked instead of a permanently-open tab. */
-function FrameworkSnapshotCard({ lead }: { lead: Lead }) {
-  const { data: tags = [] } = useTags();
-  const leadTagNames = lead.tagIds.map((tid) => tags.find((t) => t.id === tid)?.name).filter((n): n is string => !!n);
-  const hasMortgageStep = leadTagNames.some((n) => LIEN_TAG_NAMES.includes(n));
-  const steps = getScriptSteps(hasMortgageStep);
-  const answers = lead.scriptAnswers ?? {};
-  const stepComplete = (step: (typeof steps)[number]) => step.questions.every((q) => (answers[q.key] ?? '').trim().length > 0);
-  const completedCount = steps.filter(stepComplete).length;
-  const [openTitle, setOpenTitle] = useState<string | null>(null);
-
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between gap-3">
-        <CardHeader icon={CheckCircle2} title="Qualification Framework" sub={`${completedCount} of ${steps.length} steps answered`} tone="success" />
-        <RadialGauge pct={(completedCount / steps.length) * 100} color="#10b981" size={40} strokeWidth={5} centered />
-      </div>
-      <div className="mt-3 space-y-1">
-        {steps.map((step) => {
-          const complete = stepComplete(step);
-          const open = openTitle === step.title;
-          return (
-            <div key={step.title} className="rounded-md">
-              <button
-                onClick={() => setOpenTitle(open ? null : step.title)}
-                className="flex w-full items-center gap-2.5 rounded-md px-1 py-1.5 text-left hover:bg-surface-3"
-              >
-                {complete ? <CheckCircle2 size={15} className="shrink-0 text-success" /> : <Circle size={15} className="shrink-0 text-text-3" />}
-                <span className={`flex-1 text-[12.5px] ${complete ? 'text-text' : 'text-text-3'}`}>{step.title}</span>
-                <ChevronDown size={13} className={`shrink-0 text-text-3 transition-transform ${open ? 'rotate-180' : ''}`} />
-              </button>
-              {open && (
-                <div className="ml-[23px] space-y-2.5 border-l border-border-2 py-2 pl-3">
-                  {step.questions.map((q) => (
-                    <div key={q.key}>
-                      <p className="text-[11.5px] text-text-3">{q.prompt}</p>
-                      <p className={`mt-0.5 text-[12.5px] ${answers[q.key] ? 'text-text' : 'italic text-text-3'}`}>
-                        {answers[q.key] || 'No answer recorded'}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/** Lead #, created date — the safe, always-accurate subset of "at a glance"
- * facts; nothing here is inferred or guessed. */
-function QuickFactsCard({ lead }: { lead: Lead }) {
-  const rows: Array<[string, string]> = [
-    ['Lead #', lead.leadNum != null ? `#${lead.leadNum}` : '—'],
-    ['Created', formatDate(lead.createdAt)],
-  ];
-  return (
-    <div className="card">
-      <CardHeader icon={Hash} title="Quick Facts" />
-      <div className="mt-3 space-y-2.5">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between">
-            <div className="text-[12px] text-text-3">{label}</div>
-            <div className="text-[12.5px] font-medium text-text">{value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The wholesale fee actually earned on this deal — distinct from the Deal
- * Packet's own assignment fee (a per-packet number used to compute an
- * investor-facing price), this one is tied straight to the lead itself so it
- * can feed real reporting once a deal is done. Only meaningful once a lead
- * is actually under contract, which is also the only stage the Revenue in
- * Pipeline dashboard chart counts it toward. */
-function AssignmentFeeCard({ lead }: { lead: Lead }) {
-  const updateLead = useUpdateLead();
-  const [value, setValue] = useState(lead.assignmentFee?.toString() ?? '');
-  const [saved, setSaved] = useState(false);
-
-  function handleSave() {
-    updateLead.mutate(
-      { id: lead.id, assignmentFee: value.trim() ? Number(value) : null },
-      {
-        onSuccess: () => {
-          setSaved(true);
-          setTimeout(() => setSaved(false), 2000);
-        },
-      },
-    );
-  }
-
-  return (
-    <div className="card">
-      <CardHeader icon={DollarSign} title="Closing Assignment Fee" tone="accent" />
-      <p className="mt-1 text-[11px] text-text-3">Counts toward Revenue in Pipeline while this lead is Under Contract.</p>
-      <div className="mt-3 flex items-center gap-2">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">$</span>
-          <input
-            className="input pl-6"
-            inputMode="decimal"
-            placeholder="0"
-            value={value}
-            onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ''))}
-          />
-        </div>
-        <button className="btn btn-primary !px-3" onClick={handleSave} disabled={updateLead.isPending}>
-          Save
-        </button>
-      </div>
-      {saved && <span className="mt-1.5 block text-[12px] text-success">✓ Saved</span>}
-    </div>
-  );
-}
-
-/** Property Details, fully editable right on Overview — this replaced the
- * separate "Property Details" tab entirely (moved here verbatim, same
- * fields, same save/comps behavior) rather than duplicating a read-only
- * summary next to the real editable form on another tab. */
-/** Pricing (ARV, offers, comps, etc.) deliberately lives only in Deal Packet
- * now — it already has its own ARV/comps workflow (with an "Import from
- * lead" pull of whatever's in lead_comps) for building investor-facing
- * packets, and duplicating a second editable pricing form here was the
- * redundant one. This card only owns the physical property facts. */
-function PropertyEditCard({ lead }: { lead: Lead }) {
-  const updateLead = useUpdateLead();
-  const [form, setForm] = useState({
-    propType: lead.propType ?? '',
-    beds: lead.beds?.toString() ?? '',
-    baths: lead.baths?.toString() ?? '',
-    sqft: lead.sqft?.toString() ?? '',
-    lotSize: lead.lotSize ?? '',
-    yearBuilt: lead.yearBuilt?.toString() ?? '',
-    auctionDate: lead.auctionDate ?? '',
-    condition: lead.condition ?? '',
-    motivation: lead.motivation ?? '',
-  });
-  const [repairs, setRepairs] = useState(lead.repairs ?? {});
-  const [saved, setSaved] = useState(false);
-
-  function set<K extends keyof typeof form>(key: K, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function handleSave() {
-    updateLead.mutate(
-      {
-        id: lead.id,
-        propType: form.propType || null,
-        beds: form.beds ? Number(form.beds) : null,
-        baths: form.baths ? Number(form.baths) : null,
-        sqft: form.sqft ? Number(form.sqft) : null,
-        lotSize: form.lotSize || null,
-        yearBuilt: form.yearBuilt ? Number(form.yearBuilt) : null,
-        auctionDate: form.auctionDate || null,
-        condition: form.condition || null,
-        motivation: form.motivation || null,
-        repairs,
-      },
-      { onSuccess: () => flash() },
-    );
-  }
-
-  function flash() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  return (
-    <div className="card">
-      <CardHeader icon={Archive} title="Property Details" sub="edit and save directly here" />
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <Field label="Property Type">
-          <input className="input" value={form.propType} onChange={(e) => set('propType', e.target.value)} />
-        </Field>
-        <Field label="Beds">
-          <input className="input" type="number" value={form.beds} onChange={(e) => set('beds', e.target.value)} />
-        </Field>
-        <Field label="Baths">
-          <input className="input" type="number" value={form.baths} onChange={(e) => set('baths', e.target.value)} />
-        </Field>
-        <Field label="Sqft">
-          <input className="input" type="number" value={form.sqft} onChange={(e) => set('sqft', e.target.value)} />
-        </Field>
-        <Field label="Lot Size">
-          <input className="input" value={form.lotSize} onChange={(e) => set('lotSize', e.target.value)} />
-        </Field>
-        <Field label="Year Built">
-          <input className="input" type="number" value={form.yearBuilt} onChange={(e) => set('yearBuilt', e.target.value)} />
-        </Field>
-        <Field label="Auction Date">
-          <input className="input" type="date" value={form.auctionDate} onChange={(e) => set('auctionDate', e.target.value)} />
-        </Field>
-        <Field label="Condition">
-          <input className="input" value={form.condition} onChange={(e) => set('condition', e.target.value)} />
-        </Field>
-        <div className="col-span-2">
-          <Field label="Motivation">
-            <input className="input" value={form.motivation} onChange={(e) => set('motivation', e.target.value)} />
-          </Field>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div className="label">Repairs needed</div>
-        <div className="flex flex-wrap gap-3">
-          {REPAIR_FLAGS.map(({ key, label }) => (
-            <label key={key} className="flex items-center gap-1.5 text-[13px] text-text-2">
-              <input
-                type="checkbox"
-                checked={!!repairs[key]}
-                onChange={(e) => setRepairs((r) => ({ ...r, [key]: e.target.checked }))}
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center gap-3">
-        <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
-          Save property details
-        </button>
-        {saved && <span className="text-[12px] text-success">✓ Saved</span>}
-      </div>
-    </div>
-  );
-}
 
 export function LeadProfileView({ id, backTo, allowShare = false }: { id: string | undefined; backTo: string; allowShare?: boolean }) {
   const navigate = useNavigate();
@@ -567,6 +315,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   const updateLead = useUpdateLead();
   const setLeadTags = useSetLeadTags();
   const addActivity = useAddActivity();
+  const [editContactOpen, setEditContactOpen] = useState(false);
   // Zoom's own documented deep link, not a generic tel: link, so it launches
   // Zoom Phone specifically rather than whatever else the OS has registered
   // for tel: — same pattern as the Kanban card and Calendar quick actions.
@@ -577,15 +326,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
     addActivity.mutate({ leadId: lead.id, type: 'call', body: 'Quick call logged from lead profile' });
     window.location.href = `zoomphonecall://${e164}`;
   };
-  // Lets a link (e.g. the Kanban card's "Text" action) land straight on a
-  // specific tab via `?tab=sms` instead of always opening on Overview. Read
-  // once at mount — this page doesn't re-init the tab if the query string
-  // changes underneath an already-open profile.
-  const [searchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
-  const [tab, setTab] = useState<TabKey>(
-    tabParam && (TABS as readonly string[]).includes(tabParam) ? (tabParam as TabKey) : 'overview',
-  );
+  const [tab, setTab] = useState<TabKey>('overview');
   if (isLoading) return <div className="text-text-3">Loading…</div>;
   if (!lead) return <div className="text-text-3">Lead not found.</div>;
 
@@ -607,6 +348,13 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
               </h1>
               <StageBadge stage={lead.stage} />
               {lead.leadNum && <span className="text-[12px] text-text-3">#{lead.leadNum}</span>}
+              <button
+                className="text-text-3 hover:text-primary"
+                title="Edit contact info"
+                onClick={() => setEditContactOpen(true)}
+              >
+                <Pencil size={13} />
+              </button>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-text-2">
               {lead.phone && (
@@ -701,7 +449,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-border">
-        {TABS.filter((t) => t !== 'sms' || isAdmin).map((t) => (
+        {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -714,26 +462,22 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         ))}
       </div>
 
-      {tab === 'overview' && (
-        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-5">
-            <OverviewTab lead={lead} leadId={lead.id} />
-            <PropertyEditCard lead={lead} />
-            <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
-          </div>
-          <div className="space-y-5">
-            <QuickFactsCard lead={lead} />
-            <AssignmentFeeCard lead={lead} />
-            <FrameworkSnapshotCard lead={lead} />
-          </div>
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="min-w-0">
+          {tab === 'overview' && <OverviewTab lead={lead} onJumpToProperty={() => setTab('property')} />}
+          {tab === 'property' && <PropertyTab lead={lead} />}
+          {tab === 'underwriting' && <UnderwritingTab lead={lead} />}
+          {tab === 'deal' && <DealTab lead={lead} />}
+          {tab === 'activity' && <ActivityTab lead={lead} />}
         </div>
-      )}
-      {tab === 'packet' && <PacketTab lead={lead} />}
-      {/* SMS is an admin-only feature — texting leads isn't part of a
-          caller's job, which is manual cold calling only. */}
-      {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
-      {tab === 'tasks' && <TasksTab leadId={lead.id} ownerId={lead.userId} />}
-      {tab === 'files' && <FilesTab lead={lead} />}
+        <div className="space-y-5">
+          <ContactSidebarCard lead={lead} isAdmin={isAdmin} onCall={handleCall} />
+          <TasksSidebarCard leadId={lead.id} ownerId={lead.userId} />
+          <OwnerSidebarCard lead={lead} />
+        </div>
+      </div>
+
+      {editContactOpen && <EditContactModal lead={lead} onClose={() => setEditContactOpen(false)} />}
     </div>
   );
 }
@@ -792,575 +536,6 @@ function TagPicker({ lead, tags }: { lead: Lead; tags: Tag[] }) {
       <button className="text-[11px] text-text-3 hover:text-primary" onClick={() => setAdding(true)}>
         + New tag
       </button>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function OverviewTab({ lead, leadId }: { lead: Lead; leadId: string }) {
-  const updateLead = useUpdateLead();
-  const [form, setForm] = useState({
-    firstName: lead.firstName,
-    lastName: lead.lastName,
-    phone: formatPhone(lead.phone),
-    phone2: lead.phone2 ? formatPhone(lead.phone2) : '',
-    email: lead.email ?? '',
-    address: lead.address ?? '',
-    city: lead.city ?? '',
-    state: lead.state ?? '',
-    zip: lead.zip ?? '',
-    source: lead.source ?? '',
-    nextFollowUp: lead.nextFollowUp ?? '',
-    nextFollowUpTime: lead.nextFollowUpTime ?? '',
-  });
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setForm({
-      firstName: lead.firstName,
-      lastName: lead.lastName,
-      phone: lead.phone,
-      phone2: lead.phone2 ?? '',
-      email: lead.email ?? '',
-      address: lead.address ?? '',
-      city: lead.city ?? '',
-      state: lead.state ?? '',
-      zip: lead.zip ?? '',
-      source: lead.source ?? '',
-      nextFollowUp: lead.nextFollowUp ?? '',
-      nextFollowUpTime: lead.nextFollowUpTime ?? '',
-    });
-  }, [lead.id]);
-
-  function set<K extends keyof typeof form>(key: K, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function handleSave() {
-    updateLead.mutate(
-      {
-        id: lead.id,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        phone: formatPhone(form.phone),
-        phone2: form.phone2 ? formatPhone(form.phone2) : null,
-        email: form.email || null,
-        address: form.address || null,
-        city: form.city || null,
-        state: form.state || null,
-        zip: form.zip || null,
-        source: form.source || null,
-        nextFollowUp: form.nextFollowUp || null,
-        nextFollowUpTime: form.nextFollowUp ? form.nextFollowUpTime || null : null,
-      },
-      { onSuccess: () => flash() },
-    );
-  }
-
-  function flash() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  return (
-    <div className="card">
-      <CardHeader icon={User} title="Contact Info" sub="how to reach this lead" />
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <Field label="First Name">
-          <input className="input" value={form.firstName} onChange={(e) => set('firstName', e.target.value)} />
-        </Field>
-        <Field label="Last Name">
-          <input className="input" value={form.lastName} onChange={(e) => set('lastName', e.target.value)} />
-        </Field>
-        <Field label="Phone">
-          <input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-        </Field>
-        <Field label="Phone 2">
-          <input className="input" value={form.phone2} onChange={(e) => set('phone2', e.target.value)} />
-        </Field>
-        <Field label="Email">
-          <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
-        </Field>
-        <Field label="Source">
-          <input className="input" value={form.source} onChange={(e) => set('source', e.target.value)} />
-        </Field>
-        <div className="col-span-2">
-          <Field label="Address">
-            <input className="input" value={form.address} onChange={(e) => set('address', e.target.value)} />
-          </Field>
-        </div>
-        <Field label="City">
-          <input className="input" value={form.city} onChange={(e) => set('city', e.target.value)} />
-        </Field>
-        <Field label="State">
-          <input className="input" value={form.state} onChange={(e) => set('state', e.target.value)} />
-        </Field>
-        <Field label="Zip">
-          <input className="input" value={form.zip} onChange={(e) => set('zip', e.target.value)} />
-        </Field>
-        <Field label="Next Follow-Up">
-          <div className="flex gap-1.5">
-            <input className="input" type="date" value={form.nextFollowUp} onChange={(e) => set('nextFollowUp', e.target.value)} />
-            {form.nextFollowUp && (
-              <input
-                className="input !w-auto"
-                type="time"
-                value={form.nextFollowUpTime}
-                onChange={(e) => set('nextFollowUpTime', e.target.value)}
-                title="Optional time — leave blank for an all-day follow-up"
-              />
-            )}
-          </div>
-        </Field>
-      </div>
-      <div className="mt-4 flex items-center gap-3">
-        <button className="btn btn-primary" onClick={handleSave} disabled={updateLead.isPending}>
-          Save changes
-        </button>
-        {saved && <span className="text-[12px] text-success">✓ Saved</span>}
-      </div>
-    </div>
-  );
-}
-
-function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: string | null }) {
-  const { profile } = useAuth();
-  const { data: allActivities = [], isLoading } = useActivities(leadId);
-  const addActivity = useAddActivity();
-  const deleteActivity = useDeleteActivity();
-  const updateActivity = useUpdateActivity();
-  const [body, setBody] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  const notes = allActivities.filter((a) => a.type === 'note');
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [notes.length]);
-
-  function handleSend() {
-    if (!body.trim()) return;
-    addActivity.mutate({ leadId, type: 'note', body: body.trim() }, { onSuccess: () => setBody('') });
-  }
-
-  return (
-    <div className="card">
-      <CardHeader icon={MessageSquareText} title="Notes" sub={`${notes.length} logged`} />
-
-      {/* Legacy note (old single-field notes migrated from lead.notes) — its
-          own labeled block rather than an inline badge crammed into a
-          paragraph, so it reads as an archived record, not just clutter. */}
-      {legacyNote && (
-        <div className="mt-3 rounded-lg border border-border-2 bg-surface-3 p-3">
-          <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
-            <Archive size={11} /> Legacy note
-          </div>
-          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-text-2">{legacyNote}</p>
-        </div>
-      )}
-
-      {/* Chat bubbles */}
-      {isLoading && <div className="mt-3 text-[13px] text-text-3">Loading…</div>}
-      {!isLoading && notes.length === 0 && !legacyNote && (
-        <div className="mt-4 flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border-2 py-6 text-center">
-          <MessageSquareText size={18} className="text-text-3" />
-          <p className="text-[13px] text-text-3">No notes yet — add the first one below.</p>
-        </div>
-      )}
-      {notes.length > 0 && (
-        <div className="mt-3 max-h-80 space-y-3 overflow-y-auto rounded-lg border border-border-2 bg-surface-3/50 p-3 pr-2">
-          {notes.map((a) => (
-            <ActivityBubble
-              key={a.id}
-              a={a}
-              isAdmin={profile?.role === 'admin'}
-              leadId={leadId}
-              onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
-              onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
-            />
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      )}
-
-      {/* Compose */}
-      <div className="mt-3 flex items-end gap-2 rounded-lg border border-border-2 bg-surface p-2 focus-within:border-primary/50">
-        <textarea
-          className="max-h-32 flex-1 resize-none bg-transparent px-1 py-1 text-[13px] text-text outline-none placeholder:text-text-3"
-          rows={1}
-          placeholder="Add a note…"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-          }}
-        />
-        <button
-          className="btn btn-primary shrink-0 !p-2"
-          title="Send (Enter)"
-          onClick={handleSend}
-          disabled={addActivity.isPending || !body.trim()}
-        >
-          <Send size={14} />
-        </button>
-      </div>
-      <div className="mt-1 text-[11px] text-text-3">Enter to send · Shift+Enter for new line</div>
-    </div>
-  );
-}
-
-const REPAIR_FLAGS: Array<{ key: keyof Lead['repairs']; label: string }> = [
-  { key: 'cosmetics', label: 'Cosmetics' },
-  { key: 'hvac', label: 'HVAC' },
-  { key: 'plumbing', label: 'Plumbing' },
-  { key: 'roof', label: 'Roof' },
-  { key: 'foundation', label: 'Foundation' },
-  { key: 'electrical', label: 'Electrical' },
-  { key: 'flooring', label: 'Flooring' },
-];
-
-function ActivityBubble({
-  a,
-  isAdmin,
-  onDelete,
-  onEdit,
-  leadId,
-}: {
-  a: LeadActivity;
-  isAdmin: boolean;
-  onDelete: () => void;
-  onEdit: (body: string) => void;
-  leadId: string;
-}) {
-  const [editText, setEditText] = useState<string | null>(null);
-  const isRight = a.authorRole === 'admin';
-  const initials = a.authorName
-    .split(' ')
-    .map((w: string) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-  const canEdit = a.type !== 'stage_change';
-
-  return (
-    <div className={`group flex items-end gap-2 ${isRight ? 'flex-row-reverse' : ''}`}>
-      {/* Avatar */}
-      <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-          isRight ? 'bg-primary/20 text-primary' : 'bg-surface-3 text-text-3'
-        }`}
-      >
-        {initials}
-      </div>
-
-      {/* Bubble */}
-      <div className={`relative max-w-[75%] ${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
-        <div className={`mb-0.5 flex items-center gap-1.5 text-[10px] text-text-3 ${isRight ? 'flex-row-reverse' : ''}`}>
-          <span className="font-medium">{a.authorName}</span>
-          <span>·</span>
-          <span>{formatDateTime(a.createdAt)}</span>
-        </div>
-
-        {editText !== null ? (
-          <div className="flex w-full flex-col gap-1.5">
-            <textarea
-              autoFocus
-              className="input resize-none text-[13px]"
-              rows={3}
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Escape') setEditText(null); }}
-            />
-            <div className="flex gap-1.5">
-              <button
-                className="btn btn-primary !px-2.5 !py-1 text-[12px]"
-                disabled={!editText.trim()}
-                onClick={() => { onEdit(editText.trim()); setEditText(null); }}
-              >
-                Save
-              </button>
-              <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => setEditText(null)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
-              isRight
-                ? 'rounded-br-sm border border-primary/25 bg-primary/8 text-text'
-                : 'rounded-bl-sm border border-border-2 bg-surface-3 text-text'
-            }`}
-          >
-            <span className={`mr-1.5 inline-block rounded px-1 py-0.5 text-[10px] font-semibold ${isRight ? 'bg-primary/15 text-primary' : 'bg-border-2 text-text-3'}`}>
-              {ACTIVITY_LABEL[a.type]}
-            </span>
-            {a.body}
-          </div>
-        )}
-      </div>
-
-      {/* Actions — visible on hover, hidden while editing */}
-      {editText === null && (
-        <div className="mb-0.5 flex shrink-0 flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          {canEdit && (
-            <button
-              className="text-text-3 hover:text-primary"
-              onClick={() => setEditText(a.body)}
-              title="Edit"
-            >
-              <Pencil size={12} />
-            </button>
-          )}
-          <button
-            className="text-text-3 hover:text-danger"
-            onClick={onDelete}
-            title="Delete"
-          >
-            <Trash2 size={12} />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TasksTab({ leadId, ownerId }: { leadId: string; ownerId: string }) {
-  const { data: allTasks = [] } = useTasks(ownerId);
-  const tasks = allTasks.filter((t) => t.leadId === leadId);
-  const createTask = useCreateTask();
-  const toggleTask = useToggleTask();
-  const deleteTask = useDeleteTask();
-  const [title, setTitle] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [dueTime, setDueTime] = useState('');
-
-  function handleAdd() {
-    if (!title.trim()) return;
-    createTask.mutate(
-      { leadId, title: title.trim(), dueDate: dueDate || null, dueTime: dueDate ? dueTime || null : null, userId: ownerId },
-      { onSuccess: () => { setTitle(''); setDueDate(''); setDueTime(''); } },
-    );
-  }
-
-  return (
-    <div className="card">
-      <h3 className="mb-3 text-sm font-semibold text-text">Tasks</h3>
-      <div className="flex flex-wrap items-end gap-2">
-        <input
-          className="input flex-1 min-w-[200px]"
-          placeholder="New task…"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-        />
-        <input className="input !w-auto" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-        {dueDate && (
-          <input className="input !w-auto" type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} title="Optional time — leave blank for an all-day task" />
-        )}
-        <button className="btn btn-primary" onClick={handleAdd} disabled={createTask.isPending}>
-          <Plus size={14} /> Add
-        </button>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {tasks.length === 0 && <div className="text-[13px] text-text-3">No tasks for this lead.</div>}
-        {tasks.map((t) => (
-          <div key={t.id} className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-2.5">
-            <label className="flex flex-1 items-center gap-2.5">
-              <input type="checkbox" checked={t.completed} onChange={(e) => toggleTask.mutate({ id: t.id, completed: e.target.checked })} />
-              <span className={`text-[13px] ${t.completed ? 'text-text-3 line-through' : 'text-text'}`}>{t.title}</span>
-            </label>
-            <div className="flex items-center gap-2">
-              {t.dueDate && (
-                <span className="text-[11px] text-text-3">
-                  {formatDate(t.dueDate)}{t.dueTime ? ` · ${formatClockTime(t.dueTime)}` : ''}
-                </span>
-              )}
-              <button className="text-text-3 hover:text-danger" onClick={() => deleteTask.mutate(t.id)}>
-                <Trash2 size={13} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FilesTab({ lead }: { lead: Lead }) {
-  const uploadFile = useUploadLeadFile();
-  const deleteFile = useDeleteLeadFile();
-  const signedUrl = useSignedFileUrl();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const files = lead.files ?? [];
-  const [pasteHint, setPasteHint] = useState(false);
-
-  const imageFiles = useMemo(() => files.filter((f) => isImageFile(f.fileType, f.fileName)), [files]);
-  const videoFiles = useMemo(() => files.filter((f) => isVideoFile(f.fileType, f.fileName)), [files]);
-  const otherFiles = useMemo(
-    () => files.filter((f) => !isImageFile(f.fileType, f.fileName) && !isVideoFile(f.fileType, f.fileName)),
-    [files],
-  );
-  const imagePaths = useMemo(() => imageFiles.map((f) => f.storagePath), [imageFiles]);
-  const { data: imageUrls = {} } = useSignedFileUrls(imagePaths);
-
-  async function handleView(storagePath: string) {
-    const url = await signedUrl.mutateAsync(storagePath);
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  function uploadMany(fileList: FileList | File[]) {
-    for (const file of Array.from(fileList)) {
-      uploadFile.mutate({ leadId: lead.id, file });
-    }
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files?.length) uploadMany(e.target.files);
-    // Reset so the same file(s) can be re-selected if needed
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }
-
-  // Ctrl+V anywhere on this tab uploads whatever image is on the clipboard —
-  // a screenshot, or a photo copied out of another app — without having to
-  // save it to disk first just to run it back through the file picker.
-  useEffect(() => {
-    function handlePaste(e: ClipboardEvent) {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const imageFiles = Array.from(items)
-        .filter((item) => item.type.startsWith('image/'))
-        .map((item) => item.getAsFile())
-        .filter((f): f is File => !!f);
-      if (imageFiles.length === 0) return;
-      e.preventDefault();
-      uploadMany(imageFiles);
-      setPasteHint(true);
-      setTimeout(() => setPasteHint(false), 1500);
-    }
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div className="card">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-text">Files & Photos</h3>
-        <label className={`btn cursor-pointer ${uploadFile.isPending ? 'pointer-events-none opacity-60' : ''}`}>
-          <Upload size={14} /> {uploadFile.isPending ? 'Uploading…' : 'Upload'}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-            onChange={handleFileChange}
-          />
-        </label>
-      </div>
-
-      <p className="mb-3 text-[12px] text-text-3">
-        {pasteHint ? 'Pasted — uploading…' : 'Tip: copy an image and press Ctrl+V anywhere on this tab to upload it directly.'}
-      </p>
-
-      {uploadFile.isError && (
-        <div className="mb-3 rounded-md bg-danger-dim px-3 py-2 text-[12px] text-danger">
-          Upload failed: {(uploadFile.error as Error)?.message ?? 'Unknown error'}
-        </div>
-      )}
-
-      {files.length === 0 && !uploadFile.isPending && (
-        <div className="text-[13px] text-text-3">No files uploaded yet.</div>
-      )}
-
-      {imageFiles.length > 0 && (
-        <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-          {imageFiles.map((f) => {
-            const url = imageUrls[f.storagePath];
-            return (
-              <div key={f.id} className="group relative aspect-square overflow-hidden rounded-md border border-border-2 bg-surface-3">
-                {url ? (
-                  <img
-                    src={url}
-                    alt={f.fileName}
-                    title={f.fileName}
-                    className="h-full w-full cursor-pointer object-cover"
-                    onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-text-3">
-                    <Loader2 size={16} className="animate-spin" />
-                  </div>
-                )}
-                <button
-                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity hover:bg-danger group-hover:opacity-100"
-                  onClick={() => deleteFile.mutate({ id: f.id, storagePath: f.storagePath, leadId: lead.id })}
-                  title="Delete"
-                >
-                  <Trash2 size={12} />
-                </button>
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1 text-[10px] text-white">
-                  {formatDateTime(f.createdAt)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {videoFiles.length > 0 && (
-        <div className="mb-3 space-y-2">
-          {videoFiles.map((f) => (
-            <div key={f.id} className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-2.5">
-              <div className="flex min-w-0 items-center gap-2">
-                <Video size={15} className="shrink-0 text-text-3" />
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-medium text-text">{f.fileName}</div>
-                  <div className="text-[11px] text-text-3">{formatDateTime(f.createdAt)}</div>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button className="text-text-3 hover:text-primary" onClick={() => handleView(f.storagePath)} title="Play">
-                  <ExternalLink size={14} />
-                </button>
-                <button className="text-text-3 hover:text-danger" onClick={() => deleteFile.mutate({ id: f.id, storagePath: f.storagePath, leadId: lead.id })} title="Delete">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {otherFiles.length > 0 && (
-        <div className="space-y-2">
-          {otherFiles.map((f) => (
-            <div key={f.id} className="flex items-center justify-between gap-3 rounded-md border border-border-2 bg-surface-3 p-2.5">
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-medium text-text">{f.fileName}</div>
-                <div className="text-[11px] text-text-3">{formatDateTime(f.createdAt)}</div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button className="text-text-3 hover:text-primary" onClick={() => handleView(f.storagePath)} title="View">
-                  <ExternalLink size={14} />
-                </button>
-                <button className="text-text-3 hover:text-danger" onClick={() => deleteFile.mutate({ id: f.id, storagePath: f.storagePath, leadId: lead.id })} title="Delete">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

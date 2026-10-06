@@ -257,6 +257,20 @@ export interface Lead {
   scheduledCallbackAt: string | null;
   /** The callback time in the seller's own words (e.g. "Tomorrow around 3pm"), kept alongside the parsed timestamp for context. */
   scheduledCallbackNote: string | null;
+  /** Structured Property Details fields (Lead Profile redesign) — distinct
+   *  from the free-text mortgage_balance/mortgage_payment call-script
+   *  answers in scriptAnswers, which capture what the seller said rather
+   *  than a number entered directly on the property record. */
+  mortgageBalance: number | null;
+  monthlyPayment: number | null;
+  backTaxes: number | null;
+  occupancy: 'owner_occupied' | 'tenant_occupied' | 'vacant' | null;
+  /** The proposed deal structure in plain words, e.g. "Cash offer, 21-day close" — distinct from a Deal Packet's own dealTypes[]. */
+  solution: string | null;
+  /** A short action label, e.g. "Send contract Friday" — distinct from nextFollowUp, which is a scheduled date. */
+  nextStep: string | null;
+  preferredContactMethod: 'call' | 'text' | 'email' | null;
+  bestTimeToContact: string | null;
 }
 
 export type BulkSmsJobStatus = 'running' | 'completed' | 'failed' | 'paused';

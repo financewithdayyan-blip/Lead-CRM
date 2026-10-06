@@ -106,6 +106,14 @@ export function dbToLead(row: any): Lead {
     assignedSmsNumber: row.assigned_sms_number ?? null,
     scheduledCallbackAt: row.scheduled_callback_at ?? null,
     scheduledCallbackNote: row.scheduled_callback_note ?? null,
+    mortgageBalance: row.mortgage_balance ?? null,
+    monthlyPayment: row.monthly_payment ?? null,
+    backTaxes: row.back_taxes ?? null,
+    occupancy: row.occupancy ?? null,
+    solution: row.solution ?? null,
+    nextStep: row.next_step ?? null,
+    preferredContactMethod: row.preferred_contact_method ?? null,
+    bestTimeToContact: row.best_time_to_contact ?? null,
   };
 }
 
@@ -194,6 +202,14 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['aiReplyPaused', 'ai_reply_paused'],
   ['scheduledCallbackAt', 'scheduled_callback_at'],
   ['scheduledCallbackNote', 'scheduled_callback_note'],
+  ['mortgageBalance', 'mortgage_balance'],
+  ['monthlyPayment', 'monthly_payment'],
+  ['backTaxes', 'back_taxes'],
+  ['occupancy', 'occupancy'],
+  ['solution', 'solution'],
+  ['nextStep', 'next_step'],
+  ['preferredContactMethod', 'preferred_contact_method'],
+  ['bestTimeToContact', 'best_time_to_contact'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {

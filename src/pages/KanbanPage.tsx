@@ -983,7 +983,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
   );
 
   const handleOpenSms = useCallback((id: string) => {
-    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}?tab=sms` : `/leads/${id}?tab=sms`, { state: { from: 'kanban' } });
+    navigate(targetUserId ? `/team/${targetUserId}/leads/${id}?openSms=1` : `/leads/${id}?openSms=1`, { state: { from: 'kanban' } });
   }, [navigate, targetUserId]);
 
   const selCount = selectedIds.size;

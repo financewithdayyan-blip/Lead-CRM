@@ -255,7 +255,7 @@ export function CalendarStrip({ userId, leads }: { userId: string; leads: Lead[]
   // Texting navigates away to actually compose/send, so there's nothing to
   // show as "completed" here — the send itself (elsewhere) is what clears
   // next_follow_up now (see send-sms's isManualReply handling).
-  const handleText = useCallback((item: CalendarItem) => navigate(`/leads/${item.lead!.id}?tab=sms`), [navigate]);
+  const handleText = useCallback((item: CalendarItem) => navigate(`/leads/${item.lead!.id}?openSms=1`), [navigate]);
 
   const todayIso = localIsoDate(new Date());
 
