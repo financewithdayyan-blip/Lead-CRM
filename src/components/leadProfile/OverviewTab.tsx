@@ -167,10 +167,6 @@ function QuoteCard({ lead }: { lead: Lead }) {
 export function OverviewTab({ lead, onJumpToProperty }: { lead: Lead; onJumpToProperty: () => void }) {
   const owed = lead.mortgageBalance;
   const equity = owed != null && lead.arv != null ? lead.arv - owed : null;
-  // Interim estimate until the real Underwriting calculator (Phase 2) is
-  // wired in — same inputs, a flat 70% buy assumption until
-  // underwriting_buy_pct exists.
-  const maxOffer = lead.arv != null ? lead.arv * 0.7 - (lead.estRepairs ?? 0) - (lead.assignmentFee ?? 0) : null;
 
   return (
     <div className="space-y-5">
@@ -178,7 +174,7 @@ export function OverviewTab({ lead, onJumpToProperty }: { lead: Lead; onJumpToPr
         <StatBox label="ARV" value={formatCurrency(lead.arv)} />
         <StatBox label="Owed" value={owed == null || owed === 0 ? 'Paid off' : formatCurrency(owed)} />
         <StatBox label="Est. Equity" value={equity != null ? formatCurrency(equity) : '—'} color="#10b981" />
-        <StatBox label="Max Offer" value={maxOffer != null ? formatCurrency(maxOffer) : '—'} />
+        <StatBox label="Max Offer" value={lead.maxOffer != null ? formatCurrency(lead.maxOffer) : '—'} />
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

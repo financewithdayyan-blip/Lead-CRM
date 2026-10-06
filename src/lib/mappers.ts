@@ -1,4 +1,4 @@
-import type { AuctionTier, CalendarEvent, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadShare, MarketingSpendEntry, Profile, Tag, TeamInvite, Task } from '@/types/domain';
+import type { AuctionTier, CalendarEvent, CallingSession, DailySummary, Lead, LeadActivity, LeadFile, LeadRepair, LeadShare, MarketingSpendEntry, Profile, Tag, TeamInvite, Task } from '@/types/domain';
 import { leadDisplayName } from '@/lib/utils';
 
 export function dbToCalendarEvent(row: any): CalendarEvent {
@@ -114,6 +114,18 @@ export function dbToLead(row: any): Lead {
     nextStep: row.next_step ?? null,
     preferredContactMethod: row.preferred_contact_method ?? null,
     bestTimeToContact: row.best_time_to_contact ?? null,
+    offerTerms: row.offer_terms ?? null,
+    titleChecklist: row.title_checklist ?? {},
+  };
+}
+
+export function dbToLeadRepair(row: any): LeadRepair {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    item: row.item,
+    cost: row.cost,
+    sortOrder: row.sort_order,
   };
 }
 
@@ -210,6 +222,8 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['nextStep', 'next_step'],
   ['preferredContactMethod', 'preferred_contact_method'],
   ['bestTimeToContact', 'best_time_to_contact'],
+  ['offerTerms', 'offer_terms'],
+  ['titleChecklist', 'title_checklist'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {

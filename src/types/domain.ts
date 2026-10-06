@@ -134,6 +134,14 @@ export interface Comp {
   notes: string | null;
 }
 
+export interface LeadRepair {
+  id: string;
+  leadId: string;
+  item: string;
+  cost: number;
+  sortOrder: number;
+}
+
 export interface LeadFile {
   id: string;
   leadId: string;
@@ -271,7 +279,33 @@ export interface Lead {
   nextStep: string | null;
   preferredContactMethod: 'call' | 'text' | 'email' | null;
   bestTimeToContact: string | null;
+  /** The terms line shown on the Deal tab's offer strip, e.g. "All cash, 21-day close, as-is". */
+  offerTerms: string | null;
+  titleChecklist: TitleChecklist;
 }
+
+export type TitleChecklistKey =
+  | 'title_ordered'
+  | 'title_search'
+  | 'liens_judgments'
+  | 'payoff_letters'
+  | 'title_commitment'
+  | 'clear_to_close'
+  | 'closing_scheduled'
+  | 'funded_recorded';
+
+export type TitleChecklist = Partial<Record<TitleChecklistKey, { done: boolean; completedAt: string | null }>>;
+
+export const TITLE_CHECKLIST_STEPS: Array<{ key: TitleChecklistKey; label: string }> = [
+  { key: 'title_ordered', label: 'Title ordered' },
+  { key: 'title_search', label: 'Title search' },
+  { key: 'liens_judgments', label: 'Liens & judgments' },
+  { key: 'payoff_letters', label: 'Payoff letters' },
+  { key: 'title_commitment', label: 'Title commitment' },
+  { key: 'clear_to_close', label: 'Clear to close' },
+  { key: 'closing_scheduled', label: 'Closing scheduled' },
+  { key: 'funded_recorded', label: 'Funded & recorded' },
+];
 
 export type BulkSmsJobStatus = 'running' | 'completed' | 'failed' | 'paused';
 export type BulkSmsItemStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped';
@@ -435,7 +469,7 @@ export const CONDITION_SYSTEM_LABELS: Record<ConditionSystem, string> = {
   flooring: 'Flooring',
 };
 
-export type CompKind = 'sold' | 'listing';
+export type CompKind = 'sold' | 'listing' | 'as_is';
 
 export interface PacketComp {
   id: string;

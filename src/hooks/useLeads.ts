@@ -662,7 +662,7 @@ export function useUpsertComps() {
     }: {
       leadId: string;
       comps: Array<{
-        kind: 'sold' | 'listing';
+        kind: 'sold' | 'listing' | 'as_is';
         address: string | null;
         price: number | null;
         sale_date: string | null;

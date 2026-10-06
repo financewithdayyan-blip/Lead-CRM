@@ -124,6 +124,26 @@ export function useContractInstances() {
   });
 }
 
+/** Scoped to one lead — the Deal tab's Contract card needs this lead's own
+ *  envelopes only, not the full admin list every other contract on the
+ *  account (which useContractInstances() fetches, unfiltered, for Blue Docs'
+ *  own page). */
+export function useContractInstancesForLead(leadId: string | undefined) {
+  return useQuery({
+    queryKey: ['contract_instances', 'lead', leadId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contract_instances')
+        .select(INSTANCE_SELECT)
+        .eq('lead_id', leadId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map(fromRow);
+    },
+    enabled: !!leadId,
+  });
+}
+
 /** Creates the contract + its parties and sends the first signer's SMS
  * invite, all in one server-side request — see create-contract-instance.
  * Moved off the client (which used to do two separate table inserts here)
