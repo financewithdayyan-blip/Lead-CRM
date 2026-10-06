@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { supabase } from '@/lib/supabase';
 import { dbToActivity } from '@/lib/mappers';
 import { useAuth } from '@/contexts/AuthContext';
-import { localIsoDate } from '@/lib/utils';
 import { fetchAllPages } from '@/lib/paginate';
 import { refetchAndPatchLead } from '@/hooks/useLeads';
 import type { ActivityType } from '@/types/domain';
@@ -53,17 +52,16 @@ export function useAddActivity() {
       if (error) throw error;
 
       // A call happening at all is what a scheduled Next Follow-Up date was
-      // actually asking for — whether it's a full CallSessionPage session or
-      // a quick call logged straight from a Kanban card, clearing it here
-      // covers every call-logging path through this one shared mutation,
-      // instead of leaving a lead reading "Overdue" after it was just acted on.
+      // actually asking for — whether logged from a Kanban card or the lead
+      // profile, clearing it here covers every call-logging path through
+      // this one shared mutation, instead of leaving a lead reading
+      // "Overdue" after it was just acted on.
       if (type === 'call') {
         await supabase.from('leads').update({ next_follow_up: null }).eq('id', leadId);
       }
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['activities', vars.leadId] });
-      qc.invalidateQueries({ queryKey: ['today_calls'] });
       qc.invalidateQueries({ queryKey: ['admin_notes_on_my_leads'] });
       // Deliberately NOT invalidating 'activity_feed' here: it's a
       // fetchAllPages-backed, whole-year dashboard chart query that can be
@@ -210,30 +208,6 @@ export function useStageChangeHistory(targetUserId?: string) {
           return to ? { leadId: r.lead_id, to, createdAt: r.created_at } : null;
         })
         .filter((r): r is StageChangeRow => r !== null);
-    },
-    enabled: !!userId,
-  });
-}
-
-/**
- * Set of distinct lead IDs that have a 'call' activity logged today (local date).
- * Query key includes todayIso so the query resets automatically after midnight.
- */
-export function useTodayCalledLeadIds(userId: string | undefined) {
-  const todayIso = localIsoDate(new Date());
-  return useQuery({
-    queryKey: ['today_calls', userId, todayIso],
-    queryFn: async () => {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { data, error } = await supabase
-        .from('lead_activities')
-        .select('lead_id')
-        .eq('user_id', userId)
-        .eq('type', 'call')
-        .gte('created_at', todayStart.toISOString());
-      if (error) throw error;
-      return new Set(data.map((r: any) => r.lead_id as string));
     },
     enabled: !!userId,
   });

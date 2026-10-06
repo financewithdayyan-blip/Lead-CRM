@@ -4,7 +4,6 @@ import { SpeedInsights } from "@vercel/speed-insights/react"
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
-import { AttendanceProvider } from '@/contexts/AttendanceContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
@@ -29,7 +28,6 @@ const MemberLeadsPage = lazy(() => import('@/pages/MemberLeadsPage').then((m) =>
 const MemberLeadProfilePage = lazy(() => import('@/pages/MemberLeadProfilePage').then((m) => ({ default: m.MemberLeadProfilePage })));
 const MemberKanbanPage = lazy(() => import('@/pages/MemberKanbanPage').then((m) => ({ default: m.MemberKanbanPage })));
 const MemberSettingsPage = lazy(() => import('@/pages/MemberSettingsPage').then((m) => ({ default: m.MemberSettingsPage })));
-const CallSessionPage = lazy(() => import('@/pages/CallSessionPage').then((m) => ({ default: m.CallSessionPage })));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
 const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
@@ -67,7 +65,6 @@ export default function App() {
     <ThemeProvider>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AttendanceProvider>
           <PresenceProvider>
             <BrowserRouter basename="/crm">
               <Suspense fallback={<RouteFallback />}>
@@ -79,7 +76,6 @@ export default function App() {
                   <Route path="/deal/:slug" element={<ForceLightTheme><PublicPacketPage /></ForceLightTheme>} />
                   <Route path="/sign/:token" element={<ForceLightTheme><SignContractPage /></ForceLightTheme>} />
                   <Route element={<ProtectedRoute />}>
-                    <Route path="/session" element={<CallSessionPage />} />
                     <Route element={<AppShell />}>
                       <Route path="/" element={<DashboardPage />} />
                       <Route path="/leads" element={<LeadsPage />} />
@@ -114,7 +110,6 @@ export default function App() {
               </Suspense>
             </BrowserRouter>
           </PresenceProvider>
-        </AttendanceProvider>
       </AuthProvider>
     </QueryClientProvider>
     </ThemeProvider>

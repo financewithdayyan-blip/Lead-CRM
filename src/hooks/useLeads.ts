@@ -214,30 +214,6 @@ export function useNotificationsLeads(targetUserId?: string) {
   });
 }
 
-/** Call Session's queue — needs the fields the script/offer cards and call
- *  notes actually read, not the full 63-column row. */
-export function useCallSessionLeads(targetUserId?: string) {
-  const { session } = useAuth();
-  const userId = targetUserId ?? session?.user.id;
-  return useQuery({
-    queryKey: ['leads', 'callSession', userId],
-    queryFn: () =>
-      fetchAllPages<any>((from, to) =>
-        supabase
-          .from('leads')
-          .select(
-            'id, lead_num, first_name, last_name, phone, phone2, address, city, state, zip, stage, notes, repairs, property_rating, script_answers, auction_date, min_offer, max_offer, arv, lead_tags(tag_id)',
-          )
-          .eq('user_id', userId)
-          .order('lead_num', { ascending: true })
-          .range(from, to),
-      ).then((rows) => rows.map(dbToLead)),
-    enabled: !!userId,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
-}
-
 /** Dashboard's Calendar Strip — follow-up/callback scheduling fields only.
  *  DashboardPage calls this alongside its own (trimmed) useLeads() and
  *  passes the result into <CalendarStrip>, which is otherwise unchanged. */

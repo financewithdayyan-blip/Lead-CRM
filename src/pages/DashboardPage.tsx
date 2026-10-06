@@ -1,10 +1,8 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Activity,
   Bot,
   CalendarCheck,
-  CalendarClock,
   CalendarDays,
   CheckCircle2,
   DollarSign,
@@ -228,14 +226,12 @@ export function DashboardView({
   profile,
   heading = 'Dashboard',
   subtitle = 'Your pipeline, from first text to closed contract',
-  allowStartSession = false,
   showSmsStats = false,
 }: {
   userId: string;
   profile: Profile | null;
   heading?: string;
   subtitle?: string;
-  allowStartSession?: boolean;
   /** SMS outreach is an admin-only feature (RLS enforces this server-side
    * too — a caller's send_log/inbound_messages query just comes back empty),
    * and it's account-wide rather than per-caller, so the unified pipeline
@@ -1066,7 +1062,6 @@ export function DashboardView({
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
 
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === dateRange)?.label ?? '';
-  const followupLeadsCount = leads.filter((l) => l.stage === 'followup').length;
 
   return (
     <div>
@@ -1090,26 +1085,6 @@ export function DashboardView({
                 </button>
               ))}
             </div>
-          )}
-          {allowStartSession ? (
-            <>
-              {followupLeadsCount > 0 && (
-                <Link to="/session?mode=followup" className="btn shrink-0">
-                  <CalendarClock size={15} /> Start Follow-Up Session ({followupLeadsCount})
-                </Link>
-              )}
-              <Link to="/session" className="btn btn-primary shrink-0">
-                <PhoneCall size={15} /> Start Session
-              </Link>
-            </>
-          ) : (
-            <button
-              disabled
-              title="You can only start a calling session for your own account."
-              className="btn shrink-0 cursor-not-allowed opacity-50"
-            >
-              <PhoneCall size={15} /> Start Session
-            </button>
           )}
         </div>
       </div>
@@ -1565,5 +1540,5 @@ export function DashboardPage() {
   const userId = session?.user.id ?? '';
 
   if (!session) return null;
-  return <DashboardView userId={userId} profile={profile} allowStartSession showSmsStats={profile?.role === 'admin'} />;
+  return <DashboardView userId={userId} profile={profile} showSmsStats={profile?.role === 'admin'} />;
 }
