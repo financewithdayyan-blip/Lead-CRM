@@ -563,8 +563,21 @@ Deno.serve(async (req) => {
       // was a real bug until 2026-09-02 (migration 0130): On Hold leads
       // that replied were silently moving to Replied/Partial Qualified.
       const ADVANCE_FROM = new Set(['new', 'voicemail', 'contacted']);
+      // Any inbound reply from a lead already in (or just advancing into)
+      // one of send-qualify-reminders' two target stages restarts that
+      // sweep's countdown from scratch — see migration 0165. Anchored on
+      // inserted.received_at (the real moment this message arrived), not a
+      // fresh now(), so it matches exactly what the sweep reads back as
+      // last_inbound_at for this lead.
+      const QUALIFY_REMINDER_STAGES = new Set(['replied', 'initial_contact']);
+      const qualifyResetAt = new Date(Date.parse(inserted.received_at) + 60 * 60 * 1000).toISOString();
       if (ADVANCE_FROM.has(lead.stage)) {
-        await admin.from('leads').update({ stage: 'replied' }).eq('id', lead.id);
+        await admin.from('leads').update({
+          stage: 'replied',
+          last_inbound_at: inserted.received_at,
+          qualify_reminder_stage: 0,
+          next_qualify_reminder_at: qualifyResetAt,
+        }).eq('id', lead.id);
       } else if (lead.stage === 'onhold') {
         // ai_reply_paused is cleared so ai-reply's own gate (independent of
         // stage) lets the framework respond — see the 'onhold' entry
@@ -574,6 +587,12 @@ Deno.serve(async (req) => {
         // that sweep is only for leads still silently waiting, not ones
         // already mid-conversation or handed to a human.
         await admin.from('leads').update({ ai_reply_paused: false, onhold_reengaged: true }).eq('id', lead.id);
+      } else if (QUALIFY_REMINDER_STAGES.has(lead.stage)) {
+        await admin.from('leads').update({
+          last_inbound_at: inserted.received_at,
+          qualify_reminder_stage: 0,
+          next_qualify_reminder_at: qualifyResetAt,
+        }).eq('id', lead.id);
       }
 
       await admin.from('lead_activities').insert({
