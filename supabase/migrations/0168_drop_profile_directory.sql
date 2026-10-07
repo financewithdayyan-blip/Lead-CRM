@@ -1,0 +1,11 @@
+-- profile_directory (0001_init.sql) was a SECURITY DEFINER view letting any
+-- signed-in user look up any other user's id/user_code/full_name/email,
+-- built for a team-invite lookup case that was never actually wired up
+-- anywhere — confirmed unused in both the frontend and every edge function.
+-- Flagged by Supabase's security advisor as a critical finding (a SECURITY
+-- DEFINER view bypasses the querying user's own RLS). Since nothing
+-- depends on it, dropping it outright resolves the finding with zero
+-- functional impact — if a similar lookup is ever genuinely needed, it
+-- should be a purpose-built function with its own explicit access check
+-- (e.g. admin-only), not a blanket view every authenticated user can query.
+drop view if exists public.profile_directory;
