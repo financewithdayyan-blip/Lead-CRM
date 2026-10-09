@@ -170,8 +170,9 @@ export function OverviewTab({ lead, onJumpToProperty }: { lead: Lead; onJumpToPr
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatBox label="ARV" value={formatCurrency(lead.arv)} />
+        <StatBox label="CMV" value={formatCurrency(lead.asIs)} />
         <StatBox label="Owed" value={owed == null || owed === 0 ? 'Paid off' : formatCurrency(owed)} />
         <StatBox label="Est. Equity" value={equity != null ? formatCurrency(equity) : '—'} color="#10b981" />
         <StatBox label="Max Offer" value={lead.maxOffer != null ? formatCurrency(lead.maxOffer) : '—'} />

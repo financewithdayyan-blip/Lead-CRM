@@ -225,6 +225,9 @@ export interface Lead {
   condition: string | null;
   motivation: string | null;
   arv: number | null;
+  /** Current Market Value — what the property is worth as-is, today,
+   *  distinct from arv (what it's worth after repairs). Shown next to ARV
+   *  on the Overview tab. */
   asIs: number | null;
   estRepairs: number | null;
   minOffer: number | null;

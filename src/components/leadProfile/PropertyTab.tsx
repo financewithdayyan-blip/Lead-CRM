@@ -129,6 +129,7 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
     backTaxes: lead.backTaxes?.toString() ?? '',
     auctionDate: lead.auctionDate ?? '',
     arv: lead.arv?.toString() ?? '',
+    asIs: lead.asIs?.toString() ?? '',
   });
   const [repairs, setRepairs] = useState(lead.repairs ?? {});
 
@@ -152,6 +153,7 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
         backTaxes: form.backTaxes ? Number(form.backTaxes) : null,
         auctionDate: form.auctionDate || null,
         arv: form.arv ? Number(form.arv) : null,
+        asIs: form.asIs ? Number(form.asIs) : null,
         repairs,
       },
       { onSuccess: () => setEditing(false) },
@@ -172,6 +174,7 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
     ['Monthly Payment', formatCurrency(lead.monthlyPayment)],
     ['Back Taxes', lead.backTaxes ? formatCurrency(lead.backTaxes) : 'None'],
     ['ARV', formatCurrency(lead.arv)],
+    ['CMV', formatCurrency(lead.asIs)],
     ['Price / Sqft', pricePerSqft != null ? formatCurrency(pricePerSqft) : '—'],
   ];
 
@@ -244,6 +247,10 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
             <div>
               <label className="label">ARV</label>
               <input className="input" inputMode="decimal" value={form.arv} onChange={(e) => set('arv', e.target.value.replace(/[^0-9.]/g, ''))} />
+            </div>
+            <div>
+              <label className="label">CMV (current market value)</label>
+              <input className="input" inputMode="decimal" value={form.asIs} onChange={(e) => set('asIs', e.target.value.replace(/[^0-9.]/g, ''))} />
             </div>
             <div>
               <label className="label">Auction Date</label>
