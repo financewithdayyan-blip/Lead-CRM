@@ -547,6 +547,14 @@ export function useUpdateLead() {
       patchLeadInCaches(qc, id, (l) => ({ ...l, ...updates }));
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['activities', id] });
+      // A stage move writes its own lead_activities row via the DB trigger
+      // (log_lead_stage_change), invisible to the client-side cache patch
+      // above — without this, the Dashboard's Revenue chart (and anything
+      // else reading useStageChangeHistory) keeps showing a lead's old
+      // stage-as-of-now until something else happens to refetch it, even
+      // though the move already landed. Scoped to only fire when stage
+      // actually changed, not on every unrelated field edit.
+      if ('stage' in updates) qc.invalidateQueries({ queryKey: ['stage_change_history'] });
     },
   });
 }
