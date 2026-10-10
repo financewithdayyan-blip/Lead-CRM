@@ -26,6 +26,27 @@ const GRID_START_HOUR_DEFAULT = 18;
 const GRID_END_HOUR_DEFAULT = 30;
 const HOUR_HEIGHT = 56;
 
+/** "Today" for this calendar follows the US business day, not whichever
+ *  calendar date the viewer's own browser happens to be on — the work day
+ *  is Pakistan evening into early morning precisely because that's when
+ *  it's daytime in the US, so a Pakistan-based viewer crossing midnight
+ *  their own local time (while the US is still mid-afternoon the day
+ *  before) shouldn't see the highlighted "today" column jump a day early.
+ *  Resolved via real US Eastern calendar fields (Intl, DST-aware — not a
+ *  fixed offset), then rebuilt as a browser-local Date at midnight so it
+ *  drops straight into the same isSameDay/startOfWeek calls every other
+ *  "today" in this file already uses on weekDays' own local Y/M/D. */
+function todayInUsEasternAsLocalDate(): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return new Date(get('year'), get('month') - 1, get('day'));
+}
+
 function minutesFromMidnight(iso: string) {
   const d = new Date(iso);
   return d.getHours() * 60 + d.getMinutes();
@@ -89,7 +110,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
   const { events: rawEvents, isLoading } = useCalendarEvents(targetUserId);
   const deleteEvent = useDeleteCalendarEvent();
 
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(todayInUsEasternAsLocalDate(), { weekStartsOn: 1 }));
   const [visibleTypes, setVisibleTypes] = useState<Set<CalendarEventType>>(new Set(ALL_TYPES));
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
@@ -238,7 +259,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
           <button className="btn !px-2" onClick={() => setWeekStart((d) => addWeeks(d, -1))} title="Previous week">
             <ChevronLeft size={16} />
           </button>
-          <button className="btn !px-3 text-[13px]" onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
+          <button className="btn !px-3 text-[13px]" onClick={() => setWeekStart(startOfWeek(todayInUsEasternAsLocalDate(), { weekStartsOn: 1 }))}>
             Today
           </button>
           <button className="btn !px-2" onClick={() => setWeekStart((d) => addWeeks(d, 1))} title="Next week">
@@ -255,7 +276,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
           <div className="grid" style={{ gridTemplateColumns: '56px repeat(7, 1fr)' }}>
             <div className="border-b border-border" />
             {weekDays.map((d) => {
-              const today = isSameDay(d, new Date());
+              const today = isSameDay(d, todayInUsEasternAsLocalDate());
               return (
                 <div key={d.toISOString()} className="relative border-b border-l border-border px-2 py-2 text-center">
                   {today && (
@@ -285,7 +306,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
               </div>
               {weekDays.map((d, dayIdx) => {
                 const laidOut = layoutDayEvents(eventsByDay.get(dayIdx) ?? []);
-                const today = isSameDay(d, new Date());
+                const today = isSameDay(d, todayInUsEasternAsLocalDate());
                 return (
                   <div key={d.toISOString()} className={cn('relative border-l border-border', today && 'z-[1] border-x-2 border-x-primary/40 bg-primary/[0.06]')}>
                     {hours.map((h) => (
