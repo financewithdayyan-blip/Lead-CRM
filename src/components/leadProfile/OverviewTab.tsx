@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { NotebookText, Send } from 'lucide-react';
+import { Archive, NotebookText, Send } from 'lucide-react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { useActivities, useAddActivity } from '@/hooks/useActivities';
 import { EditableField } from '@/components/leadProfile/EditableField';
-import { formatCurrency, formatDateTime, formatPhone, isImageFile } from '@/lib/utils';
+import { currencyDigitsOnly, formatCurrency, formatDateTime, formatPhone, isImageFile } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
 const TEMPERATURE_LABEL = ['Cold', 'Warm', 'Hot'];
@@ -153,6 +153,15 @@ function NotesCard({ lead, onJumpToActivity }: { lead: Lead; onJumpToActivity: (
         )}
       </div>
 
+      {lead.aiScoreReasoning && (
+        <div className="mt-2 ml-[26px] rounded-lg border border-border-2 bg-surface-3 p-3">
+          <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
+            <Archive size={11} /> Legacy note
+          </div>
+          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-text-2">{lead.aiScoreReasoning}</p>
+        </div>
+      )}
+
       {latest ? (
         <div className="mt-2 pl-[26px]">
           <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-text-2">{latest.body}</p>
@@ -161,7 +170,7 @@ function NotesCard({ lead, onJumpToActivity }: { lead: Lead; onJumpToActivity: (
           </div>
         </div>
       ) : (
-        <p className="mt-2 pl-[26px] text-[13px] text-text-3">No notes yet.</p>
+        !lead.aiScoreReasoning && <p className="mt-2 pl-[26px] text-[13px] text-text-3">No notes yet.</p>
       )}
 
       <div className="mt-3 flex items-end gap-2 rounded-lg border border-border-2 bg-surface-3 p-2 focus-within:border-primary/50">
@@ -200,17 +209,65 @@ export function OverviewTab({
   onJumpToProperty: () => void;
   onJumpToActivity: () => void;
 }) {
+  const updateLead = useUpdateLead();
+  function saveField(patch: Partial<Lead>) {
+    updateLead.mutate({ id: lead.id, ...patch });
+  }
+
   const owed = lead.mortgageBalance;
   const equity = owed != null && lead.arv != null ? lead.arv - owed : null;
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatBox label="ARV" value={formatCurrency(lead.arv)} />
-        <StatBox label="CMV" value={formatCurrency(lead.asIs)} />
-        <StatBox label="Owed" value={owed == null || owed === 0 ? 'Paid off' : formatCurrency(owed)} />
+        {/* Est. Equity sits outside both fieldsets — it's ARV minus Owed,
+         *  computed, not a stored column, so there's nothing to edit; it
+         *  just updates on its own once either of those two changes. */}
+        <fieldset disabled={updateLead.isPending} className="contents">
+          <div className="card !p-3.5">
+            <EditableField
+              variant="stat"
+              label="ARV"
+              value={lead.arv?.toString() ?? ''}
+              display={formatCurrency(lead.arv)}
+              filter={currencyDigitsOnly}
+              onSave={(v) => saveField({ arv: v ? Number(v) : null })}
+            />
+          </div>
+          <div className="card !p-3.5">
+            <EditableField
+              variant="stat"
+              label="CMV"
+              value={lead.asIs?.toString() ?? ''}
+              display={formatCurrency(lead.asIs)}
+              filter={currencyDigitsOnly}
+              onSave={(v) => saveField({ asIs: v ? Number(v) : null })}
+            />
+          </div>
+          <div className="card !p-3.5">
+            <EditableField
+              variant="stat"
+              label="Owed"
+              value={owed?.toString() ?? ''}
+              display={owed == null || owed === 0 ? 'Paid off' : formatCurrency(owed)}
+              filter={currencyDigitsOnly}
+              onSave={(v) => saveField({ mortgageBalance: v ? Number(v) : null })}
+            />
+          </div>
+        </fieldset>
         <StatBox label="Est. Equity" value={equity != null ? formatCurrency(equity) : '—'} color="#10b981" />
-        <StatBox label="Max Offer" value={lead.maxOffer != null ? formatCurrency(lead.maxOffer) : '—'} />
+        <fieldset disabled={updateLead.isPending} className="contents">
+          <div className="card !p-3.5">
+            <EditableField
+              variant="stat"
+              label="Max Offer"
+              value={lead.maxOffer?.toString() ?? ''}
+              display={lead.maxOffer != null ? formatCurrency(lead.maxOffer) : '—'}
+              filter={currencyDigitsOnly}
+              onSave={(v) => saveField({ maxOffer: v ? Number(v) : null })}
+            />
+          </div>
+        </fieldset>
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

@@ -4,6 +4,14 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+/** Strips a keystroke down to digits and at most one decimal point — the
+ * shared `filter` for every inline-editable currency field (ARV, CMV,
+ * mortgage balance, etc.), so typing a $ or a stray letter never lands in
+ * the draft. */
+export function currencyDigitsOnly(raw: string): string {
+  return raw.replace(/[^0-9.]/g, '');
+}
+
 /** Anything with an image mime type or a common photo extension — a lead's
  * uploaded files can be photos, PDFs, or spreadsheets, but only photos get
  * a thumbnail preview. */

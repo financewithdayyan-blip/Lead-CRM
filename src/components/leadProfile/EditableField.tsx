@@ -23,9 +23,10 @@ interface EditableFieldProps {
   filter?: (raw: string) => string;
   /** 'stacked' (default) — label above value, for the grid-of-cells cards
    *  (Lead Information, Property Details). 'inline' — label left, value
-   *  right, for a sidebar list of rows (Contact). Same click-to-edit
+   *  right, for a sidebar list of rows (Contact). 'stat' — large anchor
+   *  number, for the ARV/CMV/Owed/Max Offer stat boxes. Same click-to-edit
    *  behavior either way, just laid out to match where it's used. */
-  variant?: 'stacked' | 'inline';
+  variant?: 'stacked' | 'inline' | 'stat';
   /** Blocks starting a new edit while true — pass the card's own
    *  mutation.isPending. Each field saves independently now instead of one
    *  bulk submit, so without this, saving field A and clicking into field B
@@ -86,11 +87,14 @@ export function EditableField({
   }
 
   const inline = variant === 'inline';
+  const stat = variant === 'stat';
 
   if (!editing) {
-    const valueClass = `border-b border-dashed border-transparent font-medium text-text group-hover/field:border-border-2 group-hover/field:text-primary ${
-      inline ? 'text-[13px]' : 'mt-0.5 truncate text-[13.5px]'
-    }`;
+    const valueClass = stat
+      ? 'mt-1 border-b border-dashed border-transparent text-xl font-semibold text-text group-hover/field:border-border-2 group-hover/field:text-primary'
+      : `border-b border-dashed border-transparent font-medium text-text group-hover/field:border-border-2 group-hover/field:text-primary ${
+          inline ? 'text-[13px]' : 'mt-0.5 truncate text-[13.5px]'
+        }`;
     return (
       <button
         type="button"
@@ -148,6 +152,15 @@ export function EditableField({
       <div className="flex items-center justify-between gap-3 py-1.5">
         <div className="text-[11px] uppercase tracking-wide text-text-3">{label}</div>
         {control}
+      </div>
+    );
+  }
+
+  if (stat) {
+    return (
+      <div>
+        <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+        <div className="mt-1">{control}</div>
       </div>
     );
   }

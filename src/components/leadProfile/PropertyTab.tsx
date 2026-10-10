@@ -3,10 +3,8 @@ import { ExternalLink, Loader2, Trash2, Upload, Video } from 'lucide-react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl, useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { EditableField } from '@/components/leadProfile/EditableField';
-import { formatCurrency, formatDateTime, isImageFile, isVideoFile } from '@/lib/utils';
+import { currencyDigitsOnly, formatCurrency, formatDateTime, isImageFile, isVideoFile } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
-
-const digitsOnly = (raw: string) => raw.replace(/[^0-9.]/g, '');
 
 const OCCUPANCY_LABEL: Record<NonNullable<Lead['occupancy']>, string> = {
   owner_occupied: 'Owner occupied',
@@ -187,35 +185,35 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
             label="Mortgage Balance"
             value={lead.mortgageBalance?.toString() ?? ''}
             display={lead.mortgageBalance == null || lead.mortgageBalance === 0 ? 'Paid off' : formatCurrency(lead.mortgageBalance)}
-            filter={digitsOnly}
+            filter={currencyDigitsOnly}
             onSave={(v) => saveField({ mortgageBalance: v ? Number(v) : null })}
           />
           <EditableField
             label="Monthly Payment"
             value={lead.monthlyPayment?.toString() ?? ''}
             display={formatCurrency(lead.monthlyPayment)}
-            filter={digitsOnly}
+            filter={currencyDigitsOnly}
             onSave={(v) => saveField({ monthlyPayment: v ? Number(v) : null })}
           />
           <EditableField
             label="Back Taxes"
             value={lead.backTaxes?.toString() ?? ''}
             display={lead.backTaxes ? formatCurrency(lead.backTaxes) : 'None'}
-            filter={digitsOnly}
+            filter={currencyDigitsOnly}
             onSave={(v) => saveField({ backTaxes: v ? Number(v) : null })}
           />
           <EditableField
             label="ARV"
             value={lead.arv?.toString() ?? ''}
             display={formatCurrency(lead.arv)}
-            filter={digitsOnly}
+            filter={currencyDigitsOnly}
             onSave={(v) => saveField({ arv: v ? Number(v) : null })}
           />
           <EditableField
             label="CMV"
             value={lead.asIs?.toString() ?? ''}
             display={formatCurrency(lead.asIs)}
-            filter={digitsOnly}
+            filter={currencyDigitsOnly}
             onSave={(v) => saveField({ asIs: v ? Number(v) : null })}
           />
           <EditableField

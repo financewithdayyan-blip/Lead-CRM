@@ -14,15 +14,6 @@ const CONTACT_METHOD_LABEL: Record<NonNullable<Lead['preferredContactMethod']>, 
   email: 'Email',
 };
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <div className="text-[11px] uppercase tracking-wide text-text-3">{label}</div>
-      <div className="text-[13px] font-medium text-text">{children}</div>
-    </div>
-  );
-}
-
 /** Next follow-up is one logical field made of two coupled inputs (date +
  *  optional time), so it can't be a single EditableField — click-to-edit
  *  the same way, but commits only once focus actually leaves both inputs
@@ -149,15 +140,25 @@ export function ContactSidebarCard({
       </div>
 
       <div className="mt-3 divide-y divide-border-2">
-        <Row label="Phone">{lead.phone ? formatPhone(lead.phone) : '—'}</Row>
-        <Row label="Email">{lead.email || '—'}</Row>
-
-        {/* One mutation shared by all three rows — disabling while any save
-         *  is in flight stops a fast second edit from computing off a lead
+        {/* One mutation shared by every row — disabling while any save is
+         *  in flight stops a fast second edit from computing off a lead
          *  snapshot that doesn't have the first edit's change yet. Native
          *  fieldset cascade reaches NextFollowUpRow's own button/inputs too,
          *  no separate disabled prop needed there. */}
         <fieldset disabled={updateLead.isPending} className="contents">
+          <EditableField
+            variant="inline"
+            label="Phone"
+            value={lead.phone ?? ''}
+            display={lead.phone ? formatPhone(lead.phone) : ''}
+            onSave={(v) => saveField({ phone: formatPhone(v.trim()) })}
+          />
+          <EditableField
+            variant="inline"
+            label="Email"
+            value={lead.email ?? ''}
+            onSave={(v) => saveField({ email: v.trim() || null })}
+          />
           <EditableField
             variant="inline"
             label="Prefers"

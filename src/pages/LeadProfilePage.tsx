@@ -27,6 +27,10 @@ import { ActivityTab } from '@/components/leadProfile/ActivityTab';
 import { EditContactModal } from '@/components/leadProfile/EditContactModal';
 import { SmsThreadTab } from '@/components/sms/SmsThreadTab';
 
+/** Compact — just the badge and a re-score link, meant to sit under the
+ *  stage dropdown in the header's right-aligned column. The reasoning text
+ *  that used to run alongside it lives in Overview's Notes card now (as a
+ *  Legacy note), not here. */
 function AiScoreCard({ lead }: { lead: Lead }) {
   const scoreLead = useScoreLead();
   const [error, setError] = useState('');
@@ -43,44 +47,39 @@ function AiScoreCard({ lead }: { lead: Lead }) {
   const scoredDate = lead.aiScoredAt ? new Date(lead.aiScoredAt).toLocaleDateString() : null;
 
   return (
-    <div className="mt-4 border-t border-border pt-4">
-      <div className="flex flex-wrap items-start gap-4">
-        {hasScore && colors ? (
-          <>
-            <div className="flex items-center gap-3">
-              <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-2 ${colors.ring} bg-surface-2`}>
-                <span className={`text-xl font-bold ${colors.text}`}>{lead.aiScore}</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
-                  <Sparkles size={13} className={colors.text} />
-                  AI Lead Score
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors.bg} text-white`}>{colors.label}</span>
-                </div>
-                {scoredDate && <div className="text-[11px] text-text-3">Scored {scoredDate}</div>}
-              </div>
-            </div>
-            <p className="flex-1 text-[13px] leading-relaxed text-text-2">{lead.aiScoreReasoning}</p>
-          </>
-        ) : (
-          <div className="flex items-center gap-2 text-[13px] text-text-3">
-            <Sparkles size={14} className="text-primary" />
-            <span>No AI score yet — click to analyze this lead.</span>
+    <div className="flex flex-col items-end gap-1.5">
+      {hasScore && colors ? (
+        <div className="flex items-center gap-2.5">
+          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 ${colors.ring} bg-surface-2`}>
+            <span className={`text-[15px] font-bold ${colors.text}`}>{lead.aiScore}</span>
           </div>
+          <div>
+            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
+              <Sparkles size={12} className={colors.text} />
+              AI Lead Score
+              <span className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ${colors.bg} text-white`}>{colors.label}</span>
+            </div>
+            {scoredDate && <div className="text-[10.5px] text-text-3">Scored {scoredDate}</div>}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 text-[12px] text-text-3">
+          <Sparkles size={13} className="text-primary" />
+          No AI score yet
+        </div>
+      )}
+      <button
+        onClick={handleScore}
+        disabled={scoreLead.isPending}
+        className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {scoreLead.isPending ? (
+          <><RefreshCw size={11} className="animate-spin" /> Scoring…</>
+        ) : (
+          hasScore ? 'Re-score' : 'Score with AI'
         )}
-        <button
-          onClick={handleScore}
-          disabled={scoreLead.isPending}
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-[12px] font-semibold text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {scoreLead.isPending ? (
-            <><RefreshCw size={12} className="animate-spin" /> Scoring…</>
-          ) : (
-            <><Sparkles size={12} /> {hasScore ? 'Re-score' : 'Score with AI'}</>
-          )}
-        </button>
-      </div>
-      {error && <div className="mt-2 text-[12px] text-danger">{error}</div>}
+      </button>
+      {error && <div className="text-[11px] text-danger">{error}</div>}
     </div>
   );
 }
@@ -436,6 +435,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 ));
               })()}
             </select>
+            <AiScoreCard lead={lead} />
           </div>
         </div>
 
@@ -452,8 +452,6 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           })}
           <TagPicker lead={lead} tags={tags} />
         </div>
-
-        <AiScoreCard lead={lead} />
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-border">
