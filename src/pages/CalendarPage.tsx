@@ -98,8 +98,14 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
   const bulkSmsEvents = useMemo((): CalendarEvent[] => {
     if (!showBulkSmsReminder) return [];
     return weekDays.map((d) => {
-      const startsAt = new Date(d);
-      startsAt.setHours(19, 30, 0, 0);
+      // 7:30pm Pakistan time, not the viewer's own local 7:30pm — PKT is a
+      // fixed UTC+5 offset (no DST), so that's always 14:30 UTC on the same
+      // calendar day. Rendered back out through each viewer's own local
+      // clock same as every other event here, so a Pakistan-based viewer
+      // sees ~7:30pm and a US-based viewer sees ~9-10am the same day,
+      // instead of everyone seeing a literal 7:30pm regardless of which
+      // timezone their own browser happens to be in.
+      const startsAt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 14, 30, 0, 0));
       const iso = startsAt.toISOString();
       return {
         id: `bulk-sms-reminder-${format(d, 'yyyy-MM-dd')}`,
@@ -111,7 +117,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
         location: null,
         startsAt: iso,
         endsAt: null,
-        notes: 'Standing reminder — manage from the Bulk SMS page.',
+        notes: 'Standing reminder — runs 7:30pm Pakistan time (~9am US). Manage from the Bulk SMS page.',
         createdAt: iso,
         editable: false,
       };
