@@ -544,8 +544,9 @@ export function useUpdateLead() {
     },
     onSuccess: (id, variables) => {
       const { id: _id, ...updates } = variables;
+      // Instant, optimistic-feeling patch first — every cache gets exactly
+      // what this call itself sent, with no round trip to wait on.
       patchLeadInCaches(qc, id, (l) => ({ ...l, ...updates }));
-      qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['activities', id] });
       // A stage move writes its own lead_activities row via the DB trigger
       // (log_lead_stage_change), invisible to the client-side cache patch
@@ -555,6 +556,17 @@ export function useUpdateLead() {
       // though the move already landed. Scoped to only fire when stage
       // actually changed, not on every unrelated field edit.
       if ('stage' in updates) qc.invalidateQueries({ queryKey: ['stage_change_history'] });
+      // leads has several more triggers that write fields on this same row
+      // the client never explicitly set (qualified_at on reaching Qualified,
+      // onhold/qualify-reminder scheduling, ...) — the optimistic patch
+      // above only ever carries what this call itself sent, so without a
+      // real refetch those stay silently stale in every list cache (Kanban,
+      // Dashboard) until something else happens to reload them.
+      // refetchAndPatchLead reconciles both the single-lead cache and every
+      // list cache with the row's true state in one request — replaces the
+      // old plain invalidateQueries(['lead', id]), which only ever covered
+      // the lead profile page itself, not the list/board/chart views.
+      refetchAndPatchLead(qc, id);
     },
   });
 }
