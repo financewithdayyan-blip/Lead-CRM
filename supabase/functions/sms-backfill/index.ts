@@ -152,13 +152,17 @@ Deno.serve(async (req) => {
       dateTo,
       sessionsPageToken,
       sessionsPageSize = 10,
+      commit: commitOrphans = false,
     } = body as {
       fromKey?: string;
-      mode?: 'inspect' | 'preview' | 'commit' | 'debug_secret' | 'backfill_from_log';
+      mode?: 'inspect' | 'preview' | 'commit' | 'debug_secret' | 'backfill_from_log' | 'recover_orphaned_outbound';
       dateFrom?: string;
       dateTo?: string;
       sessionsPageToken?: string;
       sessionsPageSize?: number;
+      /** recover_orphaned_outbound only — false (default) reports what it
+       *  would do without writing anything. */
+      commit?: boolean;
     };
 
     // Bypasses auth entirely on purpose — a length/prefix (never the real
@@ -236,6 +240,132 @@ Deno.serve(async (req) => {
         matched: firstKeyByLead.size,
         updated,
         byKey: Array.from(idsByKey.entries()).map(([key, ids]) => ({ key, count: ids.length })),
+      });
+    }
+
+    // Recovers a specific, now-fixed class of stranded history: before
+    // 2026-08-29 (see sms-webhook's sentFromOwnNumber branch, added that
+    // day), a text sent directly from the Zoom Phone app/desktop client —
+    // bypassing this CRM entirely — arrived at sms-webhook as an ordinary
+    // phone.sms_received event with "from" set to one of our own six
+    // numbers. The webhook always resolved the lead by "from", which never
+    // matched one of our own numbers, so the row landed in inbound_messages
+    // with lead_id left null — it never reached lead_activities, so a
+    // thread with real two-way history before that date only ever showed
+    // the lead's side. This replays the same "resolve by to instead of
+    // from" fix sms-webhook now applies live, against whatever's still
+    // sitting stranded, additive only — never touches leads or the
+    // original inbound_messages row (same "deliberately not linked" reasoning
+    // sms-webhook's own fix uses, so this never shows as a duplicate inbound
+    // bubble). Scoped to before the fix shipped: nothing from that date
+    // forward is a candidate, since the live path already handles it, and
+    // that row's lead_id would still read null regardless — it's a
+    // permanent raw-audit-trail marker, not a sign anything's unresolved.
+    if (mode === 'recover_orphaned_outbound') {
+      const SENT_FROM_OWN_NUMBER_FIX_SHIPPED = '2026-08-29T00:00:00+05:00';
+
+      const ourNumberKeys = new Map<string, string>();
+      for (const [key, n] of Object.entries(NUMBERS)) {
+        if (n.phone) ourNumberKeys.set(normalizePhone(n.phone), key);
+      }
+
+      const { data: orphans, error: orphanErr } = await admin
+        .from('inbound_messages')
+        .select('id, from_phone, to_phone, body, received_at, has_attachments')
+        .is('lead_id', null)
+        .eq('is_reaction', false)
+        .lt('received_at', SENT_FROM_OWN_NUMBER_FIX_SHIPPED)
+        .order('received_at', { ascending: true });
+      if (orphanErr) return json({ error: orphanErr.message }, 500);
+
+      const report = {
+        mode,
+        commit: commitOrphans,
+        scanned: orphans?.length ?? 0,
+        ownNumberCandidates: 0,
+        matched: 0,
+        unmatchedIds: [] as string[],
+        inserted: 0,
+        alreadyPresent: 0,
+        leadsTouched: new Map<string, { name: string; count: number }>(),
+        errors: [] as string[],
+      };
+
+      for (const row of orphans ?? []) {
+        const fromNorm = normalizePhone(row.from_phone ?? '');
+        // Not one of our six numbers — a genuinely unmatched inbound text
+        // from an unrecognized number (wrong number, spam, non-lead
+        // contact), untouched by this recovery either way.
+        if (!ourNumberKeys.has(fromNorm)) continue;
+        report.ownNumberCandidates++;
+
+        const toNorm = normalizePhone(row.to_phone ?? '');
+        const lead = await resolveLead(admin, toNorm);
+        if (!lead) {
+          report.unmatchedIds.push(row.id);
+          continue;
+        }
+        report.matched++;
+
+        const { data: leadRow } = await admin.from('leads').select('first_name, last_name, phone').eq('id', lead.id).single();
+        const leadLabel = leadRow ? `${leadRow.first_name ?? ''} ${leadRow.last_name ?? ''}`.trim() || leadRow.phone : lead.id;
+        if (!report.leadsTouched.has(lead.id)) report.leadsTouched.set(lead.id, { name: leadLabel, count: 0 });
+        report.leadsTouched.get(lead.id)!.count++;
+
+        if (!commitOrphans) continue;
+
+        // Re-run safety: created_at is set to the orphan's own received_at
+        // below (not now()), so an exact match here means this specific
+        // message was already recovered on a prior run.
+        const { data: existingActivity } = await admin
+          .from('lead_activities')
+          .select('id')
+          .eq('lead_id', lead.id)
+          .eq('type', 'sms')
+          .eq('created_at', row.received_at)
+          .eq('body', row.body)
+          .maybeSingle();
+        if (existingActivity) {
+          report.alreadyPresent++;
+          continue;
+        }
+
+        const { error: actErr } = await admin.from('lead_activities').insert({
+          lead_id: lead.id,
+          user_id: lead.user_id,
+          type: 'sms',
+          body: row.body,
+          meta: {
+            direction: 'outbound',
+            from: row.from_phone,
+            to: row.to_phone,
+            hasAttachments: row.has_attachments,
+            sentViaZoomApp: true,
+            recoveredFromOrphan: true,
+          },
+          created_at: row.received_at,
+        });
+        if (actErr) {
+          report.errors.push(`lead ${lead.id} / orphan ${row.id}: ${actErr.message}`);
+          continue;
+        }
+        report.inserted++;
+
+        const { error: logErr } = await admin.from('send_log').insert({
+          user_id: lead.user_id,
+          lead_id: lead.id,
+          phone: toE164(row.to_phone ?? ''),
+          phone_norm: toNorm,
+          sent_from: toE164(row.from_phone ?? ''),
+          body: row.body,
+          sent_at: row.received_at,
+        });
+        if (logErr) report.errors.push(`send_log for orphan ${row.id}: ${logErr.message}`);
+      }
+
+      return json({
+        ...report,
+        leadsTouched: Array.from(report.leadsTouched.entries()).map(([id, v]) => ({ leadId: id, ...v })),
       });
     }
 

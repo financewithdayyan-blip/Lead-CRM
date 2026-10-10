@@ -10,6 +10,7 @@ import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
 import { SmsTemplateEditor } from '@/components/sms/SmsTemplateEditor';
 import { AiReviewSettingsEditor } from '@/components/sms/AiReviewSettingsEditor';
 import { SmsNumberLabelsEditor } from '@/components/sms/SmsNumberLabelsEditor';
+import { SmsOrphanRecoveryCard } from '@/components/sms/SmsOrphanRecoveryCard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 /** Small icon-badge + title header, reused above every card on this page so
@@ -187,6 +188,7 @@ export function SettingsPage() {
           <AiReviewSettingsEditor />
           <SmsNumberLabelsEditor />
           <SmsTemplateEditor />
+          <SmsOrphanRecoveryCard />
         </div>
       ) : (
         <div className="space-y-5">
