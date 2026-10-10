@@ -72,8 +72,8 @@ export interface StateStat {
 }
 
 const TIER_COLOR: Record<Tier, string> = {
-  green: '#22c55e',
-  yellow: '#eab308',
+  green: '#10b981',
+  yellow: '#f59e0b',
   red: '#ef4444',
 };
 const TIER_LABEL: Record<Tier, string> = {

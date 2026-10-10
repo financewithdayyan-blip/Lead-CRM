@@ -151,16 +151,15 @@ function StatCard({
    * chart) — same visual language as the regular size, just smaller. */
   compact?: boolean;
 }) {
-  // Every real call site passes an explicit color; this fallback only
-  // exists so a future one that doesn't still gets a color with real
-  // contrast against both a light card and a dark one, instead of a
-  // near-black navy that would vanish on a dark background.
-  const c = color ?? '#1568A8';
   if (hero) {
+    // hero is a solid-color block, so it needs a real background color
+    // regardless — this fallback only matters if a future call site forgets
+    // one, so it still gets real contrast instead of transparent/black.
+    const bg = color ?? '#1568A8';
     return (
       <div
         className={`rounded-lg shadow-card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover ${compact ? 'p-2.5' : 'p-4'}`}
-        style={{ background: c }}
+        style={{ background: bg }}
       >
         <div className="flex items-start justify-between gap-2">
           <div className={`font-semibold uppercase tracking-wide text-white/70 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{label}</div>
@@ -175,20 +174,29 @@ function StatCard({
       </div>
     );
   }
+  // color is genuinely optional here — a plain activity count that isn't
+  // inherently good or bad (Total Leads, SMS Sent, ...) renders as a true
+  // neutral card (muted icon badge, default text color) rather than being
+  // forced into a fake "neutral-looking" hex just to satisfy a required
+  // prop. Only cards that actually carry a signal (success/danger/info/the
+  // one primary anchor metric) pass a real color.
   return (
     <div className={`card transition-transform hover:-translate-y-0.5 hover:shadow-card-hover ${compact ? '!p-2.5' : '!p-4'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className={`font-semibold uppercase tracking-wide text-text-3 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{label}</div>
         {Icon && (
           <span
-            className={`flex shrink-0 items-center justify-center rounded-md ${compact ? 'h-6 w-6' : 'h-7 w-7'}`}
-            style={{ background: `${c}17`, color: c }}
+            className={`flex shrink-0 items-center justify-center rounded-md ${compact ? 'h-6 w-6' : 'h-7 w-7'} ${color ? '' : 'bg-surface-3 text-text-3'}`}
+            style={color ? { background: `${color}17`, color } : undefined}
           >
             <Icon size={compact ? 12 : 14} />
           </span>
         )}
       </div>
-      <div className={`font-mono font-semibold tabular-nums ${compact ? 'mt-1 text-lg' : 'mt-2 text-2xl'}`} style={{ color: c }}>
+      <div
+        className={`font-mono font-semibold tabular-nums ${compact ? 'mt-1 text-lg' : 'mt-2 text-2xl'} ${color ? '' : 'text-text'}`}
+        style={color ? { color } : undefined}
+      >
         {value}
       </div>
       <div className={`text-text-3 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
@@ -1120,9 +1128,7 @@ export function DashboardView({
                     label="Total Leads"
                     value={totalLeadsCount.toLocaleString()}
                     sub={`${leads.filter((l) => l.stage === 'new').length} still cold`}
-                    color="#0B1E33"
                     icon={Users}
-                    hero
                     compact
                   />
                   <StatCard
@@ -1140,23 +1146,20 @@ export function DashboardView({
                     sub={`${stats.contractRate}% of qualified leads`}
                     color="#10b981"
                     icon={FileSignature}
-                    hero
                     compact
                   />
                   <StatCard
                     label="SMS Sent"
                     value={stats.sentInRange.toLocaleString()}
                     sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
-                    color="#C9A24B"
                     icon={MessageSquare}
-                    hero
                     compact
                   />
                   <StatCard
                     label="Replies"
                     value={stats.repliesInRange.toLocaleString()}
                     sub={`${stats.responseRate}% response rate`}
-                    color="#22d3ee"
+                    color="#0891b2"
                     icon={Reply}
                     compact
                   />
@@ -1164,7 +1167,6 @@ export function DashboardView({
                     label="AI Auto-Replies"
                     value={stats.aiRepliesSent.toLocaleString()}
                     sub="drafted and sent, no human touch"
-                    color="#a78bfa"
                     icon={Bot}
                     compact
                   />
@@ -1176,7 +1178,7 @@ export function DashboardView({
                         ? `${stats.callsOffProcess} off-process this ${dateRange === 'today' ? 'day' : 'range'}`
                         : 'all on-process'
                     }
-                    color={stats.callsOffProcess > 0 ? '#f59e0b' : '#fb923c'}
+                    color={stats.callsOffProcess > 0 ? '#f59e0b' : undefined}
                     icon={PhoneCall}
                     compact
                   />
@@ -1193,7 +1195,7 @@ export function DashboardView({
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatCard label="Total Leads" value={totalLeadsCount} sub={`${stats.qualified} qualified`} color="#0B1E33" icon={Users} hero />
+                  <StatCard label="Total Leads" value={totalLeadsCount} sub={`${stats.qualified} qualified`} icon={Users} />
                   <StatCard
                     label="Qualified Leads"
                     value={stats.qualified}
@@ -1208,32 +1210,28 @@ export function DashboardView({
                     sub={`${stats.contractRate}% of qualified`}
                     color="#10b981"
                     icon={FileSignature}
-                    hero
                   />
-                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${totalLeadsCount} leads`} color="#C9A24B" icon={Phone} hero />
+                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${totalLeadsCount} leads`} icon={Phone} />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" color="#1568A8" icon={Activity} />
-                  <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" color="#1568A8" icon={CalendarCheck} />
+                  <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" icon={Activity} />
+                  <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" icon={CalendarCheck} />
                   <StatCard
                     label="Pickup Ratio"
                     value={stats.pickupRatio ?? '—'}
                     sub="calls per real outcome"
-                    color="#0891b2"
                     icon={PhoneIncoming}
                   />
                   <StatCard
                     label="Qualifying Ratio"
                     value={`${stats.qualifyingRate}%`}
                     sub="of calls end Qualified"
-                    color="#a78bfa"
                     icon={TrendingUp}
                   />
                   <StatCard
                     label="Voicemail Ratio"
                     value={`${stats.voicemailRate}%`}
                     sub="of calls end Voicemail"
-                    color="#f59e0b"
                     icon={Voicemail}
                   />
                   <StatCard label="Dead Ratio" value={`${stats.deadRate}%`} sub="of calls end Dead/Declined" color="#ef4444" icon={XCircle} />

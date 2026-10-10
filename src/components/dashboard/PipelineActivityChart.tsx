@@ -19,9 +19,9 @@ interface ActivityTrendPoint {
   qualified: number;
 }
 
-const SENT_COLOR = '#f97316';
-const REPLIES_COLOR = '#22d3ee';
-const QUALIFIED_COLOR = '#a78bfa';
+const SENT_COLOR = '#f59e0b';
+const REPLIES_COLOR = '#0891b2';
+const QUALIFIED_COLOR = '#10b981';
 
 function StatHead({ color, label, value }: { color: string; label: string; value: number | string }) {
   return (

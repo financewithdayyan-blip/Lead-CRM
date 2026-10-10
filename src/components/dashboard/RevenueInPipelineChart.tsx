@@ -48,6 +48,15 @@ export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] 
   const ct = useChartTheme();
   const currentExpected = data.length ? data[data.length - 1].expected : 0;
   const currentActual = data.length ? data[data.length - 1].actual : 0;
+  // A sparse account (few/no leads reaching Contract+ in this window) makes
+  // both series genuine flat lines — Recharts' default auto-domain then
+  // scales to that one value with zero headroom, so a flat "expected" pins
+  // visually to the chart's ceiling and a flat $0 "actual" pins to its
+  // floor, reading as broken rather than as "accurately nothing's moved
+  // yet." A fixed minimum ceiling plus real padding above the max fixes the
+  // pinned-to-the-top case; a muted/dashed treatment for an all-zero series
+  // fixes the "looks like missing data" case.
+  const actualIsFlatZero = data.every((d) => d.actual === 0);
 
   return (
     <div className="flex h-full min-h-[220px] flex-col">
@@ -71,7 +80,15 @@ export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] 
             </defs>
             <CartesianGrid stroke={ct.gridStroke} vertical={false} />
             <XAxis dataKey="label" stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} />
-            <YAxis stroke={ct.axisStroke} fontSize={10} tickLine={false} axisLine={false} width={48} tickFormatter={formatShort} />
+            <YAxis
+              stroke={ct.axisStroke}
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              width={48}
+              tickFormatter={formatShort}
+              domain={[0, (dataMax: number) => Math.max(dataMax * 1.25, 1000)]}
+            />
             <Tooltip
               cursor={{ stroke: ct.axisStroke, strokeWidth: 1, strokeDasharray: '4 4' }}
               contentStyle={{
@@ -102,10 +119,12 @@ export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] 
               dataKey="actual"
               name="Actual (Closed)"
               stroke={ACTUAL_COLOR}
-              fill="url(#gRevenueActual)"
+              strokeOpacity={actualIsFlatZero ? 0.35 : 1}
+              strokeDasharray={actualIsFlatZero ? '4 4' : undefined}
+              fill={actualIsFlatZero ? 'none' : 'url(#gRevenueActual)'}
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
+              activeDot={actualIsFlatZero ? false : { r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
               animationDuration={500}
             />
           </ComposedChart>

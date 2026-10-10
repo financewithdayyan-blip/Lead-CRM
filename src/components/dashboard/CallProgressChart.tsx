@@ -70,9 +70,9 @@ export function CallProgressChart({ data }: { data: CallTrendPoint[] }) {
           type="linear"
           dataKey="qualified"
           name="Qualified"
-          stroke="#a78bfa"
+          stroke="#10b981"
           strokeWidth={2.5}
-          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#a78bfa' }}
+          dot={{ r: 3.5, strokeWidth: 2, stroke: '#fff', fill: '#10b981' }}
           activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
           animationDuration={600}
         />
