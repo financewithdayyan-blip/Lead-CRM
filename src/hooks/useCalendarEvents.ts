@@ -19,9 +19,8 @@ async function fetchManualEvents(targetUserId?: string): Promise<CalendarEvent[]
 
 // Calls/follow-ups aren't duplicated into calendar_events — they're read
 // straight off each lead's existing scheduled-callback/next-follow-up
-// fields (the same source CalendarStrip's Dashboard widget already uses),
-// so nothing on the calendar ever goes stale relative to the lead itself.
-// Synthesized, not editable here: editing happens on the lead profile.
+// fields, so nothing on the calendar ever goes stale relative to the lead
+// itself. Synthesized, not editable here: editing happens on the lead profile.
 async function fetchLeadDerivedEvents(targetUserId?: string): Promise<CalendarEvent[]> {
   let query = supabase
     .from('leads')

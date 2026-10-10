@@ -30,14 +30,13 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { useLeads, useCalendarStripLeads, useLeadsTotalCount } from '@/hooks/useLeads';
+import { useLeads, useLeadsTotalCount } from '@/hooks/useLeads';
 import { useActivityFeed, useStageChangeHistory } from '@/hooks/useActivities';
 import { useTags } from '@/hooks/useTags';
 import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
-import { CalendarStrip } from '@/components/dashboard/CalendarStrip';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -247,7 +246,6 @@ export function DashboardView({
   showSmsStats?: boolean;
 }) {
   const { data: leads = [], isFetching: leadsFetching, isError: leadsErrored } = useLeads(userId);
-  const { data: calendarStripLeads = [] } = useCalendarStripLeads(userId);
   // The account's real total, straight from the DB — leads itself can lag
   // behind reality for a while (see useLeads' own staleTime), and a raw
   // count is the one number where that's immediately, visibly wrong to
@@ -1206,14 +1204,6 @@ export function DashboardView({
               </div>
             )}
           </div>
-
-
-          {showSmsStats && (
-            <div>
-              <SectionLabel>Calendar</SectionLabel>
-              <CalendarStrip userId={userId} leads={calendarStripLeads} />
-            </div>
-          )}
 
           {!showSmsStats && (
             <div>

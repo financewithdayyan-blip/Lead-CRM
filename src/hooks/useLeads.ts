@@ -214,28 +214,6 @@ export function useNotificationsLeads(targetUserId?: string) {
   });
 }
 
-/** Dashboard's Calendar Strip — follow-up/callback scheduling fields only.
- *  DashboardPage calls this alongside its own (trimmed) useLeads() and
- *  passes the result into <CalendarStrip>, which is otherwise unchanged. */
-export function useCalendarStripLeads(targetUserId?: string) {
-  const { session } = useAuth();
-  const userId = targetUserId ?? session?.user.id;
-  return useQuery({
-    queryKey: ['leads', 'calendarStrip', userId],
-    queryFn: () =>
-      fetchAllPages<any>((from, to) =>
-        supabase
-          .from('leads')
-          .select('id, first_name, last_name, phone, stage, next_follow_up, next_follow_up_time, scheduled_callback_at, scheduled_callback_note')
-          .eq('user_id', userId)
-          .range(from, to),
-      ).then((rows) => rows.map(dbToLead)),
-    enabled: !!userId,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
-}
-
 /** Team page's per-member stats panel — only rendered once an admin expands
  *  a member row, and only ever needs counts, not full lead rows. */
 export function useMemberLeadStats(memberId: string | undefined) {

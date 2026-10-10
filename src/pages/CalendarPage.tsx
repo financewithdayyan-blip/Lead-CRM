@@ -98,14 +98,17 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
   const bulkSmsEvents = useMemo((): CalendarEvent[] => {
     if (!showBulkSmsReminder) return [];
     return weekDays.map((d) => {
-      // 7:30pm Pakistan time, not the viewer's own local 7:30pm — PKT is a
-      // fixed UTC+5 offset (no DST), so that's always 14:30 UTC on the same
-      // calendar day. Rendered back out through each viewer's own local
-      // clock same as every other event here, so a Pakistan-based viewer
-      // sees ~7:30pm and a US-based viewer sees ~9-10am the same day,
-      // instead of everyone seeing a literal 7:30pm regardless of which
-      // timezone their own browser happens to be in.
-      const startsAt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 14, 30, 0, 0));
+      // 6:30pm Pakistan time — when the work day actually starts, not
+      // midnight — anchored to the real PKT clock rather than the viewer's
+      // own local 6:30pm. PKT is a fixed UTC+5 offset (no DST), so that's
+      // always 13:30 UTC on the same calendar day. Rendered back out
+      // through each viewer's own local clock same as every other event
+      // here: a Pakistan-based viewer sees ~6:30pm, a US Eastern viewer
+      // sees ~9:30am (during EDT — Pakistan has no DST but the US does, so
+      // this drifts an hour against Eastern clocks specifically when DST
+      // flips later in the year; not worth full IANA zone math for a
+      // reminder marker).
+      const startsAt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 13, 30, 0, 0));
       const iso = startsAt.toISOString();
       return {
         id: `bulk-sms-reminder-${format(d, 'yyyy-MM-dd')}`,
@@ -117,7 +120,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
         location: null,
         startsAt: iso,
         endsAt: null,
-        notes: 'Standing reminder — runs 7:30pm Pakistan time (~9am US). Manage from the Bulk SMS page.',
+        notes: 'Standing reminder — work day starts 6:30pm Pakistan time (~9:30am US Eastern). Manage from the Bulk SMS page.',
         createdAt: iso,
         editable: false,
       };
