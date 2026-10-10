@@ -1123,127 +1123,93 @@ export function DashboardView({
                   </Suspense>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
-                  <StatCard
-                    label="Total Leads"
-                    value={totalLeadsCount.toLocaleString()}
-                    sub={`${leads.filter((l) => l.stage === 'new').length} still cold`}
-                    icon={Users}
-                    compact
-                  />
-                  <StatCard
-                    label="Qualified Leads"
-                    value={stats.qualified.toLocaleString()}
-                    sub={`${stats.qualifiedRate}% of contacted`}
-                    color="#1568A8"
-                    icon={CheckCircle2}
-                    hero
-                    compact
-                  />
-                  <StatCard
-                    label="Contracts"
-                    value={stats.contracts.toLocaleString()}
-                    sub={`${stats.contractRate}% of qualified leads`}
-                    color="#10b981"
-                    icon={FileSignature}
-                    compact
-                  />
-                  <StatCard
-                    label="SMS Sent"
-                    value={stats.sentInRange.toLocaleString()}
-                    sub={`${rangeLabel.toLowerCase()} · ${stats.sentToday} today`}
-                    icon={MessageSquare}
-                    compact
-                  />
-                  <StatCard
-                    label="Replies"
-                    value={stats.repliesInRange.toLocaleString()}
-                    sub={`${stats.responseRate}% response rate`}
-                    color="#0891b2"
-                    icon={Reply}
-                    compact
-                  />
-                  <StatCard
-                    label="AI Auto-Replies"
-                    value={stats.aiRepliesSent.toLocaleString()}
-                    sub="drafted and sent, no human touch"
-                    icon={Bot}
-                    compact
-                  />
-                  <StatCard
-                    label="Calls to Qualified Leads"
-                    value={stats.callsToQualified.toLocaleString()}
-                    sub={
-                      stats.callsOffProcess > 0
-                        ? `${stats.callsOffProcess} off-process this ${dateRange === 'today' ? 'day' : 'range'}`
-                        : 'all on-process'
-                    }
-                    color={stats.callsOffProcess > 0 ? '#f59e0b' : undefined}
-                    icon={PhoneCall}
-                    compact
-                  />
-                  <StatCard
-                    label="Opted Out / DNC"
-                    value={stats.optedOut.toLocaleString()}
-                    sub={`${stats.optOutRate}% of contacted`}
-                    color="#ef4444"
-                    icon={UserX}
-                    compact
-                  />
+                <div className="card flex h-full flex-col">
+                  {/* One anchor number, set large in the data-tool mono
+                      face, with nothing competing for attention around it —
+                      the rest of the row's metrics follow as a quiet,
+                      unboxed list rather than each getting its own
+                      icon-badge card. A dozen identically-styled tiles in a
+                      grid is the single most recognizable "generated
+                      dashboard" pattern there is; one real headline number
+                      plus a plain ledger underneath reads like an actual
+                      product instead. */}
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Qualified Leads</div>
+                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                    <span className="font-mono text-[34px] font-semibold leading-none tracking-tight text-primary">
+                      {stats.qualified.toLocaleString()}
+                    </span>
+                    <span className="text-[13px] text-text-3">{stats.qualifiedRate}% of contacted</span>
+                  </div>
+
+                  <div className="mt-5 grid flex-1 grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4">
+                    {(
+                      [
+                        { label: 'Total Leads', value: totalLeadsCount.toLocaleString(), sub: `${leads.filter((l) => l.stage === 'new').length} still cold` },
+                        { label: 'Contracts', value: stats.contracts.toLocaleString(), sub: `${stats.contractRate}% of qualified`, color: '#10b981' },
+                        { label: 'SMS Sent', value: stats.sentInRange.toLocaleString(), sub: `${stats.sentToday} today` },
+                        { label: 'Replies', value: stats.repliesInRange.toLocaleString(), sub: `${stats.responseRate}% response rate`, color: '#0891b2' },
+                        { label: 'AI Auto-Replies', value: stats.aiRepliesSent.toLocaleString(), sub: 'no human touch' },
+                        {
+                          label: 'Calls to Qualified',
+                          value: stats.callsToQualified.toLocaleString(),
+                          sub: stats.callsOffProcess > 0 ? `${stats.callsOffProcess} off-process` : 'all on-process',
+                          color: stats.callsOffProcess > 0 ? '#f59e0b' : undefined,
+                        },
+                        { label: 'Opted Out / DNC', value: stats.optedOut.toLocaleString(), sub: `${stats.optOutRate}% of contacted`, color: '#ef4444' },
+                      ] as Array<{ label: string; value: string; sub: string; color?: string }>
+                    ).map((s) => (
+                      <div key={s.label} className="min-w-0">
+                        <div className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{s.label}</div>
+                        <div
+                          className="mt-0.5 font-mono text-[19px] font-semibold leading-tight tabular-nums text-text"
+                          style={s.color ? { color: s.color } : undefined}
+                        >
+                          {s.value}
+                        </div>
+                        <div className="truncate text-[11px] text-text-3">{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatCard label="Total Leads" value={totalLeadsCount} sub={`${stats.qualified} qualified`} icon={Users} />
-                  <StatCard
-                    label="Qualified Leads"
-                    value={stats.qualified}
-                    sub={`${stats.qualifiedRate}% of contacted`}
-                    color="#1568A8"
-                    icon={CheckCircle2}
-                    hero
-                  />
-                  <StatCard
-                    label="Contracts"
-                    value={stats.contracts}
-                    sub={`${stats.contractRate}% of qualified`}
-                    color="#10b981"
-                    icon={FileSignature}
-                  />
-                  <StatCard label="Calls Made" value={calls.length} sub={`out of ${totalLeadsCount} leads`} icon={Phone} />
+              <div className="card">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Qualified Leads</div>
+                <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                  <span className="font-mono text-[34px] font-semibold leading-none tracking-tight text-primary">
+                    {stats.qualified.toLocaleString()}
+                  </span>
+                  <span className="text-[13px] text-text-3">{stats.qualifiedRate}% of contacted</span>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <StatCard label="Total Sessions" value={stats.totalSessions} sub="calling sessions run" icon={Activity} />
-                  <StatCard label="Calls Today" value={stats.callsToday} sub="logged today" icon={CalendarCheck} />
-                  <StatCard
-                    label="Pickup Ratio"
-                    value={stats.pickupRatio ?? '—'}
-                    sub="calls per real outcome"
-                    icon={PhoneIncoming}
-                  />
-                  <StatCard
-                    label="Qualifying Ratio"
-                    value={`${stats.qualifyingRate}%`}
-                    sub="of calls end Qualified"
-                    icon={TrendingUp}
-                  />
-                  <StatCard
-                    label="Voicemail Ratio"
-                    value={`${stats.voicemailRate}%`}
-                    sub="of calls end Voicemail"
-                    icon={Voicemail}
-                  />
-                  <StatCard label="Dead Ratio" value={`${stats.deadRate}%`} sub="of calls end Dead/Declined" color="#ef4444" icon={XCircle} />
-                  <StatCard
-                    label="Opted Out / DNC"
-                    value={stats.optedOut}
-                    sub={`${stats.optOutRate}% of contacted`}
-                    color="#ef4444"
-                    icon={UserX}
-                  />
+
+                <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4 sm:grid-cols-3 lg:grid-cols-5">
+                  {(
+                    [
+                      { label: 'Total Leads', value: totalLeadsCount.toLocaleString(), sub: `${stats.qualified} qualified` },
+                      { label: 'Contracts', value: stats.contracts.toLocaleString(), sub: `${stats.contractRate}% of qualified`, color: '#10b981' },
+                      { label: 'Calls Made', value: calls.length.toLocaleString(), sub: `out of ${totalLeadsCount} leads` },
+                      { label: 'Total Sessions', value: stats.totalSessions.toLocaleString(), sub: 'calling sessions run' },
+                      { label: 'Calls Today', value: stats.callsToday.toLocaleString(), sub: 'logged today' },
+                      { label: 'Pickup Ratio', value: String(stats.pickupRatio ?? '—'), sub: 'calls per real outcome' },
+                      { label: 'Qualifying Ratio', value: `${stats.qualifyingRate}%`, sub: 'of calls end Qualified' },
+                      { label: 'Voicemail Ratio', value: `${stats.voicemailRate}%`, sub: 'of calls end Voicemail' },
+                      { label: 'Dead Ratio', value: `${stats.deadRate}%`, sub: 'of calls end Dead/Declined', color: '#ef4444' },
+                      { label: 'Opted Out / DNC', value: stats.optedOut.toLocaleString(), sub: `${stats.optOutRate}% of contacted`, color: '#ef4444' },
+                    ] as Array<{ label: string; value: string; sub: string; color?: string }>
+                  ).map((s) => (
+                    <div key={s.label} className="min-w-0">
+                      <div className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{s.label}</div>
+                      <div
+                        className="mt-0.5 font-mono text-[19px] font-semibold leading-tight tabular-nums text-text"
+                        style={s.color ? { color: s.color } : undefined}
+                      >
+                        {s.value}
+                      </div>
+                      <div className="truncate text-[11px] text-text-3">{s.sub}</div>
+                    </div>
+                  ))}
                 </div>
-              </>
+              </div>
             )}
           </div>
 
