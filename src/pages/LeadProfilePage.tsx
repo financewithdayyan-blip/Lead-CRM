@@ -468,7 +468,11 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         ))}
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
+      {/* Activity gets the full width to itself — it's already a two-column
+       *  layout on its own (the activity feed + Qualification Framework),
+       *  so the usual 320px sidebar here would make it three columns
+       *  cramped into the same row. Every other tab keeps the sidebar. */}
+      <div className={`grid grid-cols-1 items-start gap-5 ${tab === 'activity' ? '' : 'lg:grid-cols-[1fr_320px]'}`}>
         <div className="min-w-0">
           {tab === 'overview' && (
             <OverviewTab lead={lead} onJumpToProperty={() => setTab('property')} onJumpToActivity={() => setTab('activity')} />
@@ -479,12 +483,14 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           {tab === 'deal' && <DealTab lead={lead} />}
           {tab === 'activity' && <ActivityTab lead={lead} />}
         </div>
-        <div className="space-y-5">
-          <ContactSidebarCard lead={lead} isAdmin={isAdmin} onCall={handleCall} />
-          <TasksSidebarCard leadId={lead.id} ownerId={lead.userId} />
-          <EventsSidebarCard lead={lead} />
-          <OwnerSidebarCard lead={lead} />
-        </div>
+        {tab !== 'activity' && (
+          <div className="space-y-5">
+            <ContactSidebarCard lead={lead} isAdmin={isAdmin} onCall={handleCall} />
+            <TasksSidebarCard leadId={lead.id} ownerId={lead.userId} />
+            <EventsSidebarCard lead={lead} />
+            <OwnerSidebarCard lead={lead} />
+          </div>
+        )}
       </div>
 
       {editContactOpen && <EditContactModal lead={lead} onClose={() => setEditContactOpen(false)} />}

@@ -241,7 +241,7 @@ function FrameworkSnapshotCard({ lead }: { lead: Lead }) {
 
 export function ActivityTab({ lead }: { lead: Lead }) {
   return (
-    <div className="space-y-5">
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
       <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
       <FrameworkSnapshotCard lead={lead} />
     </div>
