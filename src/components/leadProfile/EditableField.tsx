@@ -36,6 +36,9 @@ interface EditableFieldProps {
    *  & Closing checklist hit — see RepairFlags checkboxes in PropertyTab for
    *  the non-field version of this same guard). */
   disabled?: boolean;
+  /** 'stat' variant only — tints the read-mode value (e.g. green for
+   *  Wholesale Fee, a real revenue number worth calling out). */
+  color?: string;
 }
 
 /** Click the value, it becomes an input; blur or Enter saves, Escape
@@ -54,6 +57,7 @@ export function EditableField({
   filter,
   variant = 'stacked',
   disabled,
+  color,
 }: EditableFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -109,7 +113,9 @@ export function EditableField({
         <div className={inline ? 'text-[11px] uppercase tracking-wide text-text-3' : 'text-[10.5px] font-semibold uppercase tracking-wide text-text-3'}>
           {label}
         </div>
-        <div className={valueClass}>{(display ?? value) || placeholder}</div>
+        <div className={valueClass} style={stat && color ? { color } : undefined}>
+          {(display ?? value) || placeholder}
+        </div>
       </button>
     );
   }

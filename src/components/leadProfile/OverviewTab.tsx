@@ -14,17 +14,6 @@ const TEMPERATURE_OPTIONS = [
   { value: '2', label: 'Hot' },
 ];
 
-function StatBox({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="card !p-3.5">
-      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
-      <div className="mt-1 text-xl font-semibold text-text" style={color ? { color } : undefined}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
 function LeadInformationCard({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
 
@@ -215,14 +204,15 @@ export function OverviewTab({
   }
 
   const owed = lead.mortgageBalance;
-  const equity = owed != null && lead.arv != null ? lead.arv - owed : null;
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {/* Est. Equity sits outside both fieldsets — it's ARV minus Owed,
-         *  computed, not a stored column, so there's nothing to edit; it
-         *  just updates on its own once either of those two changes. */}
+        {/* One mutation shared by every stat box below — disabling the
+         *  whole row while any single save is in flight stops a fast
+         *  second edit from computing off a lead snapshot that doesn't
+         *  have the first edit's change yet (see EditableField's own
+         *  disabled comment). */}
         <fieldset disabled={updateLead.isPending} className="contents">
           <div className="card !p-3.5">
             <EditableField
@@ -254,9 +244,22 @@ export function OverviewTab({
               onSave={(v) => saveField({ mortgageBalance: v ? Number(v) : null })}
             />
           </div>
-        </fieldset>
-        <StatBox label="Est. Equity" value={equity != null ? formatCurrency(equity) : '—'} color="#10b981" />
-        <fieldset disabled={updateLead.isPending} className="contents">
+          <div className="card !p-3.5">
+            {/* The wholesale assignment fee — what this deal is actually
+             *  worth once it closes. Same field the Dashboard's Revenue
+             *  chart already reads (Expected = this fee across every lead
+             *  Under Contract/In Title, Actual = once Closed), so setting
+             *  it here is the only wiring that chart needed. */}
+            <EditableField
+              variant="stat"
+              label="Wholesale Fee"
+              value={lead.assignmentFee?.toString() ?? ''}
+              display={lead.assignmentFee != null ? formatCurrency(lead.assignmentFee) : '—'}
+              filter={currencyDigitsOnly}
+              color="#10b981"
+              onSave={(v) => saveField({ assignmentFee: v ? Number(v) : null })}
+            />
+          </div>
           <div className="card !p-3.5">
             <EditableField
               variant="stat"
