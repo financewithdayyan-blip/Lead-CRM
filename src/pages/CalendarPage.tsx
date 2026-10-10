@@ -257,9 +257,14 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
             {weekDays.map((d) => {
               const today = isSameDay(d, new Date());
               return (
-                <div key={d.toISOString()} className={cn('border-b border-l border-border px-2 py-2 text-center', today && 'bg-primary/5')}>
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-text-3">{format(d, 'EEE')}</div>
-                  <div className={cn('text-[15px] font-semibold', today ? 'text-primary' : 'text-text')}>{format(d, 'd')}</div>
+                <div key={d.toISOString()} className="relative border-b border-l border-border px-2 py-2 text-center">
+                  {today && (
+                    <div className="pointer-events-none absolute inset-x-1.5 inset-y-1 z-10 scale-110 rounded-lg bg-primary shadow-[0_6px_16px_-4px_rgba(21,104,168,0.55)] ring-2 ring-primary/30" />
+                  )}
+                  <div className={cn('relative z-10', today ? 'text-[10px] font-semibold uppercase tracking-wide text-white/80' : 'text-[10px] font-semibold uppercase tracking-wide text-text-3')}>
+                    {format(d, 'EEE')}
+                  </div>
+                  <div className={cn('relative z-10 text-[15px] font-semibold', today ? 'text-white' : 'text-text')}>{format(d, 'd')}</div>
                 </div>
               );
             })}
@@ -280,8 +285,9 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
               </div>
               {weekDays.map((d, dayIdx) => {
                 const laidOut = layoutDayEvents(eventsByDay.get(dayIdx) ?? []);
+                const today = isSameDay(d, new Date());
                 return (
-                  <div key={d.toISOString()} className="relative border-l border-border">
+                  <div key={d.toISOString()} className={cn('relative border-l border-border', today && 'z-[1] border-x-2 border-x-primary/40 bg-primary/[0.06]')}>
                     {hours.map((h) => (
                       <div key={h} className="absolute left-0 right-0 border-t border-border/60" style={{ top: (h - gridStartHour) * HOUR_HEIGHT }} />
                     ))}
