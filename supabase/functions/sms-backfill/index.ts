@@ -153,6 +153,7 @@ Deno.serve(async (req) => {
       sessionsPageToken,
       sessionsPageSize = 10,
       commit: commitOrphans = false,
+      sinceHours,
     } = body as {
       fromKey?: string;
       mode?: 'inspect' | 'preview' | 'commit' | 'debug_secret' | 'backfill_from_log' | 'recover_orphaned_outbound';
@@ -163,6 +164,11 @@ Deno.serve(async (req) => {
       /** recover_orphaned_outbound only — false (default) reports what it
        *  would do without writing anything. */
       commit?: boolean;
+      /** recover_orphaned_outbound only — scan only the last N hours of
+       *  inbound_messages instead of full history. Omitted for the Settings
+       *  page's own Preview/Recover (a full one-time sweep); the cron sweep
+       *  below always passes a small rolling window instead. */
+      sinceHours?: number;
     };
 
     // Bypasses auth entirely on purpose — a length/prefix (never the real
@@ -176,8 +182,13 @@ Deno.serve(async (req) => {
     // since this project's actual configured value turned out to be the
     // newer sb_secret_ format and isn't otherwise retrievable in full to
     // compare against for direct diagnostic testing before any UI exists.
+    // SMS_ORPHAN_RECOVERY_CRON_SECRET is the same shape, for the recurring
+    // recover_orphaned_outbound sweep specifically (see its own cron
+    // migration) — a separate secret so it can be rotated independently of
+    // the test one above.
     const isServiceCaller =
       req.headers.get('x-internal-secret') === Deno.env.get('SMS_BACKFILL_TEST_SECRET') ||
+      req.headers.get('x-internal-secret') === Deno.env.get('SMS_ORPHAN_RECOVERY_CRON_SECRET') ||
       authHeader.replace('Bearer ', '') === SERVICE_ROLE_KEY;
     if (!isServiceCaller) {
       const { data: userData } = await admin.auth.getUser(authHeader.replace('Bearer ', ''));
@@ -243,39 +254,42 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Recovers a specific, now-fixed class of stranded history: before
-    // 2026-08-29 (see sms-webhook's sentFromOwnNumber branch, added that
-    // day), a text sent directly from the Zoom Phone app/desktop client —
-    // bypassing this CRM entirely — arrived at sms-webhook as an ordinary
-    // phone.sms_received event with "from" set to one of our own six
-    // numbers. The webhook always resolved the lead by "from", which never
-    // matched one of our own numbers, so the row landed in inbound_messages
-    // with lead_id left null — it never reached lead_activities, so a
-    // thread with real two-way history before that date only ever showed
-    // the lead's side. This replays the same "resolve by to instead of
-    // from" fix sms-webhook now applies live, against whatever's still
-    // sitting stranded, additive only — never touches leads or the
-    // original inbound_messages row (same "deliberately not linked" reasoning
-    // sms-webhook's own fix uses, so this never shows as a duplicate inbound
-    // bubble). Scoped to before the fix shipped: nothing from that date
-    // forward is a candidate, since the live path already handles it, and
-    // that row's lead_id would still read null regardless — it's a
-    // permanent raw-audit-trail marker, not a sign anything's unresolved.
+    // Recovers a specific class of stranded history: a text sent directly
+    // from the Zoom Phone app/desktop client — bypassing this CRM entirely —
+    // arrives at sms-webhook as an ordinary phone.sms_received event with
+    // "from" set to one of our own six numbers. Before 2026-08-29 the
+    // webhook always resolved the lead by "from", which never matched one of
+    // our own numbers, so the row landed in inbound_messages with lead_id
+    // left null and never reached lead_activities — a thread with real
+    // two-way history from before that date only ever showed the lead's
+    // side. sms-webhook's own sentFromOwnNumber branch fixed this live from
+    // that date forward, but the live path can still fail on its own (a
+    // resolveLead error, a transient DB issue) and strand a fresh one the
+    // same way — this mode replays the same "resolve by to instead of from"
+    // fix against whatever's still sitting stranded, regardless of when,
+    // additive only (never touches leads or the original inbound_messages
+    // row, same "deliberately not linked" reasoning sms-webhook's own fix
+    // uses, so this never shows as a duplicate inbound bubble). Both the
+    // one-time full sweep (Settings' Preview/Recover, no sinceHours) and the
+    // recurring cron sweep (sinceHours set, see its own migration) share
+    // this same code path — re-run safety below is what makes running it
+    // repeatedly, on overlapping windows, safe either way.
     if (mode === 'recover_orphaned_outbound') {
-      const SENT_FROM_OWN_NUMBER_FIX_SHIPPED = '2026-08-29T00:00:00+05:00';
-
       const ourNumberKeys = new Map<string, string>();
       for (const [key, n] of Object.entries(NUMBERS)) {
         if (n.phone) ourNumberKeys.set(normalizePhone(n.phone), key);
       }
 
-      const { data: orphans, error: orphanErr } = await admin
+      let orphanQuery = admin
         .from('inbound_messages')
         .select('id, from_phone, to_phone, body, received_at, has_attachments')
         .is('lead_id', null)
         .eq('is_reaction', false)
-        .lt('received_at', SENT_FROM_OWN_NUMBER_FIX_SHIPPED)
         .order('received_at', { ascending: true });
+      if (sinceHours) {
+        orphanQuery = orphanQuery.gte('received_at', new Date(Date.now() - sinceHours * 3600_000).toISOString());
+      }
+      const { data: orphans, error: orphanErr } = await orphanQuery;
       if (orphanErr) return json({ error: orphanErr.message }, 500);
 
       const report = {
@@ -314,18 +328,28 @@ Deno.serve(async (req) => {
 
         if (!commitOrphans) continue;
 
-        // Re-run safety: created_at is set to the orphan's own received_at
-        // below (not now()), so an exact match here means this specific
-        // message was already recovered on a prior run.
+        // Re-run safety: matched on the same lead + body within a generous
+        // window around this orphan's own received_at, not an exact
+        // created_at match — a prior run of this same recovery inserts with
+        // created_at set to received_at exactly, but sms-webhook's own live
+        // sentFromOwnNumber path (when it succeeds on its own, for a message
+        // that never actually got stranded) inserts with created_at = the
+        // moment the webhook ran, a few seconds after received_at, not equal
+        // to it. An exact match would miss that case and risk a duplicate;
+        // the same body for the same lead twice within 10 minutes is not a
+        // real risk worth trading away for exactness here.
+        const windowStart = new Date(new Date(row.received_at).getTime() - 10 * 60_000).toISOString();
+        const windowEnd = new Date(new Date(row.received_at).getTime() + 10 * 60_000).toISOString();
         const { data: existingActivity } = await admin
           .from('lead_activities')
           .select('id')
           .eq('lead_id', lead.id)
           .eq('type', 'sms')
-          .eq('created_at', row.received_at)
           .eq('body', row.body)
-          .maybeSingle();
-        if (existingActivity) {
+          .gte('created_at', windowStart)
+          .lte('created_at', windowEnd)
+          .limit(1);
+        if (existingActivity && existingActivity.length > 0) {
           report.alreadyPresent++;
           continue;
         }
