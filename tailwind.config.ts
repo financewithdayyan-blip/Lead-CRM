@@ -51,17 +51,24 @@ export default {
         mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        lg: '22px',
-        md: '12px',
-        xl: '26px',
+        // Tightened from 22/12/26px — maximally-rounded corners plus a
+        // soft floating shadow (see the old boxShadow.card comment below)
+        // is the exact shadcn/ui-template default that's now everywhere;
+        // a tighter, more rectangular radius reads as engineered rather
+        // than generated.
+        lg: '10px',
+        md: '8px',
+        xl: '14px',
       },
       boxShadow: {
-        // Softer, deeper "floating" card shadow — the premium-SaaS pass
-        // traded the old tight/flat shadow for more spread and less
-        // opacity, so cards read as lifted rather than merely outlined.
-        card: '0 2px 4px 0 rgba(11, 30, 51, 0.03), 0 14px 32px -16px rgba(11, 30, 51, 0.14)',
-        'card-hover': '0 4px 8px 0 rgba(11, 30, 51, 0.05), 0 20px 40px -16px rgba(11, 30, 51, 0.18)',
-        popover: '0 10px 15px -3px rgba(11, 30, 51, 0.10), 0 4px 6px -4px rgba(11, 30, 51, 0.06)',
+        // Replaces a wide, soft "floating" glow (0 14px 32px, spread deep
+        // enough that every card looked like it was hovering an inch off
+        // the page) with a crisp, close elevation — definition comes from
+        // the 1px border first, the shadow is just a faint lift, not the
+        // card's main visual signature.
+        card: '0 1px 2px 0 rgba(11, 30, 51, 0.04)',
+        'card-hover': '0 2px 6px 0 rgba(11, 30, 51, 0.08)',
+        popover: '0 8px 20px -6px rgba(11, 30, 51, 0.16)',
       },
     },
   },
