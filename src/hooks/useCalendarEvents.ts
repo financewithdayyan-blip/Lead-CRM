@@ -97,6 +97,28 @@ export function useCalendarEvents(targetUserId?: string) {
   return { events, isLoading: manual.isLoading || leadDerived.isLoading };
 }
 
+/** Manual calendar_events rows tied to one specific lead — used by the Lead
+ *  Profile's own "Events" sidebar card. Deliberately doesn't also merge in
+ *  fetchLeadDerivedEvents' synthetic call/follow-up entries for this lead —
+ *  those are already shown via the Contact sidebar card's own "Next
+ *  follow-up" row, so repeating them here would just be the same fact
+ *  twice. */
+export function useCalendarEventsForLead(leadId: string | undefined) {
+  return useQuery({
+    queryKey: ['calendar_events', 'lead', leadId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .select('*, lead:leads(first_name, last_name)')
+        .eq('lead_id', leadId)
+        .order('starts_at', { ascending: true });
+      if (error) throw error;
+      return data.map(dbToCalendarEvent);
+    },
+    enabled: !!leadId,
+  });
+}
+
 export function useCreateCalendarEvent() {
   const { session } = useAuth();
   const qc = useQueryClient();

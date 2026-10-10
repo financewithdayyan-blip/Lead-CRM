@@ -17,6 +17,7 @@ import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/t
 import { scoreColor } from '@/lib/aiScore';
 import { ContactSidebarCard } from '@/components/leadProfile/ContactSidebarCard';
 import { TasksSidebarCard } from '@/components/leadProfile/TasksSidebarCard';
+import { EventsSidebarCard } from '@/components/leadProfile/EventsSidebarCard';
 import { OwnerSidebarCard } from '@/components/leadProfile/OwnerSidebarCard';
 import { OverviewTab } from '@/components/leadProfile/OverviewTab';
 import { PropertyTab } from '@/components/leadProfile/PropertyTab';
@@ -481,6 +482,7 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
         <div className="space-y-5">
           <ContactSidebarCard lead={lead} isAdmin={isAdmin} onCall={handleCall} />
           <TasksSidebarCard leadId={lead.id} ownerId={lead.userId} />
+          <EventsSidebarCard lead={lead} />
           <OwnerSidebarCard lead={lead} />
         </div>
       </div>

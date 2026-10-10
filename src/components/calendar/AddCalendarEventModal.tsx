@@ -35,13 +35,25 @@ function useLeadSearch(query: string) {
   });
 }
 
-export function AddCalendarEventModal({ onClose, defaultDate }: { onClose: () => void; defaultDate?: Date }) {
+export function AddCalendarEventModal({
+  onClose,
+  defaultDate,
+  initialLead,
+}: {
+  onClose: () => void;
+  defaultDate?: Date;
+  /** Pre-locks the lead link — used when this modal is opened from a
+   *  lead's own profile, so there's no need to search for the lead
+   *  you're already looking at. Still removable (the X still works),
+   *  in case what's actually wanted is a general, unlinked event. */
+  initialLead?: LeadOption;
+}) {
   const createEvent = useCreateCalendarEvent();
   const [eventType, setEventType] = useState<CalendarEventType>('walkthrough');
   const [title, setTitle] = useState('');
   const [leadQuery, setLeadQuery] = useState('');
   const [leadOpen, setLeadOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<LeadOption | null>(null);
+  const [selectedLead, setSelectedLead] = useState<LeadOption | null>(initialLead ?? null);
   const { data: leadResults = [] } = useLeadSearch(leadQuery);
   const [date, setDate] = useState(() => (defaultDate ?? new Date()).toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('10:00');

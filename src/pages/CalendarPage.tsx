@@ -6,6 +6,7 @@ import { useCalendarEvents, useDeleteCalendarEvent } from '@/hooks/useCalendarEv
 import { AddCalendarEventModal } from '@/components/calendar/AddCalendarEventModal';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { CALENDAR_EVENT_TYPE_CONFIG, type CalendarEvent, type CalendarEventType } from '@/types/domain';
 
@@ -73,7 +74,8 @@ function layoutDayEvents(dayEvents: CalendarEvent[]): LaidOutEvent[] {
 
 export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
-  const { events, isLoading } = useCalendarEvents(targetUserId);
+  const { profile } = useAuth();
+  const { events: rawEvents, isLoading } = useCalendarEvents(targetUserId);
   const deleteEvent = useDeleteCalendarEvent();
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -84,6 +86,38 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekEnd = weekDays[6];
+
+  // Bulk SMS is admin-only and account-wide (see App.tsx's "admin only" route
+  // comment), so this standing marker only ever shows on the admin's own
+  // main calendar — never a rep's, and never a drill-down into one specific
+  // rep's calendar (targetUserId/viewOnly), since the send isn't tied to any
+  // one person. Synthesized the same way the lead-derived call/follow-up
+  // entries are (not stored in calendar_events, not editable) — it's a
+  // standing fact about the account, not a schedulable appointment.
+  const showBulkSmsReminder = !targetUserId && !viewOnly && profile?.role === 'admin';
+  const bulkSmsEvents = useMemo((): CalendarEvent[] => {
+    if (!showBulkSmsReminder) return [];
+    return weekDays.map((d) => {
+      const startsAt = new Date(d);
+      startsAt.setHours(19, 30, 0, 0);
+      const iso = startsAt.toISOString();
+      return {
+        id: `bulk-sms-reminder-${format(d, 'yyyy-MM-dd')}`,
+        userId: '',
+        leadId: null,
+        leadName: null,
+        eventType: 'call',
+        title: 'Daily Bulk SMS Sending',
+        location: null,
+        startsAt: iso,
+        endsAt: null,
+        notes: 'Standing reminder — manage from the Bulk SMS page.',
+        createdAt: iso,
+        editable: false,
+      };
+    });
+  }, [showBulkSmsReminder, weekDays]);
+  const events = useMemo(() => [...rawEvents, ...bulkSmsEvents], [rawEvents, bulkSmsEvents]);
 
   const weekEvents = useMemo(
     () =>
@@ -304,6 +338,11 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
                 {selected.leadId && (
                   <button className="btn btn-primary" onClick={() => openLead(selected.leadId!)}>
                     Open lead
+                  </button>
+                )}
+                {selected.id.startsWith('bulk-sms-reminder-') && (
+                  <button className="btn btn-primary" onClick={() => navigate('/bulk-sms')}>
+                    Go to Bulk SMS
                   </button>
                 )}
                 <button className="btn" onClick={() => setSelected(null)}>
