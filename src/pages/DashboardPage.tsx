@@ -38,7 +38,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
 import { localIsoDate } from '@/lib/utils';
 import { CalendarStrip } from '@/components/dashboard/CalendarStrip';
-import { RANGE_OPTIONS, rangeCutoff, type DateRange } from '@/lib/dateRange';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -268,12 +267,13 @@ export function DashboardView({
   const { data: orgLeads = [] } = useOrgLeads(showSmsStats);
   const { data: orgActivities = [] } = useOrgActivities(showSmsStats);
 
-  // One control drives the whole page — every range-scoped card and the
-  // trend chart below all read off this same cutoff, so nothing on screen
-  // can silently disagree about what "recent" means.
-  const [dateRange, setDateRange] = useState<DateRange>('30d');
-  const cutoff = useMemo(() => rangeCutoff(dateRange), [dateRange]);
-  const inRange = (iso: string) => !cutoff || new Date(iso) >= cutoff;
+  // Overview stats (Total Leads, SMS Sent, Replies, Qualified, etc.) are
+  // always all-time — there used to be a page-wide Today/7D/30D/90D/All
+  // toggle driving these, but it didn't do anything a reader could actually
+  // see changing other than this row's own numbers (every other chart on
+  // this page already has its own independent range control), so it was
+  // just a redundant, confusing extra selector rather than a useful filter.
+  const inRange = (_iso: string) => true;
 
   // The SMS Delivery & Reply Rate card gets its own timeline, independent of
   // the page-wide control above — Zoom's own report is checked at whatever
@@ -767,7 +767,7 @@ export function DashboardView({
       stageCounts,
       tagCounts,
     };
-  }, [leads, calls, tags, activities, sendLog, inboundMessages, qualifiedPlusIds, cutoff]);
+  }, [leads, calls, tags, activities, sendLog, inboundMessages, qualifiedPlusIds]);
 
   // Driven by its own activityRange toggle rather than the page-wide range
   // — 90D and Lifetime both cap at 90 days of buckets (a daily trend chart
@@ -1090,28 +1090,9 @@ export function DashboardView({
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-text">{heading}</h1>
-          <p className="text-sm text-text-3">{subtitle}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {showSmsStats && (
-            <div className="flex gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
-              {RANGE_OPTIONS.map((r) => (
-                <button
-                  key={r.key}
-                  onClick={() => setDateRange(r.key)}
-                  className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
-                    dateRange === r.key ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text-2'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="mb-5">
+        <h1 className="font-serif text-2xl font-semibold text-text">{heading}</h1>
+        <p className="text-sm text-text-3">{subtitle}</p>
       </div>
 
       {leads.length === 0 ? (
