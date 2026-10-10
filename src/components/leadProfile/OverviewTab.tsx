@@ -1,11 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Quote } from 'lucide-react';
+import { NotebookText, Send } from 'lucide-react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useSignedFileUrls } from '@/hooks/useLeadFiles';
-import { formatCurrency, formatPhone, isImageFile } from '@/lib/utils';
+import { useActivities, useAddActivity } from '@/hooks/useActivities';
+import { EditableField } from '@/components/leadProfile/EditableField';
+import { formatCurrency, formatDateTime, formatPhone, isImageFile } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
 const TEMPERATURE_LABEL = ['Cold', 'Warm', 'Hot'];
+const TEMPERATURE_OPTIONS = [
+  { value: '0', label: 'Cold' },
+  { value: '1', label: 'Warm' },
+  { value: '2', label: 'Hot' },
+];
 
 function StatBox({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -18,91 +25,58 @@ function StatBox({ label, value, color }: { label: string; value: string; color?
   );
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
-      <div className="mt-0.5 text-[13.5px] font-medium text-text">{value || '—'}</div>
-    </div>
-  );
-}
-
 function LeadInformationCard({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
-  const [editing, setEditing] = useState(false);
-  const [situation, setSituation] = useState(lead.motivation ?? '');
-  const [solution, setSolution] = useState(lead.solution ?? '');
-  const [source, setSource] = useState(lead.source ?? '');
-  const [temperature, setTemperature] = useState(String(lead.rating ?? 0));
-  const [nextStep, setNextStep] = useState(lead.nextStep ?? '');
 
-  function handleSave() {
-    updateLead.mutate(
-      {
-        id: lead.id,
-        motivation: situation.trim() || null,
-        solution: solution.trim() || null,
-        source: source.trim() || null,
-        rating: Number(temperature),
-        nextStep: nextStep.trim() || null,
-      },
-      { onSuccess: () => setEditing(false) },
-    );
+  function saveField(patch: Partial<Lead>) {
+    updateLead.mutate({ id: lead.id, ...patch });
+  }
+
+  function saveScriptAnswer(key: 'timeline' | 'confirmation_owner', value: string) {
+    saveField({ scriptAnswers: { ...lead.scriptAnswers, [key]: value || undefined } });
   }
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between gap-2 border-b border-border pb-2.5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Lead Information</div>
-        <button className="text-[11px] font-medium text-primary hover:underline" onClick={() => setEditing((v) => !v)}>
-          {editing ? 'Cancel' : 'Edit'}
-        </button>
+      <div className="border-b border-border pb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+        Lead Information
       </div>
-
-      {!editing ? (
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5">
-          <InfoCell label="Phone" value={lead.phone ? formatPhone(lead.phone) : ''} />
-          <InfoCell label="Situation" value={lead.motivation ?? ''} />
-          <InfoCell label="Timeline" value={lead.scriptAnswers?.timeline ?? ''} />
-          <InfoCell label="Solution" value={lead.solution ?? ''} />
-          <InfoCell label="Source" value={lead.source ?? ''} />
-          <InfoCell label="Owner" value={lead.scriptAnswers?.confirmation_owner ?? ''} />
-          <InfoCell label="Temperature" value={TEMPERATURE_LABEL[lead.rating] ?? 'Cold'} />
-          <InfoCell label="Next Step" value={lead.nextStep ?? ''} />
-        </div>
-      ) : (
-        <div className="mt-3 space-y-2.5">
-          <div>
-            <label className="label">Situation</label>
-            <input className="input" value={situation} onChange={(e) => setSituation(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Solution</label>
-            <input className="input" value={solution} onChange={(e) => setSolution(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="label">Source</label>
-              <input className="input" value={source} onChange={(e) => setSource(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Temperature</label>
-              <select className="input" value={temperature} onChange={(e) => setTemperature(e.target.value)}>
-                <option value="0">Cold</option>
-                <option value="1">Warm</option>
-                <option value="2">Hot</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="label">Next Step</label>
-            <input className="input" value={nextStep} onChange={(e) => setNextStep(e.target.value)} />
-          </div>
-          <button className="btn btn-primary w-full" onClick={handleSave} disabled={updateLead.isPending}>
-            Save
-          </button>
-        </div>
-      )}
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5">
+        {/* One mutation shared by every field below — disabling the whole
+         *  set while any single save is in flight stops a fast second edit
+         *  from computing off a lead snapshot that doesn't have the first
+         *  edit's change yet (see EditableField's own disabled comment). */}
+        <fieldset disabled={updateLead.isPending} className="contents">
+          <EditableField
+            label="Phone"
+            value={lead.phone ?? ''}
+            display={lead.phone ? formatPhone(lead.phone) : ''}
+            onSave={(v) => saveField({ phone: formatPhone(v.trim()) })}
+          />
+          <EditableField label="Situation" value={lead.motivation ?? ''} onSave={(v) => saveField({ motivation: v.trim() || null })} />
+          <EditableField
+            label="Timeline"
+            value={lead.scriptAnswers?.timeline ?? ''}
+            onSave={(v) => saveScriptAnswer('timeline', v.trim())}
+          />
+          <EditableField label="Solution" value={lead.solution ?? ''} onSave={(v) => saveField({ solution: v.trim() || null })} />
+          <EditableField label="Source" value={lead.source ?? ''} onSave={(v) => saveField({ source: v.trim() || null })} />
+          <EditableField
+            label="Owner"
+            value={lead.scriptAnswers?.confirmation_owner ?? ''}
+            onSave={(v) => saveScriptAnswer('confirmation_owner', v.trim())}
+          />
+          <EditableField
+            label="Temperature"
+            type="select"
+            options={TEMPERATURE_OPTIONS}
+            value={String(lead.rating ?? 0)}
+            display={TEMPERATURE_LABEL[lead.rating] ?? 'Cold'}
+            onSave={(v) => saveField({ rating: Number(v) })}
+          />
+          <EditableField label="Next Step" value={lead.nextStep ?? ''} onSave={(v) => saveField({ nextStep: v.trim() || null })} />
+        </fieldset>
+      </div>
     </div>
   );
 }
@@ -148,23 +122,84 @@ function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToP
   );
 }
 
-function QuoteCard({ lead }: { lead: Lead }) {
-  const quote = lead.scriptAnswers?.motivation_reason || lead.notes;
-  if (!quote) return null;
+/** A compact preview of the same notes thread the Activity tab's own Notes
+ *  section owns (lead_activities, type 'note') — not a second, separate
+ *  notes field. Shows the latest note and lets you add one right here;
+ *  "View all" jumps to Activity for the full back-and-forth. */
+function NotesCard({ lead, onJumpToActivity }: { lead: Lead; onJumpToActivity: () => void }) {
+  const { data: activities = [] } = useActivities(lead.id);
+  const addActivity = useAddActivity();
+  const [body, setBody] = useState('');
+
+  const notes = useMemo(() => activities.filter((a) => a.type === 'note'), [activities]);
+  const latest = notes[notes.length - 1];
+
+  function handleSend() {
+    if (!body.trim()) return;
+    addActivity.mutate({ leadId: lead.id, type: 'note', body: body.trim() }, { onSuccess: () => setBody('') });
+  }
+
   return (
     <div className="card">
-      <div className="flex items-start gap-2.5">
-        <Quote size={16} className="mt-0.5 shrink-0 text-text-3" />
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Their situation, in their words</div>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-text-2">{quote}</p>
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="flex items-start gap-2.5">
+          <NotebookText size={16} className="mt-0.5 shrink-0 text-text-3" />
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Notes</div>
         </div>
+        {notes.length > 0 && (
+          <button className="text-[11px] font-medium text-primary hover:underline" onClick={onJumpToActivity}>
+            View all ({notes.length})
+          </button>
+        )}
+      </div>
+
+      {latest ? (
+        <div className="mt-2 pl-[26px]">
+          <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-text-2">{latest.body}</p>
+          <div className="mt-1 text-[11px] text-text-3">
+            {latest.authorName} · {formatDateTime(latest.createdAt)}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 pl-[26px] text-[13px] text-text-3">No notes yet.</p>
+      )}
+
+      <div className="mt-3 flex items-end gap-2 rounded-lg border border-border-2 bg-surface-3 p-2 focus-within:border-primary/50">
+        <textarea
+          className="max-h-24 flex-1 resize-none bg-transparent px-1 py-1 text-[13px] text-text outline-none placeholder:text-text-3"
+          rows={1}
+          placeholder="Add a note…"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+        />
+        <button
+          className="btn btn-primary shrink-0 !p-2"
+          title="Send (Enter)"
+          onClick={handleSend}
+          disabled={addActivity.isPending || !body.trim()}
+        >
+          <Send size={14} />
+        </button>
       </div>
     </div>
   );
 }
 
-export function OverviewTab({ lead, onJumpToProperty }: { lead: Lead; onJumpToProperty: () => void }) {
+export function OverviewTab({
+  lead,
+  onJumpToProperty,
+  onJumpToActivity,
+}: {
+  lead: Lead;
+  onJumpToProperty: () => void;
+  onJumpToActivity: () => void;
+}) {
   const owed = lead.mortgageBalance;
   const equity = owed != null && lead.arv != null ? lead.arv - owed : null;
 
@@ -183,7 +218,7 @@ export function OverviewTab({ lead, onJumpToProperty }: { lead: Lead; onJumpToPr
         <PropertySummaryCard lead={lead} onJumpToProperty={onJumpToProperty} />
       </div>
 
-      <QuoteCard lead={lead} />
+      <NotesCard lead={lead} onJumpToActivity={onJumpToActivity} />
     </div>
   );
 }

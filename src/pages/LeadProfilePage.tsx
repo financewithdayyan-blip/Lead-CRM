@@ -472,7 +472,9 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0">
-          {tab === 'overview' && <OverviewTab lead={lead} onJumpToProperty={() => setTab('property')} />}
+          {tab === 'overview' && (
+            <OverviewTab lead={lead} onJumpToProperty={() => setTab('property')} onJumpToActivity={() => setTab('activity')} />
+          )}
           {tab === 'sms' && isAdmin && <SmsThreadTab lead={lead} />}
           {tab === 'property' && <PropertyTab lead={lead} />}
           {tab === 'underwriting' && <UnderwritingTab lead={lead} />}
