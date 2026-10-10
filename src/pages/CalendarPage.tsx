@@ -11,8 +11,13 @@ import { cn } from '@/lib/utils';
 import { CALENDAR_EVENT_TYPE_CONFIG, type CalendarEvent, type CalendarEventType } from '@/types/domain';
 
 const ALL_TYPES = Object.keys(CALENDAR_EVENT_TYPE_CONFIG) as CalendarEventType[];
-const GRID_START_HOUR_DEFAULT = 8;
-const GRID_END_HOUR_DEFAULT = 18;
+// The work day runs evenings into the night (Pakistan time), not a typical
+// 9-to-5 — defaulting to 6pm-midnight means the grid opens on what's
+// actually there instead of a page of empty morning hours to scroll past.
+// Still expands earlier on its own (see gridStartHour below) for any real
+// event that happens to land before 6pm.
+const GRID_START_HOUR_DEFAULT = 18;
+const GRID_END_HOUR_DEFAULT = 24;
 const HOUR_HEIGHT = 56;
 
 function minutesFromMidnight(iso: string) {
