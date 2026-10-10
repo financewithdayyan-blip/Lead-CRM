@@ -816,16 +816,27 @@ export function DashboardView({
   // slice of that same money — only the fee for leads that have actually
   // landed in Closed, nothing still in Contract or In Title, since that's
   // the only point the deal is actually done. "Currently" only tells you
-  // today's number, and the point of a trend chart is the days before today
-  // too. Reconstructed from each lead's real stage_change history via
+  // today's number, and the point of a trend chart is the months before
+  // today too. Reconstructed from each lead's real stage_change history via
   // useStageChangeHistory — a dedicated, slim query (just the stage-change
   // rows, no SMS/call/note bodies) rather than the full useActivityFeed
   // used elsewhere on this page, which for an account with a large SMS
   // volume is genuinely large and made this one chart slow to load for no
   // reason it actually needed that data. A lead that has since fallen
-  // through to Dead still correctly counts on the days it really was in the
-  // contract track, and correctly stops counting once it left. Only leads
-  // with an assignment fee actually entered contribute anything.
+  // through to Dead still correctly counts on the months it really was in
+  // the contract track, and correctly stops counting once it left. Only
+  // leads with an assignment fee actually entered contribute anything.
+  //
+  // Sampled once per calendar month (month-end snapshot, or "right now" for
+  // the current still-in-progress month) rather than daily — a deal
+  // pipeline that moves a handful of times a month reads as a meaningful
+  // trend over, say, a year of months; the same data plotted daily is
+  // mostly flat stretches with no room to show more than a few weeks at
+  // once. Fixed 12-month trailing window, independent of the page's own
+  // date-range filter (same reasoning as activityRange elsewhere on this
+  // page — a long-horizon trend chart shouldn't collapse to a single point
+  // just because someone picked "Today" up top).
+  const REVENUE_TREND_MONTHS = 12;
   const revenueInPipelineTrend = useMemo(() => {
     const CONTRACT_PLUS_STAGES = new Set(['contract', 'inspection_walkthrough', 'in_title', 'closed']);
     const CLOSED_STAGE = 'closed';
@@ -866,26 +877,30 @@ export function DashboardView({
       return stage;
     }
 
-    const days: Array<{ iso: string; label: string; expected: number; actual: number }> = [];
+    const months: Array<{ iso: string; label: string; expected: number; actual: number }> = [];
     const today = new Date();
-    for (let i = trendDayCount - 1; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i, 23, 59, 59, 999);
+    for (let i = REVENUE_TREND_MONTHS - 1; i >= 0; i--) {
+      const monthStart = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      // The current, still-in-progress month is sampled "right now" rather
+      // than at its (future) month-end, so this month's point always
+      // reflects where the pipeline actually stands today.
+      const snapshotAt = i === 0 ? today : new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59, 999);
       let expected = 0;
       let actual = 0;
       for (const l of relevantLeads) {
-        const stage = stageAsOf(l.id, d.getTime());
+        const stage = stageAsOf(l.id, snapshotAt.getTime());
         if (CONTRACT_PLUS_STAGES.has(stage)) expected += l.assignmentFee ?? 0;
         if (stage === CLOSED_STAGE) actual += l.assignmentFee ?? 0;
       }
-      days.push({
-        iso: localIsoDate(d),
-        label: d.toLocaleDateString([], trendDayCount <= 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' }),
+      months.push({
+        iso: localIsoDate(monthStart),
+        label: monthStart.toLocaleDateString([], { month: 'short' }),
         expected,
         actual,
       });
     }
-    return days;
-  }, [leads, stageChangeHistory, trendDayCount]);
+    return months;
+  }, [leads, stageChangeHistory]);
 
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
   // Zoom's own definitions, matched against Zoom's own "SMS Campaign" usage
@@ -1073,8 +1088,6 @@ export function DashboardView({
 
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
 
-  const rangeLabel = RANGE_OPTIONS.find((r) => r.key === dateRange)?.label ?? '';
-
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -1114,7 +1127,7 @@ export function DashboardView({
                     icon={DollarSign}
                     title="Revenue: Expected vs Actual"
                     tone="accent"
-                    sub={`Expected = fee across Contract, In Title, or Closed · Actual = fee only once Closed · ${rangeLabel}`}
+                    sub="Expected = fee across Contract, In Title, or Closed · Actual = fee only once Closed"
                   />
                   <Suspense fallback={<div className="mt-3 flex flex-1 items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
                     <div className="mt-3 flex-1">
