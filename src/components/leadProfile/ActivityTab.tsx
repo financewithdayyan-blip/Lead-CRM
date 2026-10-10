@@ -1,190 +1,110 @@
-import { useEffect, useRef, useState } from 'react';
-import { Archive, CheckCircle2, ChevronDown, Circle, MessageSquareText, Pencil, Send, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import {
+  ArrowRightLeft,
+  CheckCircle2,
+  ChevronDown,
+  Circle,
+  FileSignature,
+  History,
+  MessageSquareText,
+  PhoneCall,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTags } from '@/hooks/useTags';
-import { useActivities, useAddActivity, useDeleteActivity, useUpdateActivity } from '@/hooks/useActivities';
+import { useActivities, useDeleteActivity } from '@/hooks/useActivities';
 import { formatDateTime } from '@/lib/utils';
 import { getScriptSteps, LIEN_TAG_NAMES } from '@/lib/callScript';
-import type { ActivityType, Lead, LeadActivity } from '@/types/domain';
+import { STAGE_CONFIG, type ActivityType, type Lead, type LeadActivity, type LeadStage } from '@/types/domain';
 
-const ACTIVITY_LABEL: Record<ActivityType, string> = {
-  note: 'Note',
-  call: 'Call',
-  email: 'Email',
-  meeting: 'Meeting',
-  sms: 'Text',
-  stage_change: 'Stage changed',
+const EVENT_ICON: Partial<Record<ActivityType, LucideIcon>> = {
+  stage_change: ArrowRightLeft,
+  sms: MessageSquareText,
+  call: PhoneCall,
+  contract: FileSignature,
 };
 
-function ActivityBubble({
-  a,
-  isAdmin,
-  onDelete,
-  onEdit,
-}: {
-  a: LeadActivity;
-  isAdmin: boolean;
-  onDelete: () => void;
-  onEdit: (body: string) => void;
-}) {
-  const [editText, setEditText] = useState<string | null>(null);
-  const isRight = a.authorRole === 'admin';
-  const initials = a.authorName
-    .split(' ')
-    .map((w: string) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-  const canEdit = a.type !== 'stage_change';
+/** The kanban-move/message/call/contract log only — no note or email/
+ *  meeting content, and specifically no SMS body text (that's the SMS
+ *  tab's job; this just marks that a message happened, and when). */
+const SHOWN_TYPES = new Set<ActivityType>(['stage_change', 'sms', 'call', 'contract']);
 
+function describeActivity(a: LeadActivity): string {
+  if (a.type === 'stage_change') {
+    const from = (a.meta as { from?: string } | null)?.from;
+    const to = (a.meta as { to?: string } | null)?.to;
+    const fromLabel = from ? (STAGE_CONFIG[from as LeadStage]?.label ?? from) : null;
+    const toLabel = to ? (STAGE_CONFIG[to as LeadStage]?.label ?? to) : null;
+    if (fromLabel && toLabel) return `Moved from ${fromLabel} to ${toLabel}`;
+    if (toLabel) return `Moved to ${toLabel}`;
+    return 'Stage changed';
+  }
+  if (a.type === 'sms') {
+    const direction = (a.meta as { direction?: string } | null)?.direction;
+    return direction === 'inbound' ? 'Message received' : 'Message sent';
+  }
+  return a.body || 'Call logged';
+}
+
+function ActivityEventRow({ a, canDelete, onDelete }: { a: LeadActivity; canDelete: boolean; onDelete: () => void }) {
+  const Icon = EVENT_ICON[a.type] ?? Circle;
   return (
-    <div className={`group flex items-end gap-2 ${isRight ? 'flex-row-reverse' : ''}`}>
-      <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-          isRight ? 'bg-primary/20 text-primary' : 'bg-surface-3 text-text-3'
-        }`}
-      >
-        {initials}
-      </div>
-
-      <div className={`relative max-w-[75%] ${isRight ? 'items-end' : 'items-start'} flex flex-col`}>
-        <div className={`mb-0.5 flex items-center gap-1.5 text-[10px] text-text-3 ${isRight ? 'flex-row-reverse' : ''}`}>
-          <span className="font-medium">{a.authorName}</span>
-          <span>·</span>
-          <span>{formatDateTime(a.createdAt)}</span>
+    <div className="group flex items-start gap-3 py-2">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-3 text-text-3">
+        <Icon size={13} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] text-text">{describeActivity(a)}</div>
+        <div className="text-[11px] text-text-3">
+          {a.authorName} · {formatDateTime(a.createdAt)}
         </div>
-
-        {editText !== null ? (
-          <div className="flex w-full flex-col gap-1.5">
-            <textarea
-              autoFocus
-              className="input resize-none text-[13px]"
-              rows={3}
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Escape') setEditText(null); }}
-            />
-            <div className="flex gap-1.5">
-              <button
-                className="btn btn-primary !px-2.5 !py-1 text-[12px]"
-                disabled={!editText.trim()}
-                onClick={() => { onEdit(editText.trim()); setEditText(null); }}
-              >
-                Save
-              </button>
-              <button className="btn !px-2.5 !py-1 text-[12px]" onClick={() => setEditText(null)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
-              isRight
-                ? 'rounded-br-sm border border-primary/25 bg-primary/8 text-text'
-                : 'rounded-bl-sm border border-border-2 bg-surface-3 text-text'
-            }`}
-          >
-            <span className={`mr-1.5 inline-block rounded px-1 py-0.5 text-[10px] font-semibold ${isRight ? 'bg-primary/15 text-primary' : 'bg-border-2 text-text-3'}`}>
-              {ACTIVITY_LABEL[a.type]}
-            </span>
-            {a.body}
-          </div>
-        )}
       </div>
-
-      {editText === null && (
-        <div className="mb-0.5 flex shrink-0 flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          {canEdit && (
-            <button className="text-text-3 hover:text-primary" onClick={() => setEditText(a.body)} title="Edit">
-              <Pencil size={12} />
-            </button>
-          )}
-          <button className="text-text-3 hover:text-danger" onClick={onDelete} title="Delete">
-            <Trash2 size={12} />
-          </button>
-        </div>
+      {canDelete && (
+        <button
+          className="shrink-0 text-text-3 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+          onClick={onDelete}
+          title="Delete"
+        >
+          <Trash2 size={12} />
+        </button>
       )}
     </div>
   );
 }
 
-function NotesChatSection({ leadId, legacyNote }: { leadId: string; legacyNote: string | null }) {
+function ActivityLogCard({ leadId }: { leadId: string }) {
   const { profile } = useAuth();
   const { data: allActivities = [], isLoading } = useActivities(leadId);
-  const addActivity = useAddActivity();
   const deleteActivity = useDeleteActivity();
-  const updateActivity = useUpdateActivity();
-  const [body, setBody] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [allActivities.length]);
-
-  function handleSend() {
-    if (!body.trim()) return;
-    addActivity.mutate({ leadId, type: 'note', body: body.trim() }, { onSuccess: () => setBody('') });
-  }
+  const events = allActivities.filter((a) => SHOWN_TYPES.has(a.type));
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <div className="card">
-      <CardHeader icon={MessageSquareText} title="Activity" sub={`${allActivities.length} logged`} />
-
-      {legacyNote && (
-        <div className="mt-3 rounded-lg border border-border-2 bg-surface-3 p-3">
-          <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
-            <Archive size={11} /> Legacy note
-          </div>
-          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-text-2">{legacyNote}</p>
-        </div>
-      )}
+      <CardHeader icon={History} title="Activity" sub={`${events.length} logged`} />
 
       {isLoading && <div className="mt-3 text-[13px] text-text-3">Loading…</div>}
-      {!isLoading && allActivities.length === 0 && !legacyNote && (
+      {!isLoading && events.length === 0 && (
         <div className="mt-4 flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border-2 py-6 text-center">
-          <MessageSquareText size={18} className="text-text-3" />
-          <p className="text-[13px] text-text-3">No activity yet — add the first note below.</p>
+          <History size={18} className="text-text-3" />
+          <p className="text-[13px] text-text-3">No activity logged yet.</p>
         </div>
       )}
-      {allActivities.length > 0 && (
-        <div className="mt-3 max-h-80 space-y-3 overflow-y-auto rounded-lg border border-border-2 bg-surface-3/50 p-3 pr-2">
-          {allActivities.map((a) => (
-            <ActivityBubble
+      {events.length > 0 && (
+        <div className="mt-3 max-h-96 divide-y divide-border-2 overflow-y-auto rounded-lg border border-border-2 bg-surface-3/50 px-3">
+          {events.map((a) => (
+            <ActivityEventRow
               key={a.id}
               a={a}
-              isAdmin={profile?.role === 'admin'}
+              canDelete={isAdmin}
               onDelete={() => deleteActivity.mutate({ id: a.id, leadId })}
-              onEdit={(body) => updateActivity.mutate({ id: a.id, leadId, body })}
             />
           ))}
-          <div ref={bottomRef} />
         </div>
       )}
-
-      <div className="mt-3 flex items-end gap-2 rounded-lg border border-border-2 bg-surface p-2 focus-within:border-primary/50">
-        <textarea
-          className="max-h-32 flex-1 resize-none bg-transparent px-1 py-1 text-[13px] text-text outline-none placeholder:text-text-3"
-          rows={1}
-          placeholder="Add a note…"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-          }}
-        />
-        <button
-          className="btn btn-primary shrink-0 !p-2"
-          title="Send (Enter)"
-          onClick={handleSend}
-          disabled={addActivity.isPending || !body.trim()}
-        >
-          <Send size={14} />
-        </button>
-      </div>
-      <div className="mt-1 text-[11px] text-text-3">Enter to send · Shift+Enter for new line</div>
     </div>
   );
 }
@@ -242,7 +162,7 @@ function FrameworkSnapshotCard({ lead }: { lead: Lead }) {
 export function ActivityTab({ lead }: { lead: Lead }) {
   return (
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-      <NotesChatSection leadId={lead.id} legacyNote={lead.notes ?? null} />
+      <ActivityLogCard leadId={lead.id} />
       <FrameworkSnapshotCard lead={lead} />
     </div>
   );

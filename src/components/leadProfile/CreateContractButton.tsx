@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, FileSignature } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useDocTemplates, type DocTemplate } from '@/hooks/useDocTemplates';
+import { useAddActivity } from '@/hooks/useActivities';
 import { FillCashDealContractModal, isCashDealTemplate } from '@/components/bluedocs/FillCashDealContractModal';
 import { FillNovationContractModal, isNovationTemplate } from '@/components/bluedocs/FillNovationContractModal';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
@@ -23,6 +24,7 @@ function summarizeDelivery(delivery: DeliveryResult): { ok: boolean; message: st
 
 export function CreateContractButton({ lead }: { lead: Lead }) {
   const { data: rawTemplates = [] } = useDocTemplates('contract');
+  const addActivity = useAddActivity();
   // The cash-deal PSA is the template used for the overwhelming majority of
   // deals — worth surfacing first rather than making it one of 8 alphabetic-
   // ish options to hunt through every time.
@@ -45,6 +47,15 @@ export function CreateContractButton({ lead }: { lead: Lead }) {
     if (templates.length === 0) return;
     if (templates.length === 1) setSendTarget(templates[0]);
     else setPickerOpen((v) => !v);
+  }
+
+  // One choke point for all three template-type modals below — each calls
+  // this on success, so a contract generated through any of them logs the
+  // same "Contract generated" activity the lead's timeline now shows.
+  function handleSent(l: { label: string; url: string; delivery: DeliveryResult }) {
+    setSendTarget(null);
+    setSentLink(l);
+    addActivity.mutate({ leadId: lead.id, type: 'contract', body: `Contract generated: ${l.label}` });
   }
 
   const sellerName = `${lead.firstName} ${lead.lastName}`.trim();
@@ -86,7 +97,7 @@ export function CreateContractButton({ lead }: { lead: Lead }) {
           initialAddress={initialAddress}
           initialPurchasePrice={initialPurchasePrice}
           onClose={() => setSendTarget(null)}
-          onSent={(l) => { setSendTarget(null); setSentLink(l); }}
+          onSent={handleSent}
         />
       )}
 
@@ -96,7 +107,7 @@ export function CreateContractButton({ lead }: { lead: Lead }) {
           leadId={lead.id}
           initialSeller={initialSeller}
           onClose={() => setSendTarget(null)}
-          onSent={(l) => { setSendTarget(null); setSentLink(l); }}
+          onSent={handleSent}
         />
       )}
 
@@ -106,7 +117,7 @@ export function CreateContractButton({ lead }: { lead: Lead }) {
           leadId={lead.id}
           initialAddress={initialAddress}
           onClose={() => setSendTarget(null)}
-          onSent={(l) => { setSendTarget(null); setSentLink(l); }}
+          onSent={handleSent}
         />
       )}
 

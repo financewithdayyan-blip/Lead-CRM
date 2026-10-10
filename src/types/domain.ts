@@ -343,7 +343,7 @@ export interface BulkSmsJobItem {
   updatedAt: string;
 }
 
-export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change';
+export type ActivityType = 'note' | 'call' | 'email' | 'meeting' | 'sms' | 'stage_change' | 'contract';
 
 export interface LeadActivity {
   id: string;
