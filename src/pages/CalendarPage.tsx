@@ -108,34 +108,40 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
   const showBulkSmsReminder = !targetUserId && !viewOnly && profile?.role === 'admin';
   const bulkSmsEvents = useMemo((): CalendarEvent[] => {
     if (!showBulkSmsReminder) return [];
-    return weekDays.map((d) => {
-      // 6:30pm Pakistan time — when the work day actually starts, not
-      // midnight — anchored to the real PKT clock rather than the viewer's
-      // own local 6:30pm. PKT is a fixed UTC+5 offset (no DST), so that's
-      // always 13:30 UTC on the same calendar day. Rendered back out
-      // through each viewer's own local clock same as every other event
-      // here: a Pakistan-based viewer sees ~6:30pm, a US Eastern viewer
-      // sees ~9:30am (during EDT — Pakistan has no DST but the US does, so
-      // this drifts an hour against Eastern clocks specifically when DST
-      // flips later in the year; not worth full IANA zone math for a
-      // reminder marker).
-      const startsAt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 13, 30, 0, 0));
-      const iso = startsAt.toISOString();
-      return {
-        id: `bulk-sms-reminder-${format(d, 'yyyy-MM-dd')}`,
-        userId: '',
-        leadId: null,
-        leadName: null,
-        eventType: 'call',
-        title: 'Daily Bulk SMS Sending',
-        location: null,
-        startsAt: iso,
-        endsAt: null,
-        notes: 'Standing reminder — work day starts 6:30pm Pakistan time (~9:30am US Eastern). Manage from the Bulk SMS page.',
-        createdAt: iso,
-        editable: false,
-      };
-    });
+    // No bulk cold outreach on Sunday at all — same rule send-sms's own
+    // withinSendWindow enforces at send time (the Sunday 7pm-Monday 6am PKT
+    // window is closed outright), so showing a reminder here on a day
+    // nothing will actually go out would just be wrong.
+    return weekDays
+      .filter((d) => d.getDay() !== 0)
+      .map((d) => {
+        // 6:30pm Pakistan time — when the work day actually starts, not
+        // midnight — anchored to the real PKT clock rather than the
+        // viewer's own local 6:30pm. PKT is a fixed UTC+5 offset (no DST),
+        // so that's always 13:30 UTC on the same calendar day. Rendered
+        // back out through each viewer's own local clock same as every
+        // other event here: a Pakistan-based viewer sees ~6:30pm, a US
+        // Eastern viewer sees ~9:30am (during EDT — Pakistan has no DST
+        // but the US does, so this drifts an hour against Eastern clocks
+        // specifically when DST flips later in the year; not worth full
+        // IANA zone math for a reminder marker).
+        const startsAt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 13, 30, 0, 0));
+        const iso = startsAt.toISOString();
+        return {
+          id: `bulk-sms-reminder-${format(d, 'yyyy-MM-dd')}`,
+          userId: '',
+          leadId: null,
+          leadName: null,
+          eventType: 'call',
+          title: 'Daily Bulk SMS Sending',
+          location: null,
+          startsAt: iso,
+          endsAt: null,
+          notes: 'Standing reminder — work day starts 6:30pm Pakistan time (~9:30am US Eastern). Manage from the Bulk SMS page.',
+          createdAt: iso,
+          editable: false,
+        };
+      });
   }, [showBulkSmsReminder, weekDays]);
   const events = useMemo(() => [...rawEvents, ...bulkSmsEvents], [rawEvents, bulkSmsEvents]);
 
