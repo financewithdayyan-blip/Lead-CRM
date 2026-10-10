@@ -11,13 +11,19 @@ import { cn } from '@/lib/utils';
 import { CALENDAR_EVENT_TYPE_CONFIG, type CalendarEvent, type CalendarEventType } from '@/types/domain';
 
 const ALL_TYPES = Object.keys(CALENDAR_EVENT_TYPE_CONFIG) as CalendarEventType[];
-// The work day runs evenings into the night (Pakistan time), not a typical
-// 9-to-5 — defaulting to 6pm-midnight means the grid opens on what's
-// actually there instead of a page of empty morning hours to scroll past.
+// The work day runs evenings into the night (Pakistan time), covering US
+// Eastern business hours — 9am Eastern lands around 6:30-7pm Pakistan —
+// not a typical 9-to-5. Defaulting to 6pm-6am means the grid opens on the
+// hours that are actually in play (through the real bulk-SMS send window)
+// instead of a page of empty morning hours to scroll past, or cutting off
+// at midnight like it's the end of the day. Hour values past 23 here are
+// deliberate — new Date(...).h accepts and normalizes them fine (24 ->
+// next day's midnight, 29 -> 5am), which is exactly the "keep counting
+// forward past midnight" display this grid wants, not a wraparound bug.
 // Still expands earlier on its own (see gridStartHour below) for any real
 // event that happens to land before 6pm.
 const GRID_START_HOUR_DEFAULT = 18;
-const GRID_END_HOUR_DEFAULT = 24;
+const GRID_END_HOUR_DEFAULT = 30;
 const HOUR_HEIGHT = 56;
 
 function minutesFromMidnight(iso: string) {
