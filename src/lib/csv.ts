@@ -207,7 +207,10 @@ export function filterOutMissingPhones(
  * A secondary number (phone2, or anything beyond it on the CSV side) is
  * never used for dedup, on either side of the comparison: an existing
  * lead's old phone2 shouldn't silently swallow a genuinely new lead just
- * because it happens to share a number nobody reaches out to. */
+ * because it happens to share a number nobody reaches out to. Only checks
+ * against leads already in the account — two rows sharing a phone number
+ * within the same CSV are both kept, deliberately not deduped against each
+ * other here. */
 export function dedupeAgainstExisting(
   mapped: MappedCsvLead[],
   existing: Array<{ phone: string }>,
@@ -217,16 +220,12 @@ export function dedupeAgainstExisting(
     const digits = normalizePhoneDigits(lead.phone);
     if (digits.length >= 7) existingNorm.add(digits);
   }
-  const seenNew = new Set<string>();
   let duplicateCount = 0;
   const unique = mapped.filter((lead) => {
     const digits = normalizePhoneDigits(lead.phone);
-    if (digits.length >= 7) {
-      if (existingNorm.has(digits) || seenNew.has(digits)) {
-        duplicateCount++;
-        return false;
-      }
-      seenNew.add(digits);
+    if (digits.length >= 7 && existingNorm.has(digits)) {
+      duplicateCount++;
+      return false;
     }
     return true;
   });

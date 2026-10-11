@@ -11,17 +11,20 @@ import { getErrorMessage } from '@/lib/utils';
 import { LEAD_SOURCE_SUGGESTIONS } from '@/lib/leadSources';
 import type { LeadStage } from '@/types/domain';
 
-// Only these stages mean real engagement happened — a reply came in, they're
-// qualified, in negotiation, under contract, or closed. A phone number that
-// only matches a Cold/Contacted/On Hold/Others/Dead lead isn't a meaningful
-// duplicate: nothing ever came of it, so a fresh CSV row for that number is
-// worth another shot rather than getting silently skipped. Same reasoning
-// the code already applied to Dead/Declined alone; this just extends it to
-// every stage that isn't actually a real, live relationship with the lead.
+// Only these stages mean real engagement happened — a reply came in,
+// they're on hold, qualified, in negotiation, under contract, or closed. A
+// phone number that only matches a Cold/Contacted/Others/Dead lead isn't a
+// meaningful duplicate: nothing ever came of it, so a fresh CSV row for
+// that number is worth another shot rather than getting silently skipped.
+// On Hold is included (unlike those) because it's still a live, ongoing
+// relationship — someone who wants to sell but hasn't decided yet, not a
+// dead end — so a re-imported CSV row for that same number should be
+// treated as the same lead, not a second shot at them.
 const DEDUPE_STAGES: LeadStage[] = [
   'replied',
   'initial_contact',
   'followup',
+  'onhold',
   'negotiation',
   'contract',
   'inspection_walkthrough',
@@ -277,7 +280,7 @@ export function ImportCsvModal({ onClose, targetUserId }: { onClose: () => void;
                 )}
                 {duplicateCount > 0 && (
                   <div className="mt-1 text-warning">
-                    {duplicateCount} duplicate(s) skipped — phone number matches a lead you've already Replied to, Qualified, Negotiated, Contracted, or Closed.
+                    {duplicateCount} duplicate(s) skipped — phone number matches a lead you've already Replied to, who's On Hold, Qualified, Negotiated, Contracted, or Closed.
                   </div>
                 )}
                 {auctionWarnings.length > 0 && (
