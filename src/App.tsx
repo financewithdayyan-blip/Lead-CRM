@@ -20,8 +20,6 @@ const KanbanPage = lazy(() => import('@/pages/KanbanPage').then((m) => ({ defaul
 const CalendarPage = lazy(() => import('@/pages/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const BulkSmsPage = lazy(() => import('@/pages/BulkSmsPage').then((m) => ({ default: m.BulkSmsPage })));
 const SmsLevelsPage = lazy(() => import('@/pages/SmsLevelsPage').then((m) => ({ default: m.SmsLevelsPage })));
-const ContactedLeadsPage = lazy(() => import('@/pages/ContactedLeadsPage').then((m) => ({ default: m.ContactedLeadsPage })));
-const BulkEmailPage = lazy(() => import('@/pages/BulkEmailPage').then((m) => ({ default: m.BulkEmailPage })));
 const CallHistoryPage = lazy(() => import('@/pages/CallHistoryPage').then((m) => ({ default: m.CallHistoryPage })));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -95,13 +93,6 @@ export default function App() {
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />
                         <Route path="/bulk-sms/levels" element={<SmsLevelsPage />} />
                         <Route path="/bulk-sms/:jobId" element={<BulkSmsPage />} />
-                        {/* Bulk Email's own lead picker (Contacted stage
-                            only) lives at the bare /bulk-email path, same
-                            way Bulk SMS's picker lives on the Kanban board
-                            rather than under /bulk-sms itself. */}
-                        <Route path="/bulk-email" element={<ContactedLeadsPage />} />
-                        <Route path="/bulk-email/history" element={<BulkEmailPage />} />
-                        <Route path="/bulk-email/history/:jobId" element={<BulkEmailPage />} />
                         <Route path="/blue-docs" element={<BlueDocsPage />} />
                         <Route path="/disposition" element={<DispositionPage />} />
                         <Route path="/disposition/:id" element={<BuyerProfilePage />} />

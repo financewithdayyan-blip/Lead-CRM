@@ -252,14 +252,8 @@ export interface Lead {
   aiScoredAt: string | null;
   auctionTier: AuctionTier | null;
   lastAlertDate: string | null;
-  /** Set by a STOP/DNC request or a decline. SMS-specific — excludes the
-   *  lead from all future bulk *texts* only; see emailOptedOut for the
-   *  separate bulk-email equivalent. */
+  /** Set by a STOP/DNC request or a decline. Excludes the lead from all future bulk sends. */
   optedOut: boolean;
-  /** Set by clicking the unsubscribe link in a bulk email, or a reply asking
-   *  to stop. Excludes the lead from all future bulk emails — independent
-   *  of optedOut, since a lead can opt out of one channel without the other. */
-  emailOptedOut: boolean;
   /** Set once fully qualified, or once a human replies by hand. Stops the AI auto-reply. */
   aiReplyPaused: boolean;
   /** True while the AI is still allowed to text this lead despite aiReplyPaused —
@@ -345,36 +339,6 @@ export interface BulkSmsJobItem {
   leadName: string;
   status: BulkSmsItemStatus;
   sentFrom: string | null;
-  detail: string | null;
-  updatedAt: string;
-}
-
-// ── Bulk Email — same job/item shape as Bulk SMS, a separate channel with
-// its own sending identity, its own opt-out (emailOptedOut), and no 7pm-6am
-// Pakistan send-window restriction (that's an SMS-carrier constraint, not
-// an email one). Only ever started from the Contacted-leads page, not the
-// Kanban board — see ContactedLeadsPage.
-export type BulkEmailJobStatus = 'running' | 'completed' | 'failed' | 'paused';
-export type BulkEmailItemStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'skipped';
-
-export interface BulkEmailJob {
-  id: string;
-  status: BulkEmailJobStatus;
-  error: string | null;
-  total: number;
-  createdAt: string;
-  completedAt: string | null;
-  hasConfig: boolean;
-  sentCount?: number;
-  skippedCount?: number;
-  failedCount?: number;
-}
-
-export interface BulkEmailJobItem {
-  id: string;
-  leadId: string | null;
-  leadName: string;
-  status: BulkEmailItemStatus;
   detail: string | null;
   updatedAt: string;
 }

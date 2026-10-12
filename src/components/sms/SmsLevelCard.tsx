@@ -2,15 +2,15 @@ import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { useSmsLevelProgress } from '@/hooks/useSmsLevelProgress';
 import { SMS_DLC_LEVEL_DAILY_LIMITS, SMS_DLC_MAX_LEVEL } from '@/lib/smsDlcLevels';
 
-const MIN_DAYS = 7;
+const MIN_DAYS = 5;
 const MIN_DELIVERY_RATE = 60;
 const MIN_REPLY_RATE = 15;
 
 /** One pooled 10DLC level for the whole account — total SMS/day across
  * every configured number combined. Fully automatic, read-only display:
- * auto_promote_sms_levels (0154/0156/0158) bootstraps a fresh account
+ * auto_promote_sms_levels (0154/0156/0158/0172) bootstraps a fresh account
  * straight to Level 1 and promotes it from there on its own once it's held
- * a level for 7+ days with a 60%+ delivery rate and 15%+ reply rate —
+ * a level for 5+ days with a 60%+ delivery rate and 15%+ reply rate —
  * there is nothing here to click or save. */
 export function SmsLevelCard() {
   const { data: settings } = useSmsSendSettings();

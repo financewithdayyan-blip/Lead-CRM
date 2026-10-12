@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 
 export interface SmsLevelProgress {
   daysElapsed: number;
-  /** Of the last 10 days (or since the level started, if shorter), how many
+  /** Of the last 5 days (or since the level started, if shorter), how many
    * had at least one real outbound send — a steady cadence reads better to
    * carriers than sporadic bursts, so this is shown as its own stat rather
    * than folded into the rate numbers. */
@@ -15,10 +15,10 @@ export interface SmsLevelProgress {
   replyRate: number;
 }
 
-/** Real deliverability/engagement over the last 10 days (or since the
+/** Real deliverability/engagement over the last 5 days (or since the
  * current level started, if that's more recent) — the exact same numbers
- * auto_promote_sms_levels (0154) uses to decide whether to promote, via the
- * shared sms_level_progress RPC, so this can never show something
+ * auto_promote_sms_levels (0154/0172) uses to decide whether to promote, via
+ * the shared sms_level_progress RPC, so this can never show something
  * different from what actually gates the next level. */
 export function useSmsLevelProgress(since: string | null) {
   return useQuery({

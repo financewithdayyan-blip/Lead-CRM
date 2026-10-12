@@ -5,7 +5,7 @@ import { useSmsLevelProgress } from '@/hooks/useSmsLevelProgress';
 import { SmsLevelCard } from '@/components/sms/SmsLevelCard';
 import { SMS_DLC_LEVELS, SMS_DLC_LEVEL_DAILY_LIMITS } from '@/lib/smsDlcLevels';
 
-const MIN_DAYS = 7;
+const MIN_DAYS = 5;
 const MIN_DELIVERY_RATE = 60;
 const MIN_REPLY_RATE = 15;
 

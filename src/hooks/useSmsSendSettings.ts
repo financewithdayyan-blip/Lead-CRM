@@ -17,7 +17,7 @@ export interface SmsSendSettings {
   dailyLimitUnlockedLevel: number;
   /** When the current dailyLimitLevel started — auto-reset by a DB trigger
    * whenever the level actually changes (see 0154). Levels 1-9 auto-promote
-   * once 10+ days have passed since this and the account has sustained a
+   * once 5+ days have passed since this and the account has sustained a
    * 60%+ delivery rate and 15%+ reply rate over that window — see
    * sms_level_progress/auto_promote_sms_levels and useSmsLevelProgress. */
   dailyLimitLevelStartedAt: string | null;
