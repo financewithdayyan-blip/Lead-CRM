@@ -59,15 +59,36 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
+const AGENT_NAME = 'Dayyan';
+function formatPhoneDisplay(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, '').slice(-10);
+  if (digits.length !== 10) return raw;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+// Same public-facing number used on every other Bluebird-branded email (see
+// create-contract-instance/submit-signature) — one person, one number, kept
+// consistent across every template rather than introducing a second line.
+const AGENT_PHONE_DISPLAY = formatPhoneDisplay(Deno.env.get('ZOOM_FROM_NUMBER_2') ?? '');
+
+function shortRef(documentId: string): string {
+  return documentId.slice(0, 8).toUpperCase();
+}
+
+function formatMoney(n: number): string {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
 // ── Branded shell — table-based, every style inlined, matching the Blue Docs
-// contract emails so every email this company sends looks like one system.
-// -webkit-text-size-adjust:100% (style block + inline on <body>, belt and
-// suspenders since some clients strip one or the other) is the fix for the
-// footer paragraph splitting apart with a huge blank gap in the middle —
-// iOS Mail auto-inflates small text (that paragraph is 11px) it decides is
-// "too small to read," reflowing it at an inconsistent effective size
-// unless this is explicitly turned off. ──
-function emailShell(preheader: string, bodyHtml: string): string {
+// contract emails (create-contract-instance/submit-signature) so every email
+// this company sends looks like one system: a plain white header with a
+// "Ref" on the right, and a two-line footer note. -webkit-text-size-adjust:
+// 100% (style block + inline on <body>, belt and suspenders since some
+// clients strip one or the other) is the fix for the footer paragraph
+// splitting apart with a huge blank gap in the middle — iOS Mail
+// auto-inflates small text (that paragraph is 11px) it decides is "too
+// small to read," reflowing it at an inconsistent effective size unless
+// this is explicitly turned off. ──
+function emailShell(preheader: string, bodyHtml: string, opts: { documentId: string; footerNote: string }): string {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title>
@@ -78,15 +99,21 @@ function emailShell(preheader: string, bodyHtml: string): string {
 <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
 <table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);border-collapse:collapse;">
-<tr><td style="background:#0B1E33;padding:24px 32px;">
-<table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
-<td style="width:28px;height:28px;background:#1568A8;border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:28px;">&#9993;</td>
-<td style="padding-left:10px;font-size:15px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Bluebird <span style="font-weight:500;color:#8CA0B8;">Acquisition</span></td>
+<tr><td style="padding:22px 32px;border-bottom:1px solid #e2e8f0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="width:10px;height:10px;background:#0B1E33;border-radius:2px;"></td>
+<td style="padding-left:8px;font-size:14px;font-weight:700;color:#0B1E33;">Bluebird Acquisition</td>
+</tr></table>
+</td>
+<td align="right" style="vertical-align:middle;font-size:11px;color:#8693A1;">Deal ${shortRef(opts.documentId)}</td>
 </tr></table>
 </td></tr>
 <tr><td style="padding:32px;">${bodyHtml}</td></tr>
 <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">This email was sent by Bluebird Acquisition about an off-market property deal. If the button above doesn't open, use the link at the bottom of this email.</p>
+<p style="margin:0 0 4px;font-size:11px;line-height:1.6;color:#8693A1;">Bluebird Acquisition &middot; Serving New York, New Jersey and Connecticut</p>
+<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">${opts.footerNote}</p>
 </td></tr>
 </table>
 </td></tr>
@@ -95,28 +122,30 @@ function emailShell(preheader: string, bodyHtml: string): string {
 </html>`;
 }
 
-function factCallout(facts: Array<[string, string]>): string {
-  const cells = facts
+/** A receipt-style key/value list — a thin top border per row, label left,
+ * value right. Same shape as the Blue Docs contract emails' Property/
+ * Purchase price rows. */
+function detailTable(rows: Array<{ label: string; value: string }>): string {
+  const rowsHtml = rows
     .map(
-      ([label, value]) => `<td style="padding:0 14px 0 0;">
-<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">${label}</div>
-<div style="margin-top:2px;font-size:14px;font-weight:600;color:#0B1E33;">${value}</div>
-</td>`,
+      (r) => `
+<tr>
+<td style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:12.5px;color:#8693A1;">${r.label}</td>
+<td style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:13px;font-weight:600;color:#0B1E33;text-align:right;">${r.value}</td>
+</tr>`,
     )
     .join('');
-  return `<div style="margin:20px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>
-</div>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border-bottom:1px solid #e2e8f0;">${rowsHtml}</table>`;
 }
 
 function ctaButton(link: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#C9A24B;border-radius:10px;">
-<a href="${link}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:#0B1E33;text-decoration:none;">${label}</a>
+  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#0B1E33;border-radius:10px;">
+<a href="${link}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;">${label}</a>
 </td></tr></table>`;
 }
 
 function fallbackLink(link: string): string {
-  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Or paste this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
+  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Button not working? Copy this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
 }
 
 Deno.serve(async (req) => {
@@ -131,19 +160,39 @@ Deno.serve(async (req) => {
     if (!userData?.user?.id) return json({ error: 'Not signed in.' }, 401);
 
     const body = await req.json();
-    const { packetId, email, note } = body as { packetId: string; email: string; note?: string };
+    const { packetId, email, note, recipientName, offerDeadline } = body as {
+      packetId: string;
+      email: string;
+      note?: string;
+      recipientName?: string;
+      offerDeadline?: string;
+    };
     if (!packetId || !email?.trim()) return json({ error: 'Missing packetId or email.' }, 400);
     if (!isValidEmail(email)) return json({ error: 'That email address doesn\'t look valid.' }, 400);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data: suppressed } = await admin
+      .from('packet_email_unsubscribes')
+      .select('email')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    if (suppressed) return json({ error: `${email.trim()} has unsubscribed from deal-packet emails.` }, 400);
 
     // RLS-scoped to the caller — returns nothing if they don't own this
     // packet and aren't an overseeing admin, exactly like opening it in the app.
     const { data: packet, error: packetErr } = await callerClient
       .from('deal_packets')
-      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types')
+      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types, purchase_price, arv')
       .eq('id', packetId)
       .single();
     if (packetErr || !packet) return json({ error: 'Packet not found, or you don\'t have access to it.' }, 404);
     if (packet.status !== 'active') return json({ error: 'Only an active packet can be emailed — activate it first.' }, 400);
+
+    // Repair total isn't on deal_packets itself — summed from its own line
+    // items, same source PacketTab/DealPacketBuilder use for the repair
+    // breakdown shown in the app.
+    const { data: repairRows } = await callerClient.from('packet_repairs').select('cost').eq('packet_id', packet.id);
+    const repairTotal = (repairRows ?? []).reduce((sum, r) => sum + (Number(r.cost) || 0), 0);
 
     // Every link in this email — CTA button and the plaintext fallback —
     // routes through track-packet-email-click rather than straight at the
@@ -151,7 +200,10 @@ Deno.serve(async (req) => {
     // "opened the email" / "opened the link" on the packet's analytics are
     // real server-recorded facts, not something the client claims. Row
     // must exist before the email goes out — a very fast open shouldn't be
-    // able to race a tracking_token that doesn't exist yet.
+    // able to race a tracking_token that doesn't exist yet. The same token
+    // also backs the Unsubscribe link, resolving back to this exact to_email
+    // server-side (see unsubscribe-packet-email) rather than trusting
+    // whatever address a forwarded/tampered link claims.
     const trackingToken = crypto.randomUUID();
     const { error: shareErr } = await admin.from('packet_email_shares').insert({
       packet_id: packet.id,
@@ -164,34 +216,57 @@ Deno.serve(async (req) => {
 
     const link = `${SUPABASE_URL}/functions/v1/track-packet-email-click?t=${trackingToken}`;
     const pixelUrl = `${SUPABASE_URL}/functions/v1/track-packet-email-open?t=${trackingToken}`;
+    const unsubscribeLink = `${SUPABASE_URL}/functions/v1/unsubscribe-packet-email?t=${trackingToken}`;
     const propType = packet.prop_type || 'Property';
     const area = [packet.city, packet.state].filter(Boolean).join(', ');
     const dealTypeLabels = ((packet.deal_types ?? []) as string[]).map((t) => DEAL_TYPE_LABELS[t]).filter(Boolean);
+    const firstName = recipientName?.trim() ? recipientName.trim().split(' ')[0] : null;
 
-    const facts: Array<[string, string]> = [['Property', propType]];
-    if (area) facts.push(['Area', area]);
-    if (packet.beds != null || packet.baths != null) {
-      facts.push(['Beds / Baths', `${packet.beds ?? '—'} / ${packet.baths ?? '—'}`]);
-    }
-    if (packet.sqft != null) facts.push(['Sqft', String(packet.sqft)]);
-    if (dealTypeLabels.length > 0) facts.push(['Structure', dealTypeLabels.join(', ')]);
+    // Street-level address is deliberately never put in this email — same
+    // boundary the public packet page itself enforces (see
+    // 0147_packet_address_reveal_from_lead's "no longer disclose an exact
+    // location under any circumstance" until a visitor passes the
+    // lead-capture gate). City/state is as specific as any Bluebird email
+    // ever gets before that gate.
+    const headline = `${propType}${area ? ` — ${area}` : ''}`;
+
+    const rows: Array<{ label: string; value: string }> = [];
+    if (packet.purchase_price != null) rows.push({ label: 'Asking price', value: formatMoney(packet.purchase_price) });
+    if (packet.arv != null) rows.push({ label: 'Estimated ARV', value: formatMoney(packet.arv) });
+    if ((repairRows ?? []).length > 0) rows.push({ label: 'Estimated repairs', value: formatMoney(repairTotal) });
+    const bedsBaths = packet.beds != null || packet.baths != null ? `${packet.beds ?? '—'}bd / ${packet.baths ?? '—'}ba` : '';
+    const sqftStr = packet.sqft != null ? `${Number(packet.sqft).toLocaleString()} sqft` : '';
+    const propertyDetail = [propType, [bedsBaths, sqftStr].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+    if (propertyDetail) rows.push({ label: 'Property', value: propertyDetail });
+    if (dealTypeLabels.length > 0) rows.push({ label: 'Structure', value: dealTypeLabels.join(', ') });
 
     const noteHtml = note?.trim()
       ? `<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${note.trim()}</p>`
       : '';
+    const deadlineHtml = offerDeadline?.trim()
+      ? `<p style="margin:14px 0 0;font-size:12.5px;line-height:1.6;color:#8693A1;">We're taking offers until ${offerDeadline.trim()}. Serious buyers with proof of funds get first look.</p>`
+      : '';
 
-    const html = emailShell(
-      `New off-market deal${area ? ` in ${area}` : ''}`,
-      `<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C9A24B;">Off-Market Deal</p>
-<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${propType}${area ? ` — ${area}` : ''}</h1>
-<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Thought you'd want a look at this one. Full details, photos, comps and numbers are in the deal packet below.</p>
+    const bodyHtml = `
+<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1568A8;">New Off-Market Deal</p>
+<h1 style="margin:0;font-size:21px;line-height:1.35;font-weight:700;color:#0B1E33;">${headline}</h1>
+<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Hi${firstName ? ` ${firstName}` : ' there'},</p>
+<p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:#45566B;">We just locked up this property and you're one of the first buyers seeing it. The numbers are below. Photos, comps and the repair breakdown are all in the deal packet.</p>
 ${noteHtml}
-${factCallout(facts)}
-${ctaButton(link, 'View Full Deal Packet')}
-<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Let me know if you want to move on it.<br>Thanks,<br>Dayyan</p>
+${detailTable(rows)}
+${ctaButton(link, 'View deal packet')}
+${deadlineHtml}
+<p style="margin:24px 0 0;font-size:13.5px;line-height:1.6;color:#45566B;">Want to walk it or talk numbers? Call me at ${AGENT_PHONE_DISPLAY} or reply to this email.</p>
+<p style="margin:18px 0 0;font-size:13.5px;line-height:1.6;color:#0B1E33;font-weight:600;">${AGENT_NAME}<br><span style="font-weight:400;color:#8693A1;">Dispositions, Bluebird Acquisition</span></p>
+<div style="margin:28px 0 0;border-top:1px solid #e2e8f0;"></div>
+<p style="margin:16px 0 0;font-size:11.5px;line-height:1.6;color:#8693A1;">Bluebird Acquisition holds this property under contract and is offering an assignment of that contract. ARV and repair figures are estimates; please do your own due diligence before making an offer.</p>
 ${fallbackLink(link)}
-<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;" />`,
-    );
+<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;" />`;
+
+    const html = emailShell(`New off-market deal${area ? ` in ${area}` : ''}`, bodyHtml, {
+      documentId: packet.id,
+      footerNote: `You're receiving this because Bluebird Acquisition is sharing an off-market deal with you. <a href="${unsubscribeLink}" style="color:#8693A1;text-decoration:underline;">Unsubscribe</a>`,
+    });
 
     await sendEmail(
       email.trim(),

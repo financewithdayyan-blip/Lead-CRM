@@ -13,13 +13,21 @@ import type { DealPacket, Lead, PacketStatus } from '@/types/domain';
 
 export function EmailPacketModal({ packet, onClose }: { packet: DealPacket; onClose: () => void }) {
   const [email, setEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
   const [note, setNote] = useState('');
+  const [offerDeadline, setOfferDeadline] = useState('');
   const [sent, setSent] = useState(false);
   const sendEmail = useSendPacketEmail();
 
   function handleSend() {
     sendEmail.mutate(
-      { packetId: packet.id, email: email.trim(), note: note.trim() || undefined },
+      {
+        packetId: packet.id,
+        email: email.trim(),
+        note: note.trim() || undefined,
+        recipientName: recipientName.trim() || undefined,
+        offerDeadline: offerDeadline.trim() || undefined,
+      },
       { onSuccess: () => setSent(true) },
     );
   }
@@ -50,12 +58,32 @@ export function EmailPacketModal({ packet, onClose }: { packet: DealPacket; onCl
             />
           </div>
           <div>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Investor's name (optional)</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="John Doe"
+              value={recipientName}
+              onChange={(e) => setRecipientName(e.target.value)}
+            />
+          </div>
+          <div>
             <label className="mb-1 block text-[12px] font-medium text-text-2">Personal note (optional)</label>
             <textarea
               className="input min-h-[70px] resize-none"
               placeholder="Thought you'd be interested in this one..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Offer deadline (optional)</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="e.g. Friday, Nov 1"
+              value={offerDeadline}
+              onChange={(e) => setOfferDeadline(e.target.value)}
             />
           </div>
           {sendEmail.isError && (

@@ -763,13 +763,27 @@ export function useDeletePacket() {
 /** Emails an active packet's link to an investor — see supabase/functions/send-packet-email.
  * The server re-reads the packet's own fields (property type, area, deal
  * structure) rather than trusting anything from the client, so this call only
- * ever needs the packet id, the recipient, and an optional personal note. */
+ * ever needs the packet id, the recipient, and a few optional personalization
+ * fields (name, a note, an offer deadline) — all cosmetic, never anything
+ * the server trusts for access control. */
 export function useSendPacketEmail() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ packetId, email, note }: { packetId: string; email: string; note?: string }) => {
+    mutationFn: async ({
+      packetId,
+      email,
+      note,
+      recipientName,
+      offerDeadline,
+    }: {
+      packetId: string;
+      email: string;
+      note?: string;
+      recipientName?: string;
+      offerDeadline?: string;
+    }) => {
       const { data, error } = await supabase.functions.invoke('send-packet-email', {
-        body: { packetId, email, note },
+        body: { packetId, email, note, recipientName, offerDeadline },
       });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);
