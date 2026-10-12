@@ -150,7 +150,53 @@ async function sendEmail(
   }
 }
 
-function emailShell(preheader: string, bodyHtml: string): string {
+// Known field ids for the Cash Deal PSA template only (see
+// FillCashDealContractModal's own FIELD_MAP, which this mirrors) — used
+// solely to surface human Purchase price / EMD / Title company / Closing
+// date values in these emails. No other template currently has an
+// equivalent concept, so every other contract type's email simply omits
+// whichever of these rows it can't resolve. If this template is ever
+// re-mapped in the field editor, these ids need updating to match.
+const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
+const CASH_DEAL_FIELD_IDS = {
+  purchasePrice: 'b95b1ea0-a8f0-4fda-a0db-91b232299515',
+  emdAmount: 'c1654e71-3c41-4216-8c91-8130873deec7',
+  titleCompany: 'e9566337-b341-4d88-a02c-e4bcd0ea16c0',
+  closingDate: 'ebfb718b-a8d6-4017-b426-732dac8fec12',
+} as const;
+
+const AGENT_NAME = 'Dayyan';
+function formatPhoneDisplay(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, '').slice(-10);
+  if (digits.length !== 10) return raw;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+const AGENT_PHONE_DISPLAY = formatPhoneDisplay(BLUEDOCS_NUMBER.phone);
+
+function shortRef(documentId: string): string {
+  return documentId.slice(0, 8).toUpperCase();
+}
+
+/** Friendly, signer-facing timestamp (vs. formatWhen's fixed-UTC audit-trail
+ * version above) — Eastern time, since that's where this business operates. */
+function formatFriendlyWhen(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York' });
+}
+
+/** closingDate's raw stored value is whatever a plain <input type="date">
+ * produced (an unformatted "YYYY-MM-DD") — this is just for display. Falls
+ * back to the raw string for anything that doesn't parse as a plain date. */
+function formatDateOnly(raw: string): string {
+  const d = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? raw : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+}
+
+/** Shared header/footer chrome — table-based, every style inlined, since
+ * email clients (Gmail especially) strip <style> blocks and don't support
+ * flexbox/grid. The same shell wraps every Blue Docs email. A plain white
+ * header (document "Ref" top-right) and a two-line footer note, matching the
+ * product's own branded letter/receipt look rather than a generic email. */
+function emailShell(preheader: string, bodyHtml: string, opts: { documentId: string; footerNote: string }): string {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title></head>
@@ -159,15 +205,21 @@ function emailShell(preheader: string, bodyHtml: string): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);">
-<tr><td style="background:#0B1E33;padding:24px 32px;">
+<tr><td style="padding:22px 32px;border-bottom:1px solid #e2e8f0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="width:28px;height:28px;background:#1568A8;border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:28px;">&#9993;</td>
-<td style="padding-left:10px;font-size:15px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Bluebird <span style="font-weight:500;color:#8CA0B8;">Acquisition</span></td>
+<td style="width:10px;height:10px;background:#0B1E33;border-radius:2px;"></td>
+<td style="padding-left:8px;font-size:14px;font-weight:700;color:#0B1E33;">Bluebird Acquisition</td>
+</tr></table>
+</td>
+<td align="right" style="vertical-align:middle;font-size:11px;color:#8693A1;">Ref: ${shortRef(opts.documentId)}</td>
 </tr></table>
 </td></tr>
 <tr><td style="padding:32px;">${bodyHtml}</td></tr>
 <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">This email was sent by Bluebird Acquisition regarding a real estate contract you're a party to. If the button above doesn't open, use the link at the bottom of this email.</p>
+<p style="margin:0 0 4px;font-size:11px;line-height:1.6;color:#8693A1;">Bluebird Acquisition &middot; Serving New York, New Jersey and Connecticut</p>
+<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">${opts.footerNote}</p>
 </td></tr>
 </table>
 </td></tr>
@@ -176,11 +228,20 @@ function emailShell(preheader: string, bodyHtml: string): string {
 </html>`;
 }
 
-function addressCallout(address: string): string {
-  return `<div style="margin:20px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
-<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">Property</div>
-<div style="margin-top:4px;font-size:14px;font-weight:600;color:#0B1E33;">${address}</div>
-</div>`;
+/** A receipt-style key/value list — a thin top border per row, label left,
+ * value right. Used for the Property/Purchase price rows in the
+ * signature-request email and the Signed-by rows in the completion email. */
+function detailTable(rows: Array<{ label: string; value: string }>): string {
+  const rowsHtml = rows
+    .map(
+      (r) => `
+<tr>
+<td style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:12.5px;color:#8693A1;">${r.label}</td>
+<td style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:13px;font-weight:600;color:#0B1E33;text-align:right;">${r.value}</td>
+</tr>`,
+    )
+    .join('');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border-bottom:1px solid #e2e8f0;">${rowsHtml}</table>`;
 }
 
 function ctaButton(link: string, label: string, bg: string, color: string): string {
@@ -190,40 +251,148 @@ function ctaButton(link: string, label: string, bg: string, color: string): stri
 }
 
 function fallbackLink(link: string): string {
-  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Or paste this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
+  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Button not working? Copy this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
+}
+
+/** The full-width pale banner at the top of the completion email ("Fully
+ * signed by all parties"). */
+function statusBanner(text: string): string {
+  return `<div style="margin:0 0 20px;padding:10px 16px;background:#EAF2FA;border-radius:8px;font-size:12.5px;font-weight:600;color:#1568A8;">&#10003; ${text}</div>`;
+}
+
+function numberedStep(n: number, title: string, body: string): string {
+  return `
+<tr>
+<td style="padding:0 14px 20px 0;vertical-align:top;width:28px;font-size:12px;font-weight:700;color:#8693A1;">${String(n).padStart(2, '0')}</td>
+<td style="padding:0 0 20px;vertical-align:top;">
+<div style="font-size:13.5px;font-weight:700;color:#0B1E33;">${title}</div>
+<div style="margin-top:2px;font-size:13px;line-height:1.5;color:#45566B;">${body}</div>
+</td>
+</tr>`;
+}
+
+function stepsTable(stepsHtml: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;">${stepsHtml}</table>`;
 }
 
 /** Same shell create-contract-instance uses for the initial invite — this is
- * the next-signer nudge, identical shape, just a different opening line. */
-function signRequestEmailHtml(opts: { opener: string; docName: string; address: string; link: string }): string {
-  const { opener, docName, address, link } = opts;
+ * the next-signer nudge, identical shape, just a different intro paragraph. */
+function signRequestEmailHtml(opts: {
+  recipientName: string;
+  docName: string;
+  address: string;
+  link: string;
+  documentId: string;
+  intro: string;
+  purchasePrice?: string;
+}): string {
+  const { recipientName, docName, address, link, documentId, intro, purchasePrice } = opts;
+  const firstName = recipientName.split(' ')[0];
+  const docNameForHeading = docName.replace(/^your\s+/i, '');
+  const rows: Array<{ label: string; value: string }> = [{ label: 'Property', value: address }];
+  if (purchasePrice) rows.push({ label: 'Purchase price', value: purchasePrice });
   const body = `
-<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C9A24B;">Signature Requested</p>
-<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${opener}</h1>
-<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${docName} is ready for your signature. Review it and sign electronically — it only takes a couple of minutes.</p>
-${addressCallout(address)}
-${ctaButton(link, 'Review &amp; Sign Document', '#C9A24B', '#0B1E33')}
-<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Sign it and let's start moving with it.<br>Thanks,<br>Dayyan</p>
+<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1568A8;">Ready for your signature</p>
+<h1 style="margin:0;font-size:21px;line-height:1.35;font-weight:700;color:#0B1E33;">Your ${docNameForHeading} for ${address}</h1>
+<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Hi ${firstName},</p>
+<p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${intro}</p>
+${detailTable(rows)}
+${ctaButton(link, 'Review and sign', '#0B1E33', '#ffffff')}
+<p style="margin:14px 0 0;font-size:12.5px;line-height:1.6;color:#8693A1;">Takes about five minutes and works on your phone.</p>
+<p style="margin:24px 0 0;font-size:13.5px;line-height:1.6;color:#45566B;">Questions before you sign? Call me directly at ${AGENT_PHONE_DISPLAY} or just reply to this email.</p>
+<p style="margin:18px 0 0;font-size:13.5px;line-height:1.6;color:#0B1E33;font-weight:600;">${AGENT_NAME}<br><span style="font-weight:400;color:#8693A1;">Acquisitions, Bluebird Acquisition</span></p>
 ${fallbackLink(link)}`;
-  return emailShell(`${docName} is ready for your signature`, body);
+  return emailShell(`${docName} is ready for your signature`, body, {
+    documentId,
+    footerNote: `We will never ask for bank details or payment by email. If something looks off, call ${AGENT_PHONE_DISPLAY} before signing.`,
+  });
+}
+
+/** Builds the "Signed by ..." rows for the completion email, from the
+ * recipient's own perspective — "Signed by you" for their own signature,
+ * one row per other seller-side signer (co-seller, if any), and a single
+ * collapsed "Signed by Bluebird Acquisition" row for whichever non-seller
+ * party (buyer/extra role) signed, using the latest timestamp if more than
+ * one exists. Skips a row entirely if its timestamp is somehow missing
+ * rather than printing a blank value. */
+function buildSignedRows(
+  recipient: { id: string; signed_at: string | null },
+  allParties: Array<{ id: string; role: string; name: string; signed_at: string | null }>,
+): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = [];
+  if (recipient.signed_at) rows.push({ label: 'Signed by you', value: formatFriendlyWhen(recipient.signed_at) });
+
+  const others = allParties.filter((p) => p.id !== recipient.id);
+  const isSellerSide = (role: string) => role === 'seller' || role.startsWith('seller_');
+  for (const p of others.filter((p) => isSellerSide(p.role))) {
+    if (p.signed_at) rows.push({ label: `Signed by ${p.name.split(' ')[0]}`, value: formatFriendlyWhen(p.signed_at) });
+  }
+  const businessSide = others.filter((p) => !isSellerSide(p.role) && p.signed_at);
+  const latestBusiness = businessSide.sort((a, b) => new Date(b.signed_at!).getTime() - new Date(a.signed_at!).getTime())[0];
+  if (latestBusiness) rows.push({ label: 'Signed by Bluebird Acquisition', value: formatFriendlyWhen(latestBusiness.signed_at!) });
+
+  return rows;
 }
 
 /** The fully-executed completion email — sent alongside a PDF attachment
  * of the actual signed copy (finalBytes, already on hand from the
  * certificate-of-completion build below), not just a link. The download
  * link stays too as a fallback for whichever mail client/filter strips or
- * blocks the attachment. */
-function signedCompleteEmailHtml(opts: { name: string; address: string; link: string }): string {
-  const { name, address, link } = opts;
+ * blocks the attachment. "What happens next" walks the deal's remaining
+ * steps in order: walkthrough/inspection, EMD deposit, opening title, then
+ * closing — title company and closing date are only named when the Cash
+ * Deal template actually captured them; every other case stays generic. */
+function signedCompleteEmailHtml(opts: {
+  recipientName: string;
+  address: string;
+  link: string;
+  documentId: string;
+  signedRows: Array<{ label: string; value: string }>;
+  titleCompany?: string;
+  closingDate?: string;
+  emdAmount?: string;
+}): string {
+  const { recipientName, address, link, documentId, signedRows, titleCompany, closingDate, emdAmount } = opts;
+  const firstName = recipientName.split(' ')[0];
+  const steps = [
+    {
+      title: 'Walkthrough and inspection',
+      body: "I'll reach out to schedule a time that works for you to walk the property together.",
+    },
+    {
+      title: 'EMD deposit',
+      body: emdAmount
+        ? `Your earnest money deposit of ${emdAmount} goes to the title company to formally open escrow.`
+        : 'Your earnest money deposit goes to the title company to formally open escrow.',
+    },
+    {
+      title: 'Opening title',
+      body: titleCompany
+        ? `${titleCompany} will contact you within two business days to start the title search.`
+        : 'The title company will contact you within two business days to start the title search.',
+    },
+    {
+      title: 'Closing',
+      body: closingDate
+        ? `Currently set for ${closingDate}. You'll get the details a few days before.`
+        : "We'll confirm your closing date and send the details a few days before.",
+    },
+  ];
+  const stepsHtml = steps.map((s, i) => numberedStep(i + 1, s.title, s.body)).join('');
   const body = `
-<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#10b981;">Fully Executed</p>
-<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">&#127881; Congrats, ${name.split(' ')[0]} — it's signed!</h1>
-<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Every party has signed the contract for your property. Your fully executed copy is attached to this email, or you can download it below.</p>
-${addressCallout(address)}
-${ctaButton(link, 'Download Signed Contract', '#0B1E33', '#ffffff')}
-<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Thanks for signing,<br>Dayyan</p>
-${fallbackLink(link)}`;
-  return emailShell(`Your contract for ${address} has been fully signed`, body);
+${statusBanner('Fully signed by all parties')}
+<h1 style="margin:0;font-size:21px;line-height:1.35;font-weight:700;color:#0B1E33;">&#127881; Congratulations, ${firstName}. It's official.</h1>
+<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">The agreement for ${address} has been signed by everyone. You're under contract. Thank you for working with us. We'll take it from here and keep you posted at each step.</p>
+${detailTable(signedRows)}
+${ctaButton(link, 'Download signed copy', '#0B1E33', '#ffffff')}
+<p style="margin:32px 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0B1E33;">What happens next</p>
+${stepsTable(stepsHtml)}
+<p style="margin:10px 0 0;font-size:13.5px;line-height:1.6;color:#45566B;">If anything comes up before closing, call me at ${AGENT_PHONE_DISPLAY} or reply here.</p>
+<p style="margin:18px 0 0;font-size:13.5px;line-height:1.6;color:#0B1E33;font-weight:600;">${AGENT_NAME}<br><span style="font-weight:400;color:#8693A1;">Acquisitions, Bluebird Acquisition</span></p>`;
+  return emailShell(`Your agreement for ${address} has been signed by everyone`, body, {
+    documentId,
+    footerNote: `Keep this email for your records. The signed agreement and its audit trail are stored under Ref: ${shortRef(documentId)}.`,
+  });
 }
 
 interface ContractField {
@@ -586,7 +755,7 @@ Deno.serve(async (req) => {
       if (nextParty?.send_sms || nextParty?.send_email) {
         const { data: nameRow } = await admin
           .from('contract_instances')
-          .select('name, property_address')
+          .select('name, property_address, template_id, field_values')
           .eq('id', party.contract_instance_id)
           .single();
         const link = `https://www.bluebirdacquisition.com/crm/sign/${nextParty.access_token}`;
@@ -604,11 +773,19 @@ Deno.serve(async (req) => {
         }
         if (nextParty.send_email && nextParty.email) {
           try {
+            const nextFieldValues = (nameRow?.field_values ?? {}) as Record<string, string>;
+            const purchasePrice =
+              nameRow?.template_id === CASH_DEAL_TEMPLATE_ID
+                ? nextFieldValues[CASH_DEAL_FIELD_IDS.purchasePrice] || undefined
+                : undefined;
             const html = signRequestEmailHtml({
-              opener: `Hi ${nextParty.name.split(' ')[0]}, it's your turn to sign`,
+              recipientName: nextParty.name,
               docName,
               address,
               link,
+              documentId: party.contract_instance_id,
+              intro: "It's your turn to sign. Please read it through and sign online when you're ready — the other party is waiting on you.",
+              purchasePrice,
             });
             await sendEmail(nextParty.email, `Your turn to sign - ${docName}`, html);
             sentAny = true;
@@ -936,7 +1113,19 @@ Deno.serve(async (req) => {
       }
       if (p.send_email && p.email) {
         try {
-          const html = signedCompleteEmailHtml({ name: p.name, address: instance.property_address ?? '', link: partyLink });
+          const isCashDeal = instance.template_id === CASH_DEAL_TEMPLATE_ID;
+          const html = signedCompleteEmailHtml({
+            recipientName: p.name,
+            address: instance.property_address ?? '',
+            link: partyLink,
+            documentId: instance.id,
+            signedRows: buildSignedRows(p, updatedParties),
+            titleCompany: isCashDeal ? fieldValues[CASH_DEAL_FIELD_IDS.titleCompany] || undefined : undefined,
+            closingDate: isCashDeal && fieldValues[CASH_DEAL_FIELD_IDS.closingDate]
+              ? formatDateOnly(fieldValues[CASH_DEAL_FIELD_IDS.closingDate])
+              : undefined,
+            emdAmount: isCashDeal ? fieldValues[CASH_DEAL_FIELD_IDS.emdAmount] || undefined : undefined,
+          });
           await sendEmail(p.email, `Contract signed - ${instance.property_address ?? 'your property'}`, html, [
             { filename: 'Signed Contract.pdf', contentType: 'application/pdf', encoding: 'binary', content: finalBytes },
           ]);

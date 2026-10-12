@@ -142,10 +142,33 @@ async function sendEmail(to: string, subject: string, html: string) {
   }
 }
 
+// Known field id for the Cash Deal PSA template's Purchase Price box only
+// (see FillCashDealContractModal's own FIELD_MAP, which this mirrors) — used
+// solely to surface a human "Purchase price" row in the signature-request
+// email. No other template currently has an equivalent concept, so every
+// other contract type's email simply omits that row. If this template is
+// ever re-mapped in the field editor, this id needs updating to match.
+const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
+const CASH_DEAL_PURCHASE_PRICE_FIELD_ID = 'b95b1ea0-a8f0-4fda-a0db-91b232299515';
+
+const AGENT_NAME = 'Dayyan';
+function formatPhoneDisplay(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, '').slice(-10);
+  if (digits.length !== 10) return raw;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+const AGENT_PHONE_DISPLAY = formatPhoneDisplay(BLUEDOCS_NUMBER.phone);
+
+function shortRef(documentId: string): string {
+  return documentId.slice(0, 8).toUpperCase();
+}
+
 /** Shared header/footer chrome — table-based, every style inlined, since
  * email clients (Gmail especially) strip <style> blocks and don't support
- * flexbox/grid. The same shell wraps every Blue Docs email. */
-function emailShell(preheader: string, bodyHtml: string): string {
+ * flexbox/grid. The same shell wraps every Blue Docs email. A plain white
+ * header (document "Ref" top-right) and a two-line footer note, matching the
+ * product's own branded letter/receipt look rather than a generic email. */
+function emailShell(preheader: string, bodyHtml: string, opts: { documentId: string; footerNote: string }): string {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bluebird Acquisition</title></head>
@@ -154,15 +177,21 @@ function emailShell(preheader: string, bodyHtml: string): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 2px 4px rgba(11,30,51,.04),0 14px 32px -16px rgba(11,30,51,.16);">
-<tr><td style="background:#0B1E33;padding:24px 32px;">
+<tr><td style="padding:22px 32px;border-bottom:1px solid #e2e8f0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="width:28px;height:28px;background:#1568A8;border-radius:8px;text-align:center;vertical-align:middle;font-size:14px;line-height:28px;">&#9993;</td>
-<td style="padding-left:10px;font-size:15px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Bluebird <span style="font-weight:500;color:#8CA0B8;">Acquisition</span></td>
+<td style="width:10px;height:10px;background:#0B1E33;border-radius:2px;"></td>
+<td style="padding-left:8px;font-size:14px;font-weight:700;color:#0B1E33;">Bluebird Acquisition</td>
+</tr></table>
+</td>
+<td align="right" style="vertical-align:middle;font-size:11px;color:#8693A1;">Ref: ${shortRef(opts.documentId)}</td>
 </tr></table>
 </td></tr>
 <tr><td style="padding:32px;">${bodyHtml}</td></tr>
 <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">This email was sent by Bluebird Acquisition regarding a real estate contract you're a party to. If the button above doesn't open, use the link at the bottom of this email.</p>
+<p style="margin:0 0 4px;font-size:11px;line-height:1.6;color:#8693A1;">Bluebird Acquisition &middot; Serving New York, New Jersey and Connecticut</p>
+<p style="margin:0;font-size:11px;line-height:1.6;color:#8693A1;">${opts.footerNote}</p>
 </td></tr>
 </table>
 </td></tr>
@@ -171,11 +200,20 @@ function emailShell(preheader: string, bodyHtml: string): string {
 </html>`;
 }
 
-function addressCallout(address: string): string {
-  return `<div style="margin:20px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
-<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8693A1;">Property</div>
-<div style="margin-top:4px;font-size:14px;font-weight:600;color:#0B1E33;">${address}</div>
-</div>`;
+/** A receipt-style key/value list — a thin top border per row, label left,
+ * value right. Used for the Property/Purchase price rows here and the
+ * Signed-by rows in submit-signature's completion email. */
+function detailTable(rows: Array<{ label: string; value: string }>): string {
+  const rowsHtml = rows
+    .map(
+      (r) => `
+<tr>
+<td style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:12.5px;color:#8693A1;">${r.label}</td>
+<td style="padding:10px 0;border-top:1px solid #e2e8f0;font-size:13px;font-weight:600;color:#0B1E33;text-align:right;">${r.value}</td>
+</tr>`,
+    )
+    .join('');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border-bottom:1px solid #e2e8f0;">${rowsHtml}</table>`;
 }
 
 function ctaButton(link: string, label: string, bg: string, color: string): string {
@@ -185,22 +223,40 @@ function ctaButton(link: string, label: string, bg: string, color: string): stri
 }
 
 function fallbackLink(link: string): string {
-  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Or paste this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
+  return `<p style="margin:20px 0 0;font-size:11.5px;color:#8693A1;word-break:break-all;">Button not working? Copy this link into your browser:<br><a href="${link}" style="color:#1568A8;">${link}</a></p>`;
 }
 
 /** Used for both the initial invite and (from submit-signature) the
- * next-signer nudge — same shape, only the opening line differs. */
-function signRequestEmailHtml(opts: { opener: string; docName: string; address: string; link: string }): string {
-  const { opener, docName, address, link } = opts;
+ * next-signer nudge — same shape, only the intro paragraph differs. */
+function signRequestEmailHtml(opts: {
+  recipientName: string;
+  docName: string;
+  address: string;
+  link: string;
+  documentId: string;
+  intro: string;
+  purchasePrice?: string;
+}): string {
+  const { recipientName, docName, address, link, documentId, intro, purchasePrice } = opts;
+  const firstName = recipientName.split(' ')[0];
+  const docNameForHeading = docName.replace(/^your\s+/i, '');
+  const rows: Array<{ label: string; value: string }> = [{ label: 'Property', value: address }];
+  if (purchasePrice) rows.push({ label: 'Purchase price', value: purchasePrice });
   const body = `
-<p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#C9A24B;">Signature Requested</p>
-<h1 style="margin:6px 0 0;font-size:20px;font-weight:700;color:#0B1E33;">${opener}</h1>
-<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${docName} is ready for your signature. Review it and sign electronically — it only takes a couple of minutes.</p>
-${addressCallout(address)}
-${ctaButton(link, 'Review &amp; Sign Document', '#C9A24B', '#0B1E33')}
-<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#45566B;">Sign it and let's start moving with it.<br>Thanks,<br>Dayyan</p>
+<p style="margin:0 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1568A8;">Ready for your signature</p>
+<h1 style="margin:0;font-size:21px;line-height:1.35;font-weight:700;color:#0B1E33;">Your ${docNameForHeading} for ${address}</h1>
+<p style="margin:16px 0 0;font-size:14px;line-height:1.6;color:#45566B;">Hi ${firstName},</p>
+<p style="margin:10px 0 0;font-size:14px;line-height:1.6;color:#45566B;">${intro}</p>
+${detailTable(rows)}
+${ctaButton(link, 'Review and sign', '#0B1E33', '#ffffff')}
+<p style="margin:14px 0 0;font-size:12.5px;line-height:1.6;color:#8693A1;">Takes about five minutes and works on your phone.</p>
+<p style="margin:24px 0 0;font-size:13.5px;line-height:1.6;color:#45566B;">Questions before you sign? Call me directly at ${AGENT_PHONE_DISPLAY} or just reply to this email.</p>
+<p style="margin:18px 0 0;font-size:13.5px;line-height:1.6;color:#0B1E33;font-weight:600;">${AGENT_NAME}<br><span style="font-weight:400;color:#8693A1;">Acquisitions, Bluebird Acquisition</span></p>
 ${fallbackLink(link)}`;
-  return emailShell(`${docName} is ready for your signature`, body);
+  return emailShell(`${docName} is ready for your signature`, body, {
+    documentId,
+    footerNote: `We will never ask for bank details or payment by email. If something looks off, call ${AGENT_PHONE_DISPLAY} before signing.`,
+  });
 }
 
 interface ContractField {
@@ -389,11 +445,17 @@ Deno.serve(async (req) => {
     if (firstParty.send_email && firstParty.email) {
       emailResult.attempted = true;
       try {
+        const purchasePrice =
+          templateId === CASH_DEAL_TEMPLATE_ID ? (fieldValues?.[CASH_DEAL_PURCHASE_PRICE_FIELD_ID] || undefined) : undefined;
         const html = signRequestEmailHtml({
-          opener: `Hi ${firstParty.name.split(' ')[0]}, you have a document to sign`,
+          recipientName: firstParty.name,
           docName: docKind,
           address: propertyAddress.trim(),
           link,
+          documentId: instance.id,
+          intro:
+            "The agreement reflecting the terms we discussed is ready. Please read it through and sign online when you're comfortable. If anything doesn't match what we agreed, tell us before signing and we'll correct it.",
+          purchasePrice,
         });
         await sendEmail(firstParty.email, `${docKind} ready for your signature - ${propertyAddress.trim()}`, html);
         emailResult.sent = true;
