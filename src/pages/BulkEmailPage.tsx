@@ -1,0 +1,357 @@
+import { useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Mail, Pause, RotateCw, Trash2, X } from 'lucide-react';
+import {
+  useBulkEmailJob,
+  useBulkEmailJobItems,
+  useBulkEmailJobs,
+  useDeleteBulkEmailJob,
+  usePauseBulkEmailJob,
+  useResumeBulkEmailJob,
+} from '@/hooks/useBulkEmail';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { formatDateTime, formatDuration, formatTime } from '@/lib/utils';
+import type { BulkEmailItemStatus, BulkEmailJobStatus } from '@/types/domain';
+
+const STATUS_CONFIG: Record<BulkEmailItemStatus, { label: string; color: string; icon: typeof Clock }> = {
+  queued: { label: 'Queued', color: '#94a3b8', icon: Clock },
+  sending: { label: 'Sending', color: '#4f46e5', icon: Loader2 },
+  sent: { label: 'Sent', color: '#10b981', icon: Check },
+  failed: { label: 'Failed', color: '#ef4444', icon: X },
+  skipped: { label: 'Skipped', color: '#f59e0b', icon: AlertTriangle },
+};
+
+const JOB_STATUS_CONFIG: Record<BulkEmailJobStatus, { label: string; color: string }> = {
+  running: { label: 'Running', color: '#4f46e5' },
+  completed: { label: 'Completed', color: '#10b981' },
+  failed: { label: 'Failed', color: '#ef4444' },
+  paused: { label: 'Paused', color: '#f59e0b' },
+};
+
+function StatCard({ label, value, color }: { label: string; value: number | string; color: string }) {
+  return (
+    <div className="card !p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+      <div className="mt-1 text-2xl font-semibold" style={{ color }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+export function BulkEmailPage() {
+  const { jobId } = useParams<{ jobId: string }>();
+  return jobId ? <BulkEmailJobDetail jobId={jobId} /> : <BulkEmailHistory />;
+}
+
+function BulkEmailHistory() {
+  const { data: jobs = [], isLoading } = useBulkEmailJobs();
+  const deleteJob = useDeleteBulkEmailJob();
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const totals = useMemo(() => {
+    const totalSent = jobs.reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
+    const totalSkipped = jobs.reduce((sum, j) => sum + (j.skippedCount ?? 0), 0);
+    const totalFailed = jobs.reduce((sum, j) => sum + (j.failedCount ?? 0), 0);
+    const durations = jobs
+      .filter((j) => j.completedAt)
+      .map((j) => (new Date(j.completedAt!).getTime() - new Date(j.createdAt).getTime()) / 1000);
+    const avgDurationSeconds = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+    return { totalSent, totalSkipped, totalFailed, avgDurationSeconds };
+  }, [jobs]);
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-text">
+            <Mail size={20} /> Bulk Email
+          </h1>
+          <p className="text-sm text-text-3">Select Contacted leads and start a send from there — every run shows up here.</p>
+        </div>
+        <Link to="/bulk-email" className="btn">
+          Contacted Leads
+        </Link>
+      </div>
+
+      {jobs.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="Total Sent" value={totals.totalSent} color={STATUS_CONFIG.sent.color} />
+          <StatCard label="Total Skipped" value={totals.totalSkipped} color={STATUS_CONFIG.skipped.color} />
+          <StatCard label="Total Failed" value={totals.totalFailed} color={STATUS_CONFIG.failed.color} />
+          <StatCard
+            label="Avg Duration"
+            value={totals.avgDurationSeconds != null ? formatDuration(totals.avgDurationSeconds) : '—'}
+            color="#4f46e5"
+          />
+        </div>
+      )}
+
+      <div className="card !p-0 overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center gap-2 p-8 text-[13px] text-text-3">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="p-8 text-center text-[13px] text-text-3">No bulk emails sent yet — select Contacted leads to start one.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-border-2 text-left text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                  <th className="px-3 py-2.5">Started</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5">Leads</th>
+                  <th className="px-3 py-2.5">Sent</th>
+                  <th className="px-3 py-2.5">Skipped</th>
+                  <th className="px-3 py-2.5">Failed</th>
+                  <th className="px-3 py-2.5">Duration</th>
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => {
+                  const cfg = JOB_STATUS_CONFIG[job.status];
+                  return (
+                    <tr key={job.id} className="border-b border-border-2 last:border-0">
+                      <td className="px-3 py-2.5 text-text">
+                        <Link to={`/bulk-email/history/${job.id}`} className="hover:underline">
+                          {formatDateTime(job.createdAt)}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: `${cfg.color}22`, color: cfg.color }}
+                        >
+                          {job.status === 'running' && <Loader2 size={11} className="animate-spin" />}
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-text-2">{job.total}</td>
+                      <td className="px-3 py-2.5" style={{ color: STATUS_CONFIG.sent.color }}>{job.sentCount ?? 0}</td>
+                      <td className="px-3 py-2.5" style={{ color: STATUS_CONFIG.skipped.color }}>{job.skippedCount ?? 0}</td>
+                      <td className="px-3 py-2.5" style={{ color: STATUS_CONFIG.failed.color }}>{job.failedCount ?? 0}</td>
+                      <td className="px-3 py-2.5 text-text-2">
+                        {job.completedAt
+                          ? formatDuration((new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) / 1000)
+                          : job.status === 'running'
+                            ? formatDuration((Date.now() - new Date(job.createdAt).getTime()) / 1000)
+                            : '—'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link to={`/bulk-email/history/${job.id}`} className="inline-flex items-center gap-0.5 text-text-3 hover:text-primary">
+                            View <ChevronRight size={13} />
+                          </Link>
+                          <button
+                            className="text-text-3 hover:text-danger"
+                            title="Delete this send from the list"
+                            onClick={() => setDeleteTarget(job.id)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this send?"
+        message="Removes it from this list only — leads that already got an email keep it, and this can't be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (deleteTarget) deleteJob.mutate(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </div>
+  );
+}
+
+const PAGE_SIZE = 100;
+
+function BulkEmailJobDetail({ jobId }: { jobId: string }) {
+  const navigate = useNavigate();
+  const { data: job, isLoading: jobLoading } = useBulkEmailJob(jobId);
+  const { data: items = [], isLoading: itemsLoading } = useBulkEmailJobItems(jobId, job?.status);
+  const [page, setPage] = useState(1);
+  const resumeJob = useResumeBulkEmailJob();
+  const pauseJob = usePauseBulkEmailJob();
+
+  const counts = useMemo(() => {
+    const c: Record<BulkEmailItemStatus, number> = { queued: 0, sending: 0, sent: 0, failed: 0, skipped: 0 };
+    for (const item of items) c[item.status]++;
+    return c;
+  }, [items]);
+
+  const running = job?.status === 'running';
+  const done = counts.sent + counts.failed + counts.skipped;
+  const total = job?.total ?? items.length;
+  const canResume = (job?.status === 'failed' || job?.status === 'paused') && job.hasConfig && counts.queued > 0;
+  const canPause = running;
+
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pageItems = items.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-text">
+            <Mail size={20} /> Bulk Email
+          </h1>
+          <p className="text-sm text-text-3">
+            {running
+              ? `Sending — ${done} of ${total} done…`
+              : job?.status === 'paused'
+                ? `Paused after ${done} of ${total} — ${counts.queued} still waiting.`
+                : job?.status === 'failed'
+                  ? done > 0
+                    ? `Stopped after ${done} of ${total} — ${counts.queued} never got an email.`
+                    : 'This send failed to start.'
+                  : `Finished — ${total} lead${total !== 1 ? 's' : ''}.`}
+          </p>
+          {job?.createdAt && (
+            <p className="mt-0.5 text-[12px] text-text-3">
+              Started {formatDateTime(job.createdAt)}
+              {job.completedAt && (
+                <> · finished {formatTime(job.completedAt)} · took {formatDuration((new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) / 1000)}</>
+              )}
+              {running && <> · running for {formatDuration((Date.now() - new Date(job.createdAt).getTime()) / 1000)}</>}
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {canPause && (
+            <button className="btn" disabled={pauseJob.isPending} onClick={() => pauseJob.mutate(jobId)}>
+              {pauseJob.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Stopping…
+                </>
+              ) : (
+                <>
+                  <Pause size={14} /> Stop
+                </>
+              )}
+            </button>
+          )}
+          {canResume && (
+            <button className="btn btn-primary" disabled={resumeJob.isPending} onClick={() => resumeJob.mutate(jobId)}>
+              {resumeJob.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Resuming…
+                </>
+              ) : (
+                <>
+                  <RotateCw size={14} /> Resume ({counts.queued} left)
+                </>
+              )}
+            </button>
+          )}
+          <button className="btn" onClick={() => navigate('/bulk-email/history')}>
+            All Sends
+          </button>
+          <button className="btn" onClick={() => navigate('/bulk-email')}>
+            Contacted Leads
+          </button>
+        </div>
+      </div>
+
+      {job?.status === 'failed' && job.error && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-danger/40 bg-danger-dim px-3 py-2 text-[13px] text-danger">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {job.error}
+        </div>
+      )}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard label="Queued" value={counts.queued} color={STATUS_CONFIG.queued.color} />
+        <StatCard label="Sending" value={counts.sending} color={STATUS_CONFIG.sending.color} />
+        <StatCard label="Sent" value={counts.sent} color={STATUS_CONFIG.sent.color} />
+        <StatCard label="Skipped" value={counts.skipped} color={STATUS_CONFIG.skipped.color} />
+        <StatCard label="Failed" value={counts.failed} color={STATUS_CONFIG.failed.color} />
+      </div>
+
+      <div className="card !p-0 overflow-hidden">
+        {jobLoading || itemsLoading ? (
+          <div className="flex items-center gap-2 p-8 text-[13px] text-text-3">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : items.length === 0 ? (
+          <div className="p-8 text-center text-[13px] text-text-3">No leads in this send.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-border-2 text-left text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                  <th className="px-3 py-2.5">Lead</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map((item) => {
+                  const cfg = STATUS_CONFIG[item.status];
+                  const Icon = cfg.icon;
+                  return (
+                    <tr key={item.id} className="border-b border-border-2 last:border-0">
+                      <td className="px-3 py-2.5 text-text">{item.leadName || '—'}</td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: `${cfg.color}22`, color: cfg.color }}
+                        >
+                          <Icon size={11} className={item.status === 'sending' ? 'animate-spin' : ''} />
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="max-w-[320px] truncate px-3 py-2.5 text-text-3" title={item.detail ?? undefined}>
+                        {item.detail || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {pageCount > 1 && (
+              <div className="flex items-center justify-between border-t border-border-2 px-3 py-2.5 text-[12px] text-text-2">
+                <span>
+                  Showing {(clampedPage - 1) * PAGE_SIZE + 1}–{Math.min(clampedPage * PAGE_SIZE, items.length)} of {items.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="btn !px-2 !py-1"
+                    disabled={clampedPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  <span className="text-text-3">
+                    Page {clampedPage} of {pageCount}
+                  </span>
+                  <button
+                    className="btn !px-2 !py-1"
+                    disabled={clampedPage >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

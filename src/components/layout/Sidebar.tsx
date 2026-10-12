@@ -9,6 +9,7 @@ import {
   Kanban,
   History,
   Send,
+  Mail,
   FileSignature,
   Handshake,
   LogOut,
@@ -296,6 +297,7 @@ export function Sidebar() {
   const adminItems = isOverseer && !viewingId
     ? [
         { to: '/bulk-sms', label: 'Bulk SMS', icon: Send },
+        { to: '/bulk-email', label: 'Bulk Email', icon: Mail },
         { to: '/blue-docs', label: 'Blue Docs', icon: FileSignature },
         { to: '/disposition', label: 'Disposition', icon: Handshake },
       ]

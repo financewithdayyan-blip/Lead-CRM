@@ -415,6 +415,29 @@ export function useContractStageLeads() {
   });
 }
 
+/** Every lead currently in the Contacted stage, across the whole team — the
+ *  Bulk Email page's own lead picker (most people reply over SMS; Bulk
+ *  Email is the fallback for Contacted leads who haven't). Deliberately
+ *  not scoped to the caller's own leads, same reasoning as
+ *  useContractStageLeads above — an admin running a bulk email send wants
+ *  every rep's Contacted leads, not just their own. Full Lead objects (not
+ *  a narrow summary type) since BulkEmailModal needs tagIds/email/
+ *  emailOptedOut the same way BulkSmsModal needs them for texting. */
+export function useContactedStageLeads() {
+  return useQuery({
+    queryKey: ['leads', 'contacted_stage'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select(`${LEAD_LIST_SELECT}, email_opted_out`)
+        .eq('stage', 'contacted')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(dbToLead);
+    },
+  });
+}
+
 /** Call on hover to warm the cache before navigation. */
 export function prefetchLeads(qc: QueryClient, userId: string) {
   return qc.prefetchQuery({

@@ -100,6 +100,7 @@ export function dbToLead(row: any): Lead {
     auctionTier: (row.auction_tier as AuctionTier | null) ?? null,
     lastAlertDate: row.last_alert_date ?? null,
     optedOut: row.opted_out ?? false,
+    emailOptedOut: row.email_opted_out ?? false,
     aiReplyPaused: row.ai_reply_paused ?? false,
     photoWaitAiActive: row.photo_wait_ai_active ?? false,
     qualifiedAt: row.qualified_at ?? null,
