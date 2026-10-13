@@ -753,6 +753,12 @@ export function PublicPacketPage() {
     setMessagePrefillSignal((n) => n + 1);
     document.getElementById('questions-notes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  // The sticky recap bar only appears once the visitor has scrolled past
+  // the first content section (the photos, when there are any) — showing
+  // it right away would just repeat what the hero right above it already
+  // says. firstSectionRef marks where that section ends.
+  const firstSectionRef = useRef<HTMLDivElement>(null);
+  const [showStickyBar, setShowStickyBar] = useState(false);
 
   // A stored identity from before the gate asked for a phone number (or one
   // otherwise missing it) is treated as incomplete, not satisfied — without
@@ -814,6 +820,25 @@ export function PublicPacketPage() {
       { onSuccess: (data) => { if (data?.address) setRevealedAddress(data); } },
     );
   }, [slug, packet, gated, identity]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Shows the sticky bar once firstSectionRef's bottom edge has scrolled
+  // above the viewport — a plain scroll listener rather than
+  // IntersectionObserver, deliberately: fewer surprises across older/
+  // embedded mobile browser engines, and easy to reason about directly.
+  useEffect(() => {
+    function checkScroll() {
+      const el = firstSectionRef.current;
+      if (!el) return;
+      setShowStickyBar(el.getBoundingClientRect().bottom < 0);
+    }
+    checkScroll();
+    window.addEventListener('scroll', checkScroll, { passive: true });
+    window.addEventListener('resize', checkScroll);
+    return () => {
+      window.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
+  }, [gated]);
 
   const repairTotalValue = useMemo(
     () => (packet?.repairs ?? []).reduce((s, r) => s + (Number(r.cost) || 0), 0),
@@ -955,7 +980,7 @@ export function PublicPacketPage() {
         // just a teaser, so it sticks to the two headline numbers rather
         // than giving away the repair scope and margin before someone's
         // even said who they are.
-        dealStats={statItems.filter((s) => s.label === 'Sale Price' || s.label === 'ARV' || s.label === 'Adjusted ARV')}
+        dealStats={statItems.filter((s) => s.label === 'Sale Price' || s.label === 'ARV')}
         onSubmit={(id) => {
           saveViewerIdentity(slug!, id);
           setIdentity(id);
@@ -965,13 +990,22 @@ export function PublicPacketPage() {
   }
 
   const areaLine = [area?.city, area?.state, area?.zip].filter(Boolean).join(', ');
-  // Full street address once revealed, coarse city/state/zip until then —
-  // what the hero's location line shows.
+  // Same location string the hero shows — full street address once
+  // revealed, coarse city/state/zip until then. Shared with the sticky
+  // header bar so the two never drift apart.
   const fullLocationLine = revealedAddress?.address
     ? [revealedAddress.address, [revealedAddress.city, revealedAddress.state].filter(Boolean).join(', ') + (revealedAddress.zip ? ` ${revealedAddress.zip}` : '')]
         .filter(Boolean)
         .join(', ')
     : areaLine || 'Location available on enquiry';
+  const specsLine = [
+    packet.propType,
+    packet.beds != null ? `${packet.beds} bed` : null,
+    packet.baths != null ? `${packet.baths} bath` : null,
+    packet.sqft != null ? `${packet.sqft.toLocaleString()} sqft` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   // Every content section below, in reading order, skipped whenever the admin
   // left that part empty. Numbering comes from position in this list, not a
@@ -1244,26 +1278,18 @@ export function PublicPacketPage() {
   });
 
   return (
-    // The whole page is pinned to one viewport height and scrolls internally
-    // — scroll-snap turns each section below into its own full-screen
-    // "slide" (presentation style) instead of one long scrolling page. A
-    // slide taller than the viewport (a long comp table, a long repair
-    // list) scrolls within itself first; the outer snap only advances once
-    // that inner content is exhausted — ordinary nested-scroll behavior,
-    // no extra JS needed for it.
-    <div className="h-dvh snap-y snap-mandatory overflow-y-auto scroll-smooth bg-surface-2">
-      {/* Full-bleed navy/gold hero — slide one of the deck. The address is
-          never in this payload by design (get_public_packet withholds it),
-          so the property type carries the headline instead, same as the
-          packet's own admin-facing label. */}
+    <div className="min-h-screen bg-surface-2 pb-16">
+      {/* Full-bleed navy/gold hero — the address is never in this payload by
+          design (get_public_packet withholds it), so the property type carries
+          the headline instead, same as the packet's own admin-facing label. */}
       <header
-        className="relative flex h-dvh snap-start snap-always flex-col overflow-y-auto bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] text-white"
+        className="relative overflow-hidden bg-gradient-to-br from-sidebar-2 via-sidebar to-[#081527] text-white"
         style={{
           backgroundImage:
             'radial-gradient(ellipse 900px 500px at 82% 8%, rgba(201,162,75,.28), transparent 60%), repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 1px, transparent 1px 74px), linear-gradient(200deg, #0d3a63 0%, #0B1E33 45%, #081527 100%)',
         }}
       >
-        <div className="relative mx-auto flex w-full max-w-5xl items-center gap-2 px-5 pt-6 sm:px-8">
+        <div className="relative mx-auto flex max-w-5xl items-center gap-2 px-5 pt-6 sm:px-8">
           <div className="flex h-[27px] w-[27px] shrink-0 items-center justify-center rounded-lg bg-primary">
             <Send size={13} className="text-white" />
           </div>
@@ -1282,11 +1308,7 @@ export function PublicPacketPage() {
           </div>
         )}
 
-        {/* m-auto centers this column vertically when the hero's content is
-            shorter than the viewport, and lets it scroll from the top like
-            everything else when it isn't — same trick every slide below
-            uses. */}
-        <div className="relative m-auto w-full max-w-5xl px-5 py-10 sm:px-8">
+        <div className="relative mx-auto max-w-5xl px-5 pt-8 sm:px-8">
           <div className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
             <span className="h-px w-[22px] bg-accent" />
             Investment Opportunity
@@ -1305,71 +1327,90 @@ export function PublicPacketPage() {
             <MapPin size={14} className="shrink-0" />
             {fullLocationLine}
           </div>
-
-          {/* Quick-facts pills — lived in <main> above the section list
-              back when this was a scrolling page; folded into the hero
-              slide now that there's no shared strip above a list of
-              slides to put them in. Restyled for the dark hero background
-              (the light-page pill colors they used are invisible on navy). */}
-          {(packet.leadStatus || packet.beds != null || packet.baths != null || packet.sqft != null || packet.yearBuilt != null) && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {packet.leadStatus && (
-                <span className="rounded-full bg-accent px-3 py-1.5 text-[12px] font-semibold text-sidebar">{packet.leadStatus}</span>
-              )}
-              {packet.beds != null && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white">{packet.beds} bed</span>}
-              {packet.baths != null && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white">{packet.baths} bath</span>}
-              {packet.sqft != null && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white">{packet.sqft.toLocaleString()} sq ft</span>}
-              {packet.yearBuilt != null && <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[12px] font-semibold text-white">Built {packet.yearBuilt}</span>}
-            </div>
-          )}
-
-          {/* Stat card — used to float half-overlapping the content below it
-              (a continuous-scroll trick); now just sits in normal flow
-              inside its own full-screen slide. */}
-          {statItems.length > 0 && (
-            <div className="mt-7 grid grid-cols-2 gap-x-3 gap-y-4 rounded-[20px] border border-white/[0.14] bg-sidebar/60 p-5 shadow-[0_24px_48px_-20px_rgba(11,30,51,0.45)] backdrop-blur-md sm:flex sm:gap-0 sm:divide-x sm:divide-accent/20 sm:py-5">
-              {statItems.map((s) => (
-                <div key={s.label} className="min-w-0 text-center sm:flex-1 sm:px-6 sm:text-left">
-                  <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[#8CA0B8]">{s.label}</div>
-                  <div className={`mt-1 truncate font-serif text-[19px] font-bold sm:text-[26px] ${s.valueClass}`}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <p className="mt-6 text-[11px] text-[#8CA0B8]">Scroll for the full picture &darr;</p>
         </div>
+
+        {statItems.length > 0 && <div className="h-16 sm:h-[76px]" />}
       </header>
 
-      {sections.map((s, i) => (
-        <section
-          key={s.title}
-          id={s.title === 'Questions or Notes' ? 'questions-notes' : undefined}
-          className="flex h-dvh snap-start snap-always flex-col overflow-y-auto"
-        >
-          <div className="m-auto w-full max-w-5xl px-5 py-10 sm:px-8">
-            <SectionHead num={i + 1} title={s.title} />
-            {s.body}
-            {i === sections.length - 1 && (
-              <p className="mt-8 px-1 text-center text-[11px] text-text-3">
-                Figures are estimates provided for evaluation and are not a warranty or an offer.
-              </p>
-            )}
+      {statItems.length > 0 && (
+        <div className="relative z-[3] mx-auto -mt-14 max-w-5xl px-5 sm:-mt-16 sm:px-8">
+          {/* Two columns on mobile — four flex-1 columns of "$1,234,567"-length
+              values refuse to shrink below their content width (flex/grid
+              items default to min-width:auto), which forced the whole page
+              wider than the viewport and dragged everything else off-screen
+              with it. Two per row leaves each cell roughly double the room,
+              and min-w-0 + truncate is the backstop for anything still too
+              long. Back to one row of four from sm: up, where there's space. */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 rounded-[20px] border border-white/[0.14] bg-sidebar/60 p-5 shadow-[0_24px_48px_-20px_rgba(11,30,51,0.45)] backdrop-blur-md sm:flex sm:gap-0 sm:divide-x sm:divide-accent/20 sm:py-5">
+            {statItems.map((s) => (
+              <div key={s.label} className="min-w-0 text-center sm:flex-1 sm:px-6 sm:text-left">
+                <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[#8CA0B8]">{s.label}</div>
+                <div className={`mt-1 truncate font-serif text-[19px] font-bold sm:text-[26px] ${s.valueClass}`}>{s.value}</div>
+              </div>
+            ))}
           </div>
-        </section>
-      ))}
+        </div>
+      )}
 
-      {/* Replaces the old sticky recap bar — a plain fixed button rather
-          than a scroll-triggered one, since there's no longer a single
-          continuous scroll position to key its visibility off of. Pinned
-          bottom-LEFT specifically so it never sits over the Questions-or-
-          Notes slide's own right-aligned Send button. */}
-      <button
-        onClick={handleLeaveMessage}
-        className="fixed bottom-5 left-5 z-20 flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-lg transition-transform hover:scale-105"
-      >
-        <MessageSquare size={14} /> Leave Me a Message
-      </button>
+      {/* Condensed recap, fixed to the viewport top, mounted only once the
+          first section (the photos, when there are any) has scrolled past —
+          showing it immediately would just repeat the hero right above it.
+          A plain conditional mount rather than a translate-based show/hide:
+          no position:fixed + transform compositing quirks to worry about on
+          any given browser, at the cost of the slide-in transition. Once
+          mounted, the address/specs and the Buy action stay reachable the
+          rest of the way down the page. */}
+      {showStickyBar && (
+        <div className="fixed inset-x-0 top-0 z-20 border-b border-white/10 bg-sidebar/95 text-white backdrop-blur-md shadow-[0_4px_16px_-4px_rgba(11,30,51,0.4)]">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-2.5 sm:px-8">
+            <div className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+              <span className="text-white">{fullLocationLine}</span>
+              {specsLine && (
+                <>
+                  <span className="mx-2 text-white/30">·</span>
+                  <span className="text-[#AEC2D8]">{specsLine}</span>
+                </>
+              )}
+            </div>
+            <div className="shrink-0">
+              <button onClick={handleLeaveMessage} className="btn btn-primary !px-3 !py-1.5 text-[12.5px] whitespace-nowrap">
+                <MessageSquare size={12} /> Leave Me a Message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className={`mx-auto max-w-5xl px-5 sm:px-8 ${statItems.length > 0 ? 'pt-6' : 'pt-8'}`}>
+        {(packet.leadStatus || packet.beds != null || packet.baths != null || packet.sqft != null || packet.yearBuilt != null) && (
+          <div className="mb-7 flex flex-wrap gap-2">
+            {packet.leadStatus && (
+              <span className="rounded-full bg-accent-dim px-3 py-1.5 text-[12px] font-semibold text-accent-hover">{packet.leadStatus}</span>
+            )}
+            {packet.beds != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">{packet.beds} bed</span>}
+            {packet.baths != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">{packet.baths} bath</span>}
+            {packet.sqft != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">{packet.sqft.toLocaleString()} sq ft</span>}
+            {packet.yearBuilt != null && <span className="rounded-full border border-border-2 bg-surface-3 px-3 py-1.5 text-[12px] font-semibold text-text-2">Built {packet.yearBuilt}</span>}
+          </div>
+        )}
+
+        <div className="space-y-8 pb-2">
+          {sections.map((s, i) => (
+            <div
+              key={s.title}
+              ref={i === 0 ? firstSectionRef : undefined}
+              id={s.title === 'Questions or Notes' ? 'questions-notes' : undefined}
+            >
+              <SectionHead num={i + 1} title={s.title} />
+              {s.body}
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-8 px-1 text-center text-[11px] text-text-3">
+          Figures are estimates provided for evaluation and are not a warranty or an offer.
+        </p>
+      </main>
 
       {lightboxIndex !== null && packet.images[lightboxIndex] && (
         <div
