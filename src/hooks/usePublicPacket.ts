@@ -37,6 +37,10 @@ export interface PublicPacket {
   purchasePrice: number | null;
   closingCost: number | null;
   arv: number | null;
+  /** True when the admin typed this ARV in by hand rather than letting it
+   *  come from the comp average — the page must show exactly this number
+   *  then, never silently recompute and substitute the comparable average. */
+  arvIsManual: boolean;
   assignmentFee: number | null;
   showAssignmentFee: boolean;
   dealTypes: DealType[];

@@ -605,7 +605,17 @@ function Line({
 }
 
 /** Verdict, equity as the centerpiece, and an itemised breakdown beneath it. */
-function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; arv: number | null; market: ComparableEstimate | null }) {
+function DealAnalysisCard({
+  analysis,
+  arv,
+  arvIsManual,
+  market,
+}: {
+  analysis: DealAnalysis;
+  arv: number | null;
+  arvIsManual: boolean;
+  market: ComparableEstimate | null;
+}) {
   const style = VERDICT_STYLE[analysis.verdict];
   // Driven by the same margin the verdict badge is computed from — headroom
   // against MAO is a different number and could show a near-empty "thin"
@@ -681,10 +691,14 @@ function DealAnalysisCard({ analysis, arv, market }: { analysis: DealAnalysis; a
         <div className="border-t border-border px-7 py-5 sm:border-l sm:border-t-0">
           <div className="mb-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">Value</div>
           <dl>
-            <Line label="ARV" value={arv} hint={market ? 'comparable average' : undefined} />
+            <Line
+              label={arvIsManual ? 'Adjusted ARV' : 'ARV'}
+              value={arv}
+              hint={market && !arvIsManual ? 'comparable average' : undefined}
+            />
             {market && (
               <Line
-                label="Comparable average"
+                label="Calculated ARV"
                 value={market.value}
                 hint={
                   market.method === 'per_sqft'
@@ -887,9 +901,14 @@ export function PublicPacketPage() {
     [packet?.comps, packet?.sqft, packet?.beds, packet?.baths],
   );
 
-  // The comparable average is the operative ARV whenever comps exist; the
-  // figure entered on the packet is the fallback for when they don't.
-  const adjustedArv = market?.value ?? packet?.arv ?? null;
+  // A manually-entered ARV (packet.arvIsManual) is authoritative and must
+  // never be silently replaced by the live comp average — that was the bug:
+  // this used to always prefer market?.value, so typing a manual ARV into
+  // the builder had no visible effect on the public page at all. Only when
+  // the admin left it on auto does the comparable average apply, falling
+  // back to whatever's stored if there's no comp data to compute one from.
+  const adjustedArv = packet?.arvIsManual ? (packet?.arv ?? null) : (market?.value ?? packet?.arv ?? null);
+  const arvLabel = packet?.arvIsManual ? 'Adjusted ARV' : 'ARV';
 
   const analysis = useMemo(
     () =>
@@ -911,7 +930,7 @@ export function PublicPacketPage() {
   const statItems = useMemo(() => {
     const items: { label: string; value: string; valueClass: string }[] = [];
     if (packet?.purchasePrice != null) items.push({ label: 'Sale Price', value: money(packet.purchasePrice), valueClass: 'text-white' });
-    if (adjustedArv != null) items.push({ label: 'ARV', value: money(adjustedArv), valueClass: 'text-sky-300' });
+    if (adjustedArv != null) items.push({ label: arvLabel, value: money(adjustedArv), valueClass: 'text-sky-300' });
     if (repairTotalValue > 0) items.push({ label: 'Est. Repairs', value: money(repairTotalValue), valueClass: 'text-white' });
     if (analysis.spread != null) {
       items.push({
@@ -921,7 +940,7 @@ export function PublicPacketPage() {
       });
     }
     return items;
-  }, [packet?.purchasePrice, adjustedArv, repairTotalValue, analysis.spread]);
+  }, [packet?.purchasePrice, adjustedArv, arvLabel, repairTotalValue, analysis.spread]);
 
   if (isLoading) {
     return (
@@ -1005,7 +1024,7 @@ export function PublicPacketPage() {
     });
   }
 
-  sections.push({ title: 'Deal Analysis', body: <DealAnalysisCard analysis={analysis} arv={adjustedArv} market={market} /> });
+  sections.push({ title: 'Deal Analysis', body: <DealAnalysisCard analysis={analysis} arv={adjustedArv} arvIsManual={!!packet?.arvIsManual} market={market} /> });
 
   if (packet.narrative) {
     sections.push({
@@ -1136,7 +1155,7 @@ export function PublicPacketPage() {
 
   if (market) {
     sections.push({
-      title: 'Comparable Average',
+      title: 'Calculated ARV',
       body: (
         <Panel>
           <div className="flex flex-wrap items-end justify-between gap-3">

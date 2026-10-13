@@ -200,9 +200,11 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     [comps, sqft, beds, baths],
   );
 
-  // Investors are shown the comparable average as the ARV, so the preview has
-  // to price off the same number rather than the entered one.
-  const adjustedArv = comparable?.value ?? effectiveArv;
+  // A manually-entered ARV is authoritative — must never be silently
+  // replaced by the live comp average here either, same fix as the public
+  // page's own adjustedArv (this preview has to match what investors will
+  // actually see once published).
+  const adjustedArv = arvIsManual ? effectiveArv : (comparable?.value ?? effectiveArv);
 
   // Recomputed as you type, so the verdict is visible before you publish.
   const analysis = useMemo(
