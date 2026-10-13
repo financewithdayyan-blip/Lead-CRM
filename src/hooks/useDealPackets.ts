@@ -474,22 +474,21 @@ export function packetUrl(slug: string): string {
  */
 export function packetImageUrl(
   storagePath: string,
-  size?: { width?: number; height?: number; quality?: number },
+  // Still accepted (every call site passes one) but no longer used — see
+  // below. Kept so nothing needs touching the moment transforms come back.
+  _size?: { width?: number; height?: number; quality?: number },
 ): string {
-  return supabase.storage
-    .from('packet-images')
-    // 'contain' — not 'cover' — because every caller only ever passes a
-    // width, never a height. Supabase/imgproxy's 'cover' mode assumes both
-    // dimensions are given to know what to crop to; fed only a width, it
-    // was found scaling that one axis down and leaving the other alone —
-    // e.g. a 1200x1600 photo requested at width 640 came back 640x1600,
-    // visibly squashed. 'contain' scales proportionally with no such
-    // assumption, so the file just gets smaller with its aspect ratio
-    // intact; every call site already applies its own object-cover/
-    // object-contain in CSS, which is what actually crops/fits it to
-    // whatever box it's rendered into.
-    .getPublicUrl(storagePath, size ? { transform: { resize: 'contain', quality: 70, ...size } } : undefined)
-    .data.publicUrl;
+  // Supabase Storage Image Transformations is not enabled for this project —
+  // confirmed 2026-10-13: every transformed request (width/quality/resize
+  // params) 403s with {"error":"FeatureNotEnabled","message":"feature not
+  // enabled for this tenant"}. That's a project/billing-level Storage
+  // setting (Settings > Storage > Image Transformations, Pro plan or an
+  // add-on), not something this app can flip — so until it's turned on,
+  // every packet photo is served as its original, untransformed upload
+  // instead of silently failing to load. Larger downloads than the
+  // 640/1600px variants this was built for, but a visible photo beats a
+  // broken one.
+  return supabase.storage.from('packet-images').getPublicUrl(storagePath).data.publicUrl;
 }
 
 // The only two photo sizes any Deal Packet view is allowed to request —
@@ -509,11 +508,13 @@ export const PACKET_IMAGE_SIZES = {
  * call site describing how wide the image actually renders there.
  */
 export function packetImageSrcSet(storagePath: string): { src: string; srcSet: string } {
-  const small = packetImageUrl(storagePath, PACKET_IMAGE_SIZES.small);
-  const large = packetImageUrl(storagePath, PACKET_IMAGE_SIZES.large);
+  // Both candidates collapse to the same plain URL while transforms are off
+  // (see packetImageUrl) — srcSet still included so the <img> markup stays
+  // valid, but the browser just picks the one real file either way.
+  const url = packetImageUrl(storagePath);
   return {
-    src: large,
-    srcSet: `${small} ${PACKET_IMAGE_SIZES.small.width}w, ${large} ${PACKET_IMAGE_SIZES.large.width}w`,
+    src: url,
+    srcSet: `${url} ${PACKET_IMAGE_SIZES.small.width}w, ${url} ${PACKET_IMAGE_SIZES.large.width}w`,
   };
 }
 
