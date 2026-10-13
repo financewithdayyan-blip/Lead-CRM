@@ -38,6 +38,19 @@ import { repairIcon } from '@/lib/repairCatalog';
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
+/** Great-circle distance in miles — used for the comp table's Distance
+ * column, same coordinates PacketMap already plots (subject lat/lng, never
+ * the street address itself). */
+function haversineMiles(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 3958.8;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 /** Drafted on the visitor's behalf by the "Leave Me a Message" CTA — a
  * starting point they can edit or send as-is, not something sent for them. */
 const BUYER_INTEREST_MESSAGE = "Hey, I'm interested in this deal, let's have a chat.";
@@ -184,6 +197,8 @@ function CompTable({
   dateLabel,
   scores,
   subject,
+  subjectLat,
+  subjectLng,
 }: {
   rows: PublicPacketComp[];
   priceLabel: string;
@@ -193,6 +208,11 @@ function CompTable({
    * line up this property's own numbers against each comp column-by-column
    * instead of holding them in their head while scrolling. */
   subject?: SubjectRow;
+  /** Coordinates only, same as PacketMap — never the street address itself.
+   * Missing on either end just blanks that row's Distance cell rather than
+   * hiding the whole column. */
+  subjectLat?: number | null;
+  subjectLng?: number | null;
 }) {
   return (
     // A long address squeezed into a shrinking column used to wrap across
@@ -202,7 +222,7 @@ function CompTable({
     // (the normal, expected mobile-table pattern) rather than each column
     // fighting the others for space.
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-left text-[12.5px]">
+      <table className="w-full min-w-[640px] text-left text-[12.5px]">
         <thead className="border-b-2 border-border-2 text-[10.5px] font-bold uppercase tracking-wide text-text-3">
           <tr>
             <th className="w-[150px] pb-2.5 pr-3">Address</th>
@@ -210,6 +230,7 @@ function CompTable({
             <th className="pb-2.5 pr-3 text-right">Bed</th>
             <th className="pb-2.5 pr-3 text-right">Bath</th>
             <th className="pb-2.5 pr-3 text-right">Sq ft</th>
+            <th className="pb-2.5 pr-3 text-right">Distance</th>
             <th className="pb-2.5 pr-3 text-right">{dateLabel}</th>
             {scores && <th className="pb-2.5 text-right">Match</th>}
           </tr>
@@ -223,6 +244,7 @@ function CompTable({
               <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-text">{subject.baths ?? '—'}</td>
               <td className="py-2.5 pr-3 text-right font-semibold tabular-nums text-text">{subject.sqft?.toLocaleString() ?? '—'}</td>
               <td className="py-2.5 pr-3 text-right text-text-3">—</td>
+              <td className="py-2.5 pr-3 text-right text-text-3">—</td>
               {scores && <td className="py-2.5 text-right text-text-3">—</td>}
             </tr>
           )}
@@ -233,6 +255,11 @@ function CompTable({
               <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.beds ?? '—'}</td>
               <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.baths ?? '—'}</td>
               <td className="py-2.5 pr-3 text-right tabular-nums text-text-2">{c.sqft?.toLocaleString() ?? '—'}</td>
+              <td className="py-2.5 pr-3 text-right tabular-nums text-text-3">
+                {subjectLat != null && subjectLng != null && c.lat != null && c.lng != null
+                  ? `${haversineMiles(subjectLat, subjectLng, c.lat, c.lng).toFixed(1)} mi`
+                  : '—'}
+              </td>
               <td className="py-2.5 pr-3 text-right tabular-nums text-text-3">
                 {c.saleDate ? new Date(c.saleDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}
               </td>
@@ -1093,13 +1120,13 @@ export function PublicPacketPage() {
           {listings.length > 0 && (
             <Panel>
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Currently on the Market</div>
-              <div className="mt-2.5"><CompTable rows={listings} priceLabel="List Price" dateLabel="Listed" scores={confidence?.byId} subject={subjectRow} /></div>
+              <div className="mt-2.5"><CompTable rows={listings} priceLabel="List Price" dateLabel="Listed" scores={confidence?.byId} subject={subjectRow} subjectLat={packet.subjectLat} subjectLng={packet.subjectLng} /></div>
             </Panel>
           )}
           {sold.length > 0 && (
             <Panel>
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Recently Sold</div>
-              <div className="mt-2.5"><CompTable rows={sold} priceLabel="Sale Price" dateLabel="Sold" scores={confidence?.byId} subject={subjectRow} /></div>
+              <div className="mt-2.5"><CompTable rows={sold} priceLabel="Sale Price" dateLabel="Sold" scores={confidence?.byId} subject={subjectRow} subjectLat={packet.subjectLat} subjectLng={packet.subjectLng} /></div>
             </Panel>
           )}
         </div>
