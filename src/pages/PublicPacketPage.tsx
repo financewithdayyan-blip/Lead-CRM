@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  Calendar,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -1063,6 +1064,17 @@ export function PublicPacketPage() {
       title: 'Comparable Sales',
       body: (
         <div className="space-y-3.5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-accent/30 bg-accent-dim/50 px-4 py-3">
+            <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Comp Criteria</div>
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+              <MapPin size={14} className="text-accent-hover" />
+              Within {packet.compRadiusMiles} mi of the subject
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+              <Calendar size={14} className="text-accent-hover" />
+              Sold in the last 6–12 months
+            </div>
+          </div>
           {listings.length > 0 && (
             <Panel>
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Currently on the Market</div>
