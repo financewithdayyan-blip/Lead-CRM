@@ -47,6 +47,7 @@ export interface PublicPacket {
   // around the subject without ever pinning or exposing its exact location.
   subjectLat: number | null;
   subjectLng: number | null;
+  compRadiusMiles: number;
   conditionRatings: ConditionRatings;
   comps: PublicPacketComp[];
   repairs: { id: string; item: string; cost: number }[];

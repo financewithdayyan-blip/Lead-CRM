@@ -1006,7 +1006,7 @@ export function PublicPacketPage() {
       body: (
         <Panel>
           <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-surface-3" />}>
-            <PacketMap pins={mapPins} center={subjectCenter} />
+            <PacketMap pins={mapPins} center={subjectCenter} radiusMiles={packet?.compRadiusMiles ?? 1} />
           </Suspense>
           {unmappedCompCount > 0 && (
             <p className="mt-2.5 text-[11.5px] text-text-3">

@@ -126,6 +126,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [dealTypes, setDealTypes] = useState<DealType[]>([]);
   const [narrative, setNarrative] = useState('');
   const [requireLeadCapture, setRequireLeadCapture] = useState(false);
+  const [compRadiusMiles, setCompRadiusMiles] = useState<0.5 | 1>(1);
   const [comps, setComps] = useState<Omit<PacketComp, 'id'>[]>([]);
   const [repairs, setRepairs] = useState<Omit<PacketRepair, 'id'>[]>([]);
   const [conditionRatings, setConditionRatings] = useState<ConditionRatings>({});
@@ -164,6 +165,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setDealTypes(packet.dealTypes);
     setNarrative(packet.narrative ?? '');
     setRequireLeadCapture(packet.requireLeadCapture);
+    setCompRadiusMiles(packet.compRadiusMiles === 0.5 ? 0.5 : 1);
     setComps(packet.comps.map(({ id: _id, ...c }) => c));
     setRepairs(packet.repairs.map(({ id: _id, ...r }) => r));
     setConditionRatings(packet.conditionRatings ?? {});
@@ -414,6 +416,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           dealTypes,
           narrative: narrative || null,
           requireLeadCapture,
+          compRadiusMiles,
           conditionRatings,
         },
         comps: geocoded,
@@ -736,6 +739,21 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                 )}
                 <span className="text-[11px] text-text-3">
                   Addresses are located on save so they can be mapped. Editing an address re-locates it.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-medium text-text-2">Map search radius</span>
+                <select
+                  className="input !w-auto !py-1 text-[12px]"
+                  value={compRadiusMiles}
+                  onChange={(e) => setCompRadiusMiles(e.target.value === '0.5' ? 0.5 : 1)}
+                >
+                  <option value="0.5">0.5 mi</option>
+                  <option value="1">1 mi</option>
+                </select>
+                <span className="text-[11px] text-text-3">
+                  Width of the dashed circle drawn around the subject on the public map — display only, doesn't filter which comps show.
                 </span>
               </div>
 

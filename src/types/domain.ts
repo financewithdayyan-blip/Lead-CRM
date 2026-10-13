@@ -535,6 +535,9 @@ export interface DealPacket {
   // point within the circle is the real property.
   subjectLat: number | null;
   subjectLng: number | null;
+  /** Radius (miles) of the dashed proximity circle drawn around the subject
+   *  on the public map — display only, never a filter on which comps show. */
+  compRadiusMiles: number;
 
   purchasePrice: number | null;
   /** Entered, not derived. Covered by Bluebird and shown to investors. */
