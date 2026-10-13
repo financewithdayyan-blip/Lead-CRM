@@ -42,6 +42,7 @@ function dbToPacket(row: any): DealPacket {
     subjectLat: row.subject_lat != null ? Number(row.subject_lat) : null,
     subjectLng: row.subject_lng != null ? Number(row.subject_lng) : null,
     compRadiusMiles: row.comp_radius_miles != null ? Number(row.comp_radius_miles) : 1,
+    compRecencyMonths: row.comp_recency_months != null ? Number(row.comp_recency_months) : 12,
     purchasePrice: row.purchase_price,
     closingCost: row.closing_cost,
     arv: row.arv,
@@ -644,7 +645,7 @@ type PacketFields = Partial<
     DealPacket,
     | 'status' | 'ownerName' | 'propType' | 'beds' | 'baths' | 'sqft' | 'yearBuilt'
     | 'market' | 'leadStatus' | 'city' | 'state' | 'zip' | 'subjectLat' | 'subjectLng'
-    | 'compRadiusMiles'
+    | 'compRadiusMiles' | 'compRecencyMonths'
     | 'purchasePrice' | 'closingCost' | 'arv'
     | 'arvIsManual' | 'assignmentFee' | 'showAssignmentFee' | 'dealTypes'
     | 'narrative' | 'requireLeadCapture' | 'conditionRatings'
@@ -680,7 +681,7 @@ export function useSavePacket() {
         baths: 'baths', sqft: 'sqft', yearBuilt: 'year_built', market: 'market',
         leadStatus: 'lead_status', city: 'city', state: 'state',
         zip: 'zip', subjectLat: 'subject_lat', subjectLng: 'subject_lng',
-        compRadiusMiles: 'comp_radius_miles',
+        compRadiusMiles: 'comp_radius_miles', compRecencyMonths: 'comp_recency_months',
         purchasePrice: 'purchase_price', closingCost: 'closing_cost', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
         showAssignmentFee: 'show_assignment_fee', dealTypes: 'deal_types',
         narrative: 'narrative', requireLeadCapture: 'require_lead_capture',

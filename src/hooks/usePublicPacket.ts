@@ -48,6 +48,7 @@ export interface PublicPacket {
   subjectLat: number | null;
   subjectLng: number | null;
   compRadiusMiles: number;
+  compRecencyMonths: number;
   conditionRatings: ConditionRatings;
   comps: PublicPacketComp[];
   repairs: { id: string; item: string; cost: number }[];

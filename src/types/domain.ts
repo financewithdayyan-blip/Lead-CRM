@@ -538,6 +538,10 @@ export interface DealPacket {
   /** Radius (miles) of the dashed proximity circle drawn around the subject
    *  on the public map — display only, never a filter on which comps show. */
   compRadiusMiles: number;
+  /** Recency criterion (months) shown in the "Comp Criteria" banner —
+   *  display only, same as compRadiusMiles; comps aren't auto-filtered by
+   *  sale date. */
+  compRecencyMonths: number;
 
   purchasePrice: number | null;
   /** Entered, not derived. Covered by Bluebird and shown to investors. */

@@ -1072,7 +1072,7 @@ export function PublicPacketPage() {
             </div>
             <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
               <Calendar size={14} className="text-accent-hover" />
-              Sold in the last 6–12 months
+              Sold in the last {packet.compRecencyMonths} months
             </div>
           </div>
           {listings.length > 0 && (

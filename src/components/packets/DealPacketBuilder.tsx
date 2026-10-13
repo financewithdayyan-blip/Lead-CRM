@@ -127,6 +127,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [narrative, setNarrative] = useState('');
   const [requireLeadCapture, setRequireLeadCapture] = useState(false);
   const [compRadiusMiles, setCompRadiusMiles] = useState<0.5 | 1>(1);
+  const [compRecencyMonths, setCompRecencyMonths] = useState<6 | 12>(12);
   const [comps, setComps] = useState<Omit<PacketComp, 'id'>[]>([]);
   const [repairs, setRepairs] = useState<Omit<PacketRepair, 'id'>[]>([]);
   const [conditionRatings, setConditionRatings] = useState<ConditionRatings>({});
@@ -166,6 +167,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setNarrative(packet.narrative ?? '');
     setRequireLeadCapture(packet.requireLeadCapture);
     setCompRadiusMiles(packet.compRadiusMiles === 0.5 ? 0.5 : 1);
+    setCompRecencyMonths(packet.compRecencyMonths === 6 ? 6 : 12);
     setComps(packet.comps.map(({ id: _id, ...c }) => c));
     setRepairs(packet.repairs.map(({ id: _id, ...r }) => r));
     setConditionRatings(packet.conditionRatings ?? {});
@@ -417,6 +419,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           narrative: narrative || null,
           requireLeadCapture,
           compRadiusMiles,
+          compRecencyMonths,
           conditionRatings,
         },
         comps: geocoded,
@@ -742,18 +745,31 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-medium text-text-2">Map search radius</span>
-                <select
-                  className="input !w-auto !py-1 text-[12px]"
-                  value={compRadiusMiles}
-                  onChange={(e) => setCompRadiusMiles(e.target.value === '0.5' ? 0.5 : 1)}
-                >
-                  <option value="0.5">0.5 mi</option>
-                  <option value="1">1 mi</option>
-                </select>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-medium text-text-2">Map search radius</span>
+                  <select
+                    className="input !w-auto !py-1 text-[12px]"
+                    value={compRadiusMiles}
+                    onChange={(e) => setCompRadiusMiles(e.target.value === '0.5' ? 0.5 : 1)}
+                  >
+                    <option value="0.5">0.5 mi</option>
+                    <option value="1">1 mi</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-medium text-text-2">Comp recency</span>
+                  <select
+                    className="input !w-auto !py-1 text-[12px]"
+                    value={compRecencyMonths}
+                    onChange={(e) => setCompRecencyMonths(e.target.value === '6' ? 6 : 12)}
+                  >
+                    <option value="6">6 mo</option>
+                    <option value="12">12 mo</option>
+                  </select>
+                </div>
                 <span className="text-[11px] text-text-3">
-                  Width of the dashed circle drawn around the subject on the public map — display only, doesn't filter which comps show.
+                  Shown in the "Comp Criteria" banner on the public page — display only, doesn't filter which comps show.
                 </span>
               </div>
 
