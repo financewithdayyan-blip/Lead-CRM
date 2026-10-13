@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  BedDouble,
   Calendar,
   Check,
   ChevronLeft,
@@ -9,12 +10,14 @@ import {
   Droplets,
   Fan,
   Grid3x3,
+  Hammer,
   Home,
   Layers,
   Loader2,
   Lock,
   MapPin,
   MessageSquare,
+  Ruler,
   Send,
   X,
   Zap,
@@ -1064,15 +1067,27 @@ export function PublicPacketPage() {
       title: 'Comparable Sales',
       body: (
         <div className="space-y-3.5">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-accent/30 bg-accent-dim/50 px-4 py-3">
-            <div className="text-[10.5px] font-bold uppercase tracking-wide text-text-3">Comp Criteria</div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-accent/30 bg-accent-dim/50 px-4 py-3">
+            <div className="w-full text-[10.5px] font-bold uppercase tracking-wide text-text-3 sm:w-auto">Comp Criteria</div>
             <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
               <MapPin size={14} className="text-accent-hover" />
-              Within {packet.compRadiusMiles} mi of the subject
+              Within {packet.compRadiusMiles} mi
             </div>
             <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
               <Calendar size={14} className="text-accent-hover" />
               Sold in the last {packet.compRecencyMonths} months
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+              <Ruler size={14} className="text-accent-hover" />
+              &plusmn;15% sq ft
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+              <Hammer size={14} className="text-accent-hover" />
+              &plusmn;20 yrs built
+            </div>
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+              <BedDouble size={14} className="text-accent-hover" />
+              &plusmn;1 bed/bath
             </div>
           </div>
           {listings.length > 0 && (
