@@ -12,9 +12,8 @@ import {
   Layers,
   Loader2,
   Lock,
-  Mail,
   MapPin,
-  Phone,
+  MessageSquare,
   Send,
   X,
   Zap,
@@ -34,6 +33,10 @@ import { repairIcon } from '@/lib/repairCatalog';
 
 const money = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+/** Drafted on the visitor's behalf by the "Leave Me a Message" CTA — a
+ * starting point they can edit or send as-is, not something sent for them. */
+const BUYER_INTEREST_MESSAGE = "Hey, I'm interested in this deal, let's have a chat.";
 
 const CONDITION_RATING_STYLE: Record<ConditionRating, { label: string; className: string }> = {
   good: { label: 'Good', className: 'border-success/40 bg-success-dim text-success' },
@@ -86,11 +89,34 @@ function Panel({ children }: { children: React.ReactNode }) {
 
 /** A private note to whoever owns this packet — never shown to other
  * investors viewing the same link, only to the owner in the CRM. */
-function CommentBox({ slug, identity }: { slug: string; identity: ViewerIdentity | null }) {
+function CommentBox({
+  slug,
+  identity,
+  prefillSignal,
+  prefillText,
+}: {
+  slug: string;
+  identity: ViewerIdentity | null;
+  /** Bumped (not just toggled) by the "Leave Me a Message" CTA so clicking
+   *  it again re-applies the prefill even if the visitor cleared the box in
+   *  between — a plain boolean/string prop wouldn't re-fire the effect on a
+   *  second click with the same text. 0/undefined means "never clicked", so
+   *  this never overwrites anything the visitor typed on their own. */
+  prefillSignal?: number;
+  prefillText?: string;
+}) {
   const [name, setName] = useState(identity?.name ?? '');
   const [body, setBody] = useState('');
   const [sent, setSent] = useState(false);
   const addComment = useAddPacketComment();
+
+  useEffect(() => {
+    if (prefillSignal) setBody(prefillText ?? '');
+    // Only the click itself should ever re-apply the prefill — reacting to
+    // prefillText too would re-stomp the box if that string literal ever
+    // changed identity across a re-render for unrelated reasons.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillSignal]);
 
   function handleSend() {
     if (!body.trim()) return;
@@ -674,7 +700,14 @@ export function PublicPacketPage() {
   // we have the visitor's name and phone, whether just captured by the gate
   // or already on file from an earlier visit. Null the whole time before that.
   const [revealedAddress, setRevealedAddress] = useState<RevealedAddress | null>(null);
-  const [wantsToBuy, setWantsToBuy] = useState(false);
+  // Bumped, not toggled — see CommentBox's own comment on why a counter
+  // rather than a boolean/string is what lets a second click re-apply the
+  // prefill after the visitor cleared the box.
+  const [messagePrefillSignal, setMessagePrefillSignal] = useState(0);
+  function handleLeaveMessage() {
+    setMessagePrefillSignal((n) => n + 1);
+    document.getElementById('questions-notes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   // The sticky recap bar only appears once the visitor has scrolled past
   // the first content section (the photos, when there are any) — showing
   // it right away would just repeat what the hero right above it already
@@ -1159,7 +1192,17 @@ export function PublicPacketPage() {
     });
   }
 
-  sections.push({ title: 'Questions or Notes', body: <CommentBox slug={packet.slug} identity={identity} /> });
+  sections.push({
+    title: 'Questions or Notes',
+    body: (
+      <CommentBox
+        slug={packet.slug}
+        identity={identity}
+        prefillSignal={messagePrefillSignal}
+        prefillText={BUYER_INTEREST_MESSAGE}
+      />
+    ),
+  });
 
   return (
     <div className="min-h-screen bg-surface-2 pb-16">
@@ -1202,23 +1245,9 @@ export function PublicPacketPage() {
               {packet.propType || 'Property'}
             </h1>
             <div className="mt-3.5 shrink-0">
-              {wantsToBuy ? (
-                <div className="rounded-xl border border-accent/40 bg-white/10 px-4 py-3 backdrop-blur-sm">
-                  <div className="text-[12px] font-semibold text-white">Let's make it happen.</div>
-                  <div className="mt-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
-                    <a href="tel:+16293399189" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline">
-                      <Phone size={13} /> +1 (629) 339-9189
-                    </a>
-                    <a href="mailto:dayyan@bluebirdacquisition.com" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:underline">
-                      <Mail size={13} /> dayyan@bluebirdacquisition.com
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <button onClick={() => setWantsToBuy(true)} className="btn btn-primary">
-                  I Want to Buy This
-                </button>
-              )}
+              <button onClick={handleLeaveMessage} className="btn btn-primary">
+                <MessageSquare size={14} /> Leave Me a Message
+              </button>
             </div>
           </div>
           <div className="mt-2.5 flex items-center gap-1.5 text-[14px] font-medium text-[#AEC2D8]">
@@ -1271,20 +1300,9 @@ export function PublicPacketPage() {
               )}
             </div>
             <div className="shrink-0">
-              {wantsToBuy ? (
-                <div className="flex items-center gap-3 text-[12px] font-semibold">
-                  <a href="tel:+16293399189" className="inline-flex items-center gap-1 text-accent hover:underline">
-                    <Phone size={12} /> <span className="hidden sm:inline">+1 (629) 339-9189</span>
-                  </a>
-                  <a href="mailto:dayyan@bluebirdacquisition.com" className="hidden items-center gap-1 text-accent hover:underline sm:inline-flex">
-                    <Mail size={12} /> dayyan@bluebirdacquisition.com
-                  </a>
-                </div>
-              ) : (
-                <button onClick={() => setWantsToBuy(true)} className="btn btn-primary !px-3 !py-1.5 text-[12.5px] whitespace-nowrap">
-                  Buy This Deal
-                </button>
-              )}
+              <button onClick={handleLeaveMessage} className="btn btn-primary !px-3 !py-1.5 text-[12.5px] whitespace-nowrap">
+                <MessageSquare size={12} /> Leave Me a Message
+              </button>
             </div>
           </div>
         </div>
@@ -1305,7 +1323,11 @@ export function PublicPacketPage() {
 
         <div className="space-y-8 pb-2">
           {sections.map((s, i) => (
-            <div key={s.title} ref={i === 0 ? firstSectionRef : undefined}>
+            <div
+              key={s.title}
+              ref={i === 0 ? firstSectionRef : undefined}
+              id={s.title === 'Questions or Notes' ? 'questions-notes' : undefined}
+            >
               <SectionHead num={i + 1} title={s.title} />
               {s.body}
             </div>
