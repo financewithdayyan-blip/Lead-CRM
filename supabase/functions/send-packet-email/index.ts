@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     // packet and aren't an overseeing admin, exactly like opening it in the app.
     const { data: packet, error: packetErr } = await callerClient
       .from('deal_packets')
-      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types, purchase_price, arv')
+      .select('id, lead_id, slug, status, prop_type, city, state, beds, baths, sqft, deal_types, purchase_price, assignment_fee, arv')
       .eq('id', packetId)
       .single();
     if (packetErr || !packet) return json({ error: 'Packet not found, or you don\'t have access to it.' }, 404);
@@ -230,8 +230,17 @@ Deno.serve(async (req) => {
     // ever gets before that gate.
     const headline = `${propType}${area ? ` — ${area}` : ''}`;
 
+    // Same "quoted price" the public packet page itself shows as Asking
+    // Price (see get_public_packet) — purchase_price is what Bluebird pays
+    // the seller, never shown to an investor on its own, since that would
+    // expose the assignment fee as the gap between this email's number and
+    // the packet's. Always folded in regardless of show_assignment_fee,
+    // which only controls whether the fee is ALSO broken out as its own
+    // line — same as the RPC.
+    const quotedPrice = packet.purchase_price != null ? packet.purchase_price + (packet.assignment_fee ?? 0) : null;
+
     const rows: Array<{ label: string; value: string }> = [];
-    if (packet.purchase_price != null) rows.push({ label: 'Asking price', value: formatMoney(packet.purchase_price) });
+    if (quotedPrice != null) rows.push({ label: 'Asking price', value: formatMoney(quotedPrice) });
     if (packet.arv != null) rows.push({ label: 'Estimated ARV', value: formatMoney(packet.arv) });
     if ((repairRows ?? []).length > 0) rows.push({ label: 'Estimated repairs', value: formatMoney(repairTotal) });
     const bedsBaths = packet.beds != null || packet.baths != null ? `${packet.beds ?? '—'}bd / ${packet.baths ?? '—'}ba` : '';
