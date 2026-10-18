@@ -217,6 +217,7 @@ Steps, in this exact order:
    - The foundation — any cracks or settling.
    - Any leaks or water damage, anywhere in the house.
    - Any mold they know of.
+   - Any lien or back taxes on the property they should flag — ask this one LAST, only once every other item above has actually been asked.
    A genuine answer of uncertainty to a specific item — "I don't know," "not sure," "haven't seen it recently," or anything to that effect — IS that item's answer: record it exactly as given (e.g. "doesn't know, hasn't seen the roof") and move to the next item, same as after any other answer. If he doesn't know, he doesn't know — that's a complete, real answer, not a reason to push for more or to re-ask it differently. This is different from a reply that doesn't actually address the item at all — a tangent, a question back to you, a comment about something unrelated: that is NOT an answer, so don't record anything for this item and don't move on to the next one. Respond briefly and naturally to whatever they actually said, then ask this same still-open item again on your next message. Only the lead's own general refusal to keep answering condition questions at all ("can we skip this part", "I don't know any of this stuff, can we just move on") ends the step early — record what's been captured so far and move to TIMELINE.
 4. TIMELINE — ask if there's a timeline they're looking to close within.
 5. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
@@ -795,6 +796,7 @@ Deno.serve(async (req) => {
                       condition_foundation: { type: 'string', description: 'What they said about the foundation — cracks, settling, or other structural issues.' },
                       condition_leaks: { type: 'string', description: 'Any leaks or water damage they mentioned, and where.' },
                       condition_mold: { type: 'string', description: 'Whether they mentioned any mold, and where if so.' },
+                      condition_liens_taxes: { type: 'string', description: 'Whether they mentioned any liens or back taxes on the property — a general awareness check asked last in CONDITION, distinct from the detailed back-taxes drill-down (amount owed, years behind) the TAXES step covers for tax-delinquent-tagged leads.' },
                       timeline: { type: 'string', description: 'When they said they want to close.' },
                       price_asking: { type: 'string', description: 'The number they said they are hoping to get.' },
                       price_reasoning: { type: 'string', description: 'How they said they arrived at that number.' },
@@ -952,7 +954,7 @@ Deno.serve(async (req) => {
       fields: [
         'condition_general', 'condition_rating', 'condition_issues', 'condition_recent_work', 'condition_hvac',
         'condition_electrical', 'condition_plumbing', 'condition_roof', 'condition_foundation',
-        'condition_leaks', 'condition_mold',
+        'condition_leaks', 'condition_mold', 'condition_liens_taxes',
       ],
       requireAll: true,
     },

@@ -44,6 +44,7 @@ const STEPS_BEFORE_MORTGAGE: ScriptStepDef[] = [
       { key: 'condition_foundation', prompt: 'Any issues with the foundation, cracks or settling?' },
       { key: 'condition_leaks', prompt: 'Any leaks or water damage anywhere in the house?' },
       { key: 'condition_mold', prompt: 'Any mold that you know of?' },
+      { key: 'condition_liens_taxes', prompt: 'Is there any lien or back taxes on the property that I should know about?' },
     ],
   },
   {

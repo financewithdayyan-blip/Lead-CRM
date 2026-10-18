@@ -180,6 +180,7 @@ export interface ScriptAnswers {
   condition_foundation?: string;
   condition_leaks?: string;
   condition_mold?: string;
+  condition_liens_taxes?: string;
   // Timeline
   timeline?: string;
   // Price
