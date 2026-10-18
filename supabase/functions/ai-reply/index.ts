@@ -209,6 +209,7 @@ Steps, in this exact order:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
    - Any major repairs needed, in general.
+   - Any recent work or updates already done to the property, and roughly when.
    - HVAC.
    - Electrical — updated, or still older/original wiring.
    - Plumbing — PVC or iron cast.
@@ -786,6 +787,7 @@ Deno.serve(async (req) => {
                       condition_general: { type: 'string', description: 'General condition of the property as they described it.' },
                       condition_rating: { type: 'string', description: 'Their self-rating out of 10.' },
                       condition_issues: { type: 'string', description: 'Catch-all for issues that are NOT HVAC, electrical, plumbing, roof, foundation, leaks, or mold — windows/doors, pests, etc. belong here, never in condition_hvac.' },
+                      condition_recent_work: { type: 'string', description: 'Any recent work, repairs, or updates they said have already been done to the property, and roughly when — distinct from condition_issues, which is about what still needs fixing, not what has already been fixed.' },
                       condition_hvac: { type: 'string', description: 'What they said about HVAC/heating/AC specifically — never electrical or plumbing.' },
                       condition_electrical: { type: 'string', description: 'What they said about the electrical system — updated vs older/original wiring, panel issues, etc. — never HVAC or plumbing.' },
                       condition_plumbing: { type: 'string', description: 'What they said about plumbing specifically (PVC vs iron cast, etc).' },
@@ -930,21 +932,25 @@ Deno.serve(async (req) => {
   // marked fully_qualified anyway (the model treats a strong price signal as
   // the whole interview). Since script_answers is written to structured
   // per-pillar fields regardless of the model's own fully_qualified verdict,
-  // it can be checked directly rather than trusted blindly: require at least
-  // 2 of the 4 pillars actually on record (cumulative across the whole
+  // it can be checked directly rather than trusted blindly: require ALL 4 of
+  // the 4 pillars actually on record (cumulative across the whole
   // conversation, not just this turn) before fully_qualified is allowed to
-  // stand, no exceptions.
+  // stand, no exceptions — raised from a lenient 2-of-4 (2026-10-18) because
+  // that let a lead through qualified having only ever answered, say,
+  // motivation and price, with condition and timeline never actually asked.
+  // The framework's own text already demanded all 4; this backstop now
+  // actually enforces it server-side instead of trusting the model to.
   const PILLAR_FIELDS: Record<string, string[]> = {
     motivation: ['motivation_reason', 'motivation_owned'],
     condition: [
-      'condition_general', 'condition_rating', 'condition_issues', 'condition_hvac',
+      'condition_general', 'condition_rating', 'condition_issues', 'condition_recent_work', 'condition_hvac',
       'condition_electrical', 'condition_plumbing', 'condition_roof', 'condition_foundation',
       'condition_leaks', 'condition_mold',
     ],
     timeline: ['timeline'],
     price: ['price_asking'],
   };
-  const MIN_PILLARS_FOR_QUALIFICATION = 2;
+  const MIN_PILLARS_FOR_QUALIFICATION = 4;
   const effectiveScriptAnswers: Record<string, unknown> = {
     ...((lead as { script_answers?: Record<string, unknown> }).script_answers ?? {}),
     ...(recoveredFields.script_answers as Record<string, unknown> | undefined ?? {}),

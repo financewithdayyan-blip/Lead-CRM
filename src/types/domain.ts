@@ -172,6 +172,7 @@ export interface ScriptAnswers {
   condition_general?: string;
   condition_rating?: string;
   condition_issues?: string;
+  condition_recent_work?: string;
   condition_hvac?: string;
   condition_electrical?: string;
   condition_plumbing?: string;

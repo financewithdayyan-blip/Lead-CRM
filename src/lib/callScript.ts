@@ -36,6 +36,7 @@ const STEPS_BEFORE_MORTGAGE: ScriptStepDef[] = [
       { key: 'condition_general', prompt: 'Tell me a bit more about the condition of your property.' },
       { key: 'condition_rating', prompt: 'What would you rate it out of 10 if you were in my shoes?' },
       { key: 'condition_issues', prompt: 'Any major issues that I should know about?' },
+      { key: 'condition_recent_work', prompt: 'Any recent work or updates done to the property, and roughly when?' },
       { key: 'condition_hvac', prompt: 'What about HVAC?' },
       { key: 'condition_electrical', prompt: 'What about the electrical, is it updated or still older wiring?' },
       { key: 'condition_plumbing', prompt: 'Is Plumbing PVC or Iron Cast?' },

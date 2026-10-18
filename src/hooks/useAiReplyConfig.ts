@@ -32,6 +32,7 @@ Steps, in this exact order:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
    - Any major repairs needed, in general.
+   - Any recent work or updates already done to the property, and roughly when.
    - HVAC.
    - Electrical — updated, or still older/original wiring.
    - Plumbing — PVC or iron cast.
