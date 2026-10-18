@@ -200,12 +200,12 @@ function toE164(raw: string): string {
 // that copy is what an admin sees as the Settings placeholder for an unsaved
 // Default framework, so it has to say exactly what actually runs here or the
 // placeholder becomes misleading about the real fallback behaviour.
-const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversation, but follow the steps below in a strict, fixed order — this is the single most important rule in this whole framework. Never jump ahead to a later step before every step before it is actually answered, and never backtrack to re-ask one already covered. Going out of order is exactly how a lead ends up replying with a bare number like "500k" with no context behind it — stay on the current step, and only that step, until it is actually answered before moving to the next one.
+const DEFAULT_FRAMEWORK = `Goal: qualify this lead through a natural conversation, but follow the steps below in a strict, fixed order and ask every single one of them — these are the two most important rules in this whole framework, equally important, neither optional. ORDER: never jump ahead to a later step before every step before it is actually answered, and never backtrack to re-ask one already covered. Going out of order is exactly how a lead ends up replying with a bare number like "500k" with no context behind it — stay on the current step, and only that step, until it is actually answered before moving to the next one. COMPLETENESS: never skip a step, or a listed item within a step, because an earlier answer felt like it already covered it, because the lead seems uncertain, or because it feels redundant — uncertainty on one item is still a real, recordable answer for that one item, not a reason to drop the rest. Work through the full list, every time, in order.
 
 Steps, in this exact order:
 1. OWNER CONFIRMATION — confirm you're speaking with the owner, or someone who can speak for them (see the standing rules on non-owners and wrong numbers). This step is quick, not a checkpoint to linger on: the moment it's established, move straight into MOTIVATION on that same reply or the next one. Once confirmed, it is done — never re-ask it or circle back to it later in the conversation, no matter what else comes up.
 2. MOTIVATION — ask why they're looking to sell, or what's going on with the property. A brief, natural answer is enough — don't push for more than they volunteer, and don't turn it into an interrogation.
-3. CONDITION — cover these one at a time, in order. Ask about exactly ONE of the items below per message, then wait for their answer before the next one — never combine two or more into the same message, and never list several in one sentence with commas (e.g. "what about the roof, HVAC, and plumbing" breaks this rule exactly as much as covering them in separate paragraphs of the same text would):
+3. CONDITION — cover every item below, one at a time, in this exact order. Ask about exactly ONE item per message, then wait for their answer before the next one — never combine two or more into the same message, and never list several in one sentence with commas (e.g. "what about the roof, HVAC, and plumbing" breaks this rule exactly as much as covering them in separate paragraphs of the same text would). Every item on this list must actually be asked before moving to TIMELINE — none are optional and none get skipped:
    - How the property looks on the inside, general condition.
    - What they'd rate it, out of 10.
    - Any major repairs needed, in general.
@@ -217,14 +217,14 @@ Steps, in this exact order:
    - The foundation — any cracks or settling.
    - Any leaks or water damage, anywhere in the house.
    - Any mold they know of.
-   If they say they haven't been to the property recently, don't know its current condition, or something to that effect: don't keep pushing through the remaining items on this list — that answer itself is what you record for CONDITION (e.g. "hasn't seen the property recently, doesn't know current condition"), and it's enough to move on to TIMELINE. If they know some of these but not others (e.g. they know the roof is old but haven't seen the inside lately), capture what they do know and don't force the rest — don't re-ask something they've already said they don't know.
+   If they say they haven't been to the property recently, don't know, or something to that effect on any one of these: that answer is exactly what you record for that specific item (e.g. "doesn't know, hasn't seen the roof") — it is a real, complete answer for that item, not a missing one. It does NOT excuse you from asking the remaining items on the list; move to the next item exactly as you would after any other answer. The only thing that ends this step early is the lead explicitly asking you to stop asking about the property's condition in general ("can we skip this part", "I don't know any of this stuff, can we just move on") — a clear, general refusal to keep going through the list, not uncertainty on a single item. If that happens, record what's been captured so far and move to TIMELINE.
 4. TIMELINE — ask if there's a timeline they're looking to close within.
 5. PRICE — ask if they have a number in mind. If they give one, ask how they landed on it.
 6. DECISION — ask if anyone else is involved in making the decision, like a spouse, co-owner, or other family member.
 7. PHOTOS — ask for interior photos so the current condition can actually be seen. If they say they can't do it themselves (out of state, no access, etc.), ask once whether someone local — an ex, a neighbor, a property manager, a tenant, anyone nearby — could walk through and send some instead. If that's not possible either, don't keep pushing for it: this step is done, move straight to CALLBACK — a human will sort out getting eyes on the property another way.
 8. CALLBACK — last: ask what's a good time to call them back tomorrow to go over everything. This step isn't done just by asking — wait for them to actually give you a real day and time before it counts as answered.
 
-A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, CONDITION, PRICE, and TIMELINE above have all actually been established in this conversation. CONDITION counts as established even when their honest answer is that they don't know or haven't seen it recently — that's a real answer, not a missing one, and doesn't block qualification. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The DECISION step is asked in its place in the sequence but doesn't block fully_qualified either — record the answer if they give one, but move on if they don't. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
+A lead is FULLY QUALIFIED — which pauses auto-reply and hands off to a human — once MOTIVATION, every item in CONDITION, PRICE, and TIMELINE above have all actually been asked and answered in this conversation, in order, none skipped. A "don't know" or uncertain answer on a specific CONDITION item still counts as that item being answered — record it as given — but every item on the list still has to actually be asked before CONDITION as a whole counts as complete; only the lead's own general refusal to keep answering condition questions (described above) ends the step early. Asking for photos is still a required step before the interview counts as complete, but don't hold fully_qualified back waiting on the photo itself to arrive — once you've asked for it, that step is done; a human takes it from there. The DECISION step is asked in its place in the sequence but doesn't block fully_qualified either — record the answer if they give one, but move on if they don't. The CALLBACK step is different: it is only done once they've actually given a specific day and time to call back, not just once you've asked — fully_qualified must wait for that real answer.`;
 
 const LIEN_ADDENDUM = `
 
@@ -940,23 +940,34 @@ Deno.serve(async (req) => {
   // motivation and price, with condition and timeline never actually asked.
   // The framework's own text already demanded all 4; this backstop now
   // actually enforces it server-side instead of trusting the model to.
-  const PILLAR_FIELDS: Record<string, string[]> = {
-    motivation: ['motivation_reason', 'motivation_owned'],
-    condition: [
-      'condition_general', 'condition_rating', 'condition_issues', 'condition_recent_work', 'condition_hvac',
-      'condition_electrical', 'condition_plumbing', 'condition_roof', 'condition_foundation',
-      'condition_leaks', 'condition_mold',
-    ],
-    timeline: ['timeline'],
-    price: ['price_asking'],
+  // CONDITION requires EVERY listed sub-item on record, not just one — the
+  // framework itself now asks all 11 one at a time and records a "doesn't
+  // know" answer same as any other, so a thorough conversation fills all 11
+  // regardless of how many were uncertain. MOTIVATION/TIMELINE/PRICE stay
+  // "any one of these fields" since each of those is really just one
+  // framework question that can land in one of a couple of fields.
+  const PILLAR_FIELDS: Record<string, { fields: string[]; requireAll: boolean }> = {
+    motivation: { fields: ['motivation_reason', 'motivation_owned'], requireAll: false },
+    condition: {
+      fields: [
+        'condition_general', 'condition_rating', 'condition_issues', 'condition_recent_work', 'condition_hvac',
+        'condition_electrical', 'condition_plumbing', 'condition_roof', 'condition_foundation',
+        'condition_leaks', 'condition_mold',
+      ],
+      requireAll: true,
+    },
+    timeline: { fields: ['timeline'], requireAll: false },
+    price: { fields: ['price_asking'], requireAll: false },
   };
   const MIN_PILLARS_FOR_QUALIFICATION = 4;
   const effectiveScriptAnswers: Record<string, unknown> = {
     ...((lead as { script_answers?: Record<string, unknown> }).script_answers ?? {}),
     ...(recoveredFields.script_answers as Record<string, unknown> | undefined ?? {}),
   };
-  const pillarsEstablished = Object.values(PILLAR_FIELDS).filter((fields) =>
-    fields.some((f) => typeof effectiveScriptAnswers[f] === 'string' && (effectiveScriptAnswers[f] as string).trim().length > 0),
+  const hasValue = (f: string) =>
+    typeof effectiveScriptAnswers[f] === 'string' && (effectiveScriptAnswers[f] as string).trim().length > 0;
+  const pillarsEstablished = Object.values(PILLAR_FIELDS).filter(({ fields, requireAll }) =>
+    requireAll ? fields.every(hasValue) : fields.some(hasValue),
   ).length;
   if (fullyQualified && pillarsEstablished < MIN_PILLARS_FOR_QUALIFICATION) {
     fullyQualified = false;
