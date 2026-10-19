@@ -10,11 +10,18 @@
 // party, added during this edit, has no link yet).
 //
 // Hard server-side gate, not just a client-side one: rejected once the
-// instance is anything but 'sent', or once ANY party has actually signed —
-// editing what someone already signed would make their signature apply to
-// different terms than the ones they saw, which is a real legal problem,
-// not just a UI inconvenience. See the Amendment Contract template for how
-// to correct an already-signed contract instead.
+// instance is anything but 'sent', or once the SELLER side has actually
+// signed — editing what the seller already signed would make their
+// signature apply to different terms than the ones they saw, which is a
+// real legal problem, not just a UI inconvenience. Our own side (buyer/
+// extra role) signing first doesn't block further edits — there's no "they
+// saw different terms" problem when the party editing and the party who
+// signed are the same business; see isSellerSide below and 2026-10-19's
+// decision to scope the gate to the seller specifically rather than
+// "anyone." When our own side has already signed, this also skips the
+// 'edited' audit event for this one save — a deliberate, explicit choice
+// (not an oversight) since this correction never involved the counterparty
+// at all; a normal pre-signature edit still logs 'edited' exactly as before.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -57,6 +64,14 @@ function toE164(raw: string): string | null {
 
 function isValidEmail(raw: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
+}
+
+// 'seller' or 'seller_2' (a co-seller) — the counterparty, as opposed to the
+// 'buyer'/'extra_*' role that represents our own side of the deal. Same
+// convention used elsewhere for telling the two sides apart (see
+// submit-signature's buildSignedRows).
+function isSellerSide(role: string): boolean {
+  return role === 'seller' || role.startsWith('seller_');
 }
 
 Deno.serve(async (req) => {
@@ -103,9 +118,13 @@ Deno.serve(async (req) => {
       'parties lookup',
     );
     if (partiesErr) throw partiesErr;
-    if ((existingParties ?? []).some((p) => p.status === 'signed')) {
-      return json({ error: 'Someone has already signed this contract — it can no longer be edited.' }, 409);
+    if ((existingParties ?? []).some((p) => isSellerSide(p.role) && p.status === 'signed')) {
+      return json({ error: 'The seller has already signed this contract — it can no longer be edited.' }, 409);
     }
+    // Used below to decide whether this save is a normal pre-signature edit
+    // (logged, as always) or a correction made entirely on our own side
+    // after our own party already signed (not logged — see the file header).
+    const ownSideAlreadySigned = (existingParties ?? []).some((p) => p.status === 'signed');
 
     const normalizedParties: (PartyInput & { e164: string | null; emailNormalized: string | null })[] = [];
     for (const p of parties) {
@@ -128,9 +147,16 @@ Deno.serve(async (req) => {
     const incomingRoles = new Set(normalizedParties.map((p) => p.role));
 
     // Roles that used to have a party but no longer do (e.g. a co-seller
-    // removed during this edit) — safe to drop outright, the guard above
-    // already confirmed nobody on this contract has signed anything.
+    // removed during this edit) — safe to drop, since the guard above
+    // already confirmed the seller side hasn't signed. Our own side is
+    // never actually omittable from the form that calls this, but never
+    // trust that from here: an already-signed party's row must survive
+    // this edit regardless of what the client sent, so this double-checks
+    // directly rather than assuming the seller-side guard covers it.
     const rolesToRemove = [...existingByRole.keys()].filter((role) => !incomingRoles.has(role));
+    if (rolesToRemove.some((role) => existingByRole.get(role)!.status === 'signed')) {
+      return json({ error: 'A signed party can\'t be removed from this contract.' }, 409);
+    }
     if (rolesToRemove.length > 0) {
       const idsToRemove = rolesToRemove.map((role) => existingByRole.get(role)!.id);
       const { error: deleteErr } = await admin.from('contract_signing_parties').delete().in('id', idsToRemove);
@@ -181,11 +207,13 @@ Deno.serve(async (req) => {
       .eq('id', instanceId);
     if (updateInstanceErr) throw updateInstanceErr;
 
-    await admin.from('contract_audit_events').insert({
-      contract_instance_id: instanceId,
-      party_id: null,
-      event_type: 'edited',
-    });
+    if (!ownSideAlreadySigned) {
+      await admin.from('contract_audit_events').insert({
+        contract_instance_id: instanceId,
+        party_id: null,
+        event_type: 'edited',
+      });
+    }
 
     return json({ ok: true });
   } catch (e) {

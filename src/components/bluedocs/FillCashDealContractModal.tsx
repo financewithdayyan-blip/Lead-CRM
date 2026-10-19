@@ -382,7 +382,7 @@ export function FillCashDealContractModal({
       <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         <p className="text-[12px] text-text-3">
           {instance
-            ? 'Update the deal terms below — this updates the contract your parties already have, no new link or message goes out. Only available while nobody has signed yet.'
+            ? 'Update the deal terms below — this updates the contract your parties already have, no new link or message goes out. Only available while the seller hasn\'t signed yet.'
             : "Fill in the deal terms below — this goes straight to the Seller to sign. Once they sign, you'll be notified to sign last."}
         </p>
 

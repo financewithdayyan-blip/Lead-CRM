@@ -77,7 +77,7 @@ export function ContractInstanceRow({
    * isn't offered — only the global Envelopes dashboard passes this. */
   onVoid?: () => void;
   /** Omitted the same way as onVoid where editing isn't offered. Only ever
-   * shown for a Cash Deal contract nobody has signed yet — see canEdit. */
+   * shown for a Cash Deal contract the seller hasn't signed yet — see canEdit. */
   onEdit?: () => void;
 }) {
   const [copiedPartyId, setCopiedPartyId] = useState<string | null>(null);
@@ -138,11 +138,18 @@ export function ContractInstanceRow({
   const signed = c.status === 'signed';
   const voidedOrDeclined = c.status === 'voided' || c.status === 'declined';
   const canVoid = onVoid && !signed && !voidedOrDeclined && c.status !== 'expired';
-  // Editing terms in place only ever makes sense before anyone's actually
-  // signed — see update-contract-instance's own server-side version of this
-  // exact check, which is the one that actually matters; this just keeps
-  // the button from appearing somewhere it'd immediately fail.
-  const canEdit = onEdit && c.templateId === CASH_DEAL_TEMPLATE_ID && c.status === 'sent' && !c.parties.some((p) => p.status === 'signed');
+  // Editing terms in place is blocked once the SELLER side has signed — their
+  // signature would then apply to different terms than what they saw. Our
+  // own side (buyer/extra role) signing first doesn't block it: there's no
+  // "they saw different terms" problem when we're both the signer and the
+  // one making the correction. See update-contract-instance's own
+  // server-side version of this exact check, which is the one that actually
+  // matters; this just keeps the button from appearing somewhere it'd
+  // immediately fail.
+  const isSellerSide = (role: string) => role === 'seller' || role.startsWith('seller_');
+  const canEdit =
+    onEdit && c.templateId === CASH_DEAL_TEMPLATE_ID && c.status === 'sent' &&
+    !c.parties.some((p) => isSellerSide(p.role) && p.status === 'signed');
   const badge = STATUS_BADGE[c.status];
   const BadgeIcon = badge?.icon;
   const typeLabel = PURCHASE_CONTRACT_TYPES.find((o) => o.key === c.templateContractType)?.label;
@@ -205,7 +212,7 @@ export function ContractInstanceRow({
             </button>
           )}
           {canEdit && (
-            <button className="btn !px-2 !py-1 text-[11px]" title="Edit the deal terms — only available before anyone signs" onClick={onEdit}>
+            <button className="btn !px-2 !py-1 text-[11px]" title="Edit the deal terms — available until the seller signs" onClick={onEdit}>
               <Pencil size={12} /> Edit
             </button>
           )}
