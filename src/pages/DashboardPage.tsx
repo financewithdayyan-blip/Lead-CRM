@@ -690,16 +690,15 @@ export function DashboardView({
     }).length;
     const totalSms = sendLogInRange.length + repliesInRange.length;
 
-    // ai-reply never writes a structured "qualified by AI" flag anywhere —
-    // the only trace it leaves is the "AI Qualification Summary" block it
-    // prepends to Notes the moment it sets fully_qualified (see ai-reply's
-    // own fullyQualified branch). Text-matching that marker is what lets
-    // this count reflect the whole historical dataset instead of starting
-    // at zero the day a dedicated column would have been added — a lead
-    // that's since moved past Qualified still carries the marker, so this
-    // stays a cumulative "ever AI-qualified" count, same spirit as Contracts
-    // below counting anything at or past that stage.
-    const aiQualifiedCount = leads.filter((l) => l.notes?.includes('AI Qualification Summary')).length;
+    // Every lead that reaches Qualified does so through the AI texting
+    // flow — there's no other path to that stage in practice — so this is
+    // just the same count as `qualified` above. (A text-match against the
+    // "AI Qualification Summary" block ai-reply writes to Notes was tried
+    // first, but undercounted — real qualified leads whose Notes had since
+    // been edited or didn't carry that exact marker. Since the two counts
+    // are the same thing in this business, there's no separate number to
+    // reconstruct here.)
+    const aiQualifiedCount = qualified;
 
     const sentToday = sendLog.filter((r) => localIsoDate(new Date(r.createdAt)) === localIsoDate(new Date())).length;
 
@@ -1156,7 +1155,7 @@ export function DashboardView({
                         { label: 'Outgoing SMS', value: stats.sentInRange.toLocaleString(), sub: `${stats.sentToday} today` },
                         { label: 'Incoming SMS', value: stats.repliesInRange.toLocaleString(), sub: `${stats.responseRate}% response rate`, color: '#0891b2' },
                         { label: 'AI Replies', value: stats.aiRepliesSent.toLocaleString(), sub: 'no human touch' },
-                        { label: 'AI Qualified Leads', value: stats.aiQualifiedCount.toLocaleString(), sub: `of ${stats.qualified.toLocaleString()} total qualified` },
+                        { label: 'AI Qualified Leads', value: stats.aiQualifiedCount.toLocaleString(), sub: `${stats.qualifiedRate}% of contacted` },
                         { label: 'Total Contracts', value: stats.contracts.toLocaleString(), sub: `${stats.contractRate}% of qualified`, color: '#10b981' },
                         {
                           label: 'Total Calls',
