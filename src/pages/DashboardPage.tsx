@@ -681,12 +681,25 @@ export function DashboardView({
     // it, rather than assuming the rule is always followed.
     const callsToQualified = callsInRange.filter((a) => qualifiedPlusIds.has(a.leadId)).length;
     const callsOffProcess = callsInRange.length - callsToQualified;
+    const totalCalls = callsInRange.length;
 
     const smsActivitiesInRange = activities.filter((a) => a.type === 'sms' && inRange(a.createdAt));
     const aiRepliesSent = smsActivitiesInRange.filter((a) => {
       const meta = a.meta as { direction?: string; aiGenerated?: boolean };
       return meta?.direction === 'outbound' && meta?.aiGenerated;
     }).length;
+    const totalSms = sendLogInRange.length + repliesInRange.length;
+
+    // ai-reply never writes a structured "qualified by AI" flag anywhere —
+    // the only trace it leaves is the "AI Qualification Summary" block it
+    // prepends to Notes the moment it sets fully_qualified (see ai-reply's
+    // own fullyQualified branch). Text-matching that marker is what lets
+    // this count reflect the whole historical dataset instead of starting
+    // at zero the day a dedicated column would have been added — a lead
+    // that's since moved past Qualified still carries the marker, so this
+    // stays a cumulative "ever AI-qualified" count, same spirit as Contracts
+    // below counting anything at or past that stage.
+    const aiQualifiedCount = leads.filter((l) => l.notes?.includes('AI Qualification Summary')).length;
 
     const sentToday = sendLog.filter((r) => localIsoDate(new Date(r.createdAt)) === localIsoDate(new Date())).length;
 
@@ -753,7 +766,10 @@ export function DashboardView({
       photosReceived,
       callsToQualified,
       callsOffProcess,
+      totalCalls,
       aiRepliesSent,
+      totalSms,
+      aiQualifiedCount,
       callsPerContract,
       pickupRatio,
       voicemailRate,
@@ -1136,15 +1152,16 @@ export function DashboardView({
                   <div className="mt-5 grid flex-1 grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4">
                     {(
                       [
-                        { label: 'Total Leads', value: totalLeadsCount.toLocaleString(), sub: `${leads.filter((l) => l.stage === 'new').length} still cold` },
-                        { label: 'Contracts', value: stats.contracts.toLocaleString(), sub: `${stats.contractRate}% of qualified`, color: '#10b981' },
-                        { label: 'SMS Sent', value: stats.sentInRange.toLocaleString(), sub: `${stats.sentToday} today` },
-                        { label: 'Replies', value: stats.repliesInRange.toLocaleString(), sub: `${stats.responseRate}% response rate`, color: '#0891b2' },
-                        { label: 'AI Auto-Replies', value: stats.aiRepliesSent.toLocaleString(), sub: 'no human touch' },
+                        { label: 'Total SMS', value: stats.totalSms.toLocaleString(), sub: `${stats.sentInRange.toLocaleString()} out / ${stats.repliesInRange.toLocaleString()} in` },
+                        { label: 'Outgoing SMS', value: stats.sentInRange.toLocaleString(), sub: `${stats.sentToday} today` },
+                        { label: 'Incoming SMS', value: stats.repliesInRange.toLocaleString(), sub: `${stats.responseRate}% response rate`, color: '#0891b2' },
+                        { label: 'AI Replies', value: stats.aiRepliesSent.toLocaleString(), sub: 'no human touch' },
+                        { label: 'AI Qualified Leads', value: stats.aiQualifiedCount.toLocaleString(), sub: `of ${stats.qualified.toLocaleString()} total qualified` },
+                        { label: 'Total Contracts', value: stats.contracts.toLocaleString(), sub: `${stats.contractRate}% of qualified`, color: '#10b981' },
                         {
-                          label: 'Calls to Qualified',
-                          value: stats.callsToQualified.toLocaleString(),
-                          sub: stats.callsOffProcess > 0 ? `${stats.callsOffProcess} off-process` : 'all on-process',
+                          label: 'Total Calls',
+                          value: stats.totalCalls.toLocaleString(),
+                          sub: stats.callsOffProcess > 0 ? `${stats.callsOffProcess} off-process` : 'all to qualified',
                           color: stats.callsOffProcess > 0 ? '#f59e0b' : undefined,
                         },
                         { label: 'Opted Out / DNC', value: stats.optedOut.toLocaleString(), sub: `${stats.optOutRate}% of contacted`, color: '#ef4444' },
