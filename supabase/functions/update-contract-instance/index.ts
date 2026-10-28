@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: instance, error: instErr } = await withTimeout(
-      admin.from('contract_instances').select('id, status, name').eq('id', instanceId).single(),
+      admin.from('contract_instances').select('id, status, name, template_id, template_fields_snapshot').eq('id', instanceId).single(),
       'instance lookup',
     );
     if (instErr || !instance) return json({ error: 'Contract not found.' }, 404);
@@ -197,12 +197,39 @@ Deno.serve(async (req) => {
       }
     }
 
+    // A field added to the template in the mapper *after* this contract was
+    // originally sent has no entry in this instance's own frozen
+    // template_fields_snapshot (see migration 0090 — the snapshot exists so
+    // a later template edit never silently changes what an in-flight or
+    // already-signed contract shows). That's fine for terms the parties may
+    // have already seen, but it means a genuinely new, previously-unmapped
+    // field the admin is now setting a value for here would be saved into
+    // field_values with nowhere for submit-signature to actually draw it.
+    // Merge in only the live fields whose IDs this edit is writing a value
+    // for and that the snapshot doesn't already have — never touches or
+    // reorders any field already in the snapshot, so nothing already relied
+    // upon can shift.
+    let templateFieldsSnapshot = instance.template_fields_snapshot;
+    if (instance.template_id && fieldValues) {
+      const currentSnapshot = (instance.template_fields_snapshot ?? []) as Array<{ id: string }>;
+      const currentIds = new Set(currentSnapshot.map((f) => f.id));
+      const incomingIds = new Set(Object.keys(fieldValues));
+      const missingIds = [...incomingIds].filter((id) => !currentIds.has(id));
+      if (missingIds.length > 0) {
+        const { data: liveTemplate } = await admin.from('doc_templates').select('fields').eq('id', instance.template_id).single();
+        const liveFields = (liveTemplate?.fields ?? []) as Array<{ id: string }>;
+        const toAdd = liveFields.filter((f) => missingIds.includes(f.id));
+        if (toAdd.length > 0) templateFieldsSnapshot = [...currentSnapshot, ...toAdd];
+      }
+    }
+
     const { error: updateInstanceErr } = await admin
       .from('contract_instances')
       .update({
         name: name ?? instance.name,
         property_address: propertyAddress.trim(),
         field_values: fieldValues ?? {},
+        template_fields_snapshot: templateFieldsSnapshot,
       })
       .eq('id', instanceId);
     if (updateInstanceErr) throw updateInstanceErr;
