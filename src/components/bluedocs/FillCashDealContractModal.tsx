@@ -89,13 +89,11 @@ const LEASEBACK_DAYS_FIELD_ID = '64fe7084-fdf5-4f77-9229-6ec3a460e3d9';
 const LEASEBACK_WITHHELD_FIELD_ID: string | null = null;
 
 // Only shown/sent when "Seller's Listing Agent" is selected above — the
-// commission line on the template ("...pay $___ or ___% of the Purchase
-// Price to Seller's listing agent or broker, ___, separate from the
-// Purchase Price..."). The amount/percent blanks haven't been placed in the
-// mapper yet, so those two stay disabled with an explanatory note until
-// their FIELD_ID constants below are filled in.
+// commission dollar amount on the template's "pay $___ ... to Seller's
+// listing agent or broker, ___" line. The amount blank hasn't been placed
+// in the mapper yet, so it stays disabled with an explanatory note until
+// this FIELD_ID constant is filled in.
 const LISTING_COMMISSION_AMOUNT_FIELD_ID: string | null = null;
-const LISTING_COMMISSION_PERCENT_FIELD_ID: string | null = null;
 const LISTING_AGENT_NAME_FIELD_ID: string | null = 'cdfc0260-fb97-4cb8-9d51-d190fdf88a28';
 
 // A co-owner's signature — needs its own signature field on the template
@@ -232,7 +230,6 @@ export function FillCashDealContractModal({
   const [leasebackDays, setLeasebackDays] = useState('');
   const [leasebackWithheld, setLeasebackWithheld] = useState('');
   const [listingCommissionAmount, setListingCommissionAmount] = useState('');
-  const [listingCommissionPercent, setListingCommissionPercent] = useState('');
   const [listingAgentName, setListingAgentName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -303,7 +300,6 @@ export function FillCashDealContractModal({
     setLeasebackDays(fv[LEASEBACK_DAYS_FIELD_ID] ?? '');
     setLeasebackWithheld(LEASEBACK_WITHHELD_FIELD_ID ? stripCurrency(fv[LEASEBACK_WITHHELD_FIELD_ID] ?? '') : '');
     setListingCommissionAmount(LISTING_COMMISSION_AMOUNT_FIELD_ID ? stripCurrency(fv[LISTING_COMMISSION_AMOUNT_FIELD_ID] ?? '') : '');
-    setListingCommissionPercent(LISTING_COMMISSION_PERCENT_FIELD_ID ? (fv[LISTING_COMMISSION_PERCENT_FIELD_ID] ?? '') : '');
     setListingAgentName(LISTING_AGENT_NAME_FIELD_ID ? (fv[LISTING_AGENT_NAME_FIELD_ID] ?? '') : '');
   }, [instance]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -358,9 +354,6 @@ export function FillCashDealContractModal({
       if (marketing === 'listingAgent') {
         if (listingCommissionAmount.trim() && LISTING_COMMISSION_AMOUNT_FIELD_ID) {
           fieldValues[LISTING_COMMISSION_AMOUNT_FIELD_ID] = formatCurrency(listingCommissionAmount.trim());
-        }
-        if (listingCommissionPercent.trim() && LISTING_COMMISSION_PERCENT_FIELD_ID) {
-          fieldValues[LISTING_COMMISSION_PERCENT_FIELD_ID] = listingCommissionPercent.trim();
         }
         if (listingAgentName.trim() && LISTING_AGENT_NAME_FIELD_ID) {
           fieldValues[LISTING_AGENT_NAME_FIELD_ID] = listingAgentName.trim();
@@ -718,49 +711,25 @@ export function FillCashDealContractModal({
                   </p>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-[11.5px] font-medium text-text-2">Commission Amount</label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">$</span>
-                    <input
-                      className="input pl-6"
-                      inputMode="decimal"
-                      placeholder="e.g. 5000"
-                      value={listingCommissionAmount}
-                      onChange={(e) => setListingCommissionAmount(e.target.value)}
-                      disabled={!LISTING_COMMISSION_AMOUNT_FIELD_ID}
-                    />
-                  </div>
-                  {!LISTING_COMMISSION_AMOUNT_FIELD_ID && (
-                    <p className="mt-1 text-[10.5px] text-warning">
-                      Not wired up yet — this field still needs to be placed on the template.
-                    </p>
-                  )}
+              <div>
+                <label className="mb-1 block text-[11.5px] font-medium text-text-2">Commission Amount</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">$</span>
+                  <input
+                    className="input pl-6"
+                    inputMode="decimal"
+                    placeholder="e.g. 5000"
+                    value={listingCommissionAmount}
+                    onChange={(e) => setListingCommissionAmount(e.target.value)}
+                    disabled={!LISTING_COMMISSION_AMOUNT_FIELD_ID}
+                  />
                 </div>
-                <div>
-                  <label className="mb-1 block text-[11.5px] font-medium text-text-2">Commission Percent</label>
-                  <div className="relative">
-                    <input
-                      className="input pr-6"
-                      inputMode="decimal"
-                      placeholder="e.g. 3"
-                      value={listingCommissionPercent}
-                      onChange={(e) => setListingCommissionPercent(e.target.value)}
-                      disabled={!LISTING_COMMISSION_PERCENT_FIELD_ID}
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">%</span>
-                  </div>
-                  {!LISTING_COMMISSION_PERCENT_FIELD_ID && (
-                    <p className="mt-1 text-[10.5px] text-warning">
-                      Not wired up yet — this field still needs to be placed on the template.
-                    </p>
-                  )}
-                </div>
+                {!LISTING_COMMISSION_AMOUNT_FIELD_ID && (
+                  <p className="mt-1 text-[10.5px] text-warning">
+                    Not wired up yet — this field still needs to be placed on the template.
+                  </p>
+                )}
               </div>
-              <p className="text-[11px] text-text-3">
-                Matches the contract's "$___ or ___% of the Purchase Price" wording — fill in whichever applies.
-              </p>
             </div>
           )}
 
