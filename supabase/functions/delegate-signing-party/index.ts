@@ -274,7 +274,6 @@ Deno.serve(async (req) => {
       .update({
         name: newName.trim(),
         phone: e164,
-        phone_norm: e164 ? e164.replace(/[^0-9]/g, '').slice(-10) : null,
         email: emailNormalized,
         send_sms: sendSms,
         send_email: sendEmailFlag,
