@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useGenerateContract, useUpdateContractInstance, type ContractInstance, type DeliveryResult } from '@/hooks/useContractInstances';
-import { useSmsNumberLabels } from '@/hooks/useSmsNumberLabels';
 import { formatCurrency } from '@/lib/currency';
 import type { DocTemplate } from '@/hooks/useDocTemplates';
 
@@ -14,12 +13,6 @@ import type { DocTemplate } from '@/hooks/useDocTemplates';
 function stripCurrency(formatted: string): string {
   return formatted.replace(/[^0-9.]/g, '');
 }
-
-// Blue Docs always sends/receives from slot 2 — see BLUEDOCS_NUMBER in
-// create-contract-instance/submit-signature (ZOOM_FROM_NUMBER_2). Used only
-// as the default starting value for the buyer's phone below — editable from
-// there, since the buyer party isn't always reachable at the Blue Docs line.
-const BLUEDOCS_SMS_SLOT = '2';
 
 // The Cash Deal PSA's own field IDs, captured off its live `doc_templates.fields`
 // mapping — see supabase/functions/create-contract-instance for how these land
@@ -109,11 +102,6 @@ export function isCashDealTemplate(templateId: string): boolean {
   return templateId === CASH_DEAL_TEMPLATE_ID;
 }
 
-function isValidPhone(raw: string): boolean {
-  const digits = raw.replace(/[^0-9]/g, '');
-  return digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
-}
-
 function isValidEmail(raw: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
 }
@@ -185,14 +173,9 @@ export function FillCashDealContractModal({
   const generate = useGenerateContract();
   const update = useUpdateContractInstance();
   const buyerRole = template.partyRoles[0]?.id;
-  const { data: numberLabels } = useSmsNumberLabels();
-  const defaultBuyerPhone = numberLabels?.[BLUEDOCS_SMS_SLOT]?.phoneNumber ?? '';
 
   const [sellerName, setSellerName] = useState(initialSeller?.name ?? '');
-  const [sellerPhone, setSellerPhone] = useState(initialSeller?.phone ?? '');
   const [sellerEmail, setSellerEmail] = useState(initialSeller?.email ?? '');
-  const [sellerSendSms, setSellerSendSms] = useState(true);
-  const [sellerSendEmail, setSellerSendEmail] = useState(false);
   // Who actually receives the invite/signing link — doesn't change the name
   // printed on the document (always sellerName above). 'agent' is for when
   // a realtor/attorney represents the seller and needs to review first; they
@@ -202,15 +185,9 @@ export function FillCashDealContractModal({
   const [sellerAgentName, setSellerAgentName] = useState('');
   const [ownerCount, setOwnerCount] = useState<1 | 2>(1);
   const [coSellerName, setCoSellerName] = useState('');
-  const [coSellerPhone, setCoSellerPhone] = useState('');
   const [coSellerEmail, setCoSellerEmail] = useState('');
-  const [coSellerSendSms, setCoSellerSendSms] = useState(true);
-  const [coSellerSendEmail, setCoSellerSendEmail] = useState(false);
   const [buyerName, setBuyerName] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState(defaultBuyerPhone);
   const [buyerEmail, setBuyerEmail] = useState('');
-  const [buyerSendSms, setBuyerSendSms] = useState(true);
-  const [buyerSendEmail, setBuyerSendEmail] = useState(false);
   const [values, setValues] = useState<Record<FieldKey, string>>({
     sellerName: '',
     buyerName: '',
@@ -232,13 +209,6 @@ export function FillCashDealContractModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Seeds the buyer phone from the Blue Docs number once it loads, but only
-  // if the field is still untouched — a user typing their own number before
-  // this resolves should never be silently overwritten.
-  useEffect(() => {
-    if (defaultBuyerPhone && !buyerPhone) setBuyerPhone(defaultBuyerPhone);
-  }, [defaultBuyerPhone]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Edit mode: seed every field from the existing instance once, on mount.
   // instance's identity is stable for this modal's whole lifetime (the
   // parent only ever opens one edit target at a time), so this is a
@@ -255,10 +225,7 @@ export function FillCashDealContractModal({
     if (seller) {
       const printedSellerName = raw('sellerName');
       setSellerName(printedSellerName);
-      setSellerPhone(seller.phone ?? '');
       setSellerEmail(seller.email ?? '');
-      setSellerSendSms(seller.sendSms);
-      setSellerSendEmail(seller.sendEmail);
       // The party's own name only diverges from the printed name when the
       // invite went to an agent instead of the seller directly.
       if (seller.name && seller.name !== printedSellerName) {
@@ -269,17 +236,11 @@ export function FillCashDealContractModal({
     if (coSeller) {
       setOwnerCount(2);
       setCoSellerName(coSeller.name);
-      setCoSellerPhone(coSeller.phone ?? '');
       setCoSellerEmail(coSeller.email ?? '');
-      setCoSellerSendSms(coSeller.sendSms);
-      setCoSellerSendEmail(coSeller.sendEmail);
     }
     if (buyer) {
       setBuyerName(buyer.name);
-      setBuyerPhone(buyer.phone ?? '');
       setBuyerEmail(buyer.email ?? '');
-      setBuyerSendSms(buyer.sendSms);
-      setBuyerSendEmail(buyer.sendEmail);
     }
     setValues({
       sellerName: raw('sellerName'),
@@ -308,20 +269,9 @@ export function FillCashDealContractModal({
   const allFilled =
     sellerName.trim() && buyerName.trim() && FIELD_ROWS.every((r) => values[r.key].trim());
   const sellerReady =
-    (sellerSendSms || sellerSendEmail) &&
-    (!sellerSendSms || isValidPhone(sellerPhone)) &&
-    (!sellerSendEmail || isValidEmail(sellerEmail)) &&
-    (sellerRecipient === 'seller' || sellerAgentName.trim().length > 0);
-  const coSellerReady =
-    ownerCount === 1 ||
-    (coSellerName.trim() &&
-      (coSellerSendSms || coSellerSendEmail) &&
-      (!coSellerSendSms || isValidPhone(coSellerPhone)) &&
-      (!coSellerSendEmail || isValidEmail(coSellerEmail)));
-  const buyerReady =
-    (buyerSendSms || buyerSendEmail) &&
-    (!buyerSendSms || isValidPhone(buyerPhone)) &&
-    (!buyerSendEmail || isValidEmail(buyerEmail));
+    isValidEmail(sellerEmail) && (sellerRecipient === 'seller' || sellerAgentName.trim().length > 0);
+  const coSellerReady = ownerCount === 1 || (coSellerName.trim() && isValidEmail(coSellerEmail));
+  const buyerReady = isValidEmail(buyerEmail);
   const canSubmit = !!buyerRole && allFilled && sellerReady && !!coSellerReady && buyerReady;
 
   async function handleSubmit() {
@@ -361,20 +311,20 @@ export function FillCashDealContractModal({
       const sellerPartyName = sellerRecipient === 'agent' ? sellerAgentName.trim() : sellerName.trim();
       const parties = [
         {
-          role: 'seller', name: sellerPartyName, phone: sellerPhone.trim(), email: sellerEmail.trim(),
-          sendSms: sellerSendSms, sendEmail: sellerSendEmail, signOrder: 1,
+          role: 'seller', name: sellerPartyName, phone: '', email: sellerEmail.trim(),
+          sendSms: false, sendEmail: true, signOrder: 1,
         },
         ...(ownerCount === 2
           ? [
               {
-                role: CO_SELLER_ROLE, name: coSellerName.trim(), phone: coSellerPhone.trim(), email: coSellerEmail.trim(),
-                sendSms: coSellerSendSms, sendEmail: coSellerSendEmail, signOrder: 2,
+                role: CO_SELLER_ROLE, name: coSellerName.trim(), phone: '', email: coSellerEmail.trim(),
+                sendSms: false, sendEmail: true, signOrder: 2,
               },
             ]
           : []),
         {
-          role: buyerRole, name: buyerName.trim(), phone: buyerPhone.trim(), email: buyerEmail.trim(),
-          sendSms: buyerSendSms, sendEmail: buyerSendEmail, signOrder: ownerCount === 2 ? 3 : 2,
+          role: buyerRole, name: buyerName.trim(), phone: '', email: buyerEmail.trim(),
+          sendSms: false, sendEmail: true, signOrder: ownerCount === 2 ? 3 : 2,
         },
       ];
 
@@ -468,35 +418,16 @@ export function FillCashDealContractModal({
             </div>
           )}
 
-          <div>
+          <div className="col-span-2">
             <label className="mb-1 block text-[12px] font-medium text-text-2">
-              {sellerRecipient === 'agent' ? "Agent Phone" : 'Seller Phone'}
+              {sellerRecipient === 'agent' ? 'Agent Email' : 'Seller Email'}
             </label>
             <input
-              className={`input ${sellerSendSms && !isValidPhone(sellerPhone) ? '!border-danger' : ''}`}
-              inputMode="tel"
-              value={sellerPhone}
-              onChange={(e) => setSellerPhone(e.target.value)}
-            />
-            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
-              <input type="checkbox" checked={sellerSendSms} onChange={(e) => setSellerSendSms(e.target.checked)} />
-              Send by text
-            </label>
-          </div>
-          <div>
-            <label className="mb-1 block text-[12px] font-medium text-text-2">
-              {sellerRecipient === 'agent' ? "Agent Email" : 'Seller Email'}
-            </label>
-            <input
-              className={`input ${sellerSendEmail && !isValidEmail(sellerEmail) ? '!border-danger' : ''}`}
+              className={`input ${sellerEmail && !isValidEmail(sellerEmail) ? '!border-danger' : ''}`}
               type="email"
               value={sellerEmail}
               onChange={(e) => setSellerEmail(e.target.value)}
             />
-            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
-              <input type="checkbox" checked={sellerSendEmail} onChange={(e) => setSellerSendEmail(e.target.checked)} />
-              Send by email
-            </label>
           </div>
 
           <div className="col-span-2">
@@ -514,31 +445,14 @@ export function FillCashDealContractModal({
                 <input className="input" value={coSellerName} onChange={(e) => setCoSellerName(e.target.value)} />
                 <p className="mt-1 text-[11px] text-text-3">They'll get their own signing link and sign separately, right after the Seller.</p>
               </div>
-              <div>
-                <label className="mb-1 block text-[12px] font-medium text-text-2">Co-Owner Phone</label>
-                <input
-                  className={`input ${coSellerSendSms && !isValidPhone(coSellerPhone) ? '!border-danger' : ''}`}
-                  inputMode="tel"
-                  value={coSellerPhone}
-                  onChange={(e) => setCoSellerPhone(e.target.value)}
-                />
-                <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
-                  <input type="checkbox" checked={coSellerSendSms} onChange={(e) => setCoSellerSendSms(e.target.checked)} />
-                  Send by text
-                </label>
-              </div>
-              <div>
+              <div className="col-span-2">
                 <label className="mb-1 block text-[12px] font-medium text-text-2">Co-Owner Email</label>
                 <input
-                  className={`input ${coSellerSendEmail && !isValidEmail(coSellerEmail) ? '!border-danger' : ''}`}
+                  className={`input ${coSellerEmail && !isValidEmail(coSellerEmail) ? '!border-danger' : ''}`}
                   type="email"
                   value={coSellerEmail}
                   onChange={(e) => setCoSellerEmail(e.target.value)}
                 />
-                <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
-                  <input type="checkbox" checked={coSellerSendEmail} onChange={(e) => setCoSellerSendEmail(e.target.checked)} />
-                  Send by email
-                </label>
               </div>
             </>
           )}
@@ -547,31 +461,14 @@ export function FillCashDealContractModal({
             <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Full Name</label>
             <input className="input" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
           </div>
-          <div>
-            <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Phone</label>
-            <input
-              className={`input ${buyerSendSms && !isValidPhone(buyerPhone) ? '!border-danger' : ''}`}
-              inputMode="tel"
-              value={buyerPhone}
-              onChange={(e) => setBuyerPhone(e.target.value)}
-            />
-            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
-              <input type="checkbox" checked={buyerSendSms} onChange={(e) => setBuyerSendSms(e.target.checked)} />
-              Send by text
-            </label>
-          </div>
-          <div>
+          <div className="col-span-2">
             <label className="mb-1 block text-[12px] font-medium text-text-2">Buyer Email</label>
             <input
-              className={`input ${buyerSendEmail && !isValidEmail(buyerEmail) ? '!border-danger' : ''}`}
+              className={`input ${buyerEmail && !isValidEmail(buyerEmail) ? '!border-danger' : ''}`}
               type="email"
               value={buyerEmail}
               onChange={(e) => setBuyerEmail(e.target.value)}
             />
-            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-text-2">
-              <input type="checkbox" checked={buyerSendEmail} onChange={(e) => setBuyerSendEmail(e.target.checked)} />
-              Send by email
-            </label>
           </div>
         </div>
 
