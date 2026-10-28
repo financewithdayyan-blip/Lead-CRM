@@ -3,7 +3,7 @@ import { Eye, PenLine, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ContractDocumentPage } from './ContractDocumentPreview';
 import { useSignedTemplateUrl, roleLabel } from '@/hooks/useDocTemplates';
-import { useContractAuditEvents, type ContractInstance } from '@/hooks/useContractInstances';
+import { useContractAuditEvents, partyNameAtEvent, type ContractInstance } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { formatDateTime } from '@/lib/utils';
 
@@ -135,7 +135,7 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                             <span className="font-medium">
                               {party ? roleLabel(party.role, instance.templateType ?? 'contract', instance.templatePartyRoles) : 'Unknown party'}
                             </span>
-                            {party ? ` (${party.name})` : ''} {actionText}
+                            {party ? ` (${partyNameAtEvent(party, e.createdAt)})` : ''} {actionText}
                           </>
                         )}
                       </div>

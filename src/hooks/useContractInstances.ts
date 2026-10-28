@@ -57,6 +57,13 @@ export interface ContractInstance {
     signedAt: string | null;
     declinedAt: string | null;
     declinedReason: string | null;
+    /** Only set once this party's link has been forwarded (see
+     * delegate-signing-party) — the identity that held this same party row
+     * BEFORE the handoff, needed to correctly attribute any event that
+     * happened before delegatedAt (the row's own name/etc. have since been
+     * overwritten to the new signer). */
+    delegatedFromName: string | null;
+    delegatedAt: string | null;
   }>;
 }
 
@@ -101,6 +108,8 @@ function fromRow(r: any): ContractInstance {
       signedAt: p.signed_at,
       declinedAt: p.declined_at ?? null,
       declinedReason: p.declined_reason,
+      delegatedFromName: p.delegated_from_name ?? null,
+      delegatedAt: p.delegated_at ?? null,
     })),
   };
 }
@@ -532,6 +541,97 @@ export function useContractAuditEvents(instanceId: string | undefined) {
       );
     },
     enabled: !!instanceId,
+  });
+}
+
+/** Delegation reassigns the same party row in place (see delegate-signing-
+ * party) — name overwritten to the new signer, old identity preserved only
+ * in delegatedFromName/delegatedAt. Without this, every event that happened
+ * BEFORE the handoff (viewed, consented, even the original "sent") would
+ * render under the name of whoever the link was later forwarded to, not
+ * whoever actually did them. Shared between the admin Audit Trail tab and
+ * the public verification page — both render the same event/party shapes. */
+export function partyNameAtEvent(
+  party: { name: string; delegatedFromName: string | null; delegatedAt: string | null },
+  eventCreatedAt: string,
+): string {
+  if (party.delegatedAt && new Date(eventCreatedAt) < new Date(party.delegatedAt)) {
+    return party.delegatedFromName ?? party.name;
+  }
+  return party.name;
+}
+
+// ── Public verification page (the QR code on a Certificate of Completion
+// points here) ──────────────────────────────────────────────────────────────
+
+export interface ContractVerification {
+  name: string;
+  status: string;
+  completedAt: string | null;
+  propertyAddress: string | null;
+  templateType: 'loi' | 'contract' | null;
+  templatePartyRoles: PartyRoleDef[];
+  templateFields: ContractField[];
+  startingDocHash: string | null;
+  finalDocHash: string | null;
+  parties: Array<{
+    id: string;
+    role: PartyRole;
+    name: string;
+    status: 'pending' | 'signed' | 'declined';
+    signedAt: string | null;
+    signOrder: number;
+    delegatedFromName: string | null;
+    delegatedAt: string | null;
+  }>;
+  events: ContractAuditEvent[];
+}
+
+/** Public/unauthenticated — same posture as usePublicSigningParty — reads
+ * get_contract_verification (0180), which only ever returns data once the
+ * contract's status is 'signed'. */
+export function usePublicContractVerification(instanceId: string | undefined) {
+  return useQuery({
+    queryKey: ['contract_verification', instanceId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_contract_verification', { p_instance_id: instanceId });
+      if (error) throw error;
+      if (!data) return null;
+      const d = data as any;
+      return {
+        name: d.name,
+        status: d.status,
+        completedAt: d.completedAt,
+        propertyAddress: d.propertyAddress,
+        templateType: d.templateType,
+        templatePartyRoles: d.templatePartyRolesSnapshot ?? [],
+        templateFields: d.templateFieldsSnapshot ?? [],
+        startingDocHash: d.startingDocHash,
+        finalDocHash: d.finalDocHash,
+        parties: (d.parties ?? []).map((p: any) => ({
+          id: p.id,
+          role: p.role,
+          name: p.name,
+          status: p.status,
+          signedAt: p.signedAt,
+          signOrder: p.signOrder,
+          delegatedFromName: p.delegatedFromName ?? null,
+          delegatedAt: p.delegatedAt ?? null,
+        })),
+        events: (d.events ?? []).map((e: any) => ({
+          id: e.id,
+          partyId: e.partyId,
+          eventType: e.eventType,
+          ipAddress: e.ipAddress,
+          userAgent: e.userAgent,
+          fieldId: e.fieldId ?? null,
+          detail: e.detail ?? null,
+          createdAt: e.createdAt,
+        })),
+      } as ContractVerification;
+    },
+    enabled: !!instanceId,
+    retry: false,
   });
 }
 

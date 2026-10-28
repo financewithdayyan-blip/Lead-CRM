@@ -34,6 +34,7 @@ const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((m
 const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) => ({ default: m.PublicPacketPage })));
 const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
 const SignContractPage = lazy(() => import('@/pages/SignContractPage').then((m) => ({ default: m.SignContractPage })));
+const VerifyContractPage = lazy(() => import('@/pages/VerifyContractPage').then((m) => ({ default: m.VerifyContractPage })));
 const DispositionPage = lazy(() => import('@/pages/DispositionPage').then((m) => ({ default: m.DispositionPage })));
 const BuyerProfilePage = lazy(() => import('@/pages/BuyerProfilePage').then((m) => ({ default: m.BuyerProfilePage })));
 
@@ -77,6 +78,7 @@ export default function App() {
                   {/* Public — investors reach this with no account and no session. */}
                   <Route path="/deal/:slug" element={<ForceLightTheme><PublicPacketPage /></ForceLightTheme>} />
                   <Route path="/sign/:token" element={<ForceLightTheme><SignContractPage /></ForceLightTheme>} />
+                  <Route path="/verify/:instanceId" element={<ForceLightTheme><VerifyContractPage /></ForceLightTheme>} />
                   <Route element={<ProtectedRoute />}>
                     <Route element={<AppShell />}>
                       <Route path="/" element={<DashboardPage />} />
