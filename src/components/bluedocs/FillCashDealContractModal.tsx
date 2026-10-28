@@ -88,6 +88,16 @@ type MarketingKey = (typeof MARKETING_OPTIONS)[number]['key'];
 const LEASEBACK_DAYS_FIELD_ID = '64fe7084-fdf5-4f77-9229-6ec3a460e3d9';
 const LEASEBACK_WITHHELD_FIELD_ID: string | null = null;
 
+// Only shown/sent when "Seller's Listing Agent" is selected above — the
+// commission line on the template ("...pay $___ or ___% of the Purchase
+// Price to Seller's listing agent or broker, ___, separate from the
+// Purchase Price..."). None of these three blanks have been placed in the
+// mapper yet, so all three stay disabled with an explanatory note until
+// their FIELD_ID constants below are filled in.
+const LISTING_COMMISSION_AMOUNT_FIELD_ID: string | null = null;
+const LISTING_COMMISSION_PERCENT_FIELD_ID: string | null = null;
+const LISTING_AGENT_NAME_FIELD_ID: string | null = null;
+
 // A co-owner's signature — needs its own signature field on the template
 // tagged with this role (see the Co-Seller Signature field added in the
 // mapper on page 6). Their name still goes into the single combined Seller
@@ -214,6 +224,9 @@ export function FillCashDealContractModal({
   const [marketing, setMarketing] = useState<MarketingKey | null>(null);
   const [leasebackDays, setLeasebackDays] = useState('');
   const [leasebackWithheld, setLeasebackWithheld] = useState('');
+  const [listingCommissionAmount, setListingCommissionAmount] = useState('');
+  const [listingCommissionPercent, setListingCommissionPercent] = useState('');
+  const [listingAgentName, setListingAgentName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -275,6 +288,9 @@ export function FillCashDealContractModal({
     setMarketing(MARKETING_OPTIONS.find((o) => fv[o.fieldId] === 'true')?.key ?? null);
     setLeasebackDays(fv[LEASEBACK_DAYS_FIELD_ID] ?? '');
     setLeasebackWithheld(LEASEBACK_WITHHELD_FIELD_ID ? stripCurrency(fv[LEASEBACK_WITHHELD_FIELD_ID] ?? '') : '');
+    setListingCommissionAmount(LISTING_COMMISSION_AMOUNT_FIELD_ID ? stripCurrency(fv[LISTING_COMMISSION_AMOUNT_FIELD_ID] ?? '') : '');
+    setListingCommissionPercent(LISTING_COMMISSION_PERCENT_FIELD_ID ? (fv[LISTING_COMMISSION_PERCENT_FIELD_ID] ?? '') : '');
+    setListingAgentName(LISTING_AGENT_NAME_FIELD_ID ? (fv[LISTING_AGENT_NAME_FIELD_ID] ?? '') : '');
   }, [instance]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setValue(key: FieldKey, v: string) {
@@ -322,6 +338,17 @@ export function FillCashDealContractModal({
         if (leasebackDays.trim()) fieldValues[LEASEBACK_DAYS_FIELD_ID] = leasebackDays.trim();
         if (leasebackWithheld.trim() && LEASEBACK_WITHHELD_FIELD_ID) {
           fieldValues[LEASEBACK_WITHHELD_FIELD_ID] = formatCurrency(leasebackWithheld.trim());
+        }
+      }
+      if (marketing === 'listingAgent') {
+        if (listingCommissionAmount.trim() && LISTING_COMMISSION_AMOUNT_FIELD_ID) {
+          fieldValues[LISTING_COMMISSION_AMOUNT_FIELD_ID] = formatCurrency(listingCommissionAmount.trim());
+        }
+        if (listingCommissionPercent.trim() && LISTING_COMMISSION_PERCENT_FIELD_ID) {
+          fieldValues[LISTING_COMMISSION_PERCENT_FIELD_ID] = listingCommissionPercent.trim();
+        }
+        if (listingAgentName.trim() && LISTING_AGENT_NAME_FIELD_ID) {
+          fieldValues[LISTING_AGENT_NAME_FIELD_ID] = listingAgentName.trim();
         }
       }
 
@@ -611,6 +638,70 @@ export function FillCashDealContractModal({
               Clear selection
             </button>
           )}
+
+          {marketing === 'listingAgent' && (
+            <div className="mt-2 space-y-3 rounded-md border border-border-2 bg-surface-3 p-3">
+              <div>
+                <label className="mb-1 block text-[11.5px] font-medium text-text-2">Listing Agent / Broker Name</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Jane Smith, ABC Realty"
+                  value={listingAgentName}
+                  onChange={(e) => setListingAgentName(e.target.value)}
+                  disabled={!LISTING_AGENT_NAME_FIELD_ID}
+                />
+                {!LISTING_AGENT_NAME_FIELD_ID && (
+                  <p className="mt-1 text-[10.5px] text-warning">
+                    Not wired up yet — this field still needs to be placed on the template.
+                  </p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-[11.5px] font-medium text-text-2">Commission Amount</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">$</span>
+                    <input
+                      className="input pl-6"
+                      inputMode="decimal"
+                      placeholder="e.g. 5000"
+                      value={listingCommissionAmount}
+                      onChange={(e) => setListingCommissionAmount(e.target.value)}
+                      disabled={!LISTING_COMMISSION_AMOUNT_FIELD_ID}
+                    />
+                  </div>
+                  {!LISTING_COMMISSION_AMOUNT_FIELD_ID && (
+                    <p className="mt-1 text-[10.5px] text-warning">
+                      Not wired up yet — this field still needs to be placed on the template.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11.5px] font-medium text-text-2">Commission Percent</label>
+                  <div className="relative">
+                    <input
+                      className="input pr-6"
+                      inputMode="decimal"
+                      placeholder="e.g. 3"
+                      value={listingCommissionPercent}
+                      onChange={(e) => setListingCommissionPercent(e.target.value)}
+                      disabled={!LISTING_COMMISSION_PERCENT_FIELD_ID}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-text-3">%</span>
+                  </div>
+                  {!LISTING_COMMISSION_PERCENT_FIELD_ID && (
+                    <p className="mt-1 text-[10.5px] text-warning">
+                      Not wired up yet — this field still needs to be placed on the template.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-text-3">
+                Matches the contract's "$___ or ___% of the Purchase Price" wording — fill in whichever applies.
+              </p>
+            </div>
+          )}
+
           <p className="mt-1 text-[11px] text-text-3">Leave both unselected if neither applies — the contract itself treats that as Not Applicable.</p>
         </div>
 
