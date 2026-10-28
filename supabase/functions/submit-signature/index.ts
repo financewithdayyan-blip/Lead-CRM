@@ -16,6 +16,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { PDFDocument, StandardFonts, rgb, LineCapStyle, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 import { encode as base64Encode } from 'https://deno.land/std@0.173.0/encoding/base64.ts';
+import QRCode from 'https://esm.sh/qrcode@1.5.3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -432,6 +433,7 @@ function roleWordFor(role: string, docType: string, partyRoles: PartyRoleDef[]):
   return partyRoles.find((r) => r.id === role)?.label ?? 'Additional Signer';
 }
 
+
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(',')[1] ?? dataUrl;
   const binary = atob(base64);
@@ -583,6 +585,18 @@ class CertWriter {
 
   gap(px = 10) {
     this.y -= px;
+  }
+
+  /** Right-aligned at the current flow position (not an absolute page
+   * corner — avoids colliding with whatever content lands below it across
+   * however many pages this certificate ends up being). */
+  async qrImage(pngBytes: Uint8Array, opts: { size?: number } = {}) {
+    const size = opts.size ?? 92;
+    this.ensureRoom(size + 10);
+    const img = await this.doc.embedPng(pngBytes);
+    const x = this.width - this.margin - size;
+    this.page.drawImage(img, { x, y: this.y - size, width: size, height: size });
+    this.y -= size + 10;
   }
 
   /** Stamps "Page N of TOTAL" + a title footer on every page written so
@@ -927,41 +941,13 @@ Deno.serve(async (req) => {
       .eq('contract_instance_id', instance.id)
       .order('created_at', { ascending: true });
 
-    const fieldLabelById = new Map((template.fields ?? []).map((f) => [f.id, f.label]));
-
-    const EVENT_LABELS: Record<string, string> = {
-      sent: 'Invitation Sent',
-      viewed: 'Document Viewed',
-      consented: 'Consented to Electronic Signature',
-      signed: 'Signature Completed',
-      declined: 'Declined to Sign',
-      reminder_sent: 'Reminder Sent',
-      voided: 'Envelope Voided',
-      expired: 'Signing Link Expired',
-      edited: 'Contract Terms Edited',
-      field_signed: 'Signature Field Signed',
-      signature_remembered: 'Chose to Reuse Signature for Remaining Fields',
-      delegated: 'Signing Forwarded to Another Signer',
-    };
-
-    const partyLabelById = new Map(
-      updatedParties.map((p) => [p.id, `${roleWordFor(p.role, template.type, partyRoles)} — ${p.name}`]),
-    );
-    // The signed event remains the best available timestamp/IP for the
-    // non-signature fields a party filled — there's still no finer-grained
-    // "this exact text field was typed at this exact second" capture, so
-    // those stay honestly attributed to the moment they pressed Sign.
-    // Signature fields now have the real thing: a field_signed event per
-    // box, so each one gets its own timestamp instead of borrowing the
-    // party's single signing moment.
+    // The signed event is the timestamp/IP this certificate prints per
+    // signer — the detailed per-event, per-field breakdown that used to live
+    // here now lives at the verify page the QR code below links to instead.
     const signedEventByParty = new Map<string, { ip: string | null; ua: string | null; at: string }>();
-    const fieldSignedEventByFieldId = new Map<string, { ip: string | null; ua: string | null; at: string }>();
     for (const e of auditEvents ?? []) {
       if (e.event_type === 'signed' && e.party_id) {
         signedEventByParty.set(e.party_id, { ip: e.ip_address, ua: e.user_agent, at: e.created_at });
-      }
-      if (e.event_type === 'field_signed' && e.field_id) {
-        fieldSignedEventByFieldId.set(e.field_id, { ip: e.ip_address, ua: e.user_agent, at: e.created_at });
       }
     }
 
@@ -994,92 +980,51 @@ Deno.serve(async (req) => {
     cert.eyebrow('Signers');
     for (const p of updatedParties) {
       const roleWord = roleWordFor(p.role, template.type, partyRoles);
-      cert.keyValue(roleWord, `${p.name}${p.phone ? ` · ${p.phone}` : ''}`);
-      cert.line(p.signature_data_url ? 'Signed electronically' : 'No signature required for this role', {
-        size: 9,
-        color: p.signature_data_url ? SUCCESS : SLATE_DIM,
-      });
-      cert.gap(6);
+      cert.keyValue(roleWord, p.name);
+      // Only set once this party's link was forwarded (see
+      // delegate-signing-party) — surfaces the agent/realtor who actually
+      // reviewed it first, right on the printed certificate rather than
+      // only in the detailed trail behind the QR code below.
+      if (p.delegated_from_name) {
+        cert.line(`Originally sent to ${p.delegated_from_name}, who reviewed it and forwarded it to the signer above.`, {
+          size: 8.5,
+          color: SLATE_DIM,
+        });
+      }
+      const signedEvent = signedEventByParty.get(p.id);
+      if (p.signature_data_url) {
+        cert.line(`Signed electronically${signedEvent ? ` — ${formatWhen(signedEvent.at)}` : ''}`, { size: 9, color: SUCCESS });
+        if (signedEvent?.ip) cert.line(`IP Address: ${signedEvent.ip}`, { size: 8, color: SLATE_DIM });
+      } else {
+        cert.line('No signature required for this role', { size: 9, color: SLATE_DIM });
+      }
+      cert.gap(8);
     }
     cert.gap(4);
     cert.divider();
 
-    cert.eyebrow('Complete Event Timeline');
-    if (!auditEvents?.length) {
-      cert.line('No audit events were recorded for this envelope.', { size: 9 });
+    // Every individual view/consent/signature event, with its own
+    // timestamp and IP address, now lives at this link instead of being
+    // printed in full here — a certificate with one line per event got
+    // unreadable fast on a multi-party, once-delegated envelope. The QR
+    // points at get_contract_verification (0180), a public RPC scoped to
+    // completed contracts only.
+    cert.eyebrow('Complete Audit Trail');
+    cert.line(
+      'Scan the QR code below to view the complete, detailed audit trail for this document — every invitation, view, consent, and signature event, with its exact timestamp and IP address.',
+      { size: 9 },
+    );
+    cert.gap(10);
+    const verifyUrl = `https://www.bluebirdacquisition.com/crm/verify/${instance.id}`;
+    try {
+      const qrDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 1, width: 300 });
+      await cert.qrImage(dataUrlToBytes(qrDataUrl), { size: 92 });
+    } catch (qrErr) {
+      // A QR generation hiccup shouldn't block the whole certificate — the
+      // plain URL right below still gets someone to the same place by hand.
+      console.error('Certificate QR generation failed:', qrErr);
     }
-    for (const evt of auditEvents ?? []) {
-      // 'delegated' is the one event type whose party_id no longer points
-      // at a meaningful "who" by cert time — the row's own name has already
-      // been overwritten to the new signer, so partyLabelById would
-      // misattribute the handoff to the person it was handed TO. detail
-      // (captured at the moment of the handoff, before the overwrite) is
-      // the only accurate record of who actually forwarded to whom.
-      const who =
-        evt.event_type === 'delegated' && evt.detail
-          ? 'Forwarded'
-          : evt.party_id
-            ? (partyLabelById.get(evt.party_id) ?? 'Unknown party')
-            : 'System';
-      let label = evt.event_type === 'delegated' && evt.detail ? evt.detail : EVENT_LABELS[evt.event_type] ?? evt.event_type;
-      if (evt.event_type === 'field_signed' && evt.field_id) {
-        const fieldLabel = fieldLabelById.get(evt.field_id);
-        if (fieldLabel) label = `Signed "${fieldLabel}"`;
-      }
-      cert.line(who, { size: 9.5, color: INK, bold: true });
-      cert.line(`${label} — ${formatWhen(evt.created_at)}`, { size: 9 });
-      if (evt.ip_address) cert.line(`IP Address: ${evt.ip_address}`, { size: 8, color: SLATE_DIM });
-      if (evt.user_agent) cert.line(`Device: ${evt.user_agent}`, { size: 8, color: SLATE_DIM });
-      cert.gap(7);
-    }
-    cert.gap(4);
-    cert.divider();
-
-    // A tickmark's value is the literal string "true"/"false" — only a
-    // checked box counts as "completed" here, same as the signing page's
-    // own required-field gating. A signature field's value is a full image
-    // data URL, useless printed verbatim, so it gets a plain "Signed
-    // electronically" line instead of its raw value like every other type.
-    const fieldsWithValues = (template.fields ?? []).filter((f) => {
-      const v = fieldValues[f.id];
-      if (!v) return false;
-      if (f.type === 'tickmark') return v === 'true';
-      return true;
-    });
-    if (fieldsWithValues.length > 0) {
-      cert.eyebrow('Fields Completed');
-      const fieldsByRole = new Map<string, ContractField[]>();
-      for (const f of fieldsWithValues) {
-        if (!fieldsByRole.has(f.role)) fieldsByRole.set(f.role, []);
-        fieldsByRole.get(f.role)!.push(f);
-      }
-      for (const [role, fields] of fieldsByRole) {
-        const p = partyByRole.get(role);
-        const roleWord = roleWordFor(role, template.type, partyRoles);
-        cert.line(`${roleWord}${p ? ` — ${p.name}` : ''}`, { size: 9.5, color: INK, bold: true });
-        const signedEvent = p ? signedEventByParty.get(p.id) : undefined;
-        if (signedEvent) {
-          cert.line(`Recorded at time of signing — ${formatWhen(signedEvent.at)}`, { size: 8, color: SLATE_DIM });
-          if (signedEvent.ip) cert.line(`IP Address: ${signedEvent.ip}`, { size: 8, color: SLATE_DIM });
-        }
-        cert.gap(3);
-        for (const f of fields) {
-          const displayValue = f.type === 'signature' ? 'Signed electronically' : f.type === 'tickmark' ? 'Checked' : fieldValues[f.id];
-          cert.keyValue(f.label, displayValue, { size: 9 });
-          // A signature field gets its own field-level timestamp/IP right
-          // underneath it when one was actually recorded — the one place in
-          // this certificate where "completed" means something more precise
-          // than "sometime during this party's single Sign action."
-          if (f.type === 'signature') {
-            const fieldEvent = fieldSignedEventByFieldId.get(f.id);
-            if (fieldEvent) {
-              cert.line(`Signed — ${formatWhen(fieldEvent.at)}${fieldEvent.ip ? ` · IP ${fieldEvent.ip}` : ''}`, { size: 7.5, color: SLATE_DIM });
-            }
-          }
-        }
-        cert.gap(8);
-      }
-    }
+    cert.line(verifyUrl, { size: 8, color: SLATE_DIM });
 
     cert.finalize('Bluebird Acquisition — Certificate of Completion');
 
