@@ -197,6 +197,13 @@ export function FillCashDealContractModal({
   const [sellerEmail, setSellerEmail] = useState(initialSeller?.email ?? '');
   const [sellerSendSms, setSellerSendSms] = useState(true);
   const [sellerSendEmail, setSellerSendEmail] = useState(false);
+  // Who actually receives the invite/signing link — doesn't change the name
+  // printed on the document (always sellerName above). 'agent' is for when
+  // a realtor/attorney represents the seller and needs to review first; they
+  // can forward the signing link to the real seller from their own signing
+  // page (see the delegate-signing-party flow in SignContractPage).
+  const [sellerRecipient, setSellerRecipient] = useState<'seller' | 'agent'>('seller');
+  const [sellerAgentName, setSellerAgentName] = useState('');
   const [ownerCount, setOwnerCount] = useState<1 | 2>(1);
   const [coSellerName, setCoSellerName] = useState('');
   const [coSellerPhone, setCoSellerPhone] = useState('');
@@ -251,11 +258,18 @@ export function FillCashDealContractModal({
     const buyer = instance.parties.find((p) => p.role === buyerRole);
 
     if (seller) {
-      setSellerName(seller.name);
+      const printedSellerName = raw('sellerName');
+      setSellerName(printedSellerName);
       setSellerPhone(seller.phone ?? '');
       setSellerEmail(seller.email ?? '');
       setSellerSendSms(seller.sendSms);
       setSellerSendEmail(seller.sendEmail);
+      // The party's own name only diverges from the printed name when the
+      // invite went to an agent instead of the seller directly.
+      if (seller.name && seller.name !== printedSellerName) {
+        setSellerRecipient('agent');
+        setSellerAgentName(seller.name);
+      }
     }
     if (coSeller) {
       setOwnerCount(2);
@@ -302,7 +316,8 @@ export function FillCashDealContractModal({
   const sellerReady =
     (sellerSendSms || sellerSendEmail) &&
     (!sellerSendSms || isValidPhone(sellerPhone)) &&
-    (!sellerSendEmail || isValidEmail(sellerEmail));
+    (!sellerSendEmail || isValidEmail(sellerEmail)) &&
+    (sellerRecipient === 'seller' || sellerAgentName.trim().length > 0);
   const coSellerReady =
     ownerCount === 1 ||
     (coSellerName.trim() &&
@@ -352,9 +367,10 @@ export function FillCashDealContractModal({
         }
       }
 
+      const sellerPartyName = sellerRecipient === 'agent' ? sellerAgentName.trim() : sellerName.trim();
       const parties = [
         {
-          role: 'seller', name: sellerName.trim(), phone: sellerPhone.trim(), email: sellerEmail.trim(),
+          role: 'seller', name: sellerPartyName, phone: sellerPhone.trim(), email: sellerEmail.trim(),
           sendSms: sellerSendSms, sendEmail: sellerSendEmail, signOrder: 1,
         },
         ...(ownerCount === 2
@@ -419,8 +435,52 @@ export function FillCashDealContractModal({
             <input className="input" value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
             <p className="mt-1 text-[11px] text-text-3">If there are 2 owners, put both names here — e.g. "Jane Doe and John Doe".</p>
           </div>
+
+          <div className="col-span-2">
+            <label className="mb-1 block text-[12px] font-medium text-text-2">Sending To</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-1.5 text-[12.5px] text-text-2">
+                <input
+                  type="radio"
+                  name="sellerRecipient"
+                  checked={sellerRecipient === 'seller'}
+                  onChange={() => setSellerRecipient('seller')}
+                />
+                Seller directly
+              </label>
+              <label className="flex items-center gap-1.5 text-[12.5px] text-text-2">
+                <input
+                  type="radio"
+                  name="sellerRecipient"
+                  checked={sellerRecipient === 'agent'}
+                  onChange={() => setSellerRecipient('agent')}
+                />
+                Seller's Agent
+              </label>
+            </div>
+            <p className="mt-1 text-[11px] text-text-3">
+              {sellerRecipient === 'agent'
+                ? "The invite below goes to the agent, not the Seller — the contract itself still prints the Seller's name above. The agent can forward the signing link to the actual Seller from their own signing page."
+                : 'The invite and signing link go straight to the Seller.'}
+            </p>
+          </div>
+
+          {sellerRecipient === 'agent' && (
+            <div className="col-span-2">
+              <label className="mb-1 block text-[12px] font-medium text-text-2">Seller's Agent Name</label>
+              <input
+                className="input"
+                placeholder="e.g. Jane Smith, ABC Realty"
+                value={sellerAgentName}
+                onChange={(e) => setSellerAgentName(e.target.value)}
+              />
+            </div>
+          )}
+
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Phone</label>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">
+              {sellerRecipient === 'agent' ? "Agent Phone" : 'Seller Phone'}
+            </label>
             <input
               className={`input ${sellerSendSms && !isValidPhone(sellerPhone) ? '!border-danger' : ''}`}
               inputMode="tel"
@@ -433,7 +493,9 @@ export function FillCashDealContractModal({
             </label>
           </div>
           <div>
-            <label className="mb-1 block text-[12px] font-medium text-text-2">Seller Email</label>
+            <label className="mb-1 block text-[12px] font-medium text-text-2">
+              {sellerRecipient === 'agent' ? "Agent Email" : 'Seller Email'}
+            </label>
             <input
               className={`input ${sellerSendEmail && !isValidEmail(sellerEmail) ? '!border-danger' : ''}`}
               type="email"
