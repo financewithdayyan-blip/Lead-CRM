@@ -91,12 +91,12 @@ const LEASEBACK_WITHHELD_FIELD_ID: string | null = null;
 // Only shown/sent when "Seller's Listing Agent" is selected above — the
 // commission line on the template ("...pay $___ or ___% of the Purchase
 // Price to Seller's listing agent or broker, ___, separate from the
-// Purchase Price..."). None of these three blanks have been placed in the
-// mapper yet, so all three stay disabled with an explanatory note until
+// Purchase Price..."). The amount/percent blanks haven't been placed in the
+// mapper yet, so those two stay disabled with an explanatory note until
 // their FIELD_ID constants below are filled in.
 const LISTING_COMMISSION_AMOUNT_FIELD_ID: string | null = null;
 const LISTING_COMMISSION_PERCENT_FIELD_ID: string | null = null;
-const LISTING_AGENT_NAME_FIELD_ID: string | null = null;
+const LISTING_AGENT_NAME_FIELD_ID: string | null = 'cdfc0260-fb97-4cb8-9d51-d190fdf88a28';
 
 // A co-owner's signature — needs its own signature field on the template
 // tagged with this role (see the Co-Seller Signature field added in the
