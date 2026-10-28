@@ -12,6 +12,7 @@
 // client for everything else).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
+import { encode as base64Encode } from 'https://deno.land/std@0.173.0/encoding/base64.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -121,6 +122,18 @@ function toE164(raw: string): string | null {
 const INVITE_MESSAGE = (docName: string, address: string, link: string) =>
   `Hey, here's the link to the ${docName} contract for your property\n${address}\n${link}\nSign it and let's start moving with it\nThanks,\nDayyan`;
 
+// denomailer's content:'auto' path quoted-printable-encodes the html body
+// and soft-wraps it every 74 characters with no regard for what it splits.
+// Confirmed by direct reproduction that this lands mid-URL inside a real
+// <a href> often enough to matter — silently dropping a character once a
+// client decodes it (e.g. the "." right after "www" in a signing link).
+// Base64 is immune: a decoder concatenates every line before decoding
+// fixed 4-char blocks, so a line wrap can never land inside a token.
+function toMimeHtml(html: string) {
+  const b64 = base64Encode(html).match(/.{1,76}/g)?.join('\r\n') ?? base64Encode(html);
+  return [{ mimeType: 'text/html; charset="utf-8"', content: b64, transferEncoding: 'base64' }];
+}
+
 // ── Email (duplicated into submit-signature too, not shared — matches this
 // codebase's own established convention for the Zoom SMS helpers above). ───
 async function sendEmail(to: string, subject: string, html: string) {
@@ -134,7 +147,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   });
   try {
     await withTimeout(
-      client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, content: 'auto', html }),
+      client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, mimeContent: toMimeHtml(html) }),
       'SMTP send',
     );
   } finally {

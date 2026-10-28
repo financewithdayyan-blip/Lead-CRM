@@ -21,6 +21,7 @@
 // "already delegated" state needed anywhere.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
+import { encode as base64Encode } from 'https://deno.land/std@0.173.0/encoding/base64.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -122,13 +123,24 @@ async function sendBlueDocsSms(toPhone: string, message: string) {
 const NEXT_SIGNER_MESSAGE = (docName: string, address: string, link: string) =>
   `Hey, this ${docName} contract for the property\n${address}\nhas been forwarded to you to sign\n${link}\nThanks,\nDayyan`;
 
+// denomailer's content:'auto' path quoted-printable-encodes the html body
+// and soft-wraps it every 74 characters with no regard for what it splits —
+// confirmed by direct reproduction that this lands mid-URL inside a real
+// <a href> (e.g. the "." right after "www" in a signing link). Base64 is
+// immune: a decoder concatenates every line before decoding fixed 4-char
+// blocks, so a line wrap can never land inside a token.
+function toMimeHtml(html: string) {
+  const b64 = base64Encode(html).match(/.{1,76}/g)?.join('\r\n') ?? base64Encode(html);
+  return [{ mimeType: 'text/html; charset="utf-8"', content: b64, transferEncoding: 'base64' }];
+}
+
 // ── Email (duplicated, same reasoning). ─────────────────────────────────────
 async function sendEmail(to: string, subject: string, html: string) {
   const client = new SMTPClient({
     connection: { hostname: SMTP_HOST, port: SMTP_PORT, tls: true, auth: { username: SMTP_USER, password: SMTP_PASS } },
   });
   try {
-    await client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, content: 'auto', html });
+    await client.send({ from: `${SMTP_FROM_NAME} <${SMTP_FROM_EMAIL}>`, to, subject, mimeContent: toMimeHtml(html) });
   } finally {
     await client.close();
   }
