@@ -24,6 +24,7 @@ const EVENT_ACTION_TEXT: Record<string, string> = {
   edited: 'edited the contract terms',
   field_signed: 'signed a signature field',
   signature_remembered: 'chose to reuse their signature for the rest of the document',
+  delegated: 'forwarded signing to the actual signer',
 };
 
 export function ContractPreviewModal({ instance, onClose }: { instance: ContractInstance; onClose: () => void }) {
@@ -122,10 +123,21 @@ export function ContractPreviewModal({ instance, onClose }: { instance: Contract
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] text-text">
-                        <span className="font-medium">
-                          {party ? roleLabel(party.role, instance.templateType ?? 'contract', instance.templatePartyRoles) : 'Unknown party'}
-                        </span>
-                        {party ? ` (${party.name})` : ''} {actionText}
+                        {/* detail stands on its own for 'delegated' — by the
+                            time this renders, the party row's own name has
+                            already changed to the new signer, so the
+                            generic "{role} ({name}) {action}" pattern below
+                            would misattribute who actually forwarded it. */}
+                        {e.detail ? (
+                          e.detail
+                        ) : (
+                          <>
+                            <span className="font-medium">
+                              {party ? roleLabel(party.role, instance.templateType ?? 'contract', instance.templatePartyRoles) : 'Unknown party'}
+                            </span>
+                            {party ? ` (${party.name})` : ''} {actionText}
+                          </>
+                        )}
                       </div>
                       {e.eventType === 'signed' && party?.typedSignatureName ? (
                         <div className="mt-0.5 text-[11px] text-text-2">

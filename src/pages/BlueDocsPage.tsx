@@ -193,11 +193,21 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
 // ─── Contract Templates tab ─────────────────────────────────────────────────
 // Every purchase-contract deal type (Cash, Novation, Subject-To, Seller
 // Finance) lives together under one card — the admin picks the type at
-// upload time instead of each type getting its own slot. Anything else
-// (a JV agreement, a listing/marketing agreement, etc.) collects in Others.
+// upload time instead of each type getting its own slot. Assignment of
+// Purchase Contract sits here too, pinned last, by name rather than a 5th
+// typeOptions entry — it isn't itself a deal-structure PSA the way the other
+// four are (nothing elsewhere picks a template by matching this against a
+// lead's deal type), it's just treated as co-equal with them for display
+// since the business considers it one of its core purchase contracts.
+// Anything else (a JV agreement, a listing/marketing agreement, etc.)
+// collects in Others.
+const PINNED_PURCHASE_CONTRACT_NAMES = ['Assignment_of_Purchase_Contract'];
+
 function ContractTemplatesTab() {
   const { data: templates = [] } = useDocTemplates('contract');
   const flow = useDocFlow();
+  const isPinnedPurchaseContract = (t: { contractType: string | null; name: string }) =>
+    t.contractType === null && PINNED_PURCHASE_CONTRACT_NAMES.includes(t.name);
 
   return (
     <div className="space-y-5">
@@ -208,14 +218,15 @@ function ContractTemplatesTab() {
         // Deal-type order (Cash, Novation, Subject-To, Seller Finance) rather
         // than upload recency — Cash Deal is the one actually in daily use
         // and should always lead the list, not whichever was (re)uploaded
-        // most recently.
+        // most recently. Pinned-by-name items (no real contractType to sort
+        // by) always land last.
         items={templates
-          .filter((t) => t.contractType !== null)
-          .sort(
-            (a, b) =>
-              PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === a.contractType) -
-              PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === b.contractType),
-          )}
+          .filter((t) => t.contractType !== null || isPinnedPurchaseContract(t))
+          .sort((a, b) => {
+            const ai = a.contractType === null ? PURCHASE_CONTRACT_TYPES.length : PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === a.contractType);
+            const bi = b.contractType === null ? PURCHASE_CONTRACT_TYPES.length : PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === b.contractType);
+            return ai - bi;
+          })}
         onOpenMapper={flow.openMapper}
         onSend={flow.setSendTarget}
         onDeleteTarget={flow.setDeleteTarget}
@@ -223,7 +234,7 @@ function ContractTemplatesTab() {
       <TemplateCategoryCard
         label="Others"
         docType="contract"
-        items={templates.filter((t) => t.contractType === null)}
+        items={templates.filter((t) => t.contractType === null && !isPinnedPurchaseContract(t))}
         multi
         onOpenMapper={flow.openMapper}
         onSend={flow.setSendTarget}

@@ -491,7 +491,8 @@ export interface ContractAuditEvent {
     | 'expired'
     | 'edited'
     | 'field_signed'
-    | 'signature_remembered';
+    | 'signature_remembered'
+    | 'delegated';
   ipAddress: string | null;
   userAgent: string | null;
   createdAt: string;
@@ -499,6 +500,12 @@ export interface ContractAuditEvent {
    * was, so the admin audit view can name it instead of just saying "signed"
    * once per field with no way to tell them apart. */
   fieldId: string | null;
+  /** Free-text note, currently only set on 'delegated' events — "X forwarded
+   * signing to Y". Needed because by the time this renders, the party row's
+   * own `name` has already been overwritten to the new signer, so the
+   * generic "{party name} {action}" pattern elsewhere can't tell this story
+   * on its own. Null for every other event type. */
+  detail: string | null;
 }
 
 export function useContractAuditEvents(instanceId: string | undefined) {
@@ -507,7 +514,7 @@ export function useContractAuditEvents(instanceId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('contract_audit_events')
-        .select('id, party_id, event_type, ip_address, user_agent, created_at, field_id')
+        .select('id, party_id, event_type, ip_address, user_agent, created_at, field_id, detail')
         .eq('contract_instance_id', instanceId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -519,10 +526,46 @@ export function useContractAuditEvents(instanceId: string | undefined) {
           ipAddress: r.ip_address,
           userAgent: r.user_agent,
           fieldId: r.field_id ?? null,
+          detail: r.detail ?? null,
           createdAt: r.created_at,
         }),
       );
     },
     enabled: !!instanceId,
+  });
+}
+
+/** Lets a seller-side party (role 'seller'/'seller_2') who isn't actually
+ * the seller — a realtor, an attorney — forward their own signing turn to
+ * the real signer instead of completing it themselves. Seller-only; there's
+ * no buyer-side equivalent anywhere in the product. Public/token-based, same
+ * posture as useSubmitSignature. */
+export function useDelegateSigningParty() {
+  return useMutation({
+    mutationFn: async ({
+      token,
+      newName,
+      newPhone,
+      newEmail,
+      sendSms,
+      sendEmail,
+    }: {
+      token: string;
+      newName: string;
+      newPhone?: string;
+      newEmail?: string;
+      sendSms: boolean;
+      sendEmail: boolean;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('delegate-signing-party', {
+        body: { token, newName, newPhone, newEmail, sendSms, sendEmail },
+      });
+      if (error) {
+        const errBody = await error.context?.json?.().catch(() => null);
+        throw new Error(errBody?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data as { ok: true };
+    },
   });
 }

@@ -29,6 +29,9 @@ verify_jwt = false
 [functions.log-signing-view]
 verify_jwt = false
 
+[functions.delegate-signing-party]
+verify_jwt = false
+
 [functions.ai-reply-review]
 verify_jwt = false
 

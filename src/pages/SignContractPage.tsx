@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Download, FileSignature, FileText, Loader2, X, ZoomIn } from 'lucide-react';
+import { ChevronDown, Clock, Download, FileSignature, FileText, Loader2, Send, X, ZoomIn } from 'lucide-react';
 import {
   usePublicSigningParty,
   useSigningPdfUrl,
@@ -8,6 +8,7 @@ import {
   useLogSigningView,
   useRecordConsent,
   useSignedFinalDocUrl,
+  useDelegateSigningParty,
 } from '@/hooks/useContractInstances';
 import { loadPdf, type pdfjsLib } from '@/lib/pdfjs';
 import { ContractDocumentPage } from '@/components/bluedocs/ContractDocumentPreview';
@@ -19,6 +20,18 @@ const MAX_PAGE_WIDTH = 680;
 const PAGE_CONTAINER_MAX = 720;
 const PAGE_CONTAINER_PADDING = 32; // px-4 on each side
 const FILLABLE_TYPES = new Set(['text', 'full_name', 'currency', 'date', 'paragraph', 'tickmark']);
+
+/** Delegation (forwarding to the real seller) only ever makes sense on the
+ * seller side — a realtor or attorney representing the seller is a real,
+ * common scenario; there's no buyer-side equivalent anywhere in this
+ * product, so this is never offered for any other role. */
+function isSellerSide(role: string): boolean {
+  return role === 'seller' || role.startsWith('seller_');
+}
+
+function isValidGateEmail(raw: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
+}
 
 /** The document was always rendered at a fixed 680px, which overflowed the
  * viewport on a phone and forced sideways scrolling to reach fields. This
@@ -194,6 +207,111 @@ function DownloadCertificateButton({ token, docLabel }: { token: string; docLabe
   );
 }
 
+/** Seller-side only (see isSellerSide) — lets a realtor/attorney who was
+ * sent this link instead of the actual seller hand their signing turn off
+ * to the real owner, rather than signing on their behalf. Shown as a
+ * secondary option alongside the normal fill-and-sign flow, never in place
+ * of it — most recipients of a seller link genuinely are the seller. */
+function ForwardToSellerModal({
+  token,
+  onClose,
+  onForwarded,
+}: {
+  token: string;
+  onClose: () => void;
+  onForwarded: (name: string) => void;
+}) {
+  const delegate = useDelegateSigningParty();
+  const [name, setName] = useState('');
+  const [sendSms, setSendSms] = useState(true);
+  const [phone, setPhone] = useState('');
+  const [sendEmail, setSendEmail] = useState(false);
+  const [email, setEmail] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+
+  const phoneDigits = phone.replace(/[^0-9]/g, '');
+  const phoneValid = phoneDigits.length === 10 || (phoneDigits.length === 11 && phoneDigits.startsWith('1'));
+  const canSubmit =
+    name.trim().length > 0 &&
+    confirmed &&
+    (sendSms || sendEmail) &&
+    (!sendSms || phoneValid) &&
+    (!sendEmail || isValidGateEmail(email));
+
+  function handleSubmit() {
+    if (!canSubmit) return;
+    delegate.mutate(
+      { token, newName: name.trim(), newPhone: sendSms ? phone.trim() : undefined, newEmail: sendEmail ? email.trim() : undefined, sendSms, sendEmail },
+      { onSuccess: () => onForwarded(name.trim()) },
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-xl bg-white p-4 shadow-popover sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="text-[14px] font-semibold text-text">Forward to the seller</div>
+        <p className="mt-1 text-[12px] text-text-3">
+          If you're representing the seller rather than the owner yourself, send this straight to them — they'll get
+          their own link to review and sign, and this link of yours stops working.
+        </p>
+
+        <input
+          autoFocus
+          className="input mt-3"
+          placeholder="Seller's full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+
+        <label className="mt-2.5 flex items-center gap-2 text-[12.5px] text-text-2">
+          <input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} />
+          Text them
+        </label>
+        {sendSms && (
+          <input
+            className="input mt-1.5"
+            placeholder="Their phone number"
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        )}
+
+        <label className="mt-2 flex items-center gap-2 text-[12.5px] text-text-2">
+          <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
+          Email them
+        </label>
+        {sendEmail && (
+          <input
+            className="input mt-1.5"
+            placeholder="Their email address"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        )}
+
+        <label className="mt-3 flex items-start gap-2 text-[11.5px] text-text-2">
+          <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+          I'm not the seller — I'm forwarding this to the person who is.
+        </label>
+
+        {delegate.isError && <p className="mt-2 text-[12px] text-danger">{(delegate.error as Error).message}</p>}
+
+        <div className="mt-3 flex gap-2">
+          <button className="btn flex-1" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary flex-1" disabled={!canSubmit || delegate.isPending} onClick={handleSubmit}>
+            {delegate.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            Forward
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SignContractPage() {
   const { token } = useParams<{ token: string }>();
   const { data: party, isLoading, isError } = usePublicSigningParty(token);
@@ -210,6 +328,13 @@ export function SignContractPage() {
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [finalPdf, setFinalPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  // Set once this party has successfully forwarded to the real seller — a
+  // dedicated confirmation screen takes over from here, same precedence as
+  // `submitted`. A reload of this same page afterward just shows "link no
+  // longer valid" (the token was rotated server-side), so this only ever
+  // matters for the one page load where the forward actually happened.
+  const [forwardedTo, setForwardedTo] = useState<string | null>(null);
   const [fieldInputs, setFieldInputs] = useState<Record<string, string>>({});
   // One rendered signature image per signature-type field this signer has
   // individually tapped — not one image reused for every signature box of
@@ -443,6 +568,19 @@ export function SignContractPage() {
     );
   }
 
+  if (forwardedTo) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-4 text-center">
+        <SignSuccessCheck />
+        <p className="mt-3 text-lg font-semibold text-text">You've forwarded this to {forwardedTo}</p>
+        <p className="mt-1 max-w-sm text-[13.5px] text-text-3">
+          They'll get their own link to review and sign {party.contractName} directly — there's nothing further for
+          you to do here.
+        </p>
+      </div>
+    );
+  }
+
   if (submitted || party.status === 'signed') {
     const docLabel = party.templateType === 'loi' ? 'LOI' : 'Contract';
 
@@ -599,6 +737,16 @@ export function SignContractPage() {
             </span>
           )}
         </div>
+        {isSellerSide(party.role) && (
+          <div className="mx-auto max-w-[720px] px-4 pb-2.5">
+            <button
+              className="flex items-center gap-1 text-[11.5px] font-medium text-primary hover:text-primary-hover"
+              onClick={() => setForwardOpen(true)}
+            >
+              <Send size={11} /> Not the seller? Forward this to them
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mx-auto max-w-[720px] px-4 py-5">
@@ -751,6 +899,17 @@ export function SignContractPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {forwardOpen && token && (
+        <ForwardToSellerModal
+          token={token}
+          onClose={() => setForwardOpen(false)}
+          onForwarded={(name) => {
+            setForwardOpen(false);
+            setForwardedTo(name);
+          }}
+        />
       )}
 
       {/* Sticky bottom action bar — the submit button stays reachable on a
