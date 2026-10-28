@@ -176,6 +176,9 @@ const CASH_DEAL_FIELD_IDS = {
   emdAmount: 'c1654e71-3c41-4216-8c91-8130873deec7',
   titleCompany: 'e9566337-b341-4d88-a02c-e4bcd0ea16c0',
   closingDate: 'ebfb718b-a8d6-4017-b426-732dac8fec12',
+  // Only set when Marketing & Compensation was marked "Seller's Listing
+  // Agent" on the fill form — absent (and this row skipped) otherwise.
+  listingAgentName: 'cdfc0260-fb97-4cb8-9d51-d190fdf88a28',
 } as const;
 
 const AGENT_NAME = 'Dayyan';
@@ -551,30 +554,21 @@ class CertWriter {
     }
   }
 
-  /** The same branded row every Blue Docs email opens with — a rounded
-   * logo mark with a "B" monogram, the wordmark, and a "Ref: XXXXXXXX"
-   * short id right-aligned — so the certificate reads as the same product
-   * as the emails that led here, not a generic pdf-lib dump bolted onto
-   * the end of the contract. */
+  /** The same branded row every Blue Docs email opens with — a small
+   * square mark, the wordmark, and a "Ref: XXXXXXXX" short id right-
+   * aligned — so the certificate reads as the same product as the emails
+   * that led here. Deliberately small/plain (no monogram letter) to match
+   * the mark's own proportions in those emails; an earlier oversized
+   * rounded "B" badge version read as off-balance next to the heading. */
   brandHeader(certId: string) {
-    this.ensureRoom(34);
-    const markSize = 26;
-    const markX = this.margin;
-    const markTopY = this.y + 6;
-    this.page.drawSvgPath(roundedRectPath(markSize, markSize, 7), { x: markX, y: markTopY, color: rgb(...INK) });
-    const letterSize = 14;
-    this.page.drawText('B', {
-      x: markX + markSize / 2 - this.bold.widthOfTextAtSize('B', letterSize) / 2,
-      y: markTopY - markSize / 2 - letterSize * 0.36,
-      size: letterSize,
-      font: this.bold,
-      color: rgb(1, 1, 1),
-    });
-    this.page.drawText('Bluebird Acquisition', { x: markX + markSize + 10, y: this.y - 2, size: 14.5, font: this.bold, color: rgb(...INK) });
+    this.ensureRoom(22);
+    const sq = 11;
+    this.page.drawSvgPath(roundedRectPath(sq, sq, 2.5), { x: this.margin, y: this.y + sq - 1, color: rgb(...INK) });
+    this.page.drawText('Bluebird Acquisition', { x: this.margin + sq + 8, y: this.y, size: 13, font: this.bold, color: rgb(...INK) });
     const refText = `Ref: ${certId.slice(0, 8).toUpperCase()}`;
-    const w = this.font.widthOfTextAtSize(refText, 9.5);
-    this.page.drawText(refText, { x: this.width - this.margin - w, y: this.y - 2, size: 9.5, font: this.font, color: rgb(...SLATE_DIM) });
-    this.y -= 40;
+    const w = this.font.widthOfTextAtSize(refText, 10);
+    this.page.drawText(refText, { x: this.width - this.margin - w, y: this.y, size: 10, font: this.font, color: rgb(...SLATE_DIM) });
+    this.y -= 30;
   }
 
   heading(text: string) {
@@ -582,7 +576,7 @@ class CertWriter {
     this.page.drawText(text, { x: this.margin, y: this.y, size: 24, font: this.bold, color: rgb(...INK) });
     this.y -= 22;
     this.page.drawRectangle({ x: this.margin, y: this.y, width: 46, height: 3, color: rgb(...BRAND) });
-    this.y -= 14;
+    this.y -= 12;
   }
 
   /** Small uppercase-ish section label, e.g. "DOCUMENT OVERVIEW", marked
@@ -591,7 +585,7 @@ class CertWriter {
     this.ensureRoom(22);
     this.page.drawRectangle({ x: this.margin, y: this.y + 1.5, width: 4, height: 9, color: rgb(...BRAND) });
     this.page.drawText(text.toUpperCase(), { x: this.margin + 9, y: this.y, size: 9.5, font: this.bold, color: rgb(...BRAND) });
-    this.y -= 17;
+    this.y -= 15;
   }
 
   divider() {
@@ -602,7 +596,7 @@ class CertWriter {
       thickness: 0.75,
       color: rgb(...RULE),
     });
-    this.y -= 15;
+    this.y -= 13;
   }
 
   line(text: string, opts: { size?: number; color?: [number, number, number]; bold?: boolean } = {}) {
@@ -611,9 +605,9 @@ class CertWriter {
     const font = opts.bold ? this.bold : this.font;
     const maxWidth = this.width - this.margin * 2;
     for (const wrapped of wrapText(text, font, size, maxWidth)) {
-      this.ensureRoom(size * 1.45);
+      this.ensureRoom(size * 1.32);
       this.page.drawText(wrapped, { x: this.margin, y: this.y, size, font, color: rgb(r, g, b) });
-      this.y -= size * 1.45;
+      this.y -= size * 1.32;
     }
   }
 
@@ -628,20 +622,24 @@ class CertWriter {
     const valueMaxWidth = this.width - this.margin * 2 - labelWidth - 7;
     const wrapped = wrapText(value || '—', this.font, size, valueMaxWidth);
 
-    this.ensureRoom(size * 1.6);
+    this.ensureRoom(size * 1.42);
     this.page.drawText(labelText, { x: this.margin, y: this.y, size, font: this.bold, color: rgb(...SLATE) });
     this.page.drawText(wrapped[0] ?? '', { x: this.margin + labelWidth + 7, y: this.y, size, font: this.font, color: rgb(...INK) });
-    this.y -= size * 1.6;
+    this.y -= size * 1.42;
     for (const extra of wrapped.slice(1)) {
-      this.ensureRoom(size * 1.6);
+      this.ensureRoom(size * 1.42);
       this.page.drawText(extra, { x: this.margin + labelWidth + 7, y: this.y, size, font: this.font, color: rgb(...INK) });
-      this.y -= size * 1.6;
+      this.y -= size * 1.42;
     }
   }
 
   /** A label followed by a rounded colored pill instead of plain text —
    * used for Status, the one field on this certificate that reads better
-   * as a badge than a sentence. */
+   * as a badge than a sentence. The pill is centered on the label's own
+   * text baseline (rather than hung a fixed offset below it), and the
+   * badge text inside is centered using the font's real ascender height
+   * (heightAtSize, not a guessed padding number) — the earlier version
+   * guessed at both and ended up visibly low in the pill. */
   keyValueBadge(label: string, badgeText: string, opts: { bg: [number, number, number]; color: [number, number, number] }) {
     const size = 10;
     const labelText = `${label}:`;
@@ -652,13 +650,15 @@ class CertWriter {
     const textW = this.bold.widthOfTextAtSize(badgeText, badgeSize);
     const boxW = textW + padX * 2;
     const boxH = badgeSize + padY * 2;
-    this.ensureRoom(Math.max(size * 1.6, boxH + 2));
+    this.ensureRoom(Math.max(size * 1.42, boxH + 2));
+    const boxBottom = this.y - (boxH - size) / 2;
     this.page.drawText(labelText, { x: this.margin, y: this.y, size, font: this.bold, color: rgb(...SLATE) });
     const badgeX = this.margin + labelWidth + 7;
-    const badgeY = this.y - 3;
-    this.page.drawSvgPath(roundedRectPath(boxW, boxH, boxH / 2), { x: badgeX, y: badgeY + boxH, color: rgb(...opts.bg) });
-    this.page.drawText(badgeText, { x: badgeX + padX, y: badgeY + padY - 1, size: badgeSize, font: this.bold, color: rgb(...opts.color) });
-    this.y -= size * 1.7;
+    this.page.drawSvgPath(roundedRectPath(boxW, boxH, boxH / 2), { x: badgeX, y: boxBottom + boxH, color: rgb(...opts.bg) });
+    const capH = this.bold.heightAtSize(badgeSize, { descender: false });
+    const textBaseline = boxBottom + (boxH - capH) / 2;
+    this.page.drawText(badgeText, { x: badgeX + padX, y: textBaseline, size: badgeSize, font: this.bold, color: rgb(...opts.color) });
+    this.y -= Math.max(size * 1.5, boxH + 8);
   }
 
   /** A line prefixed with a small filled green checkmark circle instead of
@@ -667,7 +667,7 @@ class CertWriter {
   checkLine(text: string, opts: { size?: number; color?: [number, number, number] } = {}) {
     const size = opts.size ?? 9.5;
     const r = size * 0.62;
-    this.ensureRoom(size * 1.6);
+    this.ensureRoom(size * 1.42);
     const cy = this.y + size * 0.32;
     const cx = this.margin + r;
     this.page.drawCircle({ x: cx, y: cy, size: r, color: rgb(...SUCCESS) });
@@ -675,7 +675,7 @@ class CertWriter {
     this.page.drawLine({ start: { x: cx - s * 0.45, y: cy - s * 0.02 }, end: { x: cx - s * 0.08, y: cy - s * 0.38 }, thickness: 1.4, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
     this.page.drawLine({ start: { x: cx - s * 0.08, y: cy - s * 0.38 }, end: { x: cx + s * 0.5, y: cy + s * 0.42 }, thickness: 1.4, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
     this.page.drawText(text, { x: this.margin + r * 2 + 7, y: this.y, size, font: this.font, color: rgb(...(opts.color ?? SUCCESS)) });
-    this.y -= size * 1.6;
+    this.y -= size * 1.42;
   }
 
   gap(px = 10) {
@@ -1106,9 +1106,22 @@ Deno.serve(async (req) => {
     cert.gap(12);
     cert.divider();
 
+    const isCashDealForCert = instance.template_id === CASH_DEAL_TEMPLATE_ID;
+    const coSellerForCert = updatedParties.find((p) => p.role !== 'seller' && p.role.startsWith('seller_'));
+
     cert.eyebrow('Document Overview');
     cert.keyValue('Document', `${instance.name} (${docKind})`);
     if (instance.property_address) cert.keyValue('Property', instance.property_address);
+    if (isCashDealForCert && fieldValues[CASH_DEAL_FIELD_IDS.purchasePrice]) {
+      cert.keyValue('Purchase Price', fieldValues[CASH_DEAL_FIELD_IDS.purchasePrice]);
+    }
+    if (isCashDealForCert && fieldValues[CASH_DEAL_FIELD_IDS.emdAmount]) {
+      cert.keyValue('Earnest Money Deposit', fieldValues[CASH_DEAL_FIELD_IDS.emdAmount]);
+    }
+    if (isCashDealForCert && fieldValues[CASH_DEAL_FIELD_IDS.listingAgentName]) {
+      cert.keyValue("Seller's Listing Agent", fieldValues[CASH_DEAL_FIELD_IDS.listingAgentName]);
+    }
+    if (coSellerForCert) cert.keyValue('Co-Seller', coSellerForCert.name);
     cert.keyValue('Completed', formatWhen(new Date().toISOString()));
     cert.keyValueBadge('Status', 'Completed', { bg: SUCCESS_BG, color: SUCCESS });
     cert.keyValue('Certificate ID', instance.id, { size: 8 });
@@ -1118,7 +1131,7 @@ Deno.serve(async (req) => {
     // save() below and stored on the contract instance instead (viewable in
     // the admin preview), not printed on the page it would be hashing.
     if (instance.template_pdf_sha256) cert.keyValue('Starting Document Hash (SHA-256)', instance.template_pdf_sha256, { size: 7.5 });
-    cert.gap(10);
+    cert.gap(6);
     cert.divider();
 
     cert.eyebrow('Signers');
@@ -1142,7 +1155,7 @@ Deno.serve(async (req) => {
       } else {
         cert.line('No signature required for this role', { size: 9, color: SLATE_DIM });
       }
-      cert.gap(10);
+      cert.gap(7);
     }
     cert.gap(2);
     cert.divider();
@@ -1157,14 +1170,14 @@ Deno.serve(async (req) => {
     // contracts only.
     cert.eyebrow('Complete Audit Trail');
     cert.line('Every invitation, view, consent, and signature event — with its exact timestamp and IP address.', { size: 9.5 });
-    cert.gap(10);
+    cert.gap(8);
     const verifyUrl = `https://www.bluebirdacquisition.com/crm/verify/${instance.id}`;
     cert.button('View Complete Audit Trail', verifyUrl);
     cert.gap(2);
     cert.line('or scan to open on your phone', { size: 8.5, color: SLATE_DIM });
     try {
       const qrDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 1, width: 300 });
-      await cert.qrImage(dataUrlToBytes(qrDataUrl), verifyUrl, { size: 102 });
+      await cert.qrImage(dataUrlToBytes(qrDataUrl), verifyUrl, { size: 92 });
     } catch (qrErr) {
       // A QR generation hiccup shouldn't block the whole certificate — the
       // button above still gets someone to the same place.
