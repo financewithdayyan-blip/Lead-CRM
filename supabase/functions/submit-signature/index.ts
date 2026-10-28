@@ -911,7 +911,7 @@ Deno.serve(async (req) => {
     // ── Append the signing certificate / audit trail page(s). ────────────────
     const { data: auditEvents } = await admin
       .from('contract_audit_events')
-      .select('party_id, event_type, ip_address, user_agent, created_at, field_id')
+      .select('party_id, event_type, ip_address, user_agent, created_at, field_id, detail')
       .eq('contract_instance_id', instance.id)
       .order('created_at', { ascending: true });
 
@@ -929,6 +929,7 @@ Deno.serve(async (req) => {
       edited: 'Contract Terms Edited',
       field_signed: 'Signature Field Signed',
       signature_remembered: 'Chose to Reuse Signature for Remaining Fields',
+      delegated: 'Signing Forwarded to Another Signer',
     };
 
     const partyLabelById = new Map(
@@ -996,8 +997,19 @@ Deno.serve(async (req) => {
       cert.line('No audit events were recorded for this envelope.', { size: 9 });
     }
     for (const evt of auditEvents ?? []) {
-      const who = evt.party_id ? (partyLabelById.get(evt.party_id) ?? 'Unknown party') : 'System';
-      let label = EVENT_LABELS[evt.event_type] ?? evt.event_type;
+      // 'delegated' is the one event type whose party_id no longer points
+      // at a meaningful "who" by cert time — the row's own name has already
+      // been overwritten to the new signer, so partyLabelById would
+      // misattribute the handoff to the person it was handed TO. detail
+      // (captured at the moment of the handoff, before the overwrite) is
+      // the only accurate record of who actually forwarded to whom.
+      const who =
+        evt.event_type === 'delegated' && evt.detail
+          ? 'Forwarded'
+          : evt.party_id
+            ? (partyLabelById.get(evt.party_id) ?? 'Unknown party')
+            : 'System';
+      let label = evt.event_type === 'delegated' && evt.detail ? evt.detail : EVENT_LABELS[evt.event_type] ?? evt.event_type;
       if (evt.event_type === 'field_signed' && evt.field_id) {
         const fieldLabel = fieldLabelById.get(evt.field_id);
         if (fieldLabel) label = `Signed "${fieldLabel}"`;
