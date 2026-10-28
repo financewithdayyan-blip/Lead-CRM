@@ -471,13 +471,30 @@ function wrapText(text: string, font: PDFFont, fontSize: number, maxWidth: numbe
 // Brand palette (normalized from the same hex values used on the marketing
 // site/CRM — see scripts/blog-template.mjs's :root tokens) so the appended
 // certificate reads as part of the same product, not a generic pdf-lib dump.
-const BRAND: [number, number, number] = [0.1176, 0.5608, 0.8353]; // #1E8FD5
+const BRAND: [number, number, number] = [0.1176, 0.5608, 0.8353]; // #1E8FD5 — accent blue (eyebrows, underline)
+const BAR_START: [number, number, number] = [0.149, 0.69, 0.937]; // #26B0EF — top bar gradient start
+const BAR_END: [number, number, number] = [0.031, 0.169, 0.337]; // #082B56 — top bar gradient end, deep navy
 const INK: [number, number, number] = [0.0431, 0.1176, 0.2]; // #0B1E33
 const SLATE: [number, number, number] = [0.3412, 0.4, 0.4784]; // #57667A
 const SLATE_DIM: [number, number, number] = [0.5255, 0.5765, 0.6314]; // #8693A1
 const SUCCESS: [number, number, number] = [0.0627, 0.5255, 0.4157]; // #10866A
 const SUCCESS_BG: [number, number, number] = [0.902, 0.949, 0.933]; // light green badge fill
-const RULE: [number, number, number] = [0.87, 0.87, 0.87];
+const RULE: [number, number, number] = [0.91, 0.92, 0.94];
+
+function lerpColorChannel(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+function lerpColor(c1: [number, number, number], c2: [number, number, number], t: number): [number, number, number] {
+  return [lerpColorChannel(c1[0], c2[0], t), lerpColorChannel(c1[1], c2[1], t), lerpColorChannel(c1[2], c2[2], t)];
+}
+
+/** Rounded-rect SVG path, box's top-left as the drawSvgPath {x, y} origin —
+ * real rounded corners for the certificate's badges/button/logo mark/QR
+ * card instead of pdf-lib's sharp-cornered drawRectangle everywhere. */
+function roundedRectPath(w: number, h: number, r: number): string {
+  const rr = Math.min(r, w / 2, h / 2);
+  return `M${rr},0 L${w - rr},0 A${rr},${rr} 0 0 1 ${w},${rr} L${w},${h - rr} A${rr},${rr} 0 0 1 ${w - rr},${h} L${rr},${h} A${rr},${rr} 0 0 1 0,${h - rr} L0,${rr} A${rr},${rr} 0 0 1 ${rr},0 Z`;
+}
 
 function formatWhen(iso: string): string {
   // Fixed to UTC regardless of the edge runtime's own locale/timezone, so a
@@ -495,7 +512,7 @@ class CertWriter {
   bold: PDFFont;
   width: number;
   height: number;
-  margin = 54;
+  margin = 56;
   page: PDFPage;
   y: number;
   pages: PDFPage[] = [];
@@ -511,9 +528,17 @@ class CertWriter {
 
   private newPage(): PDFPage {
     const page = this.doc.addPage([this.width, this.height]);
-    page.drawRectangle({ x: 0, y: this.height - 5, width: this.width, height: 5, color: rgb(...BRAND) });
+    // A real gradient bar — many thin strips interpolating from a bright
+    // blue down to deep navy, rather than one flat color block.
+    const barH = 9;
+    const steps = 80;
+    const stripW = this.width / steps;
+    for (let i = 0; i < steps; i++) {
+      const c = lerpColor(BAR_START, BAR_END, i / (steps - 1));
+      page.drawRectangle({ x: i * stripW, y: this.height - barH, width: stripW + 0.5, height: barH, color: rgb(...c) });
+    }
     this.pages.push(page);
-    this.y = this.height - this.margin - 12;
+    this.y = this.height - this.margin - 10;
     return page;
   }
 
@@ -526,54 +551,69 @@ class CertWriter {
     }
   }
 
-  /** The same branded row every Blue Docs email opens with — a small square
-   * mark, the wordmark, and a "Ref: XXXXXXXX" short id right-aligned — so
-   * the certificate reads as the same product as the emails that led here,
-   * not a generic pdf-lib dump bolted onto the end of the contract. */
+  /** The same branded row every Blue Docs email opens with — a rounded
+   * logo mark with a "B" monogram, the wordmark, and a "Ref: XXXXXXXX"
+   * short id right-aligned — so the certificate reads as the same product
+   * as the emails that led here, not a generic pdf-lib dump bolted onto
+   * the end of the contract. */
   brandHeader(certId: string) {
-    this.ensureRoom(22);
-    const sq = 10;
-    this.page.drawRectangle({ x: this.margin, y: this.y - sq + 2, width: sq, height: sq, color: rgb(...INK) });
-    this.page.drawText('Bluebird Acquisition', { x: this.margin + sq + 8, y: this.y, size: 13, font: this.bold, color: rgb(...INK) });
+    this.ensureRoom(34);
+    const markSize = 26;
+    const markX = this.margin;
+    const markTopY = this.y + 6;
+    this.page.drawSvgPath(roundedRectPath(markSize, markSize, 7), { x: markX, y: markTopY, color: rgb(...INK) });
+    const letterSize = 14;
+    this.page.drawText('B', {
+      x: markX + markSize / 2 - this.bold.widthOfTextAtSize('B', letterSize) / 2,
+      y: markTopY - markSize / 2 - letterSize * 0.36,
+      size: letterSize,
+      font: this.bold,
+      color: rgb(1, 1, 1),
+    });
+    this.page.drawText('Bluebird Acquisition', { x: markX + markSize + 10, y: this.y - 2, size: 14.5, font: this.bold, color: rgb(...INK) });
     const refText = `Ref: ${certId.slice(0, 8).toUpperCase()}`;
-    const w = this.font.widthOfTextAtSize(refText, 10);
-    this.page.drawText(refText, { x: this.width - this.margin - w, y: this.y, size: 10, font: this.font, color: rgb(...SLATE_DIM) });
-    this.y -= 30;
+    const w = this.font.widthOfTextAtSize(refText, 9.5);
+    this.page.drawText(refText, { x: this.width - this.margin - w, y: this.y - 2, size: 9.5, font: this.font, color: rgb(...SLATE_DIM) });
+    this.y -= 40;
   }
 
   heading(text: string) {
-    this.ensureRoom(26);
-    this.page.drawText(text, { x: this.margin, y: this.y, size: 20, font: this.bold, color: rgb(...INK) });
-    this.y -= 26;
+    this.ensureRoom(30);
+    this.page.drawText(text, { x: this.margin, y: this.y, size: 24, font: this.bold, color: rgb(...INK) });
+    this.y -= 22;
+    this.page.drawRectangle({ x: this.margin, y: this.y, width: 46, height: 3, color: rgb(...BRAND) });
+    this.y -= 14;
   }
 
-  /** Small uppercase-ish section label, e.g. "DOCUMENT OVERVIEW". */
+  /** Small uppercase-ish section label, e.g. "DOCUMENT OVERVIEW", marked
+   * with a short colored tick instead of plain text alone. */
   eyebrow(text: string) {
-    this.ensureRoom(20);
-    this.page.drawText(text.toUpperCase(), { x: this.margin, y: this.y, size: 9, font: this.bold, color: rgb(...BRAND) });
-    this.y -= 16;
+    this.ensureRoom(22);
+    this.page.drawRectangle({ x: this.margin, y: this.y + 1.5, width: 4, height: 9, color: rgb(...BRAND) });
+    this.page.drawText(text.toUpperCase(), { x: this.margin + 9, y: this.y, size: 9.5, font: this.bold, color: rgb(...BRAND) });
+    this.y -= 17;
   }
 
   divider() {
-    this.ensureRoom(10);
+    this.ensureRoom(12);
     this.page.drawLine({
       start: { x: this.margin, y: this.y },
       end: { x: this.width - this.margin, y: this.y },
       thickness: 0.75,
       color: rgb(...RULE),
     });
-    this.y -= 14;
+    this.y -= 15;
   }
 
   line(text: string, opts: { size?: number; color?: [number, number, number]; bold?: boolean } = {}) {
-    const size = opts.size ?? 10;
+    const size = opts.size ?? 10.5;
     const [r, g, b] = opts.color ?? SLATE;
     const font = opts.bold ? this.bold : this.font;
     const maxWidth = this.width - this.margin * 2;
     for (const wrapped of wrapText(text, font, size, maxWidth)) {
-      this.ensureRoom(size * 1.4);
+      this.ensureRoom(size * 1.45);
       this.page.drawText(wrapped, { x: this.margin, y: this.y, size, font, color: rgb(r, g, b) });
-      this.y -= size * 1.4;
+      this.y -= size * 1.45;
     }
   }
 
@@ -582,60 +622,60 @@ class CertWriter {
    * building full grid/border layout logic. Falls back to wrapping the
    * value on its own indented line(s) if it won't fit next to the label. */
   keyValue(label: string, value: string, opts: { size?: number } = {}) {
-    const size = opts.size ?? 9.5;
+    const size = opts.size ?? 10;
     const labelText = `${label}:`;
     const labelWidth = this.bold.widthOfTextAtSize(labelText, size);
-    const valueMaxWidth = this.width - this.margin * 2 - labelWidth - 6;
+    const valueMaxWidth = this.width - this.margin * 2 - labelWidth - 7;
     const wrapped = wrapText(value || '—', this.font, size, valueMaxWidth);
 
-    this.ensureRoom(size * 1.5);
+    this.ensureRoom(size * 1.6);
     this.page.drawText(labelText, { x: this.margin, y: this.y, size, font: this.bold, color: rgb(...SLATE) });
-    this.page.drawText(wrapped[0] ?? '', { x: this.margin + labelWidth + 6, y: this.y, size, font: this.font, color: rgb(...INK) });
-    this.y -= size * 1.5;
+    this.page.drawText(wrapped[0] ?? '', { x: this.margin + labelWidth + 7, y: this.y, size, font: this.font, color: rgb(...INK) });
+    this.y -= size * 1.6;
     for (const extra of wrapped.slice(1)) {
-      this.ensureRoom(size * 1.5);
-      this.page.drawText(extra, { x: this.margin + labelWidth + 6, y: this.y, size, font: this.font, color: rgb(...INK) });
-      this.y -= size * 1.5;
+      this.ensureRoom(size * 1.6);
+      this.page.drawText(extra, { x: this.margin + labelWidth + 7, y: this.y, size, font: this.font, color: rgb(...INK) });
+      this.y -= size * 1.6;
     }
   }
 
-  /** A label followed by a small colored pill instead of plain text — used
-   * for Status, the one field on this certificate that reads better as a
-   * badge than a sentence. */
+  /** A label followed by a rounded colored pill instead of plain text —
+   * used for Status, the one field on this certificate that reads better
+   * as a badge than a sentence. */
   keyValueBadge(label: string, badgeText: string, opts: { bg: [number, number, number]; color: [number, number, number] }) {
-    const size = 9.5;
+    const size = 10;
     const labelText = `${label}:`;
     const labelWidth = this.bold.widthOfTextAtSize(labelText, size);
-    const badgeSize = 8.5;
-    const padX = 7;
-    const padY = 3.5;
+    const badgeSize = 9;
+    const padX = 8;
+    const padY = 4;
     const textW = this.bold.widthOfTextAtSize(badgeText, badgeSize);
     const boxW = textW + padX * 2;
     const boxH = badgeSize + padY * 2;
-    this.ensureRoom(Math.max(size * 1.5, boxH + 2));
+    this.ensureRoom(Math.max(size * 1.6, boxH + 2));
     this.page.drawText(labelText, { x: this.margin, y: this.y, size, font: this.bold, color: rgb(...SLATE) });
-    const badgeX = this.margin + labelWidth + 6;
-    const badgeY = this.y - 2;
-    this.page.drawRectangle({ x: badgeX, y: badgeY, width: boxW, height: boxH, color: rgb(...opts.bg) });
+    const badgeX = this.margin + labelWidth + 7;
+    const badgeY = this.y - 3;
+    this.page.drawSvgPath(roundedRectPath(boxW, boxH, boxH / 2), { x: badgeX, y: badgeY + boxH, color: rgb(...opts.bg) });
     this.page.drawText(badgeText, { x: badgeX + padX, y: badgeY + padY - 1, size: badgeSize, font: this.bold, color: rgb(...opts.color) });
-    this.y -= size * 1.6;
+    this.y -= size * 1.7;
   }
 
   /** A line prefixed with a small filled green checkmark circle instead of
    * a plain bullet — used for each signer's "Signed electronically" line,
    * the one line on this certificate that's actually good news. */
   checkLine(text: string, opts: { size?: number; color?: [number, number, number] } = {}) {
-    const size = opts.size ?? 9;
+    const size = opts.size ?? 9.5;
     const r = size * 0.62;
-    this.ensureRoom(size * 1.5);
+    this.ensureRoom(size * 1.6);
     const cy = this.y + size * 0.32;
     const cx = this.margin + r;
     this.page.drawCircle({ x: cx, y: cy, size: r, color: rgb(...SUCCESS) });
     const s = r * 0.95;
-    this.page.drawLine({ start: { x: cx - s * 0.45, y: cy - s * 0.02 }, end: { x: cx - s * 0.08, y: cy - s * 0.38 }, thickness: 1.3, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
-    this.page.drawLine({ start: { x: cx - s * 0.08, y: cy - s * 0.38 }, end: { x: cx + s * 0.5, y: cy + s * 0.42 }, thickness: 1.3, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
-    this.page.drawText(text, { x: this.margin + r * 2 + 6, y: this.y, size, font: this.font, color: rgb(...(opts.color ?? SUCCESS)) });
-    this.y -= size * 1.5;
+    this.page.drawLine({ start: { x: cx - s * 0.45, y: cy - s * 0.02 }, end: { x: cx - s * 0.08, y: cy - s * 0.38 }, thickness: 1.4, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
+    this.page.drawLine({ start: { x: cx - s * 0.08, y: cy - s * 0.38 }, end: { x: cx + s * 0.5, y: cy + s * 0.42 }, thickness: 1.4, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
+    this.page.drawText(text, { x: this.margin + r * 2 + 7, y: this.y, size, font: this.font, color: rgb(...(opts.color ?? SUCCESS)) });
+    this.y -= size * 1.6;
   }
 
   gap(px = 10) {
@@ -659,20 +699,20 @@ class CertWriter {
     else this.page.node.set(PDFName.of('Annots'), this.doc.context.obj([ref]));
   }
 
-  /** A real clickable button — solid fill, white label, and a link
+  /** A real clickable button — rounded solid fill, white label, and a link
    * annotation covering the exact same rect, so it actually opens `url` in
    * any PDF viewer rather than just looking like a button. */
   button(text: string, url: string, opts: { size?: number } = {}) {
-    const size = opts.size ?? 11;
-    const padX = 18;
-    const padY = 10;
+    const size = opts.size ?? 11.5;
+    const padX = 20;
+    const padY = 11;
     const textW = this.bold.widthOfTextAtSize(text, size);
     const boxW = textW + padX * 2;
     const boxH = size + padY * 2;
     this.ensureRoom(boxH + 6);
     const x = this.margin;
     const y = this.y - boxH;
-    this.page.drawRectangle({ x, y, width: boxW, height: boxH, color: rgb(...INK) });
+    this.page.drawSvgPath(roundedRectPath(boxW, boxH, 8), { x, y: y + boxH, color: rgb(...INK) });
     this.page.drawText(text, { x: x + padX, y: y + padY, size, font: this.bold, color: rgb(1, 1, 1) });
     this.linkAnnotation([x, y, x + boxW, y + boxH], url);
     this.y -= boxH + 10;
@@ -680,19 +720,26 @@ class CertWriter {
 
   /** Right-aligned at the current flow position (not an absolute page
    * corner — avoids colliding with whatever content lands below it across
-   * however many pages this certificate ends up being). Also a real
-   * clickable link over the same rect — useful on desktop, where scanning
-   * isn't an option but clicking is. */
+   * however many pages this certificate ends up being), inside a rounded
+   * white card. Also a real clickable link over the same rect — useful on
+   * desktop, where scanning isn't an option but clicking is. */
   async qrImage(pngBytes: Uint8Array, url: string, opts: { size?: number } = {}) {
-    const size = opts.size ?? 100;
-    this.ensureRoom(size + 10);
+    const size = opts.size ?? 102;
+    const pad = 12;
+    this.ensureRoom(size + pad * 2 + 4);
     const img = await this.doc.embedPng(pngBytes);
     const x = this.width - this.margin - size;
     const y = this.y - size;
-    this.page.drawRectangle({ x: x - 10, y: y - 10, width: size + 20, height: size + 20, color: rgb(1, 1, 1), borderColor: rgb(...RULE), borderWidth: 1 });
+    this.page.drawSvgPath(roundedRectPath(size + pad * 2, size + pad * 2, 10), {
+      x: x - pad,
+      y: y + size + pad,
+      color: rgb(1, 1, 1),
+      borderColor: rgb(...RULE),
+      borderWidth: 1,
+    });
     this.page.drawImage(img, { x, y, width: size, height: size });
     this.linkAnnotation([x, y, x + size, y + size], url);
-    this.y -= size + 10;
+    this.y -= size + pad * 2 + 6;
   }
 
   /** Stamps "Page N of TOTAL" + a title footer on every page written so
@@ -1055,7 +1102,7 @@ Deno.serve(async (req) => {
 
     cert.brandHeader(instance.id);
     cert.heading('Certificate of Completion');
-    cert.line('Electronic Signature Audit Trail', { size: 10.5, color: SLATE_DIM });
+    cert.line('Electronic Signature Audit Trail', { size: 11, color: SLATE_DIM });
     cert.gap(12);
     cert.divider();
 
@@ -1077,7 +1124,7 @@ Deno.serve(async (req) => {
     cert.eyebrow('Signers');
     for (const p of updatedParties) {
       const roleWord = roleWordFor(p.role, template.type, partyRoles);
-      cert.line(`${roleWord} — ${p.name}`, { size: 10.5, color: INK, bold: true });
+      cert.line(`${roleWord} — ${p.name}`, { size: 11.5, color: INK, bold: true });
       // Only set once this party's link was forwarded (see
       // delegate-signing-party) — surfaces the agent/realtor who actually
       // reviewed it first, right on the printed certificate rather than
@@ -1109,7 +1156,7 @@ Deno.serve(async (req) => {
     // get_contract_verification (0180), a public RPC scoped to completed
     // contracts only.
     cert.eyebrow('Complete Audit Trail');
-    cert.line('Every invitation, view, consent, and signature event — with its exact timestamp and IP address.', { size: 9 });
+    cert.line('Every invitation, view, consent, and signature event — with its exact timestamp and IP address.', { size: 9.5 });
     cert.gap(10);
     const verifyUrl = `https://www.bluebirdacquisition.com/crm/verify/${instance.id}`;
     cert.button('View Complete Audit Trail', verifyUrl);
@@ -1117,7 +1164,7 @@ Deno.serve(async (req) => {
     cert.line('or scan to open on your phone', { size: 8.5, color: SLATE_DIM });
     try {
       const qrDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 1, width: 300 });
-      await cert.qrImage(dataUrlToBytes(qrDataUrl), verifyUrl, { size: 100 });
+      await cert.qrImage(dataUrlToBytes(qrDataUrl), verifyUrl, { size: 102 });
     } catch (qrErr) {
       // A QR generation hiccup shouldn't block the whole certificate — the
       // button above still gets someone to the same place.
