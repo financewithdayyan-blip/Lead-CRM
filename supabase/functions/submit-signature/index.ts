@@ -13,7 +13,7 @@
 // briefly served a 2.112.1 build with a broken denonext auth-js subpath,
 // which failed every fresh bundle regardless of this function's own code.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
-import { PDFDocument, StandardFonts, rgb, LineCapStyle, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
+import { PDFDocument, StandardFonts, rgb, LineCapStyle, PDFName, PDFArray, PDFString, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1';
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 import { encode as base64Encode } from 'https://deno.land/std@0.173.0/encoding/base64.ts';
 import QRCode from 'https://esm.sh/qrcode@1.5.3';
@@ -476,6 +476,7 @@ const INK: [number, number, number] = [0.0431, 0.1176, 0.2]; // #0B1E33
 const SLATE: [number, number, number] = [0.3412, 0.4, 0.4784]; // #57667A
 const SLATE_DIM: [number, number, number] = [0.5255, 0.5765, 0.6314]; // #8693A1
 const SUCCESS: [number, number, number] = [0.0627, 0.5255, 0.4157]; // #10866A
+const SUCCESS_BG: [number, number, number] = [0.902, 0.949, 0.933]; // light green badge fill
 const RULE: [number, number, number] = [0.87, 0.87, 0.87];
 
 function formatWhen(iso: string): string {
@@ -525,10 +526,25 @@ class CertWriter {
     }
   }
 
+  /** The same branded row every Blue Docs email opens with — a small square
+   * mark, the wordmark, and a "Ref: XXXXXXXX" short id right-aligned — so
+   * the certificate reads as the same product as the emails that led here,
+   * not a generic pdf-lib dump bolted onto the end of the contract. */
+  brandHeader(certId: string) {
+    this.ensureRoom(22);
+    const sq = 10;
+    this.page.drawRectangle({ x: this.margin, y: this.y - sq + 2, width: sq, height: sq, color: rgb(...INK) });
+    this.page.drawText('Bluebird Acquisition', { x: this.margin + sq + 8, y: this.y, size: 13, font: this.bold, color: rgb(...INK) });
+    const refText = `Ref: ${certId.slice(0, 8).toUpperCase()}`;
+    const w = this.font.widthOfTextAtSize(refText, 10);
+    this.page.drawText(refText, { x: this.width - this.margin - w, y: this.y, size: 10, font: this.font, color: rgb(...SLATE_DIM) });
+    this.y -= 30;
+  }
+
   heading(text: string) {
     this.ensureRoom(26);
-    this.page.drawText(text, { x: this.margin, y: this.y, size: 18, font: this.bold, color: rgb(...INK) });
-    this.y -= 28;
+    this.page.drawText(text, { x: this.margin, y: this.y, size: 20, font: this.bold, color: rgb(...INK) });
+    this.y -= 26;
   }
 
   /** Small uppercase-ish section label, e.g. "DOCUMENT OVERVIEW". */
@@ -583,19 +599,99 @@ class CertWriter {
     }
   }
 
+  /** A label followed by a small colored pill instead of plain text — used
+   * for Status, the one field on this certificate that reads better as a
+   * badge than a sentence. */
+  keyValueBadge(label: string, badgeText: string, opts: { bg: [number, number, number]; color: [number, number, number] }) {
+    const size = 9.5;
+    const labelText = `${label}:`;
+    const labelWidth = this.bold.widthOfTextAtSize(labelText, size);
+    const badgeSize = 8.5;
+    const padX = 7;
+    const padY = 3.5;
+    const textW = this.bold.widthOfTextAtSize(badgeText, badgeSize);
+    const boxW = textW + padX * 2;
+    const boxH = badgeSize + padY * 2;
+    this.ensureRoom(Math.max(size * 1.5, boxH + 2));
+    this.page.drawText(labelText, { x: this.margin, y: this.y, size, font: this.bold, color: rgb(...SLATE) });
+    const badgeX = this.margin + labelWidth + 6;
+    const badgeY = this.y - 2;
+    this.page.drawRectangle({ x: badgeX, y: badgeY, width: boxW, height: boxH, color: rgb(...opts.bg) });
+    this.page.drawText(badgeText, { x: badgeX + padX, y: badgeY + padY - 1, size: badgeSize, font: this.bold, color: rgb(...opts.color) });
+    this.y -= size * 1.6;
+  }
+
+  /** A line prefixed with a small filled green checkmark circle instead of
+   * a plain bullet — used for each signer's "Signed electronically" line,
+   * the one line on this certificate that's actually good news. */
+  checkLine(text: string, opts: { size?: number; color?: [number, number, number] } = {}) {
+    const size = opts.size ?? 9;
+    const r = size * 0.62;
+    this.ensureRoom(size * 1.5);
+    const cy = this.y + size * 0.32;
+    const cx = this.margin + r;
+    this.page.drawCircle({ x: cx, y: cy, size: r, color: rgb(...SUCCESS) });
+    const s = r * 0.95;
+    this.page.drawLine({ start: { x: cx - s * 0.45, y: cy - s * 0.02 }, end: { x: cx - s * 0.08, y: cy - s * 0.38 }, thickness: 1.3, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
+    this.page.drawLine({ start: { x: cx - s * 0.08, y: cy - s * 0.38 }, end: { x: cx + s * 0.5, y: cy + s * 0.42 }, thickness: 1.3, color: rgb(1, 1, 1), lineCap: LineCapStyle.Round });
+    this.page.drawText(text, { x: this.margin + r * 2 + 6, y: this.y, size, font: this.font, color: rgb(...(opts.color ?? SUCCESS)) });
+    this.y -= size * 1.5;
+  }
+
   gap(px = 10) {
     this.y -= px;
   }
 
+  /** A real clickable region, not just a visual rectangle — a PDF Link
+   * annotation with a URI action, the same primitive every PDF viewer's
+   * own hyperlinks use. rect is [x1, y1, x2, y2] in page coordinates. */
+  linkAnnotation(rect: [number, number, number, number], url: string) {
+    const annot = this.doc.context.obj({
+      Type: 'Annot',
+      Subtype: 'Link',
+      Rect: rect,
+      Border: [0, 0, 0],
+      A: { Type: 'Action', S: 'URI', URI: PDFString.of(url) },
+    });
+    const ref = this.doc.context.register(annot);
+    const existing = this.page.node.lookup(PDFName.of('Annots'), PDFArray);
+    if (existing) existing.push(ref);
+    else this.page.node.set(PDFName.of('Annots'), this.doc.context.obj([ref]));
+  }
+
+  /** A real clickable button — solid fill, white label, and a link
+   * annotation covering the exact same rect, so it actually opens `url` in
+   * any PDF viewer rather than just looking like a button. */
+  button(text: string, url: string, opts: { size?: number } = {}) {
+    const size = opts.size ?? 11;
+    const padX = 18;
+    const padY = 10;
+    const textW = this.bold.widthOfTextAtSize(text, size);
+    const boxW = textW + padX * 2;
+    const boxH = size + padY * 2;
+    this.ensureRoom(boxH + 6);
+    const x = this.margin;
+    const y = this.y - boxH;
+    this.page.drawRectangle({ x, y, width: boxW, height: boxH, color: rgb(...INK) });
+    this.page.drawText(text, { x: x + padX, y: y + padY, size, font: this.bold, color: rgb(1, 1, 1) });
+    this.linkAnnotation([x, y, x + boxW, y + boxH], url);
+    this.y -= boxH + 10;
+  }
+
   /** Right-aligned at the current flow position (not an absolute page
    * corner — avoids colliding with whatever content lands below it across
-   * however many pages this certificate ends up being). */
-  async qrImage(pngBytes: Uint8Array, opts: { size?: number } = {}) {
-    const size = opts.size ?? 92;
+   * however many pages this certificate ends up being). Also a real
+   * clickable link over the same rect — useful on desktop, where scanning
+   * isn't an option but clicking is. */
+  async qrImage(pngBytes: Uint8Array, url: string, opts: { size?: number } = {}) {
+    const size = opts.size ?? 100;
     this.ensureRoom(size + 10);
     const img = await this.doc.embedPng(pngBytes);
     const x = this.width - this.margin - size;
-    this.page.drawImage(img, { x, y: this.y - size, width: size, height: size });
+    const y = this.y - size;
+    this.page.drawRectangle({ x: x - 10, y: y - 10, width: size + 20, height: size + 20, color: rgb(1, 1, 1), borderColor: rgb(...RULE), borderWidth: 1 });
+    this.page.drawImage(img, { x, y, width: size, height: size });
+    this.linkAnnotation([x, y, x + size, y + size], url);
     this.y -= size + 10;
   }
 
@@ -957,17 +1053,18 @@ Deno.serve(async (req) => {
 
     const docKind = template.type === 'loi' ? 'Letter of Intent' : 'Contract';
 
+    cert.brandHeader(instance.id);
     cert.heading('Certificate of Completion');
-    cert.line('Bluebird Acquisition — Electronic Signature Audit Trail', { size: 9.5 });
-    cert.gap(14);
+    cert.line('Electronic Signature Audit Trail', { size: 10.5, color: SLATE_DIM });
+    cert.gap(12);
     cert.divider();
 
     cert.eyebrow('Document Overview');
     cert.keyValue('Document', `${instance.name} (${docKind})`);
-    cert.keyValue('Certificate ID', instance.id);
-    cert.keyValue('Status', 'Completed — all required parties have signed');
-    cert.keyValue('Completed', formatWhen(new Date().toISOString()));
     if (instance.property_address) cert.keyValue('Property', instance.property_address);
+    cert.keyValue('Completed', formatWhen(new Date().toISOString()));
+    cert.keyValueBadge('Status', 'Completed', { bg: SUCCESS_BG, color: SUCCESS });
+    cert.keyValue('Certificate ID', instance.id, { size: 8 });
     // Only the starting template's hash can be printed here without being
     // circular — the final document's own hash necessarily depends on bytes
     // that include this very certificate page, so it's computed after
@@ -980,11 +1077,11 @@ Deno.serve(async (req) => {
     cert.eyebrow('Signers');
     for (const p of updatedParties) {
       const roleWord = roleWordFor(p.role, template.type, partyRoles);
-      cert.keyValue(roleWord, p.name);
+      cert.line(`${roleWord} — ${p.name}`, { size: 10.5, color: INK, bold: true });
       // Only set once this party's link was forwarded (see
       // delegate-signing-party) — surfaces the agent/realtor who actually
       // reviewed it first, right on the printed certificate rather than
-      // only in the detailed trail behind the QR code below.
+      // only in the detailed trail behind the button/QR below.
       if (p.delegated_from_name) {
         cert.line(`Originally sent to ${p.delegated_from_name}, who reviewed it and forwarded it to the signer above.`, {
           size: 8.5,
@@ -993,38 +1090,39 @@ Deno.serve(async (req) => {
       }
       const signedEvent = signedEventByParty.get(p.id);
       if (p.signature_data_url) {
-        cert.line(`Signed electronically${signedEvent ? ` — ${formatWhen(signedEvent.at)}` : ''}`, { size: 9, color: SUCCESS });
+        cert.checkLine(`Signed electronically${signedEvent ? ` — ${formatWhen(signedEvent.at)}` : ''}`);
         if (signedEvent?.ip) cert.line(`IP Address: ${signedEvent.ip}`, { size: 8, color: SLATE_DIM });
       } else {
         cert.line('No signature required for this role', { size: 9, color: SLATE_DIM });
       }
-      cert.gap(8);
+      cert.gap(10);
     }
-    cert.gap(4);
+    cert.gap(2);
     cert.divider();
 
     // Every individual view/consent/signature event, with its own
     // timestamp and IP address, now lives at this link instead of being
     // printed in full here — a certificate with one line per event got
-    // unreadable fast on a multi-party, once-delegated envelope. The QR
-    // points at get_contract_verification (0180), a public RPC scoped to
-    // completed contracts only.
+    // unreadable fast on a multi-party, once-delegated envelope. Both the
+    // button and the QR code below are real clickable regions (PDF Link
+    // annotations), not just images of one. Points at
+    // get_contract_verification (0180), a public RPC scoped to completed
+    // contracts only.
     cert.eyebrow('Complete Audit Trail');
-    cert.line(
-      'Scan the QR code below to view the complete, detailed audit trail for this document — every invitation, view, consent, and signature event, with its exact timestamp and IP address.',
-      { size: 9 },
-    );
+    cert.line('Every invitation, view, consent, and signature event — with its exact timestamp and IP address.', { size: 9 });
     cert.gap(10);
     const verifyUrl = `https://www.bluebirdacquisition.com/crm/verify/${instance.id}`;
+    cert.button('View Complete Audit Trail', verifyUrl);
+    cert.gap(2);
+    cert.line('or scan to open on your phone', { size: 8.5, color: SLATE_DIM });
     try {
       const qrDataUrl = await QRCode.toDataURL(verifyUrl, { margin: 1, width: 300 });
-      await cert.qrImage(dataUrlToBytes(qrDataUrl), { size: 92 });
+      await cert.qrImage(dataUrlToBytes(qrDataUrl), verifyUrl, { size: 100 });
     } catch (qrErr) {
       // A QR generation hiccup shouldn't block the whole certificate — the
-      // plain URL right below still gets someone to the same place by hand.
+      // button above still gets someone to the same place.
       console.error('Certificate QR generation failed:', qrErr);
     }
-    cert.line(verifyUrl, { size: 8, color: SLATE_DIM });
 
     cert.finalize('Bluebird Acquisition — Certificate of Completion');
 
