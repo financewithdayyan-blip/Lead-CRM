@@ -223,25 +223,15 @@ function ForwardToSellerModal({
 }) {
   const delegate = useDelegateSigningParty();
   const [name, setName] = useState('');
-  const [sendSms, setSendSms] = useState(true);
-  const [phone, setPhone] = useState('');
-  const [sendEmail, setSendEmail] = useState(false);
   const [email, setEmail] = useState('');
   const [confirmed, setConfirmed] = useState(false);
 
-  const phoneDigits = phone.replace(/[^0-9]/g, '');
-  const phoneValid = phoneDigits.length === 10 || (phoneDigits.length === 11 && phoneDigits.startsWith('1'));
-  const canSubmit =
-    name.trim().length > 0 &&
-    confirmed &&
-    (sendSms || sendEmail) &&
-    (!sendSms || phoneValid) &&
-    (!sendEmail || isValidGateEmail(email));
+  const canSubmit = name.trim().length > 0 && isValidGateEmail(email) && confirmed;
 
   function handleSubmit() {
     if (!canSubmit) return;
     delegate.mutate(
-      { token, newName: name.trim(), newPhone: sendSms ? phone.trim() : undefined, newEmail: sendEmail ? email.trim() : undefined, sendSms, sendEmail },
+      { token, newName: name.trim(), newEmail: email.trim(), sendSms: false, sendEmail: true },
       { onSuccess: () => onForwarded(name.trim()) },
     );
   }
@@ -263,37 +253,17 @@ function ForwardToSellerModal({
           onChange={(e) => setName(e.target.value)}
         />
 
-        <label className="mt-2.5 flex items-center gap-2 text-[12.5px] text-text-2">
-          <input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} />
-          Text them
-        </label>
-        {sendSms && (
-          <input
-            className="input mt-1.5"
-            placeholder="Their phone number"
-            inputMode="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        )}
-
-        <label className="mt-2 flex items-center gap-2 text-[12.5px] text-text-2">
-          <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-          Email them
-        </label>
-        {sendEmail && (
-          <input
-            className="input mt-1.5"
-            placeholder="Their email address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        )}
+        <input
+          className="input mt-2.5"
+          placeholder="Seller's email address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
         <label className="mt-3 flex items-start gap-2 text-[11.5px] text-text-2">
           <input type="checkbox" className="mt-0.5" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-          I'm not the seller — I'm forwarding this to the person who is.
+          I am not the seller — I am representing the seller, and am forwarding this to them to sign.
         </label>
 
         {delegate.isError && <p className="mt-2 text-[12px] text-danger">{(delegate.error as Error).message}</p>}
