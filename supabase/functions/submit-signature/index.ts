@@ -354,55 +354,63 @@ function buildSignedRows(
  * of the actual signed copy (finalBytes, already on hand from the
  * certificate-of-completion build below), not just a link. The download
  * link stays too as a fallback for whichever mail client/filter strips or
- * blocks the attachment. "What happens next" walks the deal's remaining
- * steps in order: walkthrough/inspection, EMD deposit, opening title, then
- * closing — title company and closing date are only named when the Cash
- * Deal template actually captured them; every other case stays generic. */
+ * blocks the attachment. "What happens next" walks the Cash Deal PSA's
+ * specific remaining steps in order: walkthrough/inspection, EMD deposit,
+ * opening title, then closing — title company and closing date are only
+ * named when the Cash Deal template actually captured them. Every other
+ * template (Novation, Subject-To, Seller-Finance, LOI, Assignment, ...)
+ * has its own different post-signing process, so this whole section is
+ * skipped entirely rather than shown with generic/wrong-sounding steps. */
 function signedCompleteEmailHtml(opts: {
   recipientName: string;
   address: string;
   link: string;
   documentId: string;
   signedRows: Array<{ label: string; value: string }>;
+  isCashDeal: boolean;
   titleCompany?: string;
   closingDate?: string;
   emdAmount?: string;
 }): string {
-  const { recipientName, address, link, documentId, signedRows, titleCompany, closingDate, emdAmount } = opts;
+  const { recipientName, address, link, documentId, signedRows, isCashDeal, titleCompany, closingDate, emdAmount } = opts;
   const firstName = recipientName.split(' ')[0];
-  const steps = [
-    {
-      title: 'Walkthrough and inspection',
-      body: "I'll reach out to schedule a time that works for you to walk the property together.",
-    },
-    {
-      title: 'EMD deposit',
-      body: emdAmount
-        ? `Your earnest money deposit of ${emdAmount} goes to the title company to formally open escrow.`
-        : 'Your earnest money deposit goes to the title company to formally open escrow.',
-    },
-    {
-      title: 'Opening title',
-      body: titleCompany
-        ? `${titleCompany} will contact you within two business days to start the title search.`
-        : 'The title company will contact you within two business days to start the title search.',
-    },
-    {
-      title: 'Closing',
-      body: closingDate
-        ? `Currently set for ${closingDate}. You'll get the details a few days before.`
-        : "We'll confirm your closing date and send the details a few days before.",
-    },
-  ];
-  const stepsHtml = steps.map((s, i) => numberedStep(i + 1, s.title, s.body)).join('');
+  let whatsNextHtml = '';
+  if (isCashDeal) {
+    const steps = [
+      {
+        title: 'Walkthrough and inspection',
+        body: "I'll reach out to schedule a time that works for you to walk the property together.",
+      },
+      {
+        title: 'EMD deposit',
+        body: emdAmount
+          ? `Your earnest money deposit of ${emdAmount} goes to the title company to formally open escrow.`
+          : 'Your earnest money deposit goes to the title company to formally open escrow.',
+      },
+      {
+        title: 'Opening title',
+        body: titleCompany
+          ? `${titleCompany} will contact you within two business days to start the title search.`
+          : 'The title company will contact you within two business days to start the title search.',
+      },
+      {
+        title: 'Closing',
+        body: closingDate
+          ? `Currently set for ${closingDate}. You'll get the details a few days before.`
+          : "We'll confirm your closing date and send the details a few days before.",
+      },
+    ];
+    const stepsHtml = steps.map((s, i) => numberedStep(i + 1, s.title, s.body)).join('');
+    whatsNextHtml = `
+<p style="margin:32px 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0B1E33;">What happens next</p>
+${stepsTable(stepsHtml)}`;
+  }
   const body = `
 ${statusBanner('Fully signed by all parties')}
 <h1 style="margin:0;font-size:21px;line-height:1.35;font-weight:700;color:#0B1E33;">&#127881; Congratulations, ${firstName}. It's official.</h1>
 <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#45566B;">The agreement for ${address} has been signed by everyone. You're under contract. Thank you for working with us. We'll take it from here and keep you posted at each step.</p>
 ${detailTable(signedRows)}
-${ctaButton(link, 'Download signed copy', '#0B1E33', '#ffffff')}
-<p style="margin:32px 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0B1E33;">What happens next</p>
-${stepsTable(stepsHtml)}
+${ctaButton(link, 'Download signed copy', '#0B1E33', '#ffffff')}${whatsNextHtml}
 <p style="margin:10px 0 0;font-size:13.5px;line-height:1.6;color:#45566B;">If anything comes up before closing, call me at ${AGENT_PHONE_DISPLAY} or reply here.</p>
 <p style="margin:18px 0 0;font-size:13.5px;line-height:1.6;color:#0B1E33;font-weight:600;">${AGENT_NAME}<br><span style="font-weight:400;color:#8693A1;">Acquisitions, Bluebird Acquisition</span></p>`;
   return emailShell(`Your agreement for ${address} has been signed by everyone`, body, {
@@ -1247,6 +1255,7 @@ Deno.serve(async (req) => {
             link: partyLink,
             documentId: instance.id,
             signedRows: buildSignedRows(p, updatedParties),
+            isCashDeal,
             titleCompany: isCashDeal ? fieldValues[CASH_DEAL_FIELD_IDS.titleCompany] || undefined : undefined,
             closingDate: isCashDeal && fieldValues[CASH_DEAL_FIELD_IDS.closingDate]
               ? formatDateOnly(fieldValues[CASH_DEAL_FIELD_IDS.closingDate])
