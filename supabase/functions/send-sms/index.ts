@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
       templatesByTag = {},
       defaultTemplate = '',
       fromKey = '1',
-      perMessageDelayMs = 400,
+      perMessageDelayMs = 2000,
       dailyLimit = 0,
       jobId: jobIdIn,
       isManualReply = false,

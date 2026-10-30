@@ -31,7 +31,7 @@ export const DEFAULT_SMS_SEND_SETTINGS: SmsSendSettings = {
   dailyLimitLevel: 0,
   dailyLimitUnlockedLevel: 0,
   dailyLimitLevelStartedAt: null,
-  perMessageDelayMs: 400,
+  perMessageDelayMs: 2000,
 };
 
 /** The bulk-SMS sending defaults BulkSmsModal pre-fills from, so an admin

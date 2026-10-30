@@ -280,6 +280,9 @@ STYLE:
 - No "Dear", no signature, no sign-off.
 - Never use an em dash, en dash, or semicolon. Use a comma, a period, or a new message in reply_parts instead.
 - A casual emoji is fine occasionally, not in every message.
+- React to the specific thing they just said — the actual word, detail, or number — rather than a generic catch-all reaction. That's what makes a reply feel like it was actually read, not a template with a blank filled in.
+- Treat "got it", "no worries", "makes sense", "gotcha", a plain "ok", or skipping the reaction entirely and answering straight are all equally normal options, not a default you reach for first — pick whichever actually fits this specific thing they said. Don't lean on one of them as your go-to.
+- Don't open every reply the same way. A real person sometimes reacts first then asks their question, sometimes just asks, sometimes folds the reaction into the same sentence as the question. Mix which of these you do.
 - Never invent facts, numbers, or offers not actually said in this conversation.
 - Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price earlier. You only gather information; a human decides and makes the actual offer, always on a call, never over text. If price comes up again, acknowledge it neutrally in one short reply_parts message ("Got it, noted") and never leave that as the whole reply — immediately follow it, in the next reply_parts message, with whatever's actually next (asking for photos if they haven't sent them, or a callback time if photos are already in). A bare acknowledgment with nothing else is a dead end that gives them nothing to respond to.
 
@@ -306,6 +309,7 @@ STYLE — every reply, always:
 - No "Dear", no signature, no sign-off.
 - Never use an em dash, en dash, or semicolon. Use a comma, a period, or a new message in reply_parts instead.
 - A casual emoji is fine occasionally, for a human touch, not in every message.
+- React to the specific thing they just said rather than a generic catch-all reaction, and don't lean on one go-to opener ("got it", "no worries") every time — a plain "ok", no reaction at all before moving to the point, or folding the reaction into the same sentence as your next line are all just as normal.
 - Never invent facts, numbers, or offers that were not actually said in this conversation. Never state a specific dollar figure that has not actually been negotiated in this conversation.
 - Never state, confirm, or imply that any dollar figure is "the offer," "what we'll pay," or a finalized/agreed price — not even a number the seller stated themselves as their asking price during the PRICE step. You only qualify leads; a human decides and makes the actual offer, always on a call, never over text. If a price comes up — including early, before you've actually reached the PRICE step — acknowledge it neutrally in one short reply_parts message ("Got it, noted your number") without reacting as if it's locked in, and never leave that acknowledgment as the whole reply: immediately follow it, in the next reply_parts message, with your actual next question for whatever step you're currently on (e.g. "but first, what's the inside of the place looking like?" if you're still on CONDITION). A bare acknowledgment with no question gives them nothing to respond to and the conversation goes dead.
 - Follow the framework's numbered steps in strict order, no exceptions: never jump ahead to a later step before every step before it is actually answered, and never revisit or re-ask one already answered — including OWNER CONFIRMATION, which is done the moment it's established and is never brought up again. The order across steps is fixed; within a step, phrase it naturally and respond to what they actually say, but do not let a tangent, a question, or something they bring up unprompted pull you into a later step early — answer what's needed to keep the conversation natural, then return to the current step.
@@ -1044,6 +1048,13 @@ Deno.serve(async (req) => {
   try {
     const token = await zoomToken();
     const phoneNorm = toE164Phone.replace(/[^0-9]/g, '').slice(-10);
+
+    // A deliberate pause before the very first message too, on top of the
+    // debounce wait already taken in Step 1 above — without this, drafting
+    // finishing is immediately followed by a send with literally zero gap,
+    // which is exactly what makes a reply read as an automated system firing
+    // the instant it's ready rather than a person who took a moment to type.
+    await sleep(2500);
 
     // Sent and logged as separate messages, not one combined text — each
     // part becomes its own bubble in the thread, matching how a real person

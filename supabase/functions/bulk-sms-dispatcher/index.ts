@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
     };
     const templatesByTag = config.templatesByTag ?? {};
     const defaultTemplate = config.defaultTemplate ?? '';
-    const perMessageDelayMs = config.perMessageDelayMs ?? 400;
+    const perMessageDelayMs = config.perMessageDelayMs ?? 2000;
     const dailyLimit = config.dailyLimit ?? 0;
 
     // Same lead-fetch chunking as send-sms, for the same reason (a huge

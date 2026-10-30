@@ -22,7 +22,7 @@ export function SmsNumberLabelsEditor() {
   const saveSendSettings = useSaveSmsSendSettings();
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
-  const [delaySeconds, setDelaySeconds] = useState('0.4');
+  const [delaySeconds, setDelaySeconds] = useState('2');
   const [saved, setSaved] = useState(false);
   const seededRef = useRef(false);
   const delaySeededRef = useRef(false);
