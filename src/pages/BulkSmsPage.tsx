@@ -11,10 +11,8 @@ import {
   Pause,
   RotateCw,
   Send,
-  SkipForward,
   Trash2,
   X,
-  XCircle,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -27,7 +25,6 @@ import {
 } from '@/hooks/useSms';
 import { useLeads } from '@/hooks/useLeads';
 import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
-import { SmsLevelCard } from '@/components/sms/SmsLevelCard';
 import { withinSendWindow, nextSendWindowOpensIn } from '@/lib/smsSendWindow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/contexts/AuthContext';
@@ -100,17 +97,6 @@ function BulkSmsHistory() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | BulkSmsJobStatus>('all');
 
-  const totals = useMemo(() => {
-    const totalSent = jobs.reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
-    const totalSkipped = jobs.reduce((sum, j) => sum + (j.skippedCount ?? 0), 0);
-    const totalFailed = jobs.reduce((sum, j) => sum + (j.failedCount ?? 0), 0);
-    const durations = jobs
-      .filter((j) => j.completedAt)
-      .map((j) => (new Date(j.completedAt!).getTime() - new Date(j.createdAt).getTime()) / 1000);
-    const avgDurationSeconds = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
-    return { totalSent, totalSkipped, totalFailed, avgDurationSeconds };
-  }, [jobs]);
-
   // Real texts sent today, summed from today's jobs — the same aggregate
   // bulk-sms-dispatcher itself works from, not a separate estimate.
   const usedToday = useMemo(() => {
@@ -157,44 +143,32 @@ function BulkSmsHistory() {
       </div>
 
       {sendSettings && sendSettings.dailyLimitLevel > 0 && (
-        <div className="card mb-4">
-          <SmsLevelCard />
-          {sendSettings.dailyLimit > 0 && (
-            <div className="mt-4 border-t border-border-2 pt-4">
-              <div className="flex items-center justify-between text-[12.5px] text-text-2">
-                <span>Used today</span>
-                <span className="font-mono font-semibold text-text">
-                  {usedToday.toLocaleString()} of {sendSettings.dailyLimit.toLocaleString()}
+        <div className="card mb-4 !p-3.5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Gauge size={14} />
+              </span>
+              <span className="text-[13.5px] font-semibold text-text">Level {sendSettings.dailyLimitLevel}</span>
+            </div>
+            {sendSettings.dailyLimit > 0 && (
+              <div className="flex min-w-[160px] flex-1 items-center gap-2.5">
+                <span className="shrink-0 text-[12px] text-text-3">Used today</span>
+                <div className="h-1.5 w-full max-w-[160px] overflow-hidden rounded-full bg-surface-3">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${Math.min(100, (usedToday / sendSettings.dailyLimit) * 100)}%` }}
+                  />
+                </div>
+                <span className="shrink-0 font-mono text-[12px] font-semibold text-text">
+                  {usedToday.toLocaleString()} / {sendSettings.dailyLimit.toLocaleString()}
                 </span>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${Math.min(100, (usedToday / sendSettings.dailyLimit) * 100)}%` }}
-                />
-              </div>
-              <div className="mt-2 text-[12px] text-text-3">
-                {inWindow
-                  ? 'Sending window is open now (7pm-6am Pakistan time).'
-                  : `Outside the sending window (7pm-6am Pakistan time) — opens in ${nextSendWindowOpensIn()}.`}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {jobs.length > 0 && (
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Total Sent" value={totals.totalSent} sub={`across ${jobs.length} send${jobs.length !== 1 ? 's' : ''}`} color={STATUS_CONFIG.sent.color} icon={Send} />
-          <StatCard label="Total Skipped" value={totals.totalSkipped} sub="no usable number, opted out, etc." color={STATUS_CONFIG.skipped.color} icon={SkipForward} />
-          <StatCard label="Total Failed" value={totals.totalFailed} sub="carrier rejected" color={STATUS_CONFIG.failed.color} icon={XCircle} />
-          <StatCard
-            label="Avg Duration"
-            value={totals.avgDurationSeconds != null ? formatDuration(totals.avgDurationSeconds) : '—'}
-            sub="per completed send"
-            color="#4f46e5"
-            icon={Clock}
-          />
+            )}
+            <span className="ml-auto shrink-0 text-[12px] text-text-3">
+              {inWindow ? 'Sending window open now' : `Opens in ${nextSendWindowOpensIn()}`}
+            </span>
+          </div>
         </div>
       )}
 
