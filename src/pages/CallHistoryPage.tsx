@@ -8,7 +8,7 @@ import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { STAGE_CONFIG } from '@/types/domain';
-import { cn, formatDateTime, formatPhone, initials, localIsoDate } from '@/lib/utils';
+import { formatDateTime, formatPhone, initials, localIsoDate } from '@/lib/utils';
 
 const OUTCOME_FILTERS: Array<{ key: string; label: string; color: string }> = [
   { key: 'voicemail', label: 'Voicemail', color: STAGE_CONFIG.voicemail.color },
@@ -246,30 +246,14 @@ export function CallHistoryPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                className={cn(
-                  'rounded-md px-2.5 py-1.5 text-[12.5px] font-medium transition-colors',
-                  !outcome ? 'bg-primary text-primary-text' : 'bg-surface-3 text-text-2 hover:text-text',
-                )}
-                onClick={() => setOutcome('')}
-              >
-                All outcomes
-              </button>
+            <select className="input max-w-[160px]" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+              <option value="">All outcomes</option>
               {OUTCOME_FILTERS.map((o) => (
-                <button
-                  key={o.key}
-                  className={cn(
-                    'rounded-md px-2.5 py-1.5 text-[12.5px] font-medium transition-colors',
-                    outcome === o.key ? '' : 'bg-surface-3 text-text-2 hover:text-text',
-                  )}
-                  style={outcome === o.key ? { background: `${o.color}1f`, color: o.color } : undefined}
-                  onClick={() => setOutcome(outcome === o.key ? '' : o.key)}
-                >
+                <option key={o.key} value={o.key}>
                   {o.label}
-                </button>
+                </option>
               ))}
-            </div>
+            </select>
             <select className="input ml-auto max-w-[150px]" value={time} onChange={(e) => setTime(e.target.value)}>
               {TIME_FILTERS.map((t) => (
                 <option key={t.key} value={t.key}>
