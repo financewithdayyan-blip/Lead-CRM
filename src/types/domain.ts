@@ -333,6 +333,10 @@ export interface BulkSmsJob {
   sentCount?: number;
   skippedCount?: number;
   failedCount?: number;
+  /** The default message template this send was started with (from
+   * config.defaultTemplate) — null for jobs with no saved config, or a
+   * per-tag variant that overrode it for a given lead. */
+  messageTemplate?: string | null;
 }
 
 export interface BulkSmsJobItem {

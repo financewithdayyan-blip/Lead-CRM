@@ -38,6 +38,7 @@ function dbToBulkSmsJob(row: any): BulkSmsJob {
     createdAt: row.created_at,
     completedAt: row.completed_at ?? null,
     hasConfig: !!row.config,
+    messageTemplate: row.config?.defaultTemplate ?? null,
     // Only present on rows from bulk_sms_jobs_with_counts (useBulkSmsJobs).
     sentCount: row.sent_count != null ? Number(row.sent_count) : undefined,
     skippedCount: row.skipped_count != null ? Number(row.skipped_count) : undefined,
