@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { localIsoDate } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJob, BulkSmsJobItem, Lead } from '@/types/domain';
 import type { SmsNumberKey } from '@/lib/smsNumbers';
 
@@ -129,6 +131,20 @@ export function useBulkSmsJobs() {
       return (data ?? []).map(dbToBulkSmsJob);
     },
   });
+}
+
+/** Real texts sent today, summed across today's jobs — the same aggregate
+ * bulk-sms-dispatcher itself enforces against the daily limit, shared by
+ * the Bulk SMS list and Sending Levels pages so neither can drift from the
+ * other. */
+export function useSmsSentToday(): number {
+  const { data: jobs = [] } = useBulkSmsJobs();
+  return useMemo(() => {
+    const todayIso = localIsoDate(new Date());
+    return jobs
+      .filter((j) => localIsoDate(new Date(j.createdAt)) === todayIso)
+      .reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
+  }, [jobs]);
 }
 
 /** Removes a job from the All Sends list — bulk_sms_job_items cascades on

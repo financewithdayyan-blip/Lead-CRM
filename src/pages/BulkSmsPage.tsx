@@ -19,6 +19,7 @@ import {
   useBulkSmsJob,
   useBulkSmsJobItems,
   useBulkSmsJobs,
+  useSmsSentToday,
   useDeleteBulkSmsJob,
   usePauseBulkSmsJob,
   useResumeBulkSmsJob,
@@ -28,7 +29,7 @@ import { useSmsSendSettings } from '@/hooks/useSmsSendSettings';
 import { withinSendWindow, nextSendWindowOpensIn } from '@/lib/smsSendWindow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatDateTime, formatDuration, formatPhone, formatTime, initials, localIsoDate } from '@/lib/utils';
+import { formatDateTime, formatDuration, formatPhone, formatTime, initials } from '@/lib/utils';
 import type { BulkSmsItemStatus, BulkSmsJobStatus } from '@/types/domain';
 
 const STATUS_CONFIG: Record<BulkSmsItemStatus, { label: string; color: string; icon: typeof Clock }> = {
@@ -97,14 +98,7 @@ function BulkSmsHistory() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | BulkSmsJobStatus>('all');
 
-  // Real texts sent today, summed from today's jobs — the same aggregate
-  // bulk-sms-dispatcher itself works from, not a separate estimate.
-  const usedToday = useMemo(() => {
-    const todayIso = localIsoDate(new Date());
-    return jobs
-      .filter((j) => localIsoDate(new Date(j.createdAt)) === todayIso)
-      .reduce((sum, j) => sum + (j.sentCount ?? 0), 0);
-  }, [jobs]);
+  const usedToday = useSmsSentToday();
 
   const statusCounts = useMemo(() => {
     const c: Record<BulkSmsJobStatus, number> = { running: 0, completed: 0, failed: 0, paused: 0 };
