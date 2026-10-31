@@ -12,12 +12,38 @@ import { AuctionCountdown } from '@/components/ui/AuctionCountdown';
 import { AddLeadModal } from '@/components/leads/AddLeadModal';
 import { DeleteLeadsModal } from '@/components/leads/DeleteLeadsModal';
 import { STAGE_CONFIG, type LeadStage } from '@/types/domain';
-import { formatPhone, getErrorMessage } from '@/lib/utils';
+import { cn, formatPhone, getErrorMessage, initials } from '@/lib/utils';
 
 // Lazy — pulls in the xlsx (SheetJS) library, which is heavy and only ever
 // needed once someone actually opens the import modal, not on every visit
 // to the Leads page.
 const ImportCsvModal = lazy(() => import('@/components/leads/ImportCsvModal').then((m) => ({ default: m.ImportCsvModal })));
+
+// A stable (never changes between renders/reloads), evenly-distributed color
+// per lead for its avatar circle — hashed from the lead's own id, not random,
+// so the same lead always gets the same color.
+const AVATAR_PALETTE = [
+  { bg: 'rgba(255,181,71,.15)', text: '#FFC46B' },
+  { bg: 'rgba(110,123,255,.18)', text: '#A9B1FF' },
+  { bg: 'rgba(61,214,181,.14)', text: '#4FE0BF' },
+  { bg: 'rgba(90,184,255,.14)', text: '#7CC6FF' },
+  { bg: 'rgba(180,140,255,.15)', text: '#C7A8FF' },
+  { bg: 'rgba(255,107,107,.13)', text: '#FF8A8A' },
+];
+function avatarColorFor(id: string): { bg: string; text: string } {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+// Real ai_score (0-100, see score-lead/auto-score-leads) — thresholds are a
+// visual read only, not a different stored value.
+function scoreColor(score: number | null): string | undefined {
+  if (score == null) return undefined;
+  if (score >= 75) return '#4FE0BF';
+  if (score >= 50) return '#FFC46B';
+  return undefined;
+}
 
 export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: string; viewOnly?: boolean }) {
   const navigate = useNavigate();
@@ -81,9 +107,9 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
     <div>
       <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Leads</h1>
-          <p className="text-sm text-text-3">
-            {isError ? 'Failed to load' : `${totalCount} total`}
+          <h1 className="text-2xl font-bold tracking-tight text-text">Leads</h1>
+          <p className="mt-1 text-sm text-text-3">
+            {isError ? 'Failed to load' : <><span className="font-mono text-text-2">{totalCount.toLocaleString()}</span> total</>}
             {viewOnly && " · this is their lead list - changes apply to their account"}
           </p>
         </div>
@@ -147,56 +173,73 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                 <input type="checkbox" checked={selected.size > 0 && selected.size === leads.length} onChange={toggleSelectAll} />
               </th>
               <th className="px-3 py-2.5">#</th>
-              <th className="px-3 py-2.5">Name</th>
-              <th className="px-3 py-2.5">Phone</th>
-              <th className="px-3 py-2.5">Address</th>
-              <th className="px-3 py-2.5">Stage</th>
+              <th className="px-3 py-2.5">Lead</th>
+              <th className="px-3 py-2.5">Property</th>
               <th className="px-3 py-2.5">Tags</th>
+              <th className="px-3 py-2.5">Stage</th>
               <th className="px-3 py-2.5">Auction</th>
+              <th className="px-3 py-2.5 text-right">Score</th>
               {targetUserId && <th className="px-3 py-2.5" />}
             </tr>
           </thead>
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={targetUserId ? 10 : 9} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={targetUserId ? 9 : 8} className="px-3 py-8 text-center text-text-3">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && leads.length === 0 && (
               <tr>
-                <td colSpan={targetUserId ? 10 : 9} className="px-3 py-8 text-center text-text-3">
+                <td colSpan={targetUserId ? 9 : 8} className="px-3 py-8 text-center text-text-3">
                   No leads match your filters.
                 </td>
               </tr>
             )}
             {leads.map((lead) => {
               const sharedFrom = receivedShares[lead.id];
+              const isSelected = selected.has(lead.id);
+              const avatar = avatarColorFor(lead.id);
+              const cityState = [lead.city, lead.state].filter(Boolean).join(', ');
+              const score = scoreColor(lead.aiScore);
               return (
                 <tr
                   key={lead.id}
-                  className={`cursor-pointer border-b border-border ${sharedFrom ? 'bg-info-dim hover:bg-info/15' : 'hover:bg-surface-3'}`}
+                  className={cn(
+                    'cursor-pointer border-b border-border',
+                    sharedFrom ? 'bg-info-dim hover:bg-info/15' : isSelected ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-surface-3',
+                  )}
                   onClick={() => navigate(targetUserId ? `/team/${targetUserId}/leads/${lead.id}` : `/leads/${lead.id}`)}
                 >
                   <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" checked={selected.has(lead.id)} onChange={() => toggleSelected(lead.id)} />
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelected(lead.id)} />
                   </td>
                   <td className="px-3 py-2.5 text-text-3">{lead.leadNum}</td>
-                  <td className="px-3 py-2.5 font-medium text-text">
-                    <div>
-                      {lead.firstName} {lead.lastName}
-                    </div>
-                    {sharedFrom && (
-                      <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
-                        <Share2 size={9} /> Shared by {sharedFrom}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-text-2">{formatPhone(lead.phone || lead.phone2 || '')}</td>
-                  <td className="max-w-[220px] truncate px-3 py-2.5 text-text-2">{lead.address}</td>
                   <td className="px-3 py-2.5">
-                    <StageBadge stage={lead.stage} />
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
+                        style={{ background: avatar.bg, color: avatar.text }}
+                      >
+                        {initials(lead.firstName, lead.lastName)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-text">
+                          {lead.firstName} {lead.lastName}
+                        </div>
+                        <div className="font-mono text-[12.5px] text-text-3">{formatPhone(lead.phone || lead.phone2 || '')}</div>
+                        {sharedFrom && (
+                          <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-info/15 px-1.5 py-0.5 text-[10px] font-medium text-info-text">
+                            <Share2 size={9} /> Shared by {sharedFrom}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="max-w-[220px] px-3 py-2.5 text-text-2">
+                    <div className="truncate">{lead.address}</div>
+                    {cityState && <div className="truncate text-[12.5px] text-text-3">{cityState}</div>}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex flex-wrap gap-1">
@@ -207,7 +250,13 @@ export function LeadsView({ targetUserId, viewOnly = false }: { targetUserId?: s
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
+                    <StageBadge stage={lead.stage} />
+                  </td>
+                  <td className="px-3 py-2.5">
                     {lead.auctionDate ? <AuctionCountdown auctionDate={lead.auctionDate} /> : <span className="text-text-3">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono font-bold" style={score ? { color: score } : undefined}>
+                    {lead.aiScore ?? <span className="text-text-3">—</span>}
                   </td>
                   {targetUserId && (
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
