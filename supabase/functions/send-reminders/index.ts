@@ -88,11 +88,19 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Either the cron job (service role key) or an admin clicking the button
-  // on Kanban (their own session).
-  const authHeader = req.headers.get('Authorization') ?? '';
-  const bearer = authHeader.replace('Bearer ', '');
-  if (bearer !== SERVICE_ROLE_KEY) {
+  // Either the cron job (a dedicated internal secret — see migration 0182)
+  // or an admin clicking the button on Kanban (their own session). Used to
+  // compare the bearer directly against SUPABASE_SERVICE_ROLE_KEY, the same
+  // fragile pattern already confirmed broken twice elsewhere in this
+  // codebase (see the dev-constraints note: the key can drift format
+  // between what Vault stores and what a deployed function actually sees at
+  // runtime, silently 401ing the cron forever with no alert). Moved to the
+  // same purpose-made-secret pattern already proven by ai-reply-review,
+  // bulk-sms-dispatcher, and send-onhold-followups.
+  const isServiceCaller = req.headers.get('x-internal-secret') === Deno.env.get('SEND_REMINDERS_CRON_SECRET');
+  if (!isServiceCaller) {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const bearer = authHeader.replace('Bearer ', '');
     const { data: userData } = await admin.auth.getUser(bearer);
     const userId = userData?.user?.id;
     if (!userId) return json({ error: 'Not signed in.' }, 401);

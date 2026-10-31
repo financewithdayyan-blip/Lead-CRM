@@ -850,7 +850,15 @@ Deno.serve(async (req) => {
     const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
     const userAgent = req.headers.get('user-agent');
 
-    const { error: updateErr } = await admin
+    // Atomic claim — the status==='signed' check above ran in an earlier,
+    // separate round trip, so a retried or double-tapped submit can pass
+    // that check twice before either write lands. The .neq guard plus
+    // checking the returned row count is what actually makes only one of
+    // two racing requests win: the loser sees zero rows updated and bails
+    // out below instead of also inserting its own 'signed' audit event and
+    // running finalization (duplicate PDF flatten, duplicate completion
+    // emails/SMS to every party) a second time.
+    const { data: updatedRows, error: updateErr } = await admin
       .from('contract_signing_parties')
       .update({
         status: 'signed',
@@ -858,8 +866,11 @@ Deno.serve(async (req) => {
         typed_signature_name: signatureName?.trim() || null,
         signed_at: signedAt,
       })
-      .eq('id', party.id);
+      .eq('id', party.id)
+      .neq('status', 'signed')
+      .select('id');
     if (updateErr) throw updateErr;
+    if (!updatedRows?.length) return json({ error: 'This has already been signed' }, 409);
 
     await admin.from('contract_audit_events').insert({
       contract_instance_id: party.contract_instance_id,

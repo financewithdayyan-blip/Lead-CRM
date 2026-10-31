@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { getViewerToken, type ViewerIdentity } from '@/lib/viewerToken';
 import type { ConditionRatings, DealType } from '@/types/domain';
@@ -64,7 +64,13 @@ export function usePublicPacket(slug: string | undefined) {
   return useQuery({
     queryKey: ['public_packet', slug],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_public_packet', { p_slug: slug });
+      // The server decides what's actually safe to send back, not just what
+      // the UI chooses to render — see get_public_packet (0183). Passing the
+      // same stable per-browser viewer_token log_packet_view already keys
+      // the address reveal on is what lets a genuinely-captured returning
+      // visitor get the full deal data back, instead of the gated subset
+      // every uncaptured caller gets.
+      const { data, error } = await supabase.rpc('get_public_packet', { p_slug: slug, p_viewer_token: getViewerToken() });
       if (error) throw error;
       return (data as PublicPacket | null) ?? null;
     },
@@ -103,6 +109,7 @@ export interface RevealedAddress {
  * the log_packet_view migration for why this is one round trip rather than
  * a separate address lookup. Null until then. */
 export function useLogPacketView() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ slug, identity }: { slug: string; identity?: ViewerIdentity | null }) => {
       const { data, error } = await supabase.rpc('log_packet_view', {
@@ -115,6 +122,15 @@ export function useLogPacketView() {
       });
       if (error) throw error;
       return (data as RevealedAddress | null) ?? null;
+    },
+    // A phone number just got recorded against this viewer_token (or
+    // already was, on a returning visit) — get_public_packet's own
+    // server-side capture check (0183) now resolves differently for this
+    // same browser, so the already-cached, still-gated first fetch has to
+    // be thrown away and re-pulled, or a freshly-captured visitor would
+    // keep seeing an empty comps/repairs section despite having unlocked it.
+    onSuccess: (_data, { slug }) => {
+      qc.invalidateQueries({ queryKey: ['public_packet', slug] });
     },
   });
 }

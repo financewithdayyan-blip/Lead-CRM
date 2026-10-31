@@ -171,13 +171,6 @@ Deno.serve(async (req) => {
       sinceHours?: number;
     };
 
-    // Bypasses auth entirely on purpose — a length/prefix (never the real
-    // value) to resolve whether a caller's shared-secret header actually
-    // matches what's configured here.
-    if (mode === 'debug_secret') {
-      return json({ configuredLen: SERVICE_ROLE_KEY.length, configuredPrefix: SERVICE_ROLE_KEY.slice(0, 20) });
-    }
-
     // A dedicated, known-on-both-sides test secret — not SERVICE_ROLE_KEY,
     // since this project's actual configured value turned out to be the
     // newer sb_secret_ format and isn't otherwise retrievable in full to
@@ -197,6 +190,19 @@ Deno.serve(async (req) => {
 
       const { data: profile } = await admin.from('profiles').select('role').eq('id', userId).single();
       if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
+    }
+
+    // Moved behind the auth check above — this used to run before any
+    // authorization at all, letting anyone holding just the public anon key
+    // (which alone satisfies this function's verify_jwt gate) retrieve a
+    // real partial disclosure of the service-role key's length and first 20
+    // characters. A signed-in admin still reaches this fine via the "Admins
+    // only" branch just above, which is all this diagnostic was ever meant
+    // to serve — its value was always in letting an admin confirm their own
+    // x-internal-secret header against what's configured, not in being
+    // reachable with no credentials at all.
+    if (mode === 'debug_secret') {
+      return json({ configuredLen: SERVICE_ROLE_KEY.length, configuredPrefix: SERVICE_ROLE_KEY.slice(0, 20) });
     }
 
     // Pins every still-unpinned lead using send_log rows we already have —

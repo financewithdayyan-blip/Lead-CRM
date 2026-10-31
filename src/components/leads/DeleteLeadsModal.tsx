@@ -40,9 +40,17 @@ export function DeleteLeadsModal({
 
   const targets = useMemo(() => {
     if (mode === 'selected') return selectedLeads;
-    return allLeads.filter(
-      (l) => (stages.size > 0 && stages.has(l.stage)) || (tagIds.size > 0 && l.tagIds.some((t) => tagIds.has(t))),
-    );
+    // Stage and tag are two separate filter dimensions — picking both must
+    // narrow to their intersection (leads matching BOTH), not broaden to
+    // their union. An untouched dimension (size 0) doesn't restrict at all,
+    // but with nothing picked in either dimension, that must mean no
+    // targets rather than every lead in the account.
+    if (stages.size === 0 && tagIds.size === 0) return [];
+    return allLeads.filter((l) => {
+      const stageMatch = stages.size === 0 || stages.has(l.stage);
+      const tagMatch = tagIds.size === 0 || l.tagIds.some((t) => tagIds.has(t));
+      return stageMatch && tagMatch;
+    });
   }, [selectedLeads, allLeads, mode, stages, tagIds]);
 
   function toggleStage(s: LeadStage) {

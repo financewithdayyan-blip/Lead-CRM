@@ -1127,7 +1127,15 @@ Deno.serve(async (req) => {
   // leaves Replied once qualified, matching AI_ACTIVE_STAGES above.
   if (negativeReply) {
     if (hardDecline) {
-      await admin.from('leads').update({ stage: 'dead_declined', opted_out: explicitOptOut, ai_reply_paused: true }).eq('id', leadId);
+      // On Hold leads stay on the On Hold board through a hard decline too
+      // (0130) — same reasoning as the fullyQualified branch below: only a
+      // human manually moving the card off On Hold ever changes its stage.
+      // opted_out/ai_reply_paused still apply unchanged either way.
+      const cameFromOnhold = lead.stage === 'onhold';
+      await admin
+        .from('leads')
+        .update({ ...(cameFromOnhold ? {} : { stage: 'dead_declined' }), opted_out: explicitOptOut, ai_reply_paused: true })
+        .eq('id', leadId);
     } else {
       // Only the price-specific decline goes On Hold rather than Dead — a
       // human can revisit later with a different number or offer. That's

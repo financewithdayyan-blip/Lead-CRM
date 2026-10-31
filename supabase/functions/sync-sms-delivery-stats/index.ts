@@ -118,8 +118,20 @@ async function syncWindow(admin: ReturnType<typeof createClient>, token: string,
   return messagesSeen;
 }
 
+const CRON_SECRET = Deno.env.get('SYNC_SMS_DELIVERY_STATS_CRON_SECRET');
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+
+  // Cron-only — never called from the frontend (confirmed: no UI invokes
+  // this function). There was previously no check here at all beyond the
+  // platform's verify_jwt gate, which the public anon key already satisfies
+  // on its own — meaning any caller holding that key (embedded client-side)
+  // could trigger a full Zoom billing-report pull and service-role writes
+  // with no real authorization. See migration 0182.
+  if (req.headers.get('x-internal-secret') !== CRON_SECRET) {
+    return json({ error: 'unauthorized' }, 401);
+  }
 
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);

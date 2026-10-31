@@ -538,9 +538,15 @@ Deno.serve(async (req) => {
       const deterministicStop = isExplicitOptOut || isProfanity(body);
 
       if (deterministicStop) {
+        // On Hold leads stay on the On Hold board here too (0130) — only a
+        // human manually moving the card off On Hold changes its stage.
+        // opted_out/ai_reply_paused still apply unconditionally either way:
+        // those are the actual compliance/silence mechanisms, independent of
+        // which Kanban column the lead happens to sit in.
+        const cameFromOnhold = lead.stage === 'onhold';
         await admin
           .from('leads')
-          .update({ stage: 'dead_declined', opted_out: isExplicitOptOut, ai_reply_paused: true })
+          .update({ ...(cameFromOnhold ? {} : { stage: 'dead_declined' }), opted_out: isExplicitOptOut, ai_reply_paused: true })
           .eq('id', lead.id);
         await admin.from('lead_activities').insert({
           lead_id: lead.id,
