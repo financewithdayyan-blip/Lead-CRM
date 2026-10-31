@@ -19,9 +19,7 @@ import {
   Phone,
   PhoneCall,
   PhoneIncoming,
-  Plus,
   Reply,
-  Search,
   Send,
   Sparkles,
   Tags as TagsIcon,
@@ -1286,25 +1284,15 @@ export function DashboardView({
           <p className="mt-1 text-sm text-text-3">{subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <label className="flex min-h-[42px] items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-text-3">
-            <Search size={16} className="shrink-0" />
-            <span className="sr-only">Search leads, addresses…</span>
-            <input
-              type="search"
-              placeholder="Search leads, addresses…"
-              className="w-[180px] border-0 bg-transparent text-sm text-text outline-none placeholder:text-text-3"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') navigate('/leads');
-              }}
-            />
-          </label>
-          <span
-            className="flex min-h-[42px] items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-text"
-            title="Current month"
+          <button
+            type="button"
+            onClick={() => navigate('/calendar')}
+            title="Open Calendar"
+            className="flex min-h-[42px] items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-text hover:border-border-2"
           >
             <CalendarDays size={16} className="text-text-3" />
             {monthRangeLabel}
-          </span>
+          </button>
           <button
             type="button"
             onClick={() => navigate('/notifications')}
@@ -1313,13 +1301,6 @@ export function DashboardView({
           >
             <Bell size={18} />
             {unreadCount > 0 && <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-danger ring-2 ring-surface" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/leads')}
-            className="flex min-h-[42px] items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover"
-          >
-            <Plus size={14} strokeWidth={2.5} /> New lead
           </button>
         </div>
       </header>
@@ -1333,14 +1314,11 @@ export function DashboardView({
             {showSmsStats ? (
               <>
                 {/* All headline KPIs as one consistent grid of compact
-                    cards — 5 across so a full account's worth (12 right
-                    now) settles into 3 rows, in funnel order: money and
-                    top-of-funnel first, then negotiation through contract,
-                    then SMS volume, then AI/compliance. Revenue, New leads,
-                    Under contract, and In negotiation reuse the same real
-                    weekly/monthly series as before, just folded into this
-                    smaller card instead of their own oversized tile. */}
-                <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    cards — 4 across so a full account's worth (12 right
+                    now) settles into an even 3 rows, in funnel order: money
+                    and top-of-funnel first, then negotiation through
+                    contract, then SMS volume, then AI/compliance. */}
+                <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   <StatCard
                     compact
                     icon={DollarSign}
@@ -1514,18 +1492,18 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Sales Performance</SectionLabel>
-              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-                <div className="card">
+              <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
+                <div className="card flex h-full flex-col">
                   <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → contract → close" />
-                  <div className="mt-5 flex justify-between">
-                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={68} strokeWidth={6} label="Contact Rate" sub="of all leads" centered />
-                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={68} strokeWidth={6} label="Qualify Rate" sub="of contacted" centered />
-                    <RadialGauge pct={funnelEfficiency.contractRate} color="#fb923c" size={68} strokeWidth={6} label="Contract Rate" sub="of qualified" centered />
-                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={68} strokeWidth={6} label="Close Rate" sub="of contracts" centered />
+                  <div className="mt-5 flex flex-1 items-center justify-between">
+                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={96} strokeWidth={9} label="Contact Rate" sub="of all leads" centered />
+                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={96} strokeWidth={9} label="Qualify Rate" sub="of contacted" centered />
+                    <RadialGauge pct={funnelEfficiency.contractRate} color="#fb923c" size={96} strokeWidth={9} label="Contract Rate" sub="of qualified" centered />
+                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={96} strokeWidth={9} label="Close Rate" sub="of contracts" centered />
                   </div>
                 </div>
 
-                <div className="card">
+                <div className="card flex h-full flex-col">
                   <CardHeader icon={Timer} title="Deal velocity" sub="avg. days between milestones, this year" tone="info" />
                   {(() => {
                     const velocityColors = ['#C3C9FF', '#8B96FF', '#5A66E0', '#363F90'];
@@ -1595,33 +1573,107 @@ export function DashboardView({
                 </div>
               )}
 
-              <div className="card">
-                <CardHeader icon={TagsIcon} title="Pipeline tag breakdown" tone="accent" />
-                <div className="mt-3">
-                  {stats.tagCounts.length === 0 ? (
-                    <div className="text-[13px] text-text-3">No tagged leads yet.</div>
-                  ) : showSmsStats ? (
-                    <div className="flex flex-wrap items-center gap-5">
-                      <DonutChart segments={tagDonutSegments} total={taggedLeadsTotal} centerLabel="active leads" />
-                      <div className="flex min-w-[160px] flex-1 flex-col gap-2 text-[13px]">
-                        {tagDonutSegments.map((s) => (
-                          <div key={s.label} className="flex items-center gap-2">
-                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
-                            <span className="truncate text-text-2">{s.label}</span>
-                            <span className="ml-auto shrink-0 font-mono font-semibold text-text">{s.count.toLocaleString()}</span>
+              {showSmsStats ? (
+                <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
+                  <div className="card">
+                    <CardHeader icon={TagsIcon} title="Pipeline tag breakdown" tone="accent" />
+                    <div className="mt-3">
+                      {stats.tagCounts.length === 0 ? (
+                        <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-5">
+                          <DonutChart segments={tagDonutSegments} total={taggedLeadsTotal} centerLabel="active leads" />
+                          <div className="flex min-w-[160px] flex-1 flex-col gap-2 text-[13px]">
+                            {tagDonutSegments.map((s) => (
+                              <div key={s.label} className="flex items-center gap-2">
+                                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+                                <span className="truncate text-text-2">{s.label}</span>
+                                <span className="ml-auto shrink-0 font-mono font-semibold text-text">{s.count.toLocaleString()}</span>
+                              </div>
+                            ))}
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="card">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <CardHeader
+                        icon={TrendingUp}
+                        title="SMS Delivery & Reply Rate"
+                        sub="Real delivery status synced from Zoom, buyer conversations excluded"
+                      />
+                      <div className="flex shrink-0 gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
+                        {SMS_RANGE_OPTIONS.map((r) => (
+                          <button
+                            key={r.key}
+                            onClick={() => setSmsRange(r.key)}
+                            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                              smsRange === r.key ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text-2'
+                            }`}
+                          >
+                            {r.label}
+                          </button>
                         ))}
                       </div>
                     </div>
-                  ) : (
-                    <div>
-                      {stats.tagCounts.map(({ tag, count }) => (
-                        <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
-                      ))}
+                    <div className="mt-4 flex items-center gap-5">
+                      <RadialGauge pct={smsCampaignStats.deliveryRate ?? 0} size={100} strokeWidth={10} color="#3DD6B5" label="Delivered" centered />
+                      <div className="flex flex-1 flex-col gap-0.5">
+                        <span className="font-mono text-2xl font-bold text-text">{smsCampaignStats.sent.toLocaleString()}</span>
+                        <span className="text-[13px] text-text-3">texts sent</span>
+                      </div>
                     </div>
-                  )}
+                    <div className="mt-4 flex flex-col gap-3 text-[13.5px]">
+                      <div>
+                        <div className="flex justify-between">
+                          <span className="text-text-2">Reply rate</span>
+                          <span className="font-mono font-semibold text-primary-text">
+                            {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(1)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
+                          <div
+                            className="h-1.5 rounded-full bg-primary"
+                            style={{ width: `${Math.min(((smsCampaignStats.replyRate ?? 0) / 20) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between">
+                          <span className="text-text-2">Failed</span>
+                          <span className="font-mono font-semibold text-danger">
+                            {smsCampaignStats.failedRate !== null ? `${smsCampaignStats.failedRate.toFixed(1)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
+                          <div
+                            className="h-1.5 rounded-full bg-danger"
+                            style={{ width: `${Math.min(((smsCampaignStats.failedRate ?? 0) / 20) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2.5 text-[11.5px] text-text-3">Bars scaled to a 20% ceiling so small rates stay readable.</div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="card">
+                  <CardHeader icon={TagsIcon} title="Pipeline tag breakdown" tone="accent" />
+                  <div className="mt-3">
+                    {stats.tagCounts.length === 0 ? (
+                      <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+                    ) : (
+                      <div>
+                        {stats.tagCounts.map(({ tag, count }) => (
+                          <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1655,69 +1707,6 @@ export function DashboardView({
                       <PipelineActivityChart data={activityTrend} />
                     </div>
                   </Suspense>
-                </div>
-              )}
-
-              {showSmsStats && (
-                <div className="card">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <CardHeader
-                      icon={TrendingUp}
-                      title="SMS Delivery & Reply Rate"
-                      sub="Real delivery status synced from Zoom, buyer conversations excluded"
-                    />
-                    <div className="flex shrink-0 gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
-                      {SMS_RANGE_OPTIONS.map((r) => (
-                        <button
-                          key={r.key}
-                          onClick={() => setSmsRange(r.key)}
-                          className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                            smsRange === r.key ? 'bg-surface text-text shadow-sm' : 'text-text-3 hover:text-text-2'
-                          }`}
-                        >
-                          {r.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-5">
-                    <RadialGauge pct={smsCampaignStats.deliveryRate ?? 0} size={110} strokeWidth={11} color="#3DD6B5" label="Delivered" centered />
-                    <div className="flex flex-1 flex-col gap-0.5">
-                      <span className="font-mono text-2xl font-bold text-text">{smsCampaignStats.sent.toLocaleString()}</span>
-                      <span className="text-[13px] text-text-3">texts sent</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-col gap-3 text-[13.5px]">
-                    <div>
-                      <div className="flex justify-between">
-                        <span className="text-text-2">Reply rate</span>
-                        <span className="font-mono font-semibold text-primary-text">
-                          {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(1)}%` : '—'}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
-                        <div
-                          className="h-1.5 rounded-full bg-primary"
-                          style={{ width: `${Math.min(((smsCampaignStats.replyRate ?? 0) / 20) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between">
-                        <span className="text-text-2">Failed</span>
-                        <span className="font-mono font-semibold text-danger">
-                          {smsCampaignStats.failedRate !== null ? `${smsCampaignStats.failedRate.toFixed(1)}%` : '—'}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
-                        <div
-                          className="h-1.5 rounded-full bg-danger"
-                          style={{ width: `${Math.min(((smsCampaignStats.failedRate ?? 0) / 20) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2.5 text-[11.5px] text-text-3">Bars scaled to a 20% ceiling so small rates stay readable.</div>
                 </div>
               )}
 

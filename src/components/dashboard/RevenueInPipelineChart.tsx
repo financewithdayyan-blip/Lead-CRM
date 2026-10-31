@@ -12,10 +12,14 @@ export interface RevenuePipelinePoint {
 const EXPECTED_COLOR = '#7D8597';
 const ACTUAL_COLOR = '#6E7BFF';
 
+// "Monthly" is the full real trend data passed in (12 months, one point per
+// calendar month) — the other three are narrower windows into that same
+// series, never a separate fetch.
 const RANGE_OPTIONS = [
+  { key: 'monthly', label: 'Monthly', months: null as number | null },
   { key: '3m', label: '3M', months: 3 },
   { key: '6m', label: '6M', months: 6 },
-  { key: 'ytd', label: 'YTD', months: null },
+  { key: 'ytd', label: 'YTD', months: 'ytd' as const },
 ] as const;
 type RangeKey = (typeof RANGE_OPTIONS)[number]['key'];
 
@@ -47,10 +51,13 @@ export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] 
 
   const visible = useMemo(() => {
     const opt = RANGE_OPTIONS.find((r) => r.key === range)!;
-    if (opt.months != null) return data.slice(-opt.months);
-    const jan1 = new Date(new Date().getFullYear(), 0, 1);
-    const fromIdx = data.findIndex((d) => new Date(d.iso) >= jan1);
-    return fromIdx === -1 ? data : data.slice(fromIdx);
+    if (opt.months === null) return data;
+    if (opt.months === 'ytd') {
+      const jan1 = new Date(new Date().getFullYear(), 0, 1);
+      const fromIdx = data.findIndex((d) => new Date(d.iso) >= jan1);
+      return fromIdx === -1 ? data : data.slice(fromIdx);
+    }
+    return data.slice(-opt.months);
   }, [data, range]);
 
   const totalActual = visible.reduce((s, d) => s + d.actual, 0);
