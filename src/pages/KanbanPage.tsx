@@ -1135,34 +1135,6 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
         </div>
       )}
 
-      {/* Pipeline mix — a stacked-bar snapshot of where the (filtered) board
-          actually stands right now, from the same byStage counts the
-          columns below already render. Stages with nothing in them drop
-          out rather than leaving a zero-width sliver. */}
-      {!leadsLoading && !leadsErrored && filtered.length > 0 && (
-        <div className="card mb-3 flex flex-col gap-3 !p-4">
-          <div aria-hidden="true" className="flex h-2.5 gap-1">
-            {visibleStages.map((stage) => {
-              const count = byStage[stage].length;
-              if (count === 0) return null;
-              return <div key={stage} className="rounded-full" style={{ flex: `${count} 1 0`, background: STAGE_CONFIG[stage].color }} />;
-            })}
-          </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-text-2">
-            {visibleStages.map((stage) => {
-              const count = byStage[stage].length;
-              if (count === 0) return null;
-              return (
-                <span key={stage} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STAGE_CONFIG[stage].color }} />
-                  {STAGE_CONFIG[stage].label} <b className="font-mono font-semibold text-text">{count}</b>
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex items-start gap-2.5 overflow-x-auto pb-2">
           {visibleStages.map((stage) => (
