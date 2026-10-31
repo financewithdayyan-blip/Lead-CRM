@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Clock, MapPin, Plus, Trash2 } from 'lucide-react';
-import { addDays, addWeeks, format, isSameDay, startOfWeek } from 'date-fns';
+import { addDays, addMonths, addWeeks, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns';
 import { useCalendarEvents, useDeleteCalendarEvent } from '@/hooks/useCalendarEvents';
 import { AddCalendarEventModal } from '@/components/calendar/AddCalendarEventModal';
 import { Modal } from '@/components/ui/Modal';
@@ -111,6 +111,10 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
   const deleteEvent = useDeleteCalendarEvent();
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(todayInUsEasternAsLocalDate(), { weekStartsOn: 1 }));
+  // Independent of weekStart (doesn't jump just because the week view moves
+  // into a new month) — only re-syncs to it on the explicit "Today" reset,
+  // same as a real calendar app's own mini-month behavior.
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(todayInUsEasternAsLocalDate()));
   const [visibleTypes, setVisibleTypes] = useState<Set<CalendarEventType>>(new Set(ALL_TYPES));
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
@@ -118,6 +122,13 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekEnd = weekDays[6];
+
+  // 6 full weeks (42 days), Monday-start, padded with the adjacent months'
+  // days so the grid never has a ragged last row.
+  const monthGrid = useMemo(() => {
+    const gridStart = startOfWeek(startOfMonth(monthCursor), { weekStartsOn: 1 });
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [monthCursor]);
 
   // Bulk SMS is admin-only and account-wide (see App.tsx's "admin only" route
   // comment), so this standing marker only ever shows on the admin's own
@@ -224,7 +235,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-text">Calendar</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-text">Calendar</h1>
           <p className="text-sm text-text-3">Walkthroughs, calls, signings, and closings{targetUserId ? '' : ' across your pipeline'}</p>
         </div>
         {!viewOnly && (
@@ -278,14 +289,18 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
             {weekDays.map((d) => {
               const today = isSameDay(d, todayInUsEasternAsLocalDate());
               return (
-                <div key={d.toISOString()} className="relative border-b border-l border-border px-2 py-2 text-center">
-                  {today && (
-                    <div className="pointer-events-none absolute inset-x-1.5 inset-y-1 z-10 scale-110 rounded-lg bg-primary shadow-[0_6px_16px_-4px_rgba(21,104,168,0.55)] ring-2 ring-primary/30" />
-                  )}
-                  <div className={cn('relative z-10', today ? 'text-[10px] font-semibold uppercase tracking-wide text-white/80' : 'text-[10px] font-semibold uppercase tracking-wide text-text-3')}>
+                <div key={d.toISOString()} className="border-b border-l border-border px-2 py-2.5 text-center">
+                  <div className={cn('text-[11px] font-semibold uppercase tracking-wide', today ? 'text-primary-text' : 'text-text-3')}>
                     {format(d, 'EEE')}
                   </div>
-                  <div className={cn('relative z-10 text-[15px] font-semibold', today ? 'text-white' : 'text-text')}>{format(d, 'd')}</div>
+                  <div
+                    className={cn(
+                      'mx-auto mt-1.5 flex h-8 w-8 items-center justify-center rounded-full text-[15px] font-bold',
+                      today ? 'bg-primary text-white' : 'text-text',
+                    )}
+                  >
+                    {format(d, 'd')}
+                  </div>
                 </div>
               );
             })}
@@ -343,28 +358,92 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
           </div>
         </div>
 
-        <div className="card w-full shrink-0 !p-0 lg:w-[300px]">
-          <div className="border-b border-border px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-text-3">This Week</div>
-          <div className="max-h-[656px] divide-y divide-border overflow-y-auto">
-            {isLoading && <div className="px-4 py-6 text-center text-[13px] text-text-3">Loading…</div>}
-            {!isLoading && sidebarEvents.length === 0 && (
-              <div className="px-4 py-6 text-center text-[13px] text-text-3">No events this week.</div>
-            )}
-            {sidebarEvents.map((e) => {
-              const cfg = CALENDAR_EVENT_TYPE_CONFIG[e.eventType];
-              return (
-                <button key={e.id} onClick={() => setSelected(e)} className="block w-full px-4 py-3 text-left hover:bg-surface-3">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: cfg.color }}>
-                    {cfg.label}
-                  </div>
-                  <div className="mt-0.5 text-[13px] font-medium text-text">{e.title}</div>
-                  <div className="text-[12px] text-text-3">
-                    {format(new Date(e.startsAt), 'EEE MMM d')} · {fmtTime(e.startsAt)}
-                    {e.endsAt ? `–${fmtTime(e.endsAt)}` : ''}
-                  </div>
+        <div className="flex w-full shrink-0 flex-col gap-4 lg:w-[300px]">
+          <div className="card flex flex-col gap-3 !p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-bold text-text">{format(monthCursor, 'MMMM yyyy')}</h2>
+              <div className="flex gap-1">
+                <button
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-surface-3 text-text-2 hover:text-text"
+                  onClick={() => setMonthCursor((d) => addMonths(d, -1))}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft size={14} />
                 </button>
-              );
-            })}
+                <button
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-surface-3 text-text-2 hover:text-text"
+                  onClick={() => setMonthCursor((d) => addMonths(d, 1))}
+                  aria-label="Next month"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-y-1 text-center">
+              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                <span key={i} className="py-1 text-[11px] text-text-3">
+                  {d}
+                </span>
+              ))}
+              {monthGrid.map((d) => {
+                const today = isSameDay(d, todayInUsEasternAsLocalDate());
+                const inViewedWeek = d >= weekStart && d <= weekEnd;
+                const inMonth = isSameMonth(d, monthCursor);
+                return (
+                  <button
+                    key={d.toISOString()}
+                    onClick={() => {
+                      setWeekStart(startOfWeek(d, { weekStartsOn: 1 }));
+                      if (!inMonth) setMonthCursor(startOfMonth(d));
+                    }}
+                    className={cn(
+                      'mx-auto flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-mono tabular-nums transition-colors',
+                      today
+                        ? 'bg-primary font-bold text-white'
+                        : inViewedWeek
+                          ? 'bg-primary-dim text-primary-text'
+                          : inMonth
+                            ? 'text-text-2 hover:bg-surface-3'
+                            : 'text-text-3/50 hover:bg-surface-3',
+                    )}
+                  >
+                    {format(d, 'd')}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="card !p-0">
+            <div className="border-b border-border px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-text-3">This Week</div>
+            <div className="max-h-[480px] divide-y divide-border overflow-y-auto">
+              {isLoading && <div className="px-4 py-6 text-center text-[13px] text-text-3">Loading…</div>}
+              {!isLoading && sidebarEvents.length === 0 && (
+                <div className="px-4 py-6 text-center text-[13px] text-text-3">No events this week.</div>
+              )}
+              {sidebarEvents.map((e) => {
+                const cfg = CALENDAR_EVENT_TYPE_CONFIG[e.eventType];
+                const d = new Date(e.startsAt);
+                return (
+                  <button key={e.id} onClick={() => setSelected(e)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-3">
+                    <span
+                      className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md text-[10.5px] font-semibold leading-none"
+                      style={{ background: `${cfg.color}24`, color: cfg.color }}
+                    >
+                      <span>{format(d, 'MMM').toUpperCase()}</span>
+                      <span className="mt-0.5 font-mono text-[15px] font-extrabold">{format(d, 'd')}</span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13.5px] font-medium text-text">{e.title}</span>
+                      <span className="mt-0.5 block truncate text-[12px] text-text-3">
+                        {format(d, 'EEEE')} · {fmtTime(e.startsAt)}
+                        {e.endsAt ? `–${fmtTime(e.endsAt)}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
