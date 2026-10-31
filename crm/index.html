@@ -10,7 +10,7 @@
          permissions to a site running standalone from the home screen, never
          to a page open in a regular Safari tab (see usePushNotifications.ts). -->
     <link rel="manifest" href="/crm.webmanifest" />
-    <meta name="theme-color" content="#0B1E33" />
+    <meta name="theme-color" content="#0A0C11" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -28,7 +28,9 @@
       (function () {
         try {
           var stored = localStorage.getItem('theme');
-          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          // Matches ThemeContext's own getInitialTheme — dark is the CRM's
+          // actual design now, default to it rather than the OS preference.
+          var dark = stored ? stored === 'dark' : true;
           if (dark) document.documentElement.classList.add('dark');
         } catch (e) {}
       })();
@@ -38,7 +40,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
   </head>

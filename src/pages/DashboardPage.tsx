@@ -1,6 +1,12 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useId, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import {
   Activity,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Bell,
   Bot,
   CalendarCheck,
   CalendarDays,
@@ -16,7 +22,9 @@ import {
   Phone,
   PhoneCall,
   PhoneIncoming,
+  Plus,
   Reply,
+  Search,
   Sparkles,
   Tags as TagsIcon,
   Target,
@@ -36,7 +44,7 @@ import { useTags } from '@/hooks/useTags';
 import { useSendLog, useInboundMessages, useSmsDeliveryLog, useCashBuyerPhones } from '@/hooks/useSmsStats';
 import { useAuth } from '@/contexts/AuthContext';
 import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types/domain';
-import { localIsoDate } from '@/lib/utils';
+import { cn, localIsoDate } from '@/lib/utils';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -125,6 +133,88 @@ function BarRow({ label, count, max, color }: { label: string; count: number; ma
       <div className="w-8 shrink-0 text-right text-[12px] text-text-3">{count}</div>
     </div>
   );
+}
+
+/** Tiny filled-area trend line for a hero stat card — real values only, no
+ * decorative/fabricated data. Needs at least 2 points to draw anything. */
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const id = useId();
+  if (values.length < 2) return <svg width="96" height="40" aria-hidden="true" />;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const stepX = 96 / (values.length - 1);
+  const points = values.map((v, i) => `${(i * stepX).toFixed(1)},${(38 - ((v - min) / range) * 34).toFixed(1)}`).join(' ');
+  return (
+    <svg width="96" height="40" viewBox="0 0 96 40" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0.35" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={`0,40 ${points} 96,40`} fill={`url(#${id})`} />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** One hero metric card — icon badge, headline number, a real trend chip
+ * (vs the earlier half of the same series), and the sparkline behind it.
+ * Matches the Tristate Ledger redesign's "Overview" row exactly. */
+function HeroStatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  trendPct,
+  series,
+  color,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  sub: string;
+  trendPct: number;
+  series: number[];
+  color: string;
+}) {
+  const up = trendPct >= 0;
+  return (
+    <div className="card flex flex-col gap-3.5 !p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px]" style={{ background: `${color}24`, color }}>
+          <Icon size={17} strokeWidth={1.7} />
+        </span>
+        <span className="text-sm font-medium text-text-2">{label}</span>
+      </div>
+      <div className="flex items-end justify-between gap-2.5">
+        <div>
+          <div className="font-mono text-[28px] font-bold leading-none tracking-tight text-text">{value.toLocaleString()}</div>
+          <div className="mt-2 flex items-center gap-2">
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 rounded-full px-2 py-[3px] text-xs font-semibold',
+                up ? 'bg-success-dim text-success' : 'bg-danger-dim text-danger',
+              )}
+            >
+              {up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+              {Math.abs(trendPct).toFixed(1)}%
+            </span>
+            <span className="text-[12.5px] text-text-3">{sub}</span>
+          </div>
+        </div>
+        <Sparkline values={series} color={color} />
+      </div>
+    </div>
+  );
+}
+
+function timeOfDayGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 function StatCard({
@@ -245,6 +335,8 @@ export function DashboardView({
    * member's individual dashboard. */
   showSmsStats?: boolean;
 }) {
+  const navigate = useNavigate();
+  const { unreadCount } = useNotificationsContext();
   const { data: leads = [], isFetching: leadsFetching, isError: leadsErrored } = useLeads(userId);
   // The account's real total, straight from the DB — leads itself can lag
   // behind reality for a while (see useLeads' own staleTime), and a raw
@@ -325,6 +417,22 @@ export function DashboardView({
     };
   }, [leads]);
 
+  // The weakest single stage-to-stage transition — what the funnel bars'
+  // own callout below points at, same "biggest leak" framing the mockup
+  // uses, computed from these same real cumulative counts rather than
+  // picked by hand.
+  const biggestLeak = useMemo(() => {
+    let worst: { from: string; to: string; rate: number } | null = null;
+    for (let i = 0; i < funnel.stages.length - 1; i++) {
+      const from = funnel.stages[i];
+      const to = funnel.stages[i + 1];
+      if (from.count === 0) continue;
+      const rate = to.count / from.count;
+      if (!worst || rate < worst.rate) worst = { from: from.label, to: to.label, rate };
+    }
+    return worst;
+  }, [funnel]);
+
   // ── Sales: funnel efficiency (contact/qualify/contract/close rate) ────────
   // Mostly reuses the same cumulative funnel counts already computed above
   // for the Pipeline card, expressed as stage-to-stage percentages instead
@@ -366,6 +474,45 @@ export function DashboardView({
       closeRate: everReachedContract > 0 ? (closedCount / everReachedContract) * 100 : 0,
     };
   }, [funnel, leads, stageChangeHistory, CONTRACT_STAGES]);
+
+  // ── Sales: headline metric cards (real weekly series, not decoration) ─────
+  // Each card's sparkline and trend chip come from the same underlying
+  // event timestamps as the rest of this page (lead creation, real
+  // stage_change history) bucketed into 8 real weeks — never a fabricated
+  // or placeholder series. The headline number is the more recent half
+  // (last ~4 weeks); the trend chip compares it against the earlier half.
+  const heroMetrics = useMemo(() => {
+    const WEEKS = 8;
+    function weeklyCounts(dates: string[]): number[] {
+      const now = Date.now();
+      const buckets = new Array(WEEKS).fill(0) as number[];
+      for (const iso of dates) {
+        const daysAgo = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
+        const idx = WEEKS - 1 - Math.floor(daysAgo / 7);
+        if (idx >= 0 && idx < WEEKS) buckets[idx]++;
+      }
+      return buckets;
+    }
+    function summarize(series: number[]) {
+      const half = Math.floor(series.length / 2);
+      const earlier = series.slice(0, half).reduce((a, b) => a + b, 0);
+      const recent = series.slice(half).reduce((a, b) => a + b, 0);
+      const trendPct = earlier > 0 ? ((recent - earlier) / earlier) * 100 : recent > 0 ? 100 : 0;
+      return { series, value: recent, trendPct };
+    }
+
+    const qualifiedStageSet = new Set<LeadStage>(QUALIFIED_PLUS_STAGES);
+    return {
+      newLeads: summarize(weeklyCounts(leads.map((l) => l.createdAt))),
+      qualified: summarize(
+        weeklyCounts(stageChangeHistory.filter((e) => qualifiedStageSet.has(e.to as LeadStage)).map((e) => e.createdAt)),
+      ),
+      contracts: summarize(
+        weeklyCounts(stageChangeHistory.filter((e) => CONTRACT_STAGES.has(e.to as LeadStage)).map((e) => e.createdAt)),
+      ),
+      closed: summarize(weeklyCounts(stageChangeHistory.filter((e) => e.to === 'closed').map((e) => e.createdAt))),
+    };
+  }, [leads, stageChangeHistory, CONTRACT_STAGES]);
 
   // ── Sales: per-rep performance (real, needs >0 org-wide activity data) ────
   const repLeaderboard = useMemo(
@@ -1128,12 +1275,62 @@ export function DashboardView({
 
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
 
+  const [firstName] = (profile?.fullName ?? '').split(' ');
+  const monthRangeLabel = (() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${fmt(start)} – ${fmt(end)}`;
+  })();
+
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="font-serif text-2xl font-semibold text-text">{heading}</h1>
-        <p className="text-sm text-text-3">{subtitle}</p>
-      </div>
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-text">
+            {heading === 'Dashboard' && firstName ? `${timeOfDayGreeting()}, ${firstName}` : heading}
+          </h1>
+          <p className="mt-1 text-sm text-text-3">{subtitle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label className="flex min-h-[42px] items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-text-3">
+            <Search size={16} className="shrink-0" />
+            <span className="sr-only">Search leads, addresses…</span>
+            <input
+              type="search"
+              placeholder="Search leads, addresses…"
+              className="w-[180px] border-0 bg-transparent text-sm text-text outline-none placeholder:text-text-3"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') navigate('/leads');
+              }}
+            />
+          </label>
+          <span
+            className="flex min-h-[42px] items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-medium text-text"
+            title="Current month"
+          >
+            <CalendarDays size={16} className="text-text-3" />
+            {monthRangeLabel}
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate('/notifications')}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} new` : 'Notifications'}
+            className="relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text-2"
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-danger ring-2 ring-surface" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/leads')}
+            className="flex min-h-[42px] items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover"
+          >
+            <Plus size={14} strokeWidth={2.5} /> New lead
+          </button>
+        </div>
+      </header>
 
       {leads.length === 0 ? (
         <div className="card text-center text-text-3">Add some leads to see stats here.</div>
@@ -1141,6 +1338,44 @@ export function DashboardView({
         <div className="space-y-6">
           <div>
             <SectionLabel>Overview</SectionLabel>
+            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <HeroStatCard
+                icon={Users}
+                label="New leads"
+                value={heroMetrics.newLeads.value}
+                trendPct={heroMetrics.newLeads.trendPct}
+                series={heroMetrics.newLeads.series}
+                sub="last 4 weeks"
+                color="#6E7BFF"
+              />
+              <HeroStatCard
+                icon={CheckCircle2}
+                label="Qualified"
+                value={heroMetrics.qualified.value}
+                trendPct={heroMetrics.qualified.trendPct}
+                series={heroMetrics.qualified.series}
+                sub="last 4 weeks"
+                color="#3DD6B5"
+              />
+              <HeroStatCard
+                icon={FileSignature}
+                label="Contracts"
+                value={heroMetrics.contracts.value}
+                trendPct={heroMetrics.contracts.trendPct}
+                series={heroMetrics.contracts.series}
+                sub="last 4 weeks"
+                color="#FFB547"
+              />
+              <HeroStatCard
+                icon={Trophy}
+                label="Closed"
+                value={heroMetrics.closed.value}
+                trendPct={heroMetrics.closed.trendPct}
+                series={heroMetrics.closed.series}
+                sub="last 4 weeks"
+                color="#5AB8FF"
+              />
+            </div>
             {showSmsStats ? (
               <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
                 <div className="card chart-layer flex h-full flex-col">
@@ -1274,13 +1509,48 @@ export function DashboardView({
               <SectionLabel>Sales Performance</SectionLabel>
               <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
                 <div className="card">
-                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → contract → close" />
-                  <div className="mt-5 flex justify-between">
-                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={68} strokeWidth={6} label="Contact Rate" sub="of all leads" centered />
-                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={68} strokeWidth={6} label="Qualify Rate" sub="of contacted" centered />
-                    <RadialGauge pct={funnelEfficiency.contractRate} color="#fb923c" size={68} strokeWidth={6} label="Contract Rate" sub="of qualified" centered />
-                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={68} strokeWidth={6} label="Close Rate" sub="of contracts" centered />
+                  <div className="flex items-start justify-between gap-3">
+                    <CardHeader icon={Target} title="Sales funnel efficiency" sub="contact → qualify → contract → close" />
+                    <span className="shrink-0 rounded-full bg-primary-dim px-2.5 py-1 text-xs font-semibold text-primary-text">
+                      {funnelEfficiency.closeRate.toFixed(1)}% close
+                    </span>
                   </div>
+                  <div className="mt-4 flex flex-col gap-1.5">
+                    {funnel.stages.map((s, i) => {
+                      const first = funnel.stages[0]?.count ?? 0;
+                      const widthPct = first > 0 ? Math.max(16, (s.count / first) * 100) : 16;
+                      const prev = i > 0 ? funnel.stages[i - 1] : null;
+                      const stageRate = prev && prev.count > 0 ? Math.round((s.count / prev.count) * 100) : null;
+                      const isLeak = biggestLeak?.to === s.label;
+                      return (
+                        <div
+                          key={s.key}
+                          className="flex h-[38px] items-center justify-between rounded-[10px] px-3.5 text-[13.5px] font-semibold text-white"
+                          style={{
+                            width: `${widthPct}%`,
+                            marginInline: 'auto',
+                            background: s.color,
+                            outline: isLeak ? '2px solid rgb(var(--color-danger))' : undefined,
+                            outlineOffset: isLeak ? '-2px' : undefined,
+                          }}
+                        >
+                          <span className="truncate">{s.label}</span>
+                          <span className="shrink-0 font-mono tabular-nums">
+                            {s.count.toLocaleString()}
+                            {stageRate != null && <span className="ml-1.5 font-sans font-medium opacity-75">{stageRate}%</span>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {biggestLeak && (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-danger-dim px-3 py-2.5 text-[13px] leading-snug text-danger">
+                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                      <span>
+                        Biggest leak: only {Math.round(biggestLeak.rate * 100)}% of {biggestLeak.from.toLowerCase()} leads reach {biggestLeak.to.toLowerCase()}.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="card">

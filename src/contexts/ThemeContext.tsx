@@ -8,10 +8,14 @@ const THEME_KEY = 'theme';
  * already used to set the class before React ever mounted — this just picks
  * up whatever it decided, so the two never disagree on first render. */
 function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'light';
+  if (typeof window === 'undefined') return 'dark';
   const stored = localStorage.getItem(THEME_KEY);
   if (stored === 'light' || stored === 'dark') return stored;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // Dark is the CRM's actual design now (the "Tristate Ledger" redesign),
+  // not just an opt-in alternate — default to it outright rather than
+  // deferring to the visitor's OS preference, until they explicitly choose
+  // light themselves.
+  return 'dark';
 }
 
 const ThemeContext = createContext<{ theme: Theme; toggleTheme: () => void; setTheme: (t: Theme) => void } | null>(null);

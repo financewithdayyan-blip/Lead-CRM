@@ -78,34 +78,41 @@
   color: rgb(var(--color-text));
 }
 
+/* "Tristate Ledger" palette — matches the Design-canvas mockup
+   (claude.ai/artifact/W2v5V4yTjsUs3Nk9h19cuA) exactly, converted from its
+   hex values to the r-g-b triples this file's own convention uses. Being
+   rolled out one real page at a time; until every page has its own content
+   redesigned, an untouched page still looks coherent here because it
+   already builds on these same semantic tokens (bg-surface, text-text-2,
+   border-border, …) rather than hardcoded colors. */
 .dark {
-  --color-bg: 10 20 32;
-  --color-surface: 17 29 46;
-  --color-surface-2: 13 23 37;
-  --color-surface-3: 26 41 65;
-  --color-border: 36 51 74;
-  --color-border-2: 52 69 95;
-  --color-text: 238 242 247;
-  --color-text-2: 183 195 211;
-  --color-text-3: 128 144 166;
-  --color-primary: 58 143 214;
-  --color-primary-dim: 19 37 56;
-  --color-primary-hover: 90 163 224;
-  --color-primary-text: 111 178 232;
-  --color-accent: 217 181 104;
-  --color-accent-dim: 42 35 19;
-  --color-accent-hover: 232 201 136;
-  --color-info: 34 184 221;
-  --color-info-dim: 13 37 48;
-  --color-info-text: 95 211 238;
-  --color-success: 52 211 153;
-  --color-success-dim: 15 42 32;
-  --color-warning: 251 191 36;
-  --color-warning-dim: 43 32 8;
-  --color-danger: 248 113 113;
-  --color-danger-dim: 46 21 22;
-  --color-scrollbar-thumb: 52 69 95;
-  --color-scrollbar-thumb-hover: 82 103 133;
+  --color-bg: 10 12 17;
+  --color-surface: 17 20 28;
+  --color-surface-2: 12 14 20;
+  --color-surface-3: 21 25 37;
+  --color-border: 28 32 48;
+  --color-border-2: 38 44 64;
+  --color-text: 242 244 248;
+  --color-text-2: 163 170 186;
+  --color-text-3: 125 133 151;
+  --color-primary: 110 123 255;
+  --color-primary-dim: 26 31 51;
+  --color-primary-hover: 139 150 255;
+  --color-primary-text: 154 164 255;
+  --color-accent: 180 140 255;
+  --color-accent-dim: 36 28 56;
+  --color-accent-hover: 196 164 255;
+  --color-info: 90 184 255;
+  --color-info-dim: 13 36 50;
+  --color-info-text: 124 198 255;
+  --color-success: 61 214 181;
+  --color-success-dim: 14 40 36;
+  --color-warning: 255 181 71;
+  --color-warning-dim: 42 30 10;
+  --color-danger: 255 107 107;
+  --color-danger-dim: 42 18 18;
+  --color-scrollbar-thumb: 38 44 64;
+  --color-scrollbar-thumb-hover: 58 66 92;
 }
 
 html,

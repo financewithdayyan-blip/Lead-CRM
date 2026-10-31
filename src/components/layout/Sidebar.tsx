@@ -42,14 +42,18 @@ function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label:
       title={collapsed ? label : undefined}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2.5 rounded-full py-2 text-sm font-medium transition-colors',
-          collapsed ? 'justify-center px-0' : 'px-3.5',
-          isActive ? 'bg-primary text-white shadow-sm' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
+          'flex items-center gap-2.5 rounded-[10px] py-2.5 text-sm font-medium transition-colors',
+          collapsed ? 'justify-center px-0' : 'px-3',
+          isActive ? 'bg-primary-dim text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
         )
       }
     >
-      <Icon size={16} className="shrink-0" />
-      {!collapsed && label}
+      {({ isActive }) => (
+        <>
+          <Icon size={18} strokeWidth={1.6} className={cn('shrink-0', isActive && 'text-primary-hover')} />
+          {!collapsed && label}
+        </>
+      )}
     </NavLink>
   );
 }
@@ -60,7 +64,7 @@ function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label:
  * minimized, since there's no room for the label text. */
 function NavGroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
   if (collapsed) return <div className="mx-2 mb-1 mt-3 border-t border-sidebar-border first:mt-0" />;
-  return <div className="mb-1 mt-3 px-[10px] text-[10px] font-semibold uppercase tracking-wider text-sidebar-text/60 first:mt-0">{children}</div>;
+  return <div className="mb-1.5 mt-[18px] px-3 text-[11.5px] font-semibold text-sidebar-text/70 first:mt-0">{children}</div>;
 }
 
 function ViewingPullUp({ viewingId }: { viewingId?: string }) {
@@ -243,7 +247,7 @@ function SidebarFooterProfile({ collapsed }: { collapsed: boolean }) {
         )}
         title={collapsed ? (profile?.fullName ?? profile?.email) : undefined}
       >
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[12px] font-semibold text-white">
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2A2F45] text-[13px] font-bold text-[#C3C9FF]">
           {initials(first ?? profile?.email ?? '', last ?? '')}
           {unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-sidebar" />}
         </div>
@@ -312,8 +316,8 @@ export function Sidebar() {
         <img src="/logo-mark.svg" alt="BlueBird CRM" className="h-8 w-auto shrink-0" />
         {!collapsed && (
           <div className="min-w-0 flex-1">
-            <div className="font-serif text-base font-semibold leading-tight text-sidebar-textActive">BlueBird</div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-text">CRM</div>
+            <div className="text-[15px] font-bold leading-tight text-sidebar-textActive">BlueBird</div>
+            <div className="text-[12px] text-sidebar-text">Bluebird Acquisition</div>
           </div>
         )}
         <button

@@ -36,13 +36,15 @@ export default {
         success: { DEFAULT: withOpacity('--color-success'), dim: withOpacity('--color-success-dim') },
         warning: { DEFAULT: withOpacity('--color-warning'), dim: withOpacity('--color-warning-dim') },
         danger: { DEFAULT: withOpacity('--color-danger'), dim: withOpacity('--color-danger-dim') },
-        // Brand navy — same shell the marketing site uses for its header.
-        // Deliberately NOT theme-driven — it's already dark, so it reads
-        // correctly as the same brand shell in both light and dark mode.
-        sidebar: { DEFAULT: '#0B1E33', 2: '#132A45', border: '#132A45', text: '#8CA0B8', textActive: '#ffffff' },
+        // Tristate Ledger redesign — matches the Design-canvas mockup's
+        // sidebar exactly. Deliberately NOT theme-driven (same reasoning as
+        // before this redesign): already dark, so it reads as the same
+        // shell regardless of the app's own light/dark toggle.
+        sidebar: { DEFAULT: '#0C0E14', 2: '#151925', border: '#161A25', text: '#8A91A3', textActive: '#F2F4F8' },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        // Tristate Ledger redesign — matches the Design-canvas mockup.
+        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
         // Page-level <h1> titles only — real brand character at the top of
         // each page without touching dense UI/data text.
         serif: ['Fraunces', 'Georgia', 'serif'],
@@ -51,12 +53,13 @@ export default {
         mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        // Tightened from 22/12/26px — maximally-rounded corners plus a
-        // soft floating shadow (see the old boxShadow.card comment below)
-        // is the exact shadcn/ui-template default that's now everywhere;
-        // a tighter, more rectangular radius reads as engineered rather
-        // than generated.
-        lg: '10px',
+        // Tristate Ledger redesign — the mockup's own card radius (16px),
+        // superseding the earlier "tightened to 10px" decision below (kept
+        // for context, not current): maximally-rounded corners plus a soft
+        // floating shadow was the exact shadcn/ui-template default that was
+        // everywhere; a tighter radius read as engineered rather than
+        // generated. The new mockup lands in between on purpose.
+        lg: '16px',
         md: '8px',
         xl: '14px',
       },
