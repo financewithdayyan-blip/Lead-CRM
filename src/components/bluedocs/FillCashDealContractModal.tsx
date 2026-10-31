@@ -41,7 +41,7 @@ const FIELD_MAP = {
   // call, not an oversight).
   specialProvisions: ['9080db6f-8758-4b5b-9ed3-7edf56a2b38e'],
 } as const;
-// The one field id needed outside this form: ContractInstanceRow's address
+// The one field id needed outside this form: ContractInstanceTableRow's address
 // fallback matches by field ID rather than label, since a contract created
 // before this template's fields got their readable labels froze the OLD
 // generic label ("Text field") into its own template_fields_snapshot — a

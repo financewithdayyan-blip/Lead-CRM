@@ -14,6 +14,7 @@ import {
   useDeleteDocTemplate,
   useSignedTemplateUrl,
   PURCHASE_CONTRACT_TYPES,
+  type ContractType,
   type DocTemplate,
 } from '@/hooks/useDocTemplates';
 import { useContractInstances, type DeliveryResult } from '@/hooks/useContractInstances';
@@ -204,69 +205,96 @@ function DocFlowModals({ flow }: { flow: ReturnType<typeof useDocFlow> }) {
 // collects in Others.
 const PINNED_PURCHASE_CONTRACT_NAMES = ['Assignment_of_Purchase_Contract'];
 
+// One accent color per contract type, carried onto each template's tile
+// icon — a pinned "Assignment of Purchase Contract" (no real contractType
+// of its own) and anything in the open-ended Others bucket fall back to a
+// neutral default instead of a type color that wouldn't be true of them.
+const CONTRACT_TYPE_COLOR: Partial<Record<ContractType, string>> = {
+  cash: '#6E7BFF',
+  novation: '#A78BFA',
+  subject_to: '#5AB8FF',
+  seller_finance: '#FFC46B',
+};
+const PINNED_TILE_COLOR = '#3DD6B5';
+const DEFAULT_TILE_COLOR = '#8B96FF';
+
 function ContractTemplatesTab() {
   const { data: templates = [] } = useDocTemplates('contract');
+  const { data: instances = [] } = useContractInstances();
   const flow = useDocFlow();
   const isPinnedPurchaseContract = (t: { contractType: string | null; name: string }) =>
     t.contractType === null && PINNED_PURCHASE_CONTRACT_NAMES.includes(t.name);
 
   const readyCount = templates.filter((t) => t.mapped).length;
 
+  const usageByTemplateId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of instances) {
+      if (!i.templateId) continue;
+      m.set(i.templateId, (m.get(i.templateId) ?? 0) + 1);
+    }
+    return m;
+  }, [instances]);
+
+  const colorForPurchase = (t: DocTemplate) =>
+    isPinnedPurchaseContract(t) ? PINNED_TILE_COLOR : (t.contractType && CONTRACT_TYPE_COLOR[t.contractType]) || DEFAULT_TILE_COLOR;
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="mb-3 flex items-center justify-between">
         <SectionLabel>Templates</SectionLabel>
-        {templates.length > 0 && (
-          <span className="text-[12.5px] text-text-3">{readyCount} ready to send</span>
-        )}
+        {templates.length > 0 && <span className="text-[12.5px] text-text-3">{readyCount} ready to send</span>}
       </div>
-      <TemplateCategoryCard
-        label="Purchase Contracts"
-        docType="contract"
-        typeOptions={PURCHASE_CONTRACT_TYPES}
-        // Deal-type order (Cash, Novation, Subject-To, Seller Finance) rather
-        // than upload recency — Cash Deal is the one actually in daily use
-        // and should always lead the list, not whichever was (re)uploaded
-        // most recently. Pinned-by-name items (no real contractType to sort
-        // by) always land last.
-        items={templates
-          .filter((t) => t.contractType !== null || isPinnedPurchaseContract(t))
-          .sort((a, b) => {
-            const ai = a.contractType === null ? PURCHASE_CONTRACT_TYPES.length : PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === a.contractType);
-            const bi = b.contractType === null ? PURCHASE_CONTRACT_TYPES.length : PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === b.contractType);
-            return ai - bi;
-          })}
-        onOpenMapper={flow.openMapper}
-        onSend={flow.setSendTarget}
-        onDeleteTarget={flow.setDeleteTarget}
-      />
-      <TemplateCategoryCard
-        label="Others"
-        docType="contract"
-        items={templates.filter((t) => t.contractType === null && !isPinnedPurchaseContract(t))}
-        multi
-        onOpenMapper={flow.openMapper}
-        onSend={flow.setSendTarget}
-        onDeleteTarget={flow.setDeleteTarget}
-      />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3.5">
+        <TemplateCategoryCard
+          label="Purchase Contracts"
+          docType="contract"
+          typeOptions={PURCHASE_CONTRACT_TYPES}
+          // Deal-type order (Cash, Novation, Subject-To, Seller Finance) rather
+          // than upload recency — Cash Deal is the one actually in daily use
+          // and should always lead the list, not whichever was (re)uploaded
+          // most recently. Pinned-by-name items (no real contractType to sort
+          // by) always land last.
+          items={templates
+            .filter((t) => t.contractType !== null || isPinnedPurchaseContract(t))
+            .sort((a, b) => {
+              const ai = a.contractType === null ? PURCHASE_CONTRACT_TYPES.length : PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === a.contractType);
+              const bi = b.contractType === null ? PURCHASE_CONTRACT_TYPES.length : PURCHASE_CONTRACT_TYPES.findIndex((o) => o.key === b.contractType);
+              return ai - bi;
+            })}
+          colorFor={colorForPurchase}
+          usageByTemplateId={usageByTemplateId}
+          onOpenMapper={flow.openMapper}
+          onSend={flow.setSendTarget}
+          onDeleteTarget={flow.setDeleteTarget}
+        />
+        <TemplateCategoryCard
+          label="Others"
+          docType="contract"
+          items={templates.filter((t) => t.contractType === null && !isPinnedPurchaseContract(t))}
+          multi
+          colorFor={() => DEFAULT_TILE_COLOR}
+          usageByTemplateId={usageByTemplateId}
+          onOpenMapper={flow.openMapper}
+          onSend={flow.setSendTarget}
+          onDeleteTarget={flow.setDeleteTarget}
+        />
+      </div>
       <DocFlowModals flow={flow} />
     </div>
   );
 }
 
-function DocStatCard({ label, value, sub, color, icon: Icon }: { label: string; value: string | number; sub: string; color: string; icon: LucideIcon }) {
+function DocStatCard({ label, value, color, icon: Icon }: { label: string; value: string | number; color: string; icon: LucideIcon }) {
   return (
-    <div className="card !p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}17`, color }}>
-          <Icon size={14} />
-        </span>
+    <div className="card flex items-center gap-3.5 !p-4">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}17`, color }}>
+        <Icon size={18} />
+      </span>
+      <div className="min-w-0">
+        <div className="font-mono text-2xl font-bold tabular-nums text-text">{value}</div>
+        <div className="truncate text-[13px] text-text-3">{label}</div>
       </div>
-      <div className="mt-2 font-mono text-2xl font-semibold tabular-nums" style={{ color }}>
-        {value}
-      </div>
-      <div className="mt-0.5 text-[12px] text-text-3">{sub}</div>
     </div>
   );
 }
@@ -297,12 +325,11 @@ export function BlueDocsPage() {
 
       {instances.length > 0 && (
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <DocStatCard label="Waiting for signature" value={kpis.waiting} sub="sent or partially signed" color="#f59e0b" icon={Clock} />
-          <DocStatCard label={`Signed in ${kpis.monthName}`} value={kpis.signedThisMonth} sub="fully executed this month" color="#10b981" icon={CheckCircle2} />
+          <DocStatCard label="Waiting for signature" value={kpis.waiting} color="#f59e0b" icon={Clock} />
+          <DocStatCard label={`Signed in ${kpis.monthName}`} value={kpis.signedThisMonth} color="#10b981" icon={CheckCircle2} />
           <DocStatCard
             label="Typical time to sign"
             value={kpis.avgSignSeconds != null ? formatDuration(kpis.avgSignSeconds) : '—'}
-            sub="send to fully signed"
             color="#4f46e5"
             icon={Timer}
           />

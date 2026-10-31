@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ContractInstanceRow } from '@/components/bluedocs/ContractInstanceRow';
+import { ContractInstanceTableRow } from '@/components/bluedocs/ContractInstanceTableRow';
 import { ContractPreviewModal } from '@/components/bluedocs/ContractPreviewModal';
 import { FillCashDealContractModal } from '@/components/bluedocs/FillCashDealContractModal';
 import {
@@ -69,55 +69,72 @@ export function EnvelopesTab() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1">
-          {STATUS_TABS.map((t) => (
-            <button
-              key={t.key}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                statusFilter === t.key ? 'bg-primary text-primary-text' : 'bg-surface-3 text-text-3 hover:text-text'
-              }`}
-              onClick={() => setStatusFilter(t.key)}
-            >
-              {t.label}
-              {counts[t.key] ? (
-                <span className={`ml-1.5 ${statusFilter === t.key ? 'text-primary-text/70' : 'text-text-3'}`}>{counts[t.key]}</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-        <div className="relative ml-auto min-w-[220px] flex-1 max-w-xs">
-          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3" />
-          <input
-            className="input !pl-7"
-            placeholder="Search by document or party name"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {isLoading ? (
-        <p className="text-sm text-text-3">Loading…</p>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border-2 py-16 text-center text-sm text-text-3">
-          {instances.length === 0 ? 'Nothing sent yet — invite a signer from the Contracts tab to get started.' : 'Nothing matches this filter.'}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((c) => (
-            <ContractInstanceRow
-              key={c.id}
-              instance={c}
-              onPreview={() => setPreviewTarget(c)}
-              onDownload={download}
-              onDelete={() => setDeleteTarget(c.id)}
-              onVoid={() => setVoidTarget(c.id)}
-              onEdit={() => setEditTarget(c)}
+      <div className="card !p-0 overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border-2 px-4 py-3">
+          <h2 className="shrink-0 text-[15px] font-semibold text-text">Sent documents</h2>
+          <div className="flex flex-wrap items-center gap-1 rounded-md border border-border-2 bg-surface-2 p-1">
+            {STATUS_TABS.map((t) => (
+              <button
+                key={t.key}
+                className={`shrink-0 rounded-sm px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                  statusFilter === t.key ? 'bg-primary text-primary-text' : 'text-text-2 hover:text-text'
+                }`}
+                onClick={() => setStatusFilter(t.key)}
+              >
+                {t.label}
+                {counts[t.key] ? (
+                  <span className={`ml-1.5 font-mono ${statusFilter === t.key ? 'text-primary-text/70' : 'text-text-3'}`}>{counts[t.key]}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <div className="relative ml-auto min-w-[200px] max-w-xs flex-1">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3" />
+            <input
+              className="input !pl-7"
+              placeholder="Search by document or party name"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          ))}
+          </div>
         </div>
-      )}
+
+        {isLoading ? (
+          <p className="p-8 text-center text-[13px] text-text-3">Loading…</p>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center text-[13px] text-text-3">
+            {instances.length === 0 ? 'Nothing sent yet — invite a signer from the Contracts tab to get started.' : 'Nothing matches this filter.'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-border-2 text-left text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                  <th className="px-3 py-2.5">Document</th>
+                  <th className="px-3 py-2.5">Signer</th>
+                  <th className="px-3 py-2.5">Sent</th>
+                  <th className="px-3 py-2.5">Signatures</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c) => (
+                  <ContractInstanceTableRow
+                    key={c.id}
+                    instance={c}
+                    onPreview={() => setPreviewTarget(c)}
+                    onDownload={download}
+                    onDelete={() => setDeleteTarget(c.id)}
+                    onVoid={() => setVoidTarget(c.id)}
+                    onEdit={() => setEditTarget(c)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <ConfirmDialog
         open={!!deleteTarget}
