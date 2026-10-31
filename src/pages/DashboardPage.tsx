@@ -325,20 +325,47 @@ export function DashboardView({
     };
   }, [leads]);
 
-  // ── Sales: funnel efficiency (contact/qualify/close rate) ─────────────────
-  // Real data, no new fetch — reuses the same cumulative funnel counts
-  // already computed above for the Pipeline card, just expressed as
-  // stage-to-stage percentages instead of a bar chart.
+  // ── Sales: funnel efficiency (contact/qualify/contract/close rate) ────────
+  // Mostly reuses the same cumulative funnel counts already computed above
+  // for the Pipeline card, expressed as stage-to-stage percentages instead
+  // of a bar chart — except Contract Rate and Close Rate, which can't just
+  // read funnel.stages[5] (current-stage-based) the way the old single
+  // "Close Rate" used to. A contract has two outcomes, close or fall
+  // through, and a fallen-through one gets dragged to Dead/Declined —
+  // dropping it out of the contract-or-beyond bucket entirely and making it
+  // vanish from both rates instead of counting toward Contract Rate (it DID
+  // get a contract) while correctly missing Close Rate (it never actually
+  // closed). stageChangeHistory (full stage-change history, not just
+  // current stage — already fetched above for Revenue in Pipeline) is what
+  // makes "ever reached Contract" answerable regardless of where the lead
+  // sits today.
+  const CONTRACT_STAGES = useMemo(
+    () => new Set<LeadStage>(['contract', 'inspection_walkthrough', 'in_title', 'closed']),
+    [],
+  );
   const funnelEfficiency = useMemo(() => {
     const contactedOrBeyond = funnel.stages[0]?.count ?? 0;
     const qualifiedOrBeyond = funnel.stages[3]?.count ?? 0;
-    const contractOrBeyond = funnel.stages[5]?.count ?? 0;
+
+    const everReachedContractIds = new Set(
+      stageChangeHistory.filter((e) => CONTRACT_STAGES.has(e.to as LeadStage)).map((e) => e.leadId),
+    );
+    // Belt and suspenders — a lead currently sitting in a contract-or-beyond
+    // stage always counts too, even if its own stage_change history is
+    // missing or incomplete (e.g. predates this logging).
+    for (const l of leads) {
+      if (CONTRACT_STAGES.has(l.stage)) everReachedContractIds.add(l.id);
+    }
+    const everReachedContract = everReachedContractIds.size;
+    const closedCount = leads.filter((l) => l.stage === 'closed').length;
+
     return {
       contactRate: funnel.totalLeads > 0 ? (contactedOrBeyond / funnel.totalLeads) * 100 : 0,
       qualifyRate: contactedOrBeyond > 0 ? (qualifiedOrBeyond / contactedOrBeyond) * 100 : 0,
-      closeRate: qualifiedOrBeyond > 0 ? (contractOrBeyond / qualifiedOrBeyond) * 100 : 0,
+      contractRate: qualifiedOrBeyond > 0 ? (everReachedContract / qualifiedOrBeyond) * 100 : 0,
+      closeRate: everReachedContract > 0 ? (closedCount / everReachedContract) * 100 : 0,
     };
-  }, [funnel]);
+  }, [funnel, leads, stageChangeHistory, CONTRACT_STAGES]);
 
   // ── Sales: per-rep performance (real, needs >0 org-wide activity data) ────
   const repLeaderboard = useMemo(
@@ -1247,11 +1274,12 @@ export function DashboardView({
               <SectionLabel>Sales Performance</SectionLabel>
               <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
                 <div className="card">
-                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → close" />
+                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → contract → close" />
                   <div className="mt-5 flex justify-between">
-                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={76} strokeWidth={7} label="Contact Rate" sub="of all leads" centered />
-                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={76} strokeWidth={7} label="Qualify Rate" sub="of contacted" centered />
-                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={76} strokeWidth={7} label="Close Rate" sub="of qualified" centered />
+                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={68} strokeWidth={6} label="Contact Rate" sub="of all leads" centered />
+                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={68} strokeWidth={6} label="Qualify Rate" sub="of contacted" centered />
+                    <RadialGauge pct={funnelEfficiency.contractRate} color="#fb923c" size={68} strokeWidth={6} label="Contract Rate" sub="of qualified" centered />
+                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={68} strokeWidth={6} label="Close Rate" sub="of contracts" centered />
                   </div>
                 </div>
 
