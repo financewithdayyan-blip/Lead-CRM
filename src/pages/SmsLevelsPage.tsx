@@ -45,14 +45,8 @@ export function SmsLevelsPage() {
         <span>/</span>
         <span className="text-text-2">Sending levels</span>
       </nav>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text">Sending levels</h1>
-          <p className="mt-1 max-w-[68ch] text-sm text-text-3">
-            One pooled 10DLC level for the whole account — the daily limit is total texts per day across every
-            configured number combined, not per number. Levels go up on their own, checked once a day.
-          </p>
-        </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight text-text">Sending levels</h1>
         <button className="btn shrink-0" onClick={() => navigate('/bulk-sms')}>
           Back to sends
         </button>
@@ -63,24 +57,24 @@ export function SmsLevelsPage() {
           Not started yet — the account is automatically set to Level 1 on the next daily check.
         </div>
       ) : (
-        <div className="card mb-5 flex flex-wrap gap-6 border-primary/35 !bg-primary/5 !p-6">
-          <div className="flex min-w-[260px] flex-1 flex-col gap-3.5">
+        <div className="card mb-5 flex flex-wrap gap-5 border-primary/35 !bg-primary/5 !p-4">
+          <div className="flex min-w-[260px] flex-1 flex-col gap-2">
             <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/20 px-2.5 py-1 text-[12px] font-semibold text-primary-text">
               Current level{settings?.dailyLimitLevelStartedAt && ` · since ${formatDate(settings.dailyLimitLevelStartedAt)}`}
             </span>
-            <div className="font-mono text-[40px] font-extrabold leading-none tracking-tight text-text">Level {currentLevel}</div>
+            <div className="font-mono text-[30px] font-extrabold leading-none tracking-tight text-text">Level {currentLevel}</div>
             <div className="flex items-baseline gap-2">
-              <span className="font-mono text-2xl font-bold tabular-nums text-text">{dailyLimit.toLocaleString()}</span>
-              <span className="text-[14px] text-text-3">texts a day, shared across every configured number</span>
+              <span className="font-mono text-lg font-bold tabular-nums text-text">{dailyLimit.toLocaleString()}</span>
+              <span className="text-[13px] text-text-3">texts a day, shared across every configured number</span>
             </div>
 
             {settings && settings.dailyLimit > 0 && (
               <div>
-                <div className="flex items-center justify-between text-[12.5px] text-text-2">
+                <div className="flex items-center justify-between text-[12px] text-text-2">
                   <span>Used today</span>
                   <span className="font-mono"><b className="text-text">{usedToday.toLocaleString()}</b> of {settings.dailyLimit.toLocaleString()}</span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-3">
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-3">
                   <div
                     className="h-full rounded-full bg-primary"
                     style={{ width: `${Math.min(100, (usedToday / settings.dailyLimit) * 100)}%` }}
@@ -89,9 +83,9 @@ export function SmsLevelsPage() {
               </div>
             )}
 
-            <ol aria-label="Level ladder" className="mt-1 grid grid-cols-6 gap-1.5 sm:grid-cols-12">
+            <ol aria-label="Level ladder" className="mt-0.5 grid grid-cols-6 gap-1.5 sm:grid-cols-12">
               {SMS_DLC_LEVELS.map((level) => (
-                <li key={level} className="flex flex-col gap-1.5">
+                <li key={level} className="flex flex-col gap-1">
                   <span
                     className={`h-1.5 rounded-full ${
                       level < currentLevel ? 'bg-primary' : level === currentLevel ? 'bg-primary ring-2 ring-primary/30' : 'bg-surface-3'
@@ -104,9 +98,9 @@ export function SmsLevelsPage() {
           </div>
 
           {currentLevel < SMS_DLC_MAX_LEVEL && (
-            <div className="flex min-w-[320px] flex-[1.3] flex-col gap-3">
+            <div className="flex min-w-[320px] flex-[1.3] flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-[15px] font-bold text-text">
+                <h2 className="text-[14px] font-bold text-text">
                   To reach Level {nextLevel} <span className="font-mono font-medium text-text-3">{SMS_DLC_LEVEL_DAILY_LIMITS[nextLevel].toLocaleString()} a day</span>
                 </h2>
                 <span className="shrink-0 rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[11.5px] font-semibold text-warning">
@@ -114,7 +108,7 @@ export function SmsLevelsPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <HeroRequirement ok={daysOk} label={`${MIN_DAYS}+ days at Level ${currentLevel}`} sub={progress ? `${progress.daysElapsed} day${progress.daysElapsed === 1 ? '' : 's'} so far` : undefined} />
                 <HeroRequirement
                   neutral
@@ -125,7 +119,7 @@ export function SmsLevelsPage() {
                 <HeroRequirement ok={replyOk} label={`Reply rate ${MIN_REPLY_RATE}%+`} rate={progress?.replyRate} threshold={MIN_REPLY_RATE} />
               </div>
 
-              <div className={`rounded-md bg-surface-2 px-3.5 py-2.5 text-[12.5px] ${readyToPromote ? 'font-medium text-success' : 'text-text-2'}`}>
+              <div className={`rounded-md bg-surface-2 px-3 py-2 text-[12px] ${readyToPromote ? 'font-medium text-success' : 'text-text-2'}`}>
                 {readyToPromote
                   ? `Ready — Level ${nextLevel} auto-promotes on the next daily check.`
                   : 'Checked once a day — promotes on its own once every requirement above is met.'}
@@ -145,23 +139,23 @@ export function SmsLevelsPage() {
             const earned = status === 'active' || status === 'passed';
 
             return (
-              <div key={level} className={`card !p-4 ${style.cardBorder}`}>
+              <div key={level} className={`card !p-3 ${style.cardBorder}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[15px] font-bold text-text">Level {level}</span>
+                  <span className="text-[14px] font-bold text-text">Level {level}</span>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${style.badge}`}>
                     <StatusIcon size={11} />
                     {style.label}
                   </span>
                 </div>
 
-                <div className="mt-2 flex items-baseline gap-1.5">
-                  <span className="font-mono text-[26px] font-extrabold tracking-tight text-text">
+                <div className="mt-1.5 flex items-baseline gap-1.5">
+                  <span className="font-mono text-[20px] font-extrabold tracking-tight text-text">
                     {SMS_DLC_LEVEL_DAILY_LIMITS[level].toLocaleString()}
                   </span>
-                  <span className="text-[12.5px] text-text-3">texts a day</span>
+                  <span className="text-[12px] text-text-3">texts a day</span>
                 </div>
 
-                <div className="mt-3 flex flex-col gap-1.5 border-t border-border-2 pt-3">
+                <div className="mt-2 flex flex-col gap-1 border-t border-border-2 pt-2">
                   {level === 1 ? (
                     <RequirementRow label="No history needed" state="met" />
                   ) : (
@@ -211,23 +205,23 @@ function HeroRequirement({
   threshold?: number;
 }) {
   return (
-    <div className={`flex flex-col gap-2 rounded-md p-3.5 ${!neutral && ok === false ? 'border border-danger/30 bg-danger-dim/40' : 'bg-surface-2'}`}>
-      <div className="flex items-center gap-2 text-[13px]">
+    <div className={`flex flex-col gap-1.5 rounded-md p-2.5 ${!neutral && ok === false ? 'border border-danger/30 bg-danger-dim/40' : 'bg-surface-2'}`}>
+      <div className="flex items-center gap-2 text-[12.5px]">
         {neutral ? (
-          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center text-text-3">
-            <Minus size={12} />
+          <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center text-text-3">
+            <Minus size={11} />
           </span>
         ) : ok ? (
-          <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
-            <Check size={11} />
+          <span className="flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+            <Check size={10} />
           </span>
         ) : (
-          <span className="h-[18px] w-[18px] shrink-0 rounded-full border-[1.5px] border-border-2" />
+          <span className="h-[16px] w-[16px] shrink-0 rounded-full border-[1.5px] border-border-2" />
         )}
         <span className="font-semibold text-text">{label}</span>
       </div>
       {rate !== undefined && threshold !== undefined ? (
-        <div className="flex items-center gap-2 pl-[26px]">
+        <div className="flex items-center gap-2 pl-6">
           <div className="relative h-[5px] flex-1 overflow-hidden rounded-full bg-surface-3">
             <div className="h-full rounded-full" style={{ width: `${Math.min(100, rate)}%`, background: ok ? 'rgb(var(--color-success))' : 'rgb(var(--color-danger))' }} />
             <div className="absolute -top-[3px] bottom-[-3px] w-[2px] bg-text" style={{ left: `${threshold}%` }} />
@@ -235,7 +229,7 @@ function HeroRequirement({
           <span className={`font-mono text-[12px] font-semibold ${ok ? 'text-success' : 'text-danger'}`}>{rate}%</span>
         </div>
       ) : (
-        sub && <div className="pl-[26px] font-mono text-[12px] text-text-3">{sub}</div>
+        sub && <div className="pl-6 font-mono text-[12px] text-text-3">{sub}</div>
       )}
     </div>
   );
