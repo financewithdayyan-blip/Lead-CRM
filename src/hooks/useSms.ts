@@ -223,6 +223,50 @@ export function useResumeBulkSmsJob() {
   });
 }
 
+export interface ActiveBulkSmsJob {
+  id: string;
+  total: number;
+  sentCount: number;
+  skippedCount: number;
+  failedCount: number;
+  createdAt: string;
+}
+
+/** Powers the account-wide "Bulk SMS sending…" banner (BulkSmsProgressBanner,
+ * mounted once in AppShell) that follows the admin across every page, not
+ * just the Bulk SMS page itself — a send can run for many minutes and there
+ * was previously no way to notice progress or completion without staying on
+ * that one tab. Polled more loosely (every 4s) than the detail page's own
+ * 1.5s, since this query runs on every single page rather than one. Only
+ * ever at most one job is 'running' at a time in practice (BulkSmsModal/
+ * useCreateBulkSmsJob don't allow starting a second one), so the oldest
+ * match is a safe tie-breaker rather than a real choice. */
+export function useActiveBulkSmsJob() {
+  return useQuery({
+    queryKey: ['active_bulk_sms_job'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bulk_sms_jobs_with_counts')
+        .select('id, total, created_at, sent_count, skipped_count, failed_count')
+        .eq('status', 'running')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        id: data.id,
+        total: data.total,
+        sentCount: Number(data.sent_count ?? 0),
+        skippedCount: Number(data.skipped_count ?? 0),
+        failedCount: Number(data.failed_count ?? 0),
+        createdAt: data.created_at,
+      } as ActiveBulkSmsJob;
+    },
+    refetchInterval: 4000,
+  });
+}
+
 export interface SendRemindersResult {
   sent: number;
   rescheduled: number;
