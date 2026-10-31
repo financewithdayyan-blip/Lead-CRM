@@ -42,7 +42,7 @@ function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label:
       title={collapsed ? label : undefined}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2.5 rounded-[10px] py-2.5 text-sm font-medium transition-colors',
+          'flex items-center gap-2.5 rounded-md py-2.5 text-sm font-medium transition-colors',
           collapsed ? 'justify-center px-0' : 'px-3',
           isActive ? 'bg-primary-dim text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
         )

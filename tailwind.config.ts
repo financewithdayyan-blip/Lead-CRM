@@ -53,15 +53,16 @@ export default {
         mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        // Tristate Ledger redesign — the mockup's own card radius (16px),
-        // superseding the earlier "tightened to 10px" decision below (kept
-        // for context, not current): maximally-rounded corners plus a soft
-        // floating shadow was the exact shadcn/ui-template default that was
-        // everywhere; a tighter radius read as engineered rather than
-        // generated. The new mockup lands in between on purpose.
-        lg: '16px',
-        md: '8px',
-        xl: '14px',
+        // Tristate Ledger redesign, "edgy corners" pass — sharp rectangles
+        // for every card/button/input/modal instead of the mockup's own
+        // softly-rounded 16px, at the user's explicit request. rounded-full
+        // (avatars, pills, badges, gauges) is untouched — it's a separate
+        // Tailwind scale key, not covered by lg/md/xl here, so circles and
+        // pill-shaped chips keep their real shape rather than becoming
+        // squared-off rectangles.
+        lg: '2px',
+        md: '2px',
+        xl: '2px',
       },
       boxShadow: {
         // Replaces a wide, soft "floating" glow (0 14px 32px, spread deep
