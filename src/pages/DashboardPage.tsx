@@ -1,22 +1,19 @@
-import { lazy, Suspense, useId, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import {
   Activity,
-  AlertTriangle,
-  ArrowDownRight,
-  ArrowUpRight,
   Bell,
   Bot,
   CalendarCheck,
   CalendarDays,
+  CheckCircle2,
   DollarSign,
   FileSignature,
   Flame,
   Gauge,
   Handshake,
   Map as MapIcon,
-  Medal,
   Megaphone,
   MessageSquare,
   Phone,
@@ -25,6 +22,7 @@ import {
   Plus,
   Reply,
   Search,
+  Send,
   Sparkles,
   Tags as TagsIcon,
   Target,
@@ -47,8 +45,7 @@ import { STAGE_CONFIG, STAGE_ORDER, type LeadStage, type Profile } from '@/types
 import { cn, localIsoDate } from '@/lib/utils';
 import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { RadialGauge } from '@/components/ui/RadialGauge';
-import { useTeamMembers } from '@/hooks/useTeam';
-import { useOrgLeads, useOrgActivities, computeRepLeaderboard, computeDealVelocity } from '@/hooks/useSalesKpis';
+import { useOrgLeads, useOrgActivities, computeDealVelocity } from '@/hooks/useSalesKpis';
 import { isMajorCity } from '@/lib/majorCities';
 
 type SmsRangeKey = '1d' | '7d' | '30d' | '90d' | 'all';
@@ -135,89 +132,6 @@ function BarRow({ label, count, max, color }: { label: string; count: number; ma
   );
 }
 
-/** Tiny filled-area trend line for a hero stat card — real values only, no
- * decorative/fabricated data. Needs at least 2 points to draw anything. */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const id = useId();
-  if (values.length < 2) return <svg width="96" height="40" aria-hidden="true" />;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const range = max - min || 1;
-  const stepX = 96 / (values.length - 1);
-  const points = values.map((v, i) => `${(i * stepX).toFixed(1)},${(38 - ((v - min) / range) * 34).toFixed(1)}`).join(' ');
-  return (
-    <svg width="96" height="40" viewBox="0 0 96 40" aria-hidden="true">
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={color} stopOpacity="0.35" />
-          <stop offset="1" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={`0,40 ${points} 96,40`} fill={`url(#${id})`} />
-      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** One hero metric card — icon badge, headline number, a real trend chip
- * (vs the earlier half of the same series), and the sparkline behind it.
- * Matches the Tristate Ledger redesign's "Overview" row exactly. */
-function HeroStatCard({
-  icon: Icon,
-  label,
-  value,
-  valueSuffix,
-  sub,
-  trendPct,
-  series,
-  color,
-  formatValue,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: number;
-  /** e.g. " deals" — rendered smaller/muted right after the number. */
-  valueSuffix?: string;
-  sub: string;
-  trendPct: number;
-  series: number[];
-  color: string;
-  formatValue?: (v: number) => string;
-}) {
-  const up = trendPct >= 0;
-  return (
-    <div className="card flex flex-col gap-3.5 !p-5">
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px]" style={{ background: `${color}24`, color }}>
-          <Icon size={17} strokeWidth={1.7} />
-        </span>
-        <span className="text-sm font-medium text-text-2">{label}</span>
-      </div>
-      <div className="flex items-end justify-between gap-2.5">
-        <div>
-          <div className="font-mono text-[28px] font-bold leading-none tracking-tight text-text">
-            {formatValue ? formatValue(value) : value.toLocaleString()}
-            {valueSuffix && <span className="ml-1 font-sans text-[15px] font-medium text-text-3">{valueSuffix}</span>}
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={cn(
-                'inline-flex items-center gap-0.5 rounded-full px-2 py-[3px] text-xs font-semibold',
-                up ? 'bg-success-dim text-success' : 'bg-danger-dim text-danger',
-              )}
-            >
-              {up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-              {Math.abs(trendPct).toFixed(1)}%
-            </span>
-            <span className="text-[12.5px] text-text-3">{sub}</span>
-          </div>
-        </div>
-        <Sparkline values={series} color={color} />
-      </div>
-    </div>
-  );
-}
-
 function money(v: number): string {
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
@@ -273,40 +187,6 @@ function DonutChart({
         {centerLabel}
       </text>
     </svg>
-  );
-}
-
-/** Gradient-filled trend line for a full-width card (SMS activity /
- * City/Lead volume style cards) — same real-data-only approach as
- * Sparkline, just sized for a card body instead of a hero tile. */
-function AreaTrendChart({ points, color, height = 150 }: { points: { label: string; count: number }[]; color: string; height?: number }) {
-  const id = useId();
-  const width = 600;
-  const max = Math.max(...points.map((p) => p.count), 1);
-  const stepX = points.length > 1 ? width / (points.length - 1) : width;
-  const coords = points.map((p, i) => ({ x: i * stepX, y: height - (p.count / max) * (height - 24) - 6 }));
-  const linePoints = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
-  const last = coords[coords.length - 1];
-  const labelIdxs = points.length > 1 ? [0, Math.floor((points.length - 1) / 2), points.length - 1] : [0];
-  return (
-    <div>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={color} stopOpacity="0.32" />
-            <stop offset="1" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon points={`0,${height} ${linePoints} ${width},${height}`} fill={`url(#${id})`} />
-        <polyline points={linePoints} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        {last && <circle cx={last.x} cy={last.y} r="4.5" fill={color} />}
-      </svg>
-      <div className="mt-1 flex justify-between text-[11px] text-text-3">
-        {labelIdxs.map((i) => (
-          <span key={i}>{points[i]?.label}</span>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -453,7 +333,6 @@ export function DashboardView({
   const { data: inboundMessages = [] } = useInboundMessages(showSmsStats);
   const { data: smsDeliveryLog = [] } = useSmsDeliveryLog(showSmsStats);
   const { data: buyerPhones = new Set<string>() } = useCashBuyerPhones(showSmsStats);
-  const { data: teamMembers = [] } = useTeamMembers();
   const { data: orgLeads = [] } = useOrgLeads(showSmsStats);
   const { data: orgActivities = [] } = useOrgActivities(showSmsStats);
 
@@ -516,22 +395,6 @@ export function DashboardView({
       coldCount: leads.filter((l) => l.stage === 'new').length,
     };
   }, [leads]);
-
-  // The weakest single stage-to-stage transition — what the funnel bars'
-  // own callout below points at, same "biggest leak" framing the mockup
-  // uses, computed from these same real cumulative counts rather than
-  // picked by hand.
-  const biggestLeak = useMemo(() => {
-    let worst: { from: string; to: string; rate: number } | null = null;
-    for (let i = 0; i < funnel.stages.length - 1; i++) {
-      const from = funnel.stages[i];
-      const to = funnel.stages[i + 1];
-      if (from.count === 0) continue;
-      const rate = to.count / from.count;
-      if (!worst || rate < worst.rate) worst = { from: from.label, to: to.label, rate };
-    }
-    return worst;
-  }, [funnel]);
 
   // ── Sales: funnel efficiency (contact/qualify/contract/close rate) ────────
   // Mostly reuses the same cumulative funnel counts already computed above
@@ -624,57 +487,28 @@ export function DashboardView({
     };
   }, [leads, stageChangeHistory, CONTRACT_STAGES]);
 
-  // ── Sales: per-rep performance (real, needs >0 org-wide activity data) ────
-  const repLeaderboard = useMemo(
-    () =>
-      computeRepLeaderboard(
-        orgLeads,
-        orgActivities,
-        teamMembers.map((m) => ({ memberId: m.memberId, name: m.member.fullName || m.member.email })),
-      ),
-    [orgLeads, orgActivities, teamMembers],
-  );
-
   // ── Sales: deal velocity (avg days between real milestones) ───────────────
   const dealVelocity = useMemo(() => computeDealVelocity(orgLeads, orgActivities), [orgLeads, orgActivities]);
 
-  // ── Marketing: lead volume by week (are we feeding the pipeline enough) ───
-  const leadVolumeTrend = useMemo(() => {
-    const weekMap = new Map<string, number>();
+  // New leads per calendar month, last 12 months — real lead-creation
+  // dates, same source the hero "New leads" card reads.
+  const leadsPerMonth = useMemo(() => {
+    const MONTHS = 12;
+    const monthMap = new Map<string, number>();
     for (const l of leads) {
       const d = new Date(l.createdAt);
-      const weekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
-      const key = localIsoDate(weekStart);
-      weekMap.set(key, (weekMap.get(key) ?? 0) + 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthMap.set(key, (monthMap.get(key) ?? 0) + 1);
     }
-    return Array.from(weekMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([iso, count]) => ({ label: new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count }));
-  }, [leads]);
-
-  // Daily outbound SMS volume, last 14 days — real counts from
-  // smsDeliveryLog (same source smsCampaignStats reads), buyer
-  // conversations excluded for the same reason noted there.
-  const dailySmsVolume = useMemo(() => {
-    const DAYS = 14;
-    const dayMap = new Map<string, number>();
-    for (const r of smsDeliveryLog) {
-      if (r.direction !== 'Out') continue;
-      const counterparty = r.counterpartyNumber?.replace(/[^0-9]/g, '').slice(-10);
-      if (counterparty && buyerPhones.has(counterparty)) continue;
-      const iso = localIsoDate(new Date(r.occurredAt));
-      dayMap.set(iso, (dayMap.get(iso) ?? 0) + 1);
-    }
-    const out: { iso: string; label: string; count: number }[] = [];
+    const out: { key: string; label: string; count: number }[] = [];
     const today = new Date();
-    for (let i = DAYS - 1; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-      const iso = localIsoDate(d);
-      out.push({ iso, label: String(d.getDate()), count: dayMap.get(iso) ?? 0 });
+    for (let i = MONTHS - 1; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      out.push({ key, label: d.toLocaleDateString('en-US', { month: 'short' }), count: monthMap.get(key) ?? 0 });
     }
     return out;
-  }, [smsDeliveryLog, buyerPhones]);
+  }, [leads]);
 
   // ── Marketing: which states/cities/zips are actually converting — scored
   // by real deal outcomes, not raw reply chatter, so spend/outreach can be
@@ -1496,112 +1330,125 @@ export function DashboardView({
         <div className="space-y-6">
           <div>
             <SectionLabel>Overview</SectionLabel>
-            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <HeroStatCard
-                icon={DollarSign}
-                label="Revenue this month"
-                value={revenueCard.value}
-                formatValue={money}
-                trendPct={revenueCard.trendPct}
-                series={revenueCard.series}
-                sub="vs last month, closed"
-                color="#6E7BFF"
-              />
-              <HeroStatCard
-                icon={Users}
-                label="New leads"
-                value={heroMetrics.newLeads.value}
-                trendPct={heroMetrics.newLeads.trendPct}
-                series={heroMetrics.newLeads.series}
-                sub="last 4 weeks"
-                color="#3DD6B5"
-              />
-              <HeroStatCard
-                icon={FileSignature}
-                label="Under contract"
-                value={heroMetrics.underContract.value}
-                valueSuffix="deals"
-                trendPct={heroMetrics.underContract.trendPct}
-                series={heroMetrics.underContract.series}
-                sub={`${money(heroMetrics.underContract.fees)} in fees`}
-                color="#FFB547"
-              />
-              <HeroStatCard
-                icon={Handshake}
-                label="In negotiation"
-                value={heroMetrics.negotiation.value}
-                trendPct={heroMetrics.negotiation.trendPct}
-                series={heroMetrics.negotiation.series}
-                sub="live right now"
-                color="#5AB8FF"
-              />
-            </div>
             {showSmsStats ? (
-              <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
-                <div className="card chart-layer flex h-full flex-col">
+              <>
+                {/* All headline KPIs as one consistent grid of compact
+                    cards — 5 across so a full account's worth (12 right
+                    now) settles into 3 rows, in funnel order: money and
+                    top-of-funnel first, then negotiation through contract,
+                    then SMS volume, then AI/compliance. Revenue, New leads,
+                    Under contract, and In negotiation reuse the same real
+                    weekly/monthly series as before, just folded into this
+                    smaller card instead of their own oversized tile. */}
+                <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  <StatCard
+                    compact
+                    icon={DollarSign}
+                    label="Revenue this month"
+                    value={money(revenueCard.value)}
+                    sub={`${revenueCard.trendPct >= 0 ? '▲' : '▼'} ${Math.abs(revenueCard.trendPct).toFixed(1)}% vs last month`}
+                    color="#6E7BFF"
+                  />
+                  <StatCard
+                    compact
+                    icon={Users}
+                    label="New Leads"
+                    value={heroMetrics.newLeads.value.toLocaleString()}
+                    sub="last 4 weeks"
+                    color="#3DD6B5"
+                  />
+                  <StatCard
+                    compact
+                    icon={CheckCircle2}
+                    label="Qualified Leads"
+                    value={stats.qualified.toLocaleString()}
+                    sub={`${stats.qualifiedRate}% of contacted`}
+                    color="#a78bfa"
+                  />
+                  <StatCard
+                    compact
+                    icon={Handshake}
+                    label="In Negotiation"
+                    value={heroMetrics.negotiation.value.toLocaleString()}
+                    sub="live right now"
+                    color="#5AB8FF"
+                  />
+                  <StatCard
+                    compact
+                    icon={FileSignature}
+                    label="Under Contract"
+                    value={`${heroMetrics.underContract.value} deals`}
+                    sub={`${money(heroMetrics.underContract.fees)} in fees`}
+                    color="#FFB547"
+                  />
+                  <StatCard
+                    compact
+                    icon={Trophy}
+                    label="Total Contracts"
+                    value={stats.contracts.toLocaleString()}
+                    sub={`${stats.contractRate}% of qualified`}
+                    color="#10b981"
+                  />
+                  <StatCard
+                    compact
+                    icon={MessageSquare}
+                    label="Total SMS"
+                    value={stats.totalSms.toLocaleString()}
+                    sub={`${stats.sentInRange.toLocaleString()} out / ${stats.repliesInRange.toLocaleString()} in`}
+                  />
+                  <StatCard
+                    compact
+                    icon={Send}
+                    label="Outgoing SMS"
+                    value={stats.sentInRange.toLocaleString()}
+                    sub={`${stats.sentToday} today`}
+                  />
+                  <StatCard
+                    compact
+                    icon={Reply}
+                    label="Incoming SMS"
+                    value={stats.repliesInRange.toLocaleString()}
+                    sub={`${stats.responseRate}% response rate`}
+                    color="#0891b2"
+                  />
+                  <StatCard
+                    compact
+                    icon={Bot}
+                    label="AI Replies"
+                    value={stats.aiRepliesSent.toLocaleString()}
+                    sub="no human touch"
+                  />
+                  <StatCard
+                    compact
+                    icon={Sparkles}
+                    label="AI Qualified Leads"
+                    value={stats.aiQualifiedCount.toLocaleString()}
+                    sub={`${stats.qualifiedRate}% of contacted`}
+                  />
+                  <StatCard
+                    compact
+                    icon={UserX}
+                    label="Opted Out / DNC"
+                    value={stats.optedOut.toLocaleString()}
+                    sub={`${stats.optOutRate}% of contacted`}
+                    color="#ef4444"
+                  />
+                </div>
+
+                <div className="card chart-layer">
                   <CardHeader
                     icon={DollarSign}
                     title="Revenue: Expected vs Actual"
                     tone="accent"
                     sub="Expected = fee across Contract, In Title, or Closed · Actual = fee only once Closed"
                   />
-                  <Suspense fallback={<div className="mt-3 flex flex-1 items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
-                    <div className="mt-3 flex-1">
+                  <Suspense fallback={<div className="mt-3 flex h-[260px] items-center justify-center text-[13px] text-text-3">Loading chart…</div>}>
+                    <div className="mt-3" style={{ height: 300 }}>
                       <RevenueInPipelineChart data={revenueInPipelineTrend} />
                     </div>
                   </Suspense>
                 </div>
-
-                <div className="card flex h-full flex-col">
-                  {/* One anchor number, set large in the data-tool mono
-                      face, with nothing competing for attention around it —
-                      the rest of the row's metrics follow as a quiet,
-                      unboxed list rather than each getting its own
-                      icon-badge card. A dozen identically-styled tiles in a
-                      grid is the single most recognizable "generated
-                      dashboard" pattern there is; one real headline number
-                      plus a plain ledger underneath reads like an actual
-                      product instead. */}
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Qualified Leads</div>
-                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-                    <span className="font-mono text-[34px] font-semibold leading-none tracking-tight text-primary">
-                      {stats.qualified.toLocaleString()}
-                    </span>
-                    <span className="text-[13px] text-text-3">{stats.qualifiedRate}% of contacted</span>
-                  </div>
-
-                  <div className="mt-5 grid flex-1 grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4">
-                    {(
-                      [
-                        { label: 'Total SMS', value: stats.totalSms.toLocaleString(), sub: `${stats.sentInRange.toLocaleString()} out / ${stats.repliesInRange.toLocaleString()} in` },
-                        { label: 'Outgoing SMS', value: stats.sentInRange.toLocaleString(), sub: `${stats.sentToday} today` },
-                        { label: 'Incoming SMS', value: stats.repliesInRange.toLocaleString(), sub: `${stats.responseRate}% response rate`, color: '#0891b2' },
-                        { label: 'AI Replies', value: stats.aiRepliesSent.toLocaleString(), sub: 'no human touch' },
-                        { label: 'AI Qualified Leads', value: stats.aiQualifiedCount.toLocaleString(), sub: `${stats.qualifiedRate}% of contacted` },
-                        { label: 'Total Contracts', value: stats.contracts.toLocaleString(), sub: `${stats.contractRate}% of qualified`, color: '#10b981' },
-                        {
-                          label: 'Total Calls',
-                          value: stats.totalCalls.toLocaleString(),
-                          sub: stats.callsOffProcess > 0 ? `${stats.callsOffProcess} off-process` : 'all to qualified',
-                          color: stats.callsOffProcess > 0 ? '#f59e0b' : undefined,
-                        },
-                        { label: 'Opted Out / DNC', value: stats.optedOut.toLocaleString(), sub: `${stats.optOutRate}% of contacted`, color: '#ef4444' },
-                      ] as Array<{ label: string; value: string; sub: string; color?: string }>
-                    ).map((s) => (
-                      <div key={s.label} className="min-w-0">
-                        <div className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-text-3">{s.label}</div>
-                        <div
-                          className="mt-0.5 font-mono text-[19px] font-semibold leading-tight tabular-nums text-text"
-                          style={s.color ? { color: s.color } : undefined}
-                        >
-                          {s.value}
-                        </div>
-                        <div className="truncate text-[11px] text-text-3">{s.sub}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              </>
             ) : (
               <div className="card">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Qualified Leads</div>
@@ -1667,50 +1514,15 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Sales Performance</SectionLabel>
-              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
+              <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
                 <div className="card">
-                  <div className="flex items-start justify-between gap-3">
-                    <CardHeader icon={Target} title="Sales funnel efficiency" sub="contact → qualify → contract → close" />
-                    <span className="shrink-0 rounded-full bg-primary-dim px-2.5 py-1 text-xs font-semibold text-primary-text">
-                      {funnelEfficiency.closeRate.toFixed(1)}% close
-                    </span>
+                  <CardHeader icon={Target} title="Sales Funnel Efficiency" sub="contact → qualify → contract → close" />
+                  <div className="mt-5 flex justify-between">
+                    <RadialGauge pct={funnelEfficiency.contactRate} color="#1568A8" size={68} strokeWidth={6} label="Contact Rate" sub="of all leads" centered />
+                    <RadialGauge pct={funnelEfficiency.qualifyRate} color="#a78bfa" size={68} strokeWidth={6} label="Qualify Rate" sub="of contacted" centered />
+                    <RadialGauge pct={funnelEfficiency.contractRate} color="#fb923c" size={68} strokeWidth={6} label="Contract Rate" sub="of qualified" centered />
+                    <RadialGauge pct={funnelEfficiency.closeRate} color="#10b981" size={68} strokeWidth={6} label="Close Rate" sub="of contracts" centered />
                   </div>
-                  <div className="mt-4 flex flex-col gap-1.5">
-                    {funnel.stages.map((s, i) => {
-                      const first = funnel.stages[0]?.count ?? 0;
-                      const widthPct = first > 0 ? Math.max(16, (s.count / first) * 100) : 16;
-                      const prev = i > 0 ? funnel.stages[i - 1] : null;
-                      const stageRate = prev && prev.count > 0 ? Math.round((s.count / prev.count) * 100) : null;
-                      const isLeak = biggestLeak?.to === s.label;
-                      return (
-                        <div
-                          key={s.key}
-                          className="flex h-[38px] items-center justify-between rounded-[10px] px-3.5 text-[13.5px] font-semibold text-white"
-                          style={{
-                            width: `${widthPct}%`,
-                            marginInline: 'auto',
-                            background: s.color,
-                            outline: isLeak ? '2px solid rgb(var(--color-danger))' : undefined,
-                            outlineOffset: isLeak ? '-2px' : undefined,
-                          }}
-                        >
-                          <span className="truncate">{s.label}</span>
-                          <span className="shrink-0 font-mono tabular-nums">
-                            {s.count.toLocaleString()}
-                            {stageRate != null && <span className="ml-1.5 font-sans font-medium opacity-75">{stageRate}%</span>}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {biggestLeak && (
-                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-danger-dim px-3 py-2.5 text-[13px] leading-snug text-danger">
-                      <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-                      <span>
-                        Biggest leak: only {Math.round(biggestLeak.rate * 100)}% of {biggestLeak.from.toLowerCase()} leads reach {biggestLeak.to.toLowerCase()}.
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 <div className="card">
@@ -1755,29 +1567,6 @@ export function DashboardView({
                   })()}
                 </div>
 
-                <div className="card">
-                  <CardHeader icon={Medal} title="Rep Performance" sub="calls, qualify rate, contracts — this year" tone="warning" />
-                  <div className="mt-3 space-y-1.5">
-                    {repLeaderboard.length === 0 ? (
-                      <div className="text-[13px] text-text-3">No activity logged yet this year.</div>
-                    ) : (
-                      repLeaderboard.map((r, i) => (
-                        <div key={r.userId} className="flex items-center gap-2.5 rounded-md border border-border-2 bg-surface-3 px-3 py-2">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
-                            {i + 1}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-medium text-text">{r.name}</div>
-                            <div className="text-[11px] text-text-3">
-                              {r.calls} calls · {r.qualifyRate}% qualify rate
-                            </div>
-                          </div>
-                          <div className="font-mono text-[15px] font-semibold tabular-nums text-success">{r.contracts}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -1844,7 +1633,7 @@ export function DashboardView({
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <CardHeader
                       icon={Waypoints}
-                      title="Pipeline Activity"
+                      title="SMS Activity"
                       sub={`SMS sent and replies, newly qualified as bubbles · ${SMS_RANGE_OPTIONS.find((r) => r.key === activityRange)?.label}`}
                     />
                     <div className="flex shrink-0 gap-1 rounded-lg border border-border-2 bg-surface-3 p-0.5">
@@ -1949,81 +1738,45 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Marketing</SectionLabel>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <div className="card">
-                  {(() => {
-                    const dailyMax = Math.max(...dailySmsVolume.map((d) => d.count), 1);
-                    const dailyAvg = dailySmsVolume.length
-                      ? Math.round(dailySmsVolume.reduce((s, d) => s + d.count, 0) / dailySmsVolume.length)
-                      : 0;
-                    const peakIdx = dailySmsVolume.reduce((best, d, i) => (d.count > dailySmsVolume[best].count ? i : best), 0);
-                    return (
-                      <>
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h2 className="text-[16px] font-bold text-text">Texts sent per day</h2>
-                            <p className="mt-1 text-[13px] text-text-3">Last 14 days</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-mono text-xl font-bold text-text">{dailyAvg.toLocaleString()}</div>
-                            <div className="text-[12px] text-text-3">daily average</div>
-                          </div>
+              <div className="card">
+                {(() => {
+                  const monthlyMax = Math.max(...leadsPerMonth.map((m) => m.count), 1);
+                  const monthlyAvg = leadsPerMonth.length
+                    ? Math.round(leadsPerMonth.reduce((s, m) => s + m.count, 0) / leadsPerMonth.length)
+                    : 0;
+                  const peakIdx = leadsPerMonth.reduce((best, m, i) => (m.count > leadsPerMonth[best].count ? i : best), 0);
+                  return (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h2 className="text-[16px] font-bold text-text">Leads per month</h2>
+                          <p className="mt-1 text-[13px] text-text-3">Last 12 months</p>
                         </div>
-                        <div className="mt-4 flex items-stretch gap-1" style={{ height: 150 }}>
-                          {dailySmsVolume.map((d, i) => (
-                            <div key={d.iso} className="flex flex-1 flex-col items-center gap-1">
-                              <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
-                                <div
-                                  className="w-full rounded-t-sm"
-                                  style={{
-                                    height: `${Math.max((d.count / dailyMax) * 100, d.count > 0 ? 4 : 1)}%`,
-                                    background: i === peakIdx ? '#6E7BFF' : '#2C3354',
-                                  }}
-                                  title={`${d.label}: ${d.count} text${d.count === 1 ? '' : 's'}`}
-                                />
-                              </div>
-                              <div className={cn('text-[10px]', i === peakIdx ? 'font-semibold text-primary-text' : 'text-text-3')}>{d.label}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                <div className="card">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h2 className="text-[16px] font-bold text-text">SMS activity</h2>
-                      <p className="mt-1 text-[13px] text-text-3">New leads per week, last 12 weeks</p>
-                    </div>
-                    {(() => {
-                      const total = leadVolumeTrend.reduce((s, w) => s + w.count, 0);
-                      const half = Math.floor(leadVolumeTrend.length / 2) || 1;
-                      const earlier = leadVolumeTrend.slice(0, half).reduce((s, w) => s + w.count, 0);
-                      const recent = leadVolumeTrend.slice(half).reduce((s, w) => s + w.count, 0);
-                      const trendPct = earlier > 0 ? ((recent - earlier) / earlier) * 100 : recent > 0 ? 100 : 0;
-                      const up = trendPct >= 0;
-                      return (
                         <div className="text-right">
-                          <div className="font-mono text-xl font-bold text-text">{total.toLocaleString()}</div>
-                          <span
-                            className={cn(
-                              'mt-0.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-[2px] text-[11px] font-semibold',
-                              up ? 'bg-success-dim text-success' : 'bg-danger-dim text-danger',
-                            )}
-                          >
-                            {up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                            {Math.abs(trendPct).toFixed(1)}%
-                          </span>
+                          <div className="font-mono text-xl font-bold text-text">{monthlyAvg.toLocaleString()}</div>
+                          <div className="text-[12px] text-text-3">monthly average</div>
                         </div>
-                      );
-                    })()}
-                  </div>
-                  <div className="mt-4">
-                    <AreaTrendChart points={leadVolumeTrend} color="#3DD6B5" />
-                  </div>
-                </div>
+                      </div>
+                      <div className="mt-4 flex items-stretch gap-1.5" style={{ height: 150 }}>
+                        {leadsPerMonth.map((m, i) => (
+                          <div key={m.key} className="flex flex-1 flex-col items-center gap-1">
+                            <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
+                              <div
+                                className="w-full rounded-t-sm"
+                                style={{
+                                  height: `${Math.max((m.count / monthlyMax) * 100, m.count > 0 ? 4 : 1)}%`,
+                                  background: i === peakIdx ? '#6E7BFF' : '#2C3354',
+                                }}
+                                title={`${m.label}: ${m.count} lead${m.count === 1 ? '' : 's'}`}
+                              />
+                            </div>
+                            <div className={cn('text-[10px]', i === peakIdx ? 'font-semibold text-primary-text' : 'text-text-3')}>{m.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="card chart-layer mt-3">

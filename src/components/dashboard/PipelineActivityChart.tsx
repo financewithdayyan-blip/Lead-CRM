@@ -19,9 +19,9 @@ interface ActivityTrendPoint {
   qualified: number;
 }
 
-const SENT_COLOR = '#f59e0b';
-const REPLIES_COLOR = '#0891b2';
-const QUALIFIED_COLOR = '#10b981';
+const SENT_COLOR = '#6E7BFF';
+const REPLIES_COLOR = '#5AB8FF';
+const QUALIFIED_COLOR = '#3DD6B5';
 
 function StatHead({ color, label, value }: { color: string; label: string; value: number | string }) {
   return (
@@ -70,12 +70,12 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
         <ComposedChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="gSent" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={SENT_COLOR} stopOpacity={0.12} />
-              <stop offset="100%" stopColor={SENT_COLOR} stopOpacity={0.01} />
+              <stop offset="0%" stopColor={SENT_COLOR} stopOpacity={0.28} />
+              <stop offset="100%" stopColor={SENT_COLOR} stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="gReplies" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={REPLIES_COLOR} stopOpacity={0.12} />
-              <stop offset="100%" stopColor={REPLIES_COLOR} stopOpacity={0.01} />
+              <stop offset="0%" stopColor={REPLIES_COLOR} stopOpacity={0.28} />
+              <stop offset="100%" stopColor={REPLIES_COLOR} stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid stroke={ct.gridStroke} vertical={false} />
@@ -113,23 +113,23 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
             }
           />
           <Area
-            type="linear"
+            type="monotone"
             dataKey="sent"
             name="SMS Sent"
             stroke={SENT_COLOR}
             fill="url(#gSent)"
-            strokeWidth={2}
+            strokeWidth={2.5}
             dot={false}
             activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
             animationDuration={500}
           />
           <Area
-            type="linear"
+            type="monotone"
             dataKey="replies"
             name="Replies"
             stroke={REPLIES_COLOR}
             fill="url(#gReplies)"
-            strokeWidth={2}
+            strokeWidth={2.5}
             dot={false}
             activeDot={{ r: 5, strokeWidth: 2, stroke: ct.tooltipBg }}
             animationDuration={500}
