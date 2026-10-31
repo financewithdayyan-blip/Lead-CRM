@@ -1620,38 +1620,38 @@ export function DashboardView({
                     </div>
                     <div className="mt-4 flex items-center gap-5">
                       <RadialGauge pct={smsCampaignStats.deliveryRate ?? 0} size={100} strokeWidth={10} color="#3DD6B5" label="Delivered" centered />
-                      <div className="flex flex-1 flex-col gap-0.5">
-                        <span className="font-mono text-2xl font-bold text-text">{smsCampaignStats.sent.toLocaleString()}</span>
-                        <span className="text-[13px] text-text-3">texts sent</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex flex-col gap-3 text-[13.5px]">
-                      <div>
-                        <div className="flex justify-between">
-                          <span className="text-text-2">Reply rate</span>
-                          <span className="font-mono font-semibold text-primary-text">
-                            {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(1)}%` : '—'}
-                          </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-3">
+                        <div>
+                          <span className="font-mono text-2xl font-bold text-text">{smsCampaignStats.sent.toLocaleString()}</span>
+                          <span className="ml-2 text-[13px] text-text-3">texts sent</span>
                         </div>
-                        <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
-                          <div
-                            className="h-1.5 rounded-full bg-primary"
-                            style={{ width: `${Math.min(((smsCampaignStats.replyRate ?? 0) / 20) * 100, 100)}%` }}
-                          />
+                        <div className="text-[13.5px]">
+                          <div className="flex justify-between">
+                            <span className="text-text-2">Reply rate</span>
+                            <span className="font-mono font-semibold text-primary-text">
+                              {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
+                            <div
+                              className="h-1.5 rounded-full bg-primary"
+                              style={{ width: `${Math.min(((smsCampaignStats.replyRate ?? 0) / 20) * 100, 100)}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between">
-                          <span className="text-text-2">Failed</span>
-                          <span className="font-mono font-semibold text-danger">
-                            {smsCampaignStats.failedRate !== null ? `${smsCampaignStats.failedRate.toFixed(1)}%` : '—'}
-                          </span>
-                        </div>
-                        <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
-                          <div
-                            className="h-1.5 rounded-full bg-danger"
-                            style={{ width: `${Math.min(((smsCampaignStats.failedRate ?? 0) / 20) * 100, 100)}%` }}
-                          />
+                        <div className="text-[13.5px]">
+                          <div className="flex justify-between">
+                            <span className="text-text-2">Failed</span>
+                            <span className="font-mono font-semibold text-danger">
+                              {smsCampaignStats.failedRate !== null ? `${smsCampaignStats.failedRate.toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
+                            <div
+                              className="h-1.5 rounded-full bg-danger"
+                              style={{ width: `${Math.min(((smsCampaignStats.failedRate ?? 0) / 20) * 100, 100)}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
