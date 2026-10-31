@@ -13,10 +13,13 @@ export function useChartTheme() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   return {
-    axisStroke: dark ? '#8090a6' : '#8693A1',
-    gridStroke: dark ? '#24334a' : '#e2e8f0',
-    tooltipBg: dark ? '#111d2e' : '#ffffff',
-    tooltipBorder: dark ? '#24334a' : '#e2e8f0',
-    textFill: dark ? '#eef2f7' : '#0B1E33',
+    // Dark values match the Tristate Ledger palette (src/index.css's .dark
+    // block) — kept as literal hex here since recharts style props don't
+    // resolve CSS custom properties.
+    axisStroke: dark ? '#7D8597' : '#8693A1',
+    gridStroke: dark ? '#1C2030' : '#e2e8f0',
+    tooltipBg: dark ? '#151925' : '#ffffff',
+    tooltipBorder: dark ? '#262C40' : '#e2e8f0',
+    textFill: dark ? '#F2F4F8' : '#0B1E33',
   };
 }

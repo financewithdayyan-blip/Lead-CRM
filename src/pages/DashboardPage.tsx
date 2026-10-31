@@ -10,11 +10,11 @@ import {
   Bot,
   CalendarCheck,
   CalendarDays,
-  CheckCircle2,
   DollarSign,
   FileSignature,
   Flame,
   Gauge,
+  Handshake,
   Map as MapIcon,
   Medal,
   Megaphone,
@@ -166,18 +166,23 @@ function HeroStatCard({
   icon: Icon,
   label,
   value,
+  valueSuffix,
   sub,
   trendPct,
   series,
   color,
+  formatValue,
 }: {
   icon: LucideIcon;
   label: string;
   value: number;
+  /** e.g. " deals" — rendered smaller/muted right after the number. */
+  valueSuffix?: string;
   sub: string;
   trendPct: number;
   series: number[];
   color: string;
+  formatValue?: (v: number) => string;
 }) {
   const up = trendPct >= 0;
   return (
@@ -190,7 +195,10 @@ function HeroStatCard({
       </div>
       <div className="flex items-end justify-between gap-2.5">
         <div>
-          <div className="font-mono text-[28px] font-bold leading-none tracking-tight text-text">{value.toLocaleString()}</div>
+          <div className="font-mono text-[28px] font-bold leading-none tracking-tight text-text">
+            {formatValue ? formatValue(value) : value.toLocaleString()}
+            {valueSuffix && <span className="ml-1 font-sans text-[15px] font-medium text-text-3">{valueSuffix}</span>}
+          </div>
           <div className="mt-2 flex items-center gap-2">
             <span
               className={cn(
@@ -205,6 +213,98 @@ function HeroStatCard({
           </div>
         </div>
         <Sparkline values={series} color={color} />
+      </div>
+    </div>
+  );
+}
+
+function money(v: number): string {
+  return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+/** Donut chart for a labeled breakdown (Pipeline tag breakdown) — real
+ * per-tag colors (tag.colorText, the admin's own assigned color), not an
+ * invented palette, so it always matches the Tags UI elsewhere in the CRM. */
+function DonutChart({
+  segments,
+  total,
+  centerLabel,
+}: {
+  segments: { label: string; count: number; color: string }[];
+  total: number;
+  centerLabel: string;
+}) {
+  const size = 140;
+  const strokeWidth = 16;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let offsetAccum = 0;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label={`${total.toLocaleString()} ${centerLabel}: ${segments.map((s) => `${s.label} ${s.count}`).join(', ')}`}
+    >
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`} fill="none" strokeWidth={strokeWidth}>
+        {segments.map((s) => {
+          const frac = total > 0 ? s.count / total : 0;
+          const dash = Math.max(frac * circumference, frac > 0 ? 1 : 0);
+          const el = (
+            <circle
+              key={s.label}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={s.color}
+              strokeDasharray={`${dash} ${circumference}`}
+              strokeDashoffset={-offsetAccum}
+            />
+          );
+          offsetAccum += dash;
+          return el;
+        })}
+      </g>
+      <text x={size / 2} y={size / 2 - 4} textAnchor="middle" className="fill-text" style={{ fontSize: 22, fontWeight: 700 }}>
+        {total.toLocaleString()}
+      </text>
+      <text x={size / 2} y={size / 2 + 15} textAnchor="middle" className="fill-text-3" style={{ fontSize: 11 }}>
+        {centerLabel}
+      </text>
+    </svg>
+  );
+}
+
+/** Gradient-filled trend line for a full-width card (SMS activity /
+ * City/Lead volume style cards) — same real-data-only approach as
+ * Sparkline, just sized for a card body instead of a hero tile. */
+function AreaTrendChart({ points, color, height = 150 }: { points: { label: string; count: number }[]; color: string; height?: number }) {
+  const id = useId();
+  const width = 600;
+  const max = Math.max(...points.map((p) => p.count), 1);
+  const stepX = points.length > 1 ? width / (points.length - 1) : width;
+  const coords = points.map((p, i) => ({ x: i * stepX, y: height - (p.count / max) * (height - 24) - 6 }));
+  const linePoints = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const last = coords[coords.length - 1];
+  const labelIdxs = points.length > 1 ? [0, Math.floor((points.length - 1) / 2), points.length - 1] : [0];
+  return (
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={color} stopOpacity="0.32" />
+            <stop offset="1" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={`0,${height} ${linePoints} ${width},${height}`} fill={`url(#${id})`} />
+        <polyline points={linePoints} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {last && <circle cx={last.x} cy={last.y} r="4.5" fill={color} />}
+      </svg>
+      <div className="mt-1 flex justify-between text-[11px] text-text-3">
+        {labelIdxs.map((i) => (
+          <span key={i}>{points[i]?.label}</span>
+        ))}
       </div>
     </div>
   );
@@ -501,16 +601,26 @@ export function DashboardView({
       return { series, value: recent, trendPct };
     }
 
-    const qualifiedStageSet = new Set<LeadStage>(QUALIFIED_PLUS_STAGES);
+    // "Under contract" and "In negotiation" headline numbers are a live
+    // snapshot (matches the Kanban board right now), same framing as
+    // funnel.stages — but the sparkline/trend chip underneath is still the
+    // real weekly rate of leads newly ENTERING that stage, since a plain
+    // snapshot has no meaningful week-by-week shape of its own.
+    const underContractLeads = leads.filter((l) => CONTRACT_STAGES.has(l.stage) && l.stage !== 'closed');
+    const underContractFees = underContractLeads.reduce((sum, l) => sum + (l.assignmentFee ?? 0), 0);
+    const negotiationCount = leads.filter((l) => l.stage === 'negotiation').length;
+
     return {
       newLeads: summarize(weeklyCounts(leads.map((l) => l.createdAt))),
-      qualified: summarize(
-        weeklyCounts(stageChangeHistory.filter((e) => qualifiedStageSet.has(e.to as LeadStage)).map((e) => e.createdAt)),
-      ),
-      contracts: summarize(
-        weeklyCounts(stageChangeHistory.filter((e) => CONTRACT_STAGES.has(e.to as LeadStage)).map((e) => e.createdAt)),
-      ),
-      closed: summarize(weeklyCounts(stageChangeHistory.filter((e) => e.to === 'closed').map((e) => e.createdAt))),
+      underContract: {
+        ...summarize(weeklyCounts(stageChangeHistory.filter((e) => e.to === 'contract').map((e) => e.createdAt))),
+        value: underContractLeads.length,
+        fees: underContractFees,
+      },
+      negotiation: {
+        ...summarize(weeklyCounts(stageChangeHistory.filter((e) => e.to === 'negotiation').map((e) => e.createdAt))),
+        value: negotiationCount,
+      },
     };
   }, [leads, stageChangeHistory, CONTRACT_STAGES]);
 
@@ -542,6 +652,29 @@ export function DashboardView({
       .slice(-12)
       .map(([iso, count]) => ({ label: new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), count }));
   }, [leads]);
+
+  // Daily outbound SMS volume, last 14 days — real counts from
+  // smsDeliveryLog (same source smsCampaignStats reads), buyer
+  // conversations excluded for the same reason noted there.
+  const dailySmsVolume = useMemo(() => {
+    const DAYS = 14;
+    const dayMap = new Map<string, number>();
+    for (const r of smsDeliveryLog) {
+      if (r.direction !== 'Out') continue;
+      const counterparty = r.counterpartyNumber?.replace(/[^0-9]/g, '').slice(-10);
+      if (counterparty && buyerPhones.has(counterparty)) continue;
+      const iso = localIsoDate(new Date(r.occurredAt));
+      dayMap.set(iso, (dayMap.get(iso) ?? 0) + 1);
+    }
+    const out: { iso: string; label: string; count: number }[] = [];
+    const today = new Date();
+    for (let i = DAYS - 1; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const iso = localIsoDate(d);
+      out.push({ iso, label: String(d.getDate()), count: dayMap.get(iso) ?? 0 });
+    }
+    return out;
+  }, [smsDeliveryLog, buyerPhones]);
 
   // ── Marketing: which states/cities/zips are actually converting — scored
   // by real deal outcomes, not raw reply chatter, so spend/outreach can be
@@ -1089,6 +1222,18 @@ export function DashboardView({
     return months;
   }, [leads, stageChangeHistory]);
 
+  // "Revenue this month" hero card — reuses revenueInPipelineTrend's own
+  // real monthly .actual series (realized/Closed revenue only) rather than
+  // a separate computation, so the hero card and the Revenue chart below it
+  // can never disagree.
+  const revenueCard = useMemo(() => {
+    const series = revenueInPipelineTrend.map((m) => m.actual);
+    const value = series.length ? series[series.length - 1] : 0;
+    const prior = series.length > 1 ? series[series.length - 2] : 0;
+    const trendPct = prior > 0 ? ((value - prior) / prior) * 100 : value > 0 ? 100 : 0;
+    return { value, trendPct, series: series.slice(-6) };
+  }, [revenueInPipelineTrend]);
+
   // Delivery rate = delivered / sent, reply rate = replies / delivered —
   // Zoom's own definitions, matched against Zoom's own "SMS Campaign" usage
   // report (Reports > Usage Reports > Phone Numbers > SMS Campaign). Every
@@ -1128,6 +1273,7 @@ export function DashboardView({
     }
     let sent = 0;
     let delivered = 0;
+    let failed = 0;
     let replies = 0;
     smsDeliveryLog.forEach((r) => {
       const counterparty = r.counterpartyNumber?.replace(/[^0-9]/g, '').slice(-10);
@@ -1136,6 +1282,7 @@ export function DashboardView({
       if (r.direction === 'Out') {
         sent++;
         if (r.deliveryStatus === 'delivered') delivered++;
+        else if (r.deliveryStatus === 'failed to deliver') failed++;
       } else {
         replies++;
       }
@@ -1143,8 +1290,10 @@ export function DashboardView({
     return {
       sent,
       delivered,
+      failed,
       replies,
       deliveryRate: sent > 0 ? (delivered / sent) * 100 : null,
+      failedRate: sent > 0 ? (failed / sent) * 100 : null,
       replyRate: delivered > 0 ? (replies / delivered) * 100 : null,
     };
   }, [smsDeliveryLog, buyerPhones, smsRange]);
@@ -1274,6 +1423,15 @@ export function DashboardView({
   }, [activities]);
 
   const maxTag = Math.max(...stats.tagCounts.map((x) => x.count), 1);
+  // Donut-chart segments for the Pipeline tag breakdown — top 7 tags by
+  // real count (already sorted, see stats.tagCounts), the rest folded into
+  // one "Other" slice rather than cramming an unreadable 15-slice donut.
+  const tagDonutSegments = (() => {
+    const top = stats.tagCounts.slice(0, 7).map((t) => ({ label: t.tag.name, count: t.count, color: t.tag.colorText }));
+    const restCount = stats.tagCounts.slice(7).reduce((sum, t) => sum + t.count, 0);
+    return restCount > 0 ? [...top, { label: 'Other', count: restCount, color: '#5B6275' }] : top;
+  })();
+  const taggedLeadsTotal = stats.tagCounts.reduce((sum, t) => sum + t.count, 0);
 
   const [firstName] = (profile?.fullName ?? '').split(' ');
   const monthRangeLabel = (() => {
@@ -1340,39 +1498,41 @@ export function DashboardView({
             <SectionLabel>Overview</SectionLabel>
             <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <HeroStatCard
+                icon={DollarSign}
+                label="Revenue this month"
+                value={revenueCard.value}
+                formatValue={money}
+                trendPct={revenueCard.trendPct}
+                series={revenueCard.series}
+                sub="vs last month, closed"
+                color="#6E7BFF"
+              />
+              <HeroStatCard
                 icon={Users}
                 label="New leads"
                 value={heroMetrics.newLeads.value}
                 trendPct={heroMetrics.newLeads.trendPct}
                 series={heroMetrics.newLeads.series}
                 sub="last 4 weeks"
-                color="#6E7BFF"
-              />
-              <HeroStatCard
-                icon={CheckCircle2}
-                label="Qualified"
-                value={heroMetrics.qualified.value}
-                trendPct={heroMetrics.qualified.trendPct}
-                series={heroMetrics.qualified.series}
-                sub="last 4 weeks"
                 color="#3DD6B5"
               />
               <HeroStatCard
                 icon={FileSignature}
-                label="Contracts"
-                value={heroMetrics.contracts.value}
-                trendPct={heroMetrics.contracts.trendPct}
-                series={heroMetrics.contracts.series}
-                sub="last 4 weeks"
+                label="Under contract"
+                value={heroMetrics.underContract.value}
+                valueSuffix="deals"
+                trendPct={heroMetrics.underContract.trendPct}
+                series={heroMetrics.underContract.series}
+                sub={`${money(heroMetrics.underContract.fees)} in fees`}
                 color="#FFB547"
               />
               <HeroStatCard
-                icon={Trophy}
-                label="Closed"
-                value={heroMetrics.closed.value}
-                trendPct={heroMetrics.closed.trendPct}
-                series={heroMetrics.closed.series}
-                sub="last 4 weeks"
+                icon={Handshake}
+                label="In negotiation"
+                value={heroMetrics.negotiation.value}
+                trendPct={heroMetrics.negotiation.trendPct}
+                series={heroMetrics.negotiation.series}
+                sub="live right now"
                 color="#5AB8FF"
               />
             </div>
@@ -1554,24 +1714,45 @@ export function DashboardView({
                 </div>
 
                 <div className="card">
-                  <CardHeader icon={Timer} title="Deal Velocity" sub="avg. days between milestones, this year" tone="info" />
-                  <div className="mt-3 space-y-2">
-                    {dealVelocity.map((v) => (
-                      <div key={v.toLabel} className="flex items-center justify-between rounded-md border border-border-2 bg-surface-3 px-3 py-2.5">
-                        <div className="text-[12.5px] text-text-2">
-                          {v.fromLabel} → {v.toLabel}
+                  <CardHeader icon={Timer} title="Deal velocity" sub="avg. days between milestones, this year" tone="info" />
+                  {(() => {
+                    const velocityColors = ['#C3C9FF', '#8B96FF', '#5A66E0', '#363F90'];
+                    const totalDays = dealVelocity.reduce((sum, v) => sum + (v.avgDays ?? 0), 0);
+                    return (
+                      <>
+                        <div className="mt-2.5 flex items-baseline gap-1.5">
+                          <span className="font-mono text-[32px] font-bold leading-none tracking-tight text-text">
+                            {totalDays > 0 ? totalDays.toFixed(1) : '—'}
+                          </span>
+                          <span className="text-[14px] text-text-3">days lead to close</span>
                         </div>
-                        <div className="text-right">
-                          <div className="font-mono text-[15px] font-semibold tabular-nums text-text">
-                            {v.avgDays !== null ? `${v.avgDays.toFixed(1)}d` : '—'}
+                        {totalDays > 0 && (
+                          <div className="mt-3 flex h-2.5 gap-1" aria-hidden="true">
+                            {dealVelocity.map((v, i) => (
+                              <div
+                                key={v.toLabel}
+                                className="rounded-full"
+                                style={{ flex: `${Math.max(v.avgDays ?? 0, 0.3)} 1 0`, background: velocityColors[i % velocityColors.length] }}
+                              />
+                            ))}
                           </div>
-                          <div className="text-[10px] text-text-3">
-                            {v.sampleSize} lead{v.sampleSize !== 1 ? 's' : ''}
-                          </div>
+                        )}
+                        <div className="mt-4 flex flex-col gap-2.5 text-[13px]">
+                          {dealVelocity.map((v, i) => (
+                            <div key={v.toLabel} className="flex items-center gap-2.5">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: velocityColors[i % velocityColors.length] }} />
+                              <span className="text-text-2">
+                                {v.fromLabel} → {v.toLabel}
+                              </span>
+                              <span className="ml-auto shrink-0 font-mono font-semibold text-text">
+                                {v.avgDays !== null ? `${v.avgDays.toFixed(1)}d` : '—'}
+                              </span>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="card">
@@ -1626,12 +1807,25 @@ export function DashboardView({
               )}
 
               <div className="card">
-                <CardHeader icon={TagsIcon} title="Tag Breakdown" tone="accent" />
-                <div className="mt-2">
+                <CardHeader icon={TagsIcon} title="Pipeline tag breakdown" tone="accent" />
+                <div className="mt-3">
                   {stats.tagCounts.length === 0 ? (
                     <div className="text-[13px] text-text-3">No tagged leads yet.</div>
+                  ) : showSmsStats ? (
+                    <div className="flex flex-wrap items-center gap-5">
+                      <DonutChart segments={tagDonutSegments} total={taggedLeadsTotal} centerLabel="active leads" />
+                      <div className="flex min-w-[160px] flex-1 flex-col gap-2 text-[13px]">
+                        {tagDonutSegments.map((s) => (
+                          <div key={s.label} className="flex items-center gap-2">
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+                            <span className="truncate text-text-2">{s.label}</span>
+                            <span className="ml-auto shrink-0 font-mono font-semibold text-text">{s.count.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   ) : (
-                    <div className={showSmsStats ? 'grid grid-cols-1 gap-x-6 sm:grid-cols-2' : undefined}>
+                    <div>
                       {stats.tagCounts.map(({ tag, count }) => (
                         <BarRow key={tag.id} label={tag.name} count={count} max={maxTag} color={tag.colorText} />
                       ))}
@@ -1697,33 +1891,44 @@ export function DashboardView({
                       ))}
                     </div>
                   </div>
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[560px] border-collapse text-left">
-                      <thead>
-                        <tr className="border-b border-border-2">
-                          {['Campaign', 'Total sent', 'Total delivered', 'Total replies', 'Delivery rate', 'Reply rate'].map((h) => (
-                            <th key={h} className="whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-[13px] font-medium text-text">Solution Campaign</td>
-                          <td className="px-3 py-2.5 font-mono text-[13px] tabular-nums text-text">{smsCampaignStats.sent.toLocaleString()}</td>
-                          <td className="px-3 py-2.5 font-mono text-[13px] tabular-nums text-text">{smsCampaignStats.delivered.toLocaleString()}</td>
-                          <td className="px-3 py-2.5 font-mono text-[13px] tabular-nums text-text">{smsCampaignStats.replies.toLocaleString()}</td>
-                          <td className="px-3 py-2.5 font-mono text-[13px] font-semibold tabular-nums text-primary">
-                            {smsCampaignStats.deliveryRate !== null ? `${smsCampaignStats.deliveryRate.toFixed(2)}%` : '—'}
-                          </td>
-                          <td className="px-3 py-2.5 font-mono text-[13px] font-semibold tabular-nums text-primary">
-                            {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(2)}%` : '—'}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="mt-4 flex items-center gap-5">
+                    <RadialGauge pct={smsCampaignStats.deliveryRate ?? 0} size={110} strokeWidth={11} color="#3DD6B5" label="Delivered" centered />
+                    <div className="flex flex-1 flex-col gap-0.5">
+                      <span className="font-mono text-2xl font-bold text-text">{smsCampaignStats.sent.toLocaleString()}</span>
+                      <span className="text-[13px] text-text-3">texts sent</span>
+                    </div>
                   </div>
+                  <div className="mt-4 flex flex-col gap-3 text-[13.5px]">
+                    <div>
+                      <div className="flex justify-between">
+                        <span className="text-text-2">Reply rate</span>
+                        <span className="font-mono font-semibold text-primary-text">
+                          {smsCampaignStats.replyRate !== null ? `${smsCampaignStats.replyRate.toFixed(1)}%` : '—'}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
+                        <div
+                          className="h-1.5 rounded-full bg-primary"
+                          style={{ width: `${Math.min(((smsCampaignStats.replyRate ?? 0) / 20) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between">
+                        <span className="text-text-2">Failed</span>
+                        <span className="font-mono font-semibold text-danger">
+                          {smsCampaignStats.failedRate !== null ? `${smsCampaignStats.failedRate.toFixed(1)}%` : '—'}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-surface-3">
+                        <div
+                          className="h-1.5 rounded-full bg-danger"
+                          style={{ width: `${Math.min(((smsCampaignStats.failedRate ?? 0) / 20) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 text-[11.5px] text-text-3">Bars scaled to a 20% ceiling so small rates stay readable.</div>
                 </div>
               )}
 
@@ -1744,37 +1949,81 @@ export function DashboardView({
           {showSmsStats && (
             <div>
               <SectionLabel>Marketing</SectionLabel>
-              <div className="card">
-                <CardHeader icon={Megaphone} title="Lead Volume" sub="new leads per week, last 12 weeks" />
-                {(() => {
-                  const max = Math.max(...leadVolumeTrend.map((w) => w.count), 1);
-                  return (
-                    // `items-stretch` (the default, made explicit here) so
-                    // each week column actually inherits this row's 120px
-                    // height — with `items-end` instead, a column had no
-                    // definite height of its own, so the child below with
-                    // height:{pct}% had nothing real to be a percentage
-                    // of and rendered at 0px regardless of lead count.
-                    <div className="mt-4 flex items-stretch gap-1.5" style={{ height: 120 }}>
-                      {leadVolumeTrend.map((w) => (
-                        <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
-                          {/* A faint full-height track behind the bar so a genuinely
-                              small week (real leads, just few of them) still reads as
-                              "a little" against the axis, not indistinguishable from
-                              zero next to a much bigger historical import spike. */}
-                          <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
-                            <div
-                              className="w-full rounded-t-sm bg-primary"
-                              style={{ height: `${Math.max((w.count / max) * 100, 4)}%` }}
-                              title={`${w.label}: ${w.count} lead${w.count === 1 ? '' : 's'}`}
-                            />
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="card">
+                  {(() => {
+                    const dailyMax = Math.max(...dailySmsVolume.map((d) => d.count), 1);
+                    const dailyAvg = dailySmsVolume.length
+                      ? Math.round(dailySmsVolume.reduce((s, d) => s + d.count, 0) / dailySmsVolume.length)
+                      : 0;
+                    const peakIdx = dailySmsVolume.reduce((best, d, i) => (d.count > dailySmsVolume[best].count ? i : best), 0);
+                    return (
+                      <>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h2 className="text-[16px] font-bold text-text">Texts sent per day</h2>
+                            <p className="mt-1 text-[13px] text-text-3">Last 14 days</p>
                           </div>
-                          <div className="text-[9px] text-text-3">{w.label}</div>
+                          <div className="text-right">
+                            <div className="font-mono text-xl font-bold text-text">{dailyAvg.toLocaleString()}</div>
+                            <div className="text-[12px] text-text-3">daily average</div>
+                          </div>
                         </div>
-                      ))}
+                        <div className="mt-4 flex items-stretch gap-1" style={{ height: 150 }}>
+                          {dailySmsVolume.map((d, i) => (
+                            <div key={d.iso} className="flex flex-1 flex-col items-center gap-1">
+                              <div className="relative flex w-full flex-1 items-end rounded-t-sm bg-surface-3">
+                                <div
+                                  className="w-full rounded-t-sm"
+                                  style={{
+                                    height: `${Math.max((d.count / dailyMax) * 100, d.count > 0 ? 4 : 1)}%`,
+                                    background: i === peakIdx ? '#6E7BFF' : '#2C3354',
+                                  }}
+                                  title={`${d.label}: ${d.count} text${d.count === 1 ? '' : 's'}`}
+                                />
+                              </div>
+                              <div className={cn('text-[10px]', i === peakIdx ? 'font-semibold text-primary-text' : 'text-text-3')}>{d.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                <div className="card">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h2 className="text-[16px] font-bold text-text">SMS activity</h2>
+                      <p className="mt-1 text-[13px] text-text-3">New leads per week, last 12 weeks</p>
                     </div>
-                  );
-                })()}
+                    {(() => {
+                      const total = leadVolumeTrend.reduce((s, w) => s + w.count, 0);
+                      const half = Math.floor(leadVolumeTrend.length / 2) || 1;
+                      const earlier = leadVolumeTrend.slice(0, half).reduce((s, w) => s + w.count, 0);
+                      const recent = leadVolumeTrend.slice(half).reduce((s, w) => s + w.count, 0);
+                      const trendPct = earlier > 0 ? ((recent - earlier) / earlier) * 100 : recent > 0 ? 100 : 0;
+                      const up = trendPct >= 0;
+                      return (
+                        <div className="text-right">
+                          <div className="font-mono text-xl font-bold text-text">{total.toLocaleString()}</div>
+                          <span
+                            className={cn(
+                              'mt-0.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-[2px] text-[11px] font-semibold',
+                              up ? 'bg-success-dim text-success' : 'bg-danger-dim text-danger',
+                            )}
+                          >
+                            {up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                            {Math.abs(trendPct).toFixed(1)}%
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="mt-4">
+                    <AreaTrendChart points={leadVolumeTrend} color="#3DD6B5" />
+                  </div>
+                </div>
               </div>
 
               <div className="card chart-layer mt-3">

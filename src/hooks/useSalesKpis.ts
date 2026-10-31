@@ -205,9 +205,11 @@ export function computeDealVelocity(leads: KpiLead[], activities: KpiActivity[])
 
   const newToQualified = avgGap('new', ['initial_contact', 'followup']);
   const qualifiedToContract = avgGap('followup', ['contract', 'inspection_walkthrough', 'in_title', 'closed']);
+  const contractToClose = avgGap('contract', ['closed']);
 
   return [
     { fromLabel: 'New Lead', toLabel: 'Qualified', avgDays: newToQualified.avgDays, sampleSize: newToQualified.sampleSize },
     { fromLabel: 'Qualified', toLabel: 'Contract', avgDays: qualifiedToContract.avgDays, sampleSize: qualifiedToContract.sampleSize },
+    { fromLabel: 'Contract', toLabel: 'Close', avgDays: contractToClose.avgDays, sampleSize: contractToClose.sampleSize },
   ];
 }

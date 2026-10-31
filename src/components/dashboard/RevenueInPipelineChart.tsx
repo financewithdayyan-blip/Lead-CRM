@@ -8,8 +8,8 @@ export interface RevenuePipelinePoint {
   actual: number;
 }
 
-const EXPECTED_COLOR = '#C9A24B';
-const ACTUAL_COLOR = '#10B981';
+const EXPECTED_COLOR = '#7D8597';
+const ACTUAL_COLOR = '#6E7BFF';
 
 function formatShort(v: number): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`;
