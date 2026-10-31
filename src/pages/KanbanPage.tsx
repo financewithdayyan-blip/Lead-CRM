@@ -328,7 +328,7 @@ function KanbanCardVisual({
             ? 'border-info/30 bg-info-dim'
             : themed
               ? `border-transparent bg-gradient-to-br ${theme!.gradient}`
-              : 'border-border-2 bg-surface'
+              : 'border-border-2 bg-surface-3'
       } ${dimmed && !selected ? 'opacity-70' : ''} ${lifted ? 'rotate-1 shadow-2xl' : 'shadow-card hover:shadow-card-hover'}`}
       style={lifted ? { willChange: 'transform' } : undefined}
       onDoubleClick={onOpen}
@@ -639,7 +639,7 @@ const KanbanColumn = memo(function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-64 shrink-0 flex-col rounded-2xl border ${dimmed ? 'bg-surface-3/50' : 'bg-surface-2'} ${isOver ? 'border-primary' : 'border-border'}`}
+      className={`flex w-72 shrink-0 flex-col rounded-lg border ${dimmed ? 'bg-surface-3/50' : 'bg-surface-2'} ${isOver ? 'border-primary' : 'border-border'}`}
     >
       {/* Stage color lives on the dot below, not a thick top border — a
           heavy colored border following a large corner radius rendered as
@@ -1012,7 +1012,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
           other, most of it empty space either side of a narrow search box. */}
       <div className="mb-1 flex flex-nowrap items-center justify-between gap-3">
         <div className="shrink-0">
-          <h1 className="text-2xl font-semibold text-text">Pipeline</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-text">Pipeline</h1>
           {leadsLoading ? (
             <p className="flex items-center gap-1.5 text-sm text-text-3">
               <Loader2 size={13} className="animate-spin" /> Loading leads…
@@ -1135,6 +1135,34 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
         </div>
       )}
 
+      {/* Pipeline mix — a stacked-bar snapshot of where the (filtered) board
+          actually stands right now, from the same byStage counts the
+          columns below already render. Stages with nothing in them drop
+          out rather than leaving a zero-width sliver. */}
+      {!leadsLoading && !leadsErrored && filtered.length > 0 && (
+        <div className="card mb-3 flex flex-col gap-3 !p-4">
+          <div aria-hidden="true" className="flex h-2.5 gap-1">
+            {visibleStages.map((stage) => {
+              const count = byStage[stage].length;
+              if (count === 0) return null;
+              return <div key={stage} className="rounded-full" style={{ flex: `${count} 1 0`, background: STAGE_CONFIG[stage].color }} />;
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-text-2">
+            {visibleStages.map((stage) => {
+              const count = byStage[stage].length;
+              if (count === 0) return null;
+              return (
+                <span key={stage} className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STAGE_CONFIG[stage].color }} />
+                  {STAGE_CONFIG[stage].label} <b className="font-mono font-semibold text-text">{count}</b>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex items-start gap-2.5 overflow-x-auto pb-2">
           {visibleStages.map((stage) => (
@@ -1196,7 +1224,7 @@ export function KanbanView({ targetUserId, viewOnly = false }: { targetUserId?: 
       {/* ── Share modal ─────────────────────────────────────────────────────── */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded-md border border-border bg-surface p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold text-text">
                 Transfer {selCount} lead{selCount !== 1 ? 's' : ''}
