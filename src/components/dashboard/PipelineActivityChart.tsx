@@ -38,13 +38,12 @@ function StatHead({ color, label, value }: { color: string; label: string; value
  * — with period totals up top standing in for a legend (a dot + label +
  * number per series reads as both at once).
  *
- * Newly Qualified rides directly on the chart as bubbles on the Replies
+ * Newly Qualified rides directly on the chart as bubbles on the SMS Sent
  * line (bigger bubble = more leads qualified that day, no bubble = zero)
  * rather than a third line or a separate strip below — its size is the
- * whole encoding, so it never needs its own y-scale the way a line would,
- * and sitting on the Replies point tells the real story: no reply, no
- * qualifying happens. All three series share one ComposedChart/data array,
- * so a bubble's x-position can't drift from its real date. */
+ * whole encoding, so it never needs its own y-scale the way a line would.
+ * All three series share one ComposedChart/data array, so a bubble's
+ * x-position can't drift from its real date. */
 export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) {
   const ct = useChartTheme();
   const maxQualified = Math.max(1, ...data.map((d) => d.qualified));
@@ -105,7 +104,7 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
               color: ct.textFill,
             }}
             itemStyle={{ padding: '1px 0' }}
-            // The bubble's own y-value is borrowed from "replies" so it sits
+            // The bubble's own y-value is borrowed from "sent" so it sits
             // on that line — its tooltip line has to read the real
             // qualified count back out of the point's own payload instead.
             formatter={(value: number, name: string, entry: any) =>
@@ -135,7 +134,7 @@ export function PipelineActivityChart({ data }: { data: ActivityTrendPoint[] }) 
             animationDuration={500}
           />
           <Scatter
-            data={data.map((d) => ({ label: d.label, y: d.replies, qualified: d.qualified }))}
+            data={data.map((d) => ({ label: d.label, y: d.sent, qualified: d.qualified }))}
             dataKey="y"
             name="Newly Qualified"
             fill={QUALIFIED_COLOR}
