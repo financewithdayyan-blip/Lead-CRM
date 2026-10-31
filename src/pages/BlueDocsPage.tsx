@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Check, Copy, FileSignature, Inbox, ScrollText } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertTriangle, Check, CheckCircle2, Clock, Copy, Inbox, ScrollText, Timer, type LucideIcon } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
+import { SectionLabel } from '@/components/ui/CardHeader';
 import { ContractFieldMapper } from '@/components/bluedocs/ContractFieldMapper';
 import { SendContractModal } from '@/components/bluedocs/SendContractModal';
 import { FillCashDealContractModal, isCashDealTemplate } from '@/components/bluedocs/FillCashDealContractModal';
@@ -15,8 +16,8 @@ import {
   PURCHASE_CONTRACT_TYPES,
   type DocTemplate,
 } from '@/hooks/useDocTemplates';
-import type { DeliveryResult } from '@/hooks/useContractInstances';
-import { AlertTriangle } from 'lucide-react';
+import { useContractInstances, type DeliveryResult } from '@/hooks/useContractInstances';
+import { formatDuration } from '@/lib/utils';
 
 function SigningLinkRow({ label, url }: { label: string; url: string }) {
   const [copied, setCopied] = useState(false);
@@ -209,8 +210,16 @@ function ContractTemplatesTab() {
   const isPinnedPurchaseContract = (t: { contractType: string | null; name: string }) =>
     t.contractType === null && PINNED_PURCHASE_CONTRACT_NAMES.includes(t.name);
 
+  const readyCount = templates.filter((t) => t.mapped).length;
+
   return (
     <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Templates</SectionLabel>
+        {templates.length > 0 && (
+          <span className="text-[12.5px] text-text-3">{readyCount} ready to send</span>
+        )}
+      </div>
       <TemplateCategoryCard
         label="Purchase Contracts"
         docType="contract"
@@ -245,22 +254,62 @@ function ContractTemplatesTab() {
   );
 }
 
+function DocStatCard({ label, value, sub, color, icon: Icon }: { label: string; value: string | number; sub: string; color: string; icon: LucideIcon }) {
+  return (
+    <div className="card !p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">{label}</div>
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}17`, color }}>
+          <Icon size={14} />
+        </span>
+      </div>
+      <div className="mt-2 font-mono text-2xl font-semibold tabular-nums" style={{ color }}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-[12px] text-text-3">{sub}</div>
+    </div>
+  );
+}
+
 export function BlueDocsPage() {
   const [tab, setTab] = useState<'templates' | 'envelopes'>('templates');
+  const { data: instances = [] } = useContractInstances();
+
+  const kpis = useMemo(() => {
+    const now = new Date();
+    const waiting = instances.filter((i) => i.status === 'sent' || i.status === 'partial').length;
+    const signedThisMonth = instances.filter(
+      (i) => i.status === 'signed' && i.completedAt && new Date(i.completedAt).getFullYear() === now.getFullYear() && new Date(i.completedAt).getMonth() === now.getMonth(),
+    ).length;
+    const signTimes = instances
+      .filter((i) => i.status === 'signed' && i.completedAt)
+      .map((i) => (new Date(i.completedAt!).getTime() - new Date(i.createdAt).getTime()) / 1000);
+    const avgSignSeconds = signTimes.length ? signTimes.reduce((a, b) => a + b, 0) / signTimes.length : null;
+    return { waiting, signedThisMonth, avgSignSeconds, monthName: now.toLocaleDateString('en-US', { month: 'long' }) };
+  }, [instances]);
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <FileSignature size={20} />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold text-text">Blue Docs</h1>
-          <p className="text-sm text-text-3">Contract templates and e-signing</p>
-        </div>
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold tracking-tight text-text">Blue Docs</h1>
+        <p className="text-sm text-text-3">Contract templates and e-signing</p>
       </div>
 
-      <div className="mb-5 flex gap-1 border-b border-border">
+      {instances.length > 0 && (
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <DocStatCard label="Waiting for signature" value={kpis.waiting} sub="sent or partially signed" color="#f59e0b" icon={Clock} />
+          <DocStatCard label={`Signed in ${kpis.monthName}`} value={kpis.signedThisMonth} sub="fully executed this month" color="#10b981" icon={CheckCircle2} />
+          <DocStatCard
+            label="Typical time to sign"
+            value={kpis.avgSignSeconds != null ? formatDuration(kpis.avgSignSeconds) : '—'}
+            sub="send to fully signed"
+            color="#4f46e5"
+            icon={Timer}
+          />
+        </div>
+      )}
+
+      <div className="mb-5 inline-flex items-center gap-1 rounded-md border border-border-2 bg-surface-2 p-1">
         {(
           [
             ['templates', 'Contracts', ScrollText],
@@ -269,8 +318,8 @@ export function BlueDocsPage() {
         ).map(([key, label, Icon]) => (
           <button
             key={key}
-            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
-              tab === key ? 'border-primary text-primary' : 'border-transparent text-text-3 hover:text-text'
+            className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              tab === key ? 'bg-primary text-primary-text' : 'text-text-2 hover:text-text'
             }`}
             onClick={() => setTab(key)}
           >

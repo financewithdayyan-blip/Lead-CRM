@@ -75,13 +75,13 @@ export function EnvelopesTab() {
             <button
               key={t.key}
               className={`shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                statusFilter === t.key ? 'bg-primary text-white' : 'bg-surface-3 text-text-3 hover:text-text'
+                statusFilter === t.key ? 'bg-primary text-primary-text' : 'bg-surface-3 text-text-3 hover:text-text'
               }`}
               onClick={() => setStatusFilter(t.key)}
             >
               {t.label}
               {counts[t.key] ? (
-                <span className={`ml-1.5 ${statusFilter === t.key ? 'text-white/70' : 'text-text-3'}`}>{counts[t.key]}</span>
+                <span className={`ml-1.5 ${statusFilter === t.key ? 'text-primary-text/70' : 'text-text-3'}`}>{counts[t.key]}</span>
               ) : null}
             </button>
           ))}
