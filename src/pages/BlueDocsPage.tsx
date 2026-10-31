@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, Check, CheckCircle2, Clock, Copy, Inbox, ScrollText, Timer, type LucideIcon } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Timer, type LucideIcon } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { SectionLabel } from '@/components/ui/CardHeader';
@@ -239,14 +239,31 @@ function ContractTemplatesTab() {
   const colorForPurchase = (t: DocTemplate) =>
     isPinnedPurchaseContract(t) ? PINNED_TILE_COLOR : (t.contractType && CONTRACT_TYPE_COLOR[t.contractType]) || DEFAULT_TILE_COLOR;
 
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  function scrollByTiles(dir: -1 | 1) {
+    scrollerRef.current?.scrollBy({ left: dir * 450, behavior: 'smooth' });
+  }
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <SectionLabel>Templates</SectionLabel>
         {templates.length > 0 && <span className="text-[12.5px] text-text-3">{readyCount} ready to send</span>}
       </div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3.5">
-        <TemplateCategoryCard
+      <div className="relative">
+        <button
+          className="absolute -left-3.5 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface text-text-2 shadow-popover hover:text-text"
+          onClick={() => scrollByTiles(-1)}
+          aria-label="Scroll templates left"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <div
+          ref={scrollerRef}
+          className="flex snap-x snap-mandatory gap-3.5 overflow-x-auto scroll-smooth px-1 py-1 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          <TemplateCategoryCard
           label="Purchase Contracts"
           docType="contract"
           typeOptions={PURCHASE_CONTRACT_TYPES}
@@ -279,6 +296,14 @@ function ContractTemplatesTab() {
           onSend={flow.setSendTarget}
           onDeleteTarget={flow.setDeleteTarget}
         />
+        </div>
+        <button
+          className="absolute -right-3.5 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface text-text-2 shadow-popover hover:text-text"
+          onClick={() => scrollByTiles(1)}
+          aria-label="Scroll templates right"
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
       <DocFlowModals flow={flow} />
     </div>
@@ -300,7 +325,6 @@ function DocStatCard({ label, value, color, icon: Icon }: { label: string; value
 }
 
 export function BlueDocsPage() {
-  const [tab, setTab] = useState<'templates' | 'envelopes'>('templates');
   const { data: instances = [] } = useContractInstances();
 
   const kpis = useMemo(() => {
@@ -336,27 +360,11 @@ export function BlueDocsPage() {
         </div>
       )}
 
-      <div className="mb-5 inline-flex items-center gap-1 rounded-md border border-border-2 bg-surface-2 p-1">
-        {(
-          [
-            ['templates', 'Contracts', ScrollText],
-            ['envelopes', 'Envelopes', Inbox],
-          ] as const
-        ).map(([key, label, Icon]) => (
-          <button
-            key={key}
-            className={`flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-[13px] font-medium transition-colors ${
-              tab === key ? 'bg-primary text-primary-text' : 'text-text-2 hover:text-text'
-            }`}
-            onClick={() => setTab(key)}
-          >
-            <Icon size={14} />
-            {label}
-          </button>
-        ))}
-      </div>
+      <ContractTemplatesTab />
 
-      {tab === 'templates' ? <ContractTemplatesTab /> : <EnvelopesTab />}
+      <div className="mt-6">
+        <EnvelopesTab />
+      </div>
     </div>
   );
 }

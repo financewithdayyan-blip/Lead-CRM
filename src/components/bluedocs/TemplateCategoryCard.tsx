@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Download, FilePlus2, FileText, Loader2, Map, Pencil, Plus, Send, Trash2, Upload } from 'lucide-react';
 import {
   useUploadDocTemplate,
-  useDeleteDocTemplate,
   useSignedTemplateUrl,
   type ContractType,
   type DocTemplate,
@@ -94,7 +93,7 @@ function TemplateTile({
 
   return (
     <div
-      className="flex cursor-pointer flex-col gap-3 rounded-lg border border-border-2 bg-surface-3 p-4 transition-colors hover:border-border hover:bg-surface-2"
+      className="flex w-[210px] shrink-0 cursor-pointer snap-start flex-col gap-3 rounded-lg border border-border-2 bg-surface-3 p-4 transition-colors hover:border-border hover:bg-surface-2"
       onClick={() => (t.mapped ? onSend(t) : onOpenMapper(t))}
     >
       <div className="flex items-start justify-between gap-2">
@@ -143,7 +142,7 @@ function TemplateTile({
 function AddTile({ label, sub, uploading, onPick }: { label: string; sub: string; uploading: boolean; onPick: () => void }) {
   return (
     <button
-      className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-2 p-4 text-center transition-colors hover:border-border hover:bg-surface-3"
+      className="flex w-[210px] shrink-0 snap-start flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-2 p-4 text-center transition-colors hover:border-border hover:bg-surface-3"
       disabled={uploading}
       onClick={onPick}
     >
@@ -233,7 +232,7 @@ export function TemplateCategoryCard({
   return (
     <>
       {items.length === 0 && !alwaysOpen && (
-        <div className="col-span-full flex items-center gap-2.5 rounded-md border border-dashed border-border-2 px-3 py-3 text-text-3">
+        <div className="flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md border border-dashed border-border-2 px-3 py-3 text-text-3">
           <FilePlus2 size={16} className="shrink-0" />
           <p className="text-[12px]">No {label.toLowerCase()} template uploaded yet.</p>
         </div>
