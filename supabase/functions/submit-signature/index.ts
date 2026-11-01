@@ -168,17 +168,19 @@ async function sendEmail(
 // solely to surface human Purchase price / EMD / Title company / Closing
 // date values in these emails. No other template currently has an
 // equivalent concept, so every other contract type's email simply omits
-// whichever of these rows it can't resolve. If this template is ever
-// re-mapped in the field editor, these ids need updating to match.
+// whichever of these rows it can't resolve. Re-matched 2026-10-29 against
+// the current live template (the IDs from the 2026-10-06 mapping no longer
+// existed on it at all) — if this template is ever re-mapped again, these
+// ids need updating to match, same as the frontend copy.
 const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
 const CASH_DEAL_FIELD_IDS = {
-  purchasePrice: 'b95b1ea0-a8f0-4fda-a0db-91b232299515',
-  emdAmount: 'c1654e71-3c41-4216-8c91-8130873deec7',
-  titleCompany: 'e9566337-b341-4d88-a02c-e4bcd0ea16c0',
-  closingDate: 'ebfb718b-a8d6-4017-b426-732dac8fec12',
+  purchasePrice: '05375386-15be-4fbc-a00b-1972c4b4622b',
+  emdAmount: 'f21a2dcc-64b4-4313-b1a0-4b9db9210a6f',
+  titleCompany: '1d3d3667-ccc2-44d7-b864-9b236c0033dd',
+  closingDate: '1551b015-6ab9-4cb8-9a5f-ba86698c66c9',
   // Only set when Marketing & Compensation was marked "Seller's Listing
   // Agent" on the fill form — absent (and this row skipped) otherwise.
-  listingAgentName: 'cdfc0260-fb97-4cb8-9d51-d190fdf88a28',
+  listingAgentName: 'b2e7813f-4940-4e01-a218-09ecd66f0170',
 } as const;
 
 const AGENT_NAME = 'Dayyan';

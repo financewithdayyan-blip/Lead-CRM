@@ -15,31 +15,37 @@ function stripCurrency(formatted: string): string {
 }
 
 // The Cash Deal PSA's own field IDs, captured off its live `doc_templates.fields`
-// mapping — see supabase/functions/create-contract-instance for how these land
-// on the final PDF. Re-mapped 2026-10-06 for the "Millionaire PSA" template
-// (Seller/Buyer Full Name both appear twice — the intro sentence on page 1 and
-// the printed-name line in the signature block on page 6 — so one input backs
-// both). If this template is ever re-mapped in the field editor, these IDs
-// need updating to match.
+// mapping — see supabase/functions/create-contract-instance and submit-signature
+// for other copies of these same IDs (certificate/notification text), which
+// need updating in lockstep with this one. Re-mapped again 2026-10-29 for a
+// refreshed "Millionaire PSA Template Black" upload — every ID below was
+// re-derived from that live template (matched against the actual PDF's text
+// positions, not guessed) after the 2026-10-06 mapping's IDs were found to no
+// longer exist on the current template at all. Unlike the 2026-10-06 mapping,
+// Seller/Buyer Full Name each appear only ONCE in this admin-filled form (the
+// intro sentence on page 1) — the final page's "Printed Name" lines are each
+// party's own full_name field, filled through their own signing flow instead.
+// If this template is ever re-mapped again, every ID below needs updating to
+// match (and so do the two edge-function copies).
 export const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
 const FIELD_MAP = {
-  sellerName: ['131dbd71-4898-4b86-ae49-c9bc51d6fe49', '8986af33-e41c-4188-b979-31f75ae13900'],
-  buyerName: ['a1b3d33f-756f-4754-bd51-cad21d313ef7', '4c27c427-6024-40df-8204-87cf87ebe32f'],
-  address: ['07774d27-ebae-4976-bdd2-f8ee70f9ba35'],
-  purchasePrice: ['b95b1ea0-a8f0-4fda-a0db-91b232299515'],
-  emdAmount: ['c1654e71-3c41-4216-8c91-8130873deec7'],
-  titleCompany: ['e9566337-b341-4d88-a02c-e4bcd0ea16c0'],
+  sellerName: ['ce029e48-42c3-4192-8d7d-32d7eee977ee'],
+  buyerName: ['70a4e60f-f804-4590-9669-83545e8d758e'],
+  address: ['4e4a4416-c305-4bb9-85e4-d3823b2ef900'],
+  purchasePrice: ['05375386-15be-4fbc-a00b-1972c4b4622b'],
+  emdAmount: ['f21a2dcc-64b4-4313-b1a0-4b9db9210a6f'],
+  titleCompany: ['1d3d3667-ccc2-44d7-b864-9b236c0033dd'],
   // "Option Period" on this template (was "Inspection Period" on the old one)
   // — same concept, Buyer's business days to inspect before Earnest Money
   // goes hard.
-  inspectionPeriod: ['ddff239d-497e-4f6e-be3b-8d3cc879cff3'],
-  closingDate: ['ebfb718b-a8d6-4017-b426-732dac8fec12'],
-  governingState: ['30716627-1ebe-4a1b-9f1e-7875bf6b1226'],
-  // Section 13 of the PSA (the "Clause" paragraph field) — left blank by
+  inspectionPeriod: ['423da460-172f-43ca-97d0-ed5802b8e92e'],
+  closingDate: ['1551b015-6ab9-4cb8-9a5f-ba86698c66c9'],
+  governingState: ['af469cd4-f301-48ea-86ca-f411f2b05fc4'],
+  // Section 14 of the PSA (the "Clause" paragraph field) — left blank by
   // default, filled in with an actual clause when there is one, or typed as
   // "N/A" by hand when there isn't (never auto-filled — that's a deliberate
   // call, not an oversight).
-  specialProvisions: ['9080db6f-8758-4b5b-9ed3-7edf56a2b38e'],
+  specialProvisions: ['0caa88c8-bc8f-40c9-b701-6a07f75f4c25'],
 } as const;
 // The one field id needed outside this form: ContractInstanceTableRow's address
 // fallback matches by field ID rather than label, since a contract created
@@ -59,33 +65,30 @@ const CURRENCY_KEYS: FieldKey[] = ['purchasePrice', 'emdAmount'];
 // other box in the group is simply left out of fieldValues, which the
 // signing/stamping pipeline renders as unchecked.
 const TENANT_OCCUPANCY_OPTIONS = [
-  { key: 'vacant', label: 'Vacant at Closing', fieldId: 'e0a41df0-15e9-49ba-8e69-30e33884c5c5' },
-  { key: 'buyerAssumesLease', label: 'Buyer Assumes Lease', fieldId: 'bd262f10-1c8b-4735-be3b-27b6f6cb5052' },
-  { key: 'postClosing', label: 'Post-Closing Occupancy', fieldId: '3e3d34c4-b0ef-462e-b947-a185165c5d38' },
+  { key: 'vacant', label: 'Vacant at Closing', fieldId: '6700cd20-2fb7-42dd-8197-81595c413b1b' },
+  { key: 'buyerAssumesLease', label: 'Buyer Assumes Lease', fieldId: 'd47250a8-f5fc-4c98-b99b-4bb5dfa985d3' },
+  { key: 'postClosing', label: 'Post-Closing Occupancy', fieldId: '60252fbe-9bdf-474b-92c7-9fb7f08c5dde' },
 ] as const;
 type TenantOccupancyKey = (typeof TENANT_OCCUPANCY_OPTIONS)[number]['key'];
 
 const MARKETING_OPTIONS = [
-  { key: 'notApplicable', label: 'Not Applicable', fieldId: 'e51d5bd0-bd69-4c79-80bf-a518eb2f8a50' },
-  { key: 'listingAgent', label: "Seller's Listing Agent", fieldId: '23eef1ee-11b4-4a07-9cfb-66036593407d' },
+  { key: 'notApplicable', label: 'Not Applicable', fieldId: '7fdeff3d-7169-4c95-9d14-3737e12d6ae3' },
+  { key: 'listingAgent', label: "Seller's Listing Agent", fieldId: '3606b82d-fb08-4525-a661-3788e9e7bc0f' },
 ] as const;
 type MarketingKey = (typeof MARKETING_OPTIONS)[number]['key'];
 
 // Only shown/sent when "Post-Closing Occupancy" is selected above — the two
 // blanks on that line ("...remain up to ___ days under a written leaseback;
-// $___ withheld from proceeds..."). The days field already exists on the
-// template. The withheld-amount field does not yet — it still needs to be
-// placed in the mapper (page 4, right after the leaseback-days box) before
-// this can actually reach the document; the input below stays disabled with
-// an explanatory note until LEASEBACK_WITHHELD_FIELD_ID is filled in.
-const LEASEBACK_DAYS_FIELD_ID = '64fe7084-fdf5-4f77-9229-6ec3a460e3d9';
-const LEASEBACK_WITHHELD_FIELD_ID: string | null = null;
+// $___ withheld from proceeds..."). Both now exist on the template (see the
+// 2026-10-29 re-map note above).
+const LEASEBACK_DAYS_FIELD_ID = 'b01c98d7-7501-4488-b1da-e366b3b496b5';
+const LEASEBACK_WITHHELD_FIELD_ID: string | null = 'a5d6b87d-84ba-48c5-a461-00b5a1eeec7c';
 
 // Only shown/sent when "Seller's Listing Agent" is selected above — the
 // commission dollar amount on the template's "pay $___ ... to Seller's
 // listing agent or broker, ___" line.
-const LISTING_COMMISSION_AMOUNT_FIELD_ID: string | null = 'f95218bb-7cb6-4ac9-8d6c-daaaa7e10be4';
-const LISTING_AGENT_NAME_FIELD_ID: string | null = 'cdfc0260-fb97-4cb8-9d51-d190fdf88a28';
+const LISTING_COMMISSION_AMOUNT_FIELD_ID: string | null = '8d1a4945-b8fa-43f4-a087-c04f5c9ae634';
+const LISTING_AGENT_NAME_FIELD_ID: string | null = 'b2e7813f-4940-4e01-a218-09ecd66f0170';
 
 // A co-owner's signature — needs its own signature field on the template
 // tagged with this role (see the Co-Seller Signature field added in the

@@ -159,10 +159,11 @@ async function sendEmail(to: string, subject: string, html: string) {
 // (see FillCashDealContractModal's own FIELD_MAP, which this mirrors) — used
 // solely to surface a human "Purchase price" row in the signature-request
 // email. No other template currently has an equivalent concept, so every
-// other contract type's email simply omits that row. If this template is
-// ever re-mapped in the field editor, this id needs updating to match.
+// other contract type's email simply omits that row. Re-matched 2026-10-29
+// against the current live template — if this template is ever re-mapped
+// again, this id needs updating to match, same as the other two copies.
 const CASH_DEAL_TEMPLATE_ID = 'b7b8fc5c-dfc1-466d-b12f-ada853c9180c';
-const CASH_DEAL_PURCHASE_PRICE_FIELD_ID = 'b95b1ea0-a8f0-4fda-a0db-91b232299515';
+const CASH_DEAL_PURCHASE_PRICE_FIELD_ID = '05375386-15be-4fbc-a00b-1972c4b4622b';
 
 const AGENT_NAME = 'Dayyan';
 function formatPhoneDisplay(raw: string): string {
