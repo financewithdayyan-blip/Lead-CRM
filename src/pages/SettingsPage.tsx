@@ -1,36 +1,19 @@
-import { useRef, useState } from 'react';
-import { Bell, Bot, CalendarRange, CreditCard, Settings as SettingsIcon, SlidersHorizontal, Sparkles, Tag, Target, User } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, Bot, CreditCard, Sparkles, Tag, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTags, useCreateTag, useDeleteTag, nextTagColor } from '@/hooks/useTags';
 import { useUpdateProfile } from '@/hooks/useProfile';
 import { useDeviceSubscriptionStatus, useSubscribeToPush, useUnsubscribeFromPush } from '@/hooks/usePushNotifications';
 import { useBusinessCard } from '@/hooks/useBusinessCard';
 import { TagPill } from '@/components/ui/TagPill';
+import { CardHeader, SectionLabel } from '@/components/ui/CardHeader';
 import { AiFrameworkEditor } from '@/components/sms/AiFrameworkEditor';
 import { SmsTemplateEditor } from '@/components/sms/SmsTemplateEditor';
 import { AiReviewSettingsEditor } from '@/components/sms/AiReviewSettingsEditor';
 import { SmsNumberLabelsEditor } from '@/components/sms/SmsNumberLabelsEditor';
 import { SmsOrphanRecoveryCard } from '@/components/sms/SmsOrphanRecoveryCard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-
-/** Small icon-badge + title header, reused above every card on this page so
- * a long settings list reads as a set of distinct, scannable sections
- * instead of identical gray boxes stacked on top of each other. */
-function CardHeader({ icon: Icon, title }: { icon: typeof User; title: string }) {
-  return (
-    <div className="mb-1 flex items-center gap-2">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <Icon size={14} />
-      </span>
-      <div className="text-sm font-semibold text-text">{title}</div>
-    </div>
-  );
-}
-
-/** Small uppercase eyebrow above a group of related cards. */
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">{children}</div>;
-}
+import { cn } from '@/lib/utils';
 
 const PRESETS = [
   'Foreclosure',
@@ -76,7 +59,6 @@ export function SettingsPage() {
   const [monthlyGoalSaved, setMonthlyGoalSaved] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [tagDeleteTarget, setTagDeleteTarget] = useState<string | null>(null);
-  const [tab, setTab] = useState<'general' | 'automation'>('general');
 
   async function handleCardUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -148,51 +130,59 @@ export function SettingsPage() {
     createTag.mutate({ name, colorBg: c.bg, colorText: c.text });
   }
 
+  const sections = useMemo(() => {
+    const base = [
+      { id: 'profile', label: 'Profile', icon: User },
+      { id: 'tags', label: 'Tags', icon: Tag },
+    ];
+    if (isAdmin) base.push({ id: 'automation', label: 'AI & Automation', icon: Bot });
+    return base;
+  }, [isAdmin]);
+  const [activeSection, setActiveSection] = useState(sections[0].id);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: '-10% 0px -70% 0px', threshold: 0 },
+    );
+    for (const s of sections) {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [sections]);
+
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <SettingsIcon size={20} />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold text-text">Settings</h1>
-          <p className="text-sm text-text-3">Manage your profile, goals, and tags</p>
-        </div>
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold tracking-tight text-text">Settings</h1>
+        <p className="text-sm text-text-3">Your profile, tags, and how the AI texts for you</p>
       </div>
 
-      {isAdmin && (
-        <div className="mb-5 flex gap-1 border-b border-border">
-          {(
-            [
-              ['general', 'General', SlidersHorizontal],
-              ['automation', 'AI & Automation', Bot],
-            ] as const
-          ).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-[13px] font-medium transition-colors ${
-                tab === key ? 'border-primary text-primary' : 'border-transparent text-text-3 hover:text-text'
-              }`}
-              onClick={() => setTab(key)}
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+        <nav aria-label="Settings sections" className="card sticky top-5 flex w-full shrink-0 flex-col gap-0.5 !p-2 lg:w-[220px]">
+          {sections.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className={cn(
+                'flex items-center gap-2.5 rounded-md px-3 py-2.5 text-[13.5px] font-medium transition-colors',
+                activeSection === s.id ? 'bg-surface-2 text-text' : 'text-text-3 hover:bg-surface-2 hover:text-text',
+              )}
             >
-              <Icon size={14} />
-              {label}
-            </button>
+              <s.icon size={15} className="shrink-0" />
+              {s.label}
+            </a>
           ))}
-        </div>
-      )}
+        </nav>
 
-      {isAdmin && tab === 'automation' ? (
-        <div className="space-y-4">
-          <AiFrameworkEditor />
-          <AiReviewSettingsEditor />
-          <SmsNumberLabelsEditor />
-          <SmsTemplateEditor />
-          <SmsOrphanRecoveryCard />
-        </div>
-      ) : (
-        <div className="space-y-5">
-          <div>
+        <div className="min-w-0 flex-1 space-y-5">
+          <div id="profile">
             <SectionLabel>Profile</SectionLabel>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="card">
@@ -282,7 +272,7 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div>
+          <div id="tags">
             <SectionLabel>Tags</SectionLabel>
             <div className="space-y-4">
               <div className="card">
@@ -336,8 +326,20 @@ export function SettingsPage() {
             </div>
           </div>
 
+          {isAdmin && (
+            <div id="automation">
+              <SectionLabel>AI &amp; Automation</SectionLabel>
+              <div className="space-y-4">
+                <AiFrameworkEditor />
+                <AiReviewSettingsEditor />
+                <SmsNumberLabelsEditor />
+                <SmsTemplateEditor />
+                <SmsOrphanRecoveryCard />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <ConfirmDialog
         open={!!tagDeleteTarget}
