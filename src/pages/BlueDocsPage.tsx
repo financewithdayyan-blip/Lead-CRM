@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Timer, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { SectionLabel } from '@/components/ui/CardHeader';
@@ -18,7 +18,6 @@ import {
   type DocTemplate,
 } from '@/hooks/useDocTemplates';
 import { useContractInstances, type DeliveryResult } from '@/hooks/useContractInstances';
-import { formatDuration } from '@/lib/utils';
 
 function SigningLinkRow({ label, url }: { label: string; url: string }) {
   const [copied, setCopied] = useState(false);
@@ -310,55 +309,13 @@ function ContractTemplatesTab() {
   );
 }
 
-function DocStatCard({ label, value, color, icon: Icon }: { label: string; value: string | number; color: string; icon: LucideIcon }) {
-  return (
-    <div className="card flex items-center gap-3.5 !p-4">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}17`, color }}>
-        <Icon size={18} />
-      </span>
-      <div className="min-w-0">
-        <div className="font-mono text-2xl font-bold tabular-nums text-text">{value}</div>
-        <div className="truncate text-[13px] text-text-3">{label}</div>
-      </div>
-    </div>
-  );
-}
-
 export function BlueDocsPage() {
-  const { data: instances = [] } = useContractInstances();
-
-  const kpis = useMemo(() => {
-    const now = new Date();
-    const waiting = instances.filter((i) => i.status === 'sent' || i.status === 'partial').length;
-    const signedThisMonth = instances.filter(
-      (i) => i.status === 'signed' && i.completedAt && new Date(i.completedAt).getFullYear() === now.getFullYear() && new Date(i.completedAt).getMonth() === now.getMonth(),
-    ).length;
-    const signTimes = instances
-      .filter((i) => i.status === 'signed' && i.completedAt)
-      .map((i) => (new Date(i.completedAt!).getTime() - new Date(i.createdAt).getTime()) / 1000);
-    const avgSignSeconds = signTimes.length ? signTimes.reduce((a, b) => a + b, 0) / signTimes.length : null;
-    return { waiting, signedThisMonth, avgSignSeconds, monthName: now.toLocaleDateString('en-US', { month: 'long' }) };
-  }, [instances]);
-
   return (
     <div>
       <div className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight text-text">Blue Docs</h1>
         <p className="text-sm text-text-3">Contract templates and e-signing</p>
       </div>
-
-      {instances.length > 0 && (
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <DocStatCard label="Waiting for signature" value={kpis.waiting} color="#f59e0b" icon={Clock} />
-          <DocStatCard label={`Signed in ${kpis.monthName}`} value={kpis.signedThisMonth} color="#10b981" icon={CheckCircle2} />
-          <DocStatCard
-            label="Typical time to sign"
-            value={kpis.avgSignSeconds != null ? formatDuration(kpis.avgSignSeconds) : '—'}
-            color="#4f46e5"
-            icon={Timer}
-          />
-        </div>
-      )}
 
       <ContractTemplatesTab />
 
