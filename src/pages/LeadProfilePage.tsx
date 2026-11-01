@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, RefreshCw, Share2, ArrowRightLeft, Sparkles, PhoneCall } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, Check, MessageSquareText, MoreHorizontal, Pencil, PhoneCall, Share2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
-import { useAddActivity } from '@/hooks/useActivities';
+import { useAddActivity, useActivities } from '@/hooks/useActivities';
 import { useMyPendingShareForLead, useShareLead, useAdminShareLeadToCaller, useTransferLeadToAdmin } from '@/hooks/useLeadShares';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { STAGE_CONFIG, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
-import { formatPhone, toE164 } from '@/lib/utils';
+import { STAGE_CONFIG, STAGE_ORDER, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
+import { cn, formatPhone, initials, toE164 } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { scoreColor } from '@/lib/aiScore';
 import { ContactSidebarCard } from '@/components/leadProfile/ContactSidebarCard';
@@ -27,10 +27,20 @@ import { ActivityTab } from '@/components/leadProfile/ActivityTab';
 import { EditContactModal } from '@/components/leadProfile/EditContactModal';
 import { SmsThreadTab } from '@/components/sms/SmsThreadTab';
 
-/** Compact — just the badge and a re-score link, meant to sit under the
- *  stage dropdown in the header's right-aligned column. The reasoning text
- *  that used to run alongside it lives in Overview's Notes card now (as a
- *  Legacy note), not here. */
+// Raw hex per scoreColor's own bands (85/65/45/25) — that util returns
+// Tailwind class names (for the ring/text/bg classes elsewhere), but an SVG
+// stroke attribute needs an actual color value, not a class.
+function scoreHex(score: number): string {
+  if (score >= 85) return '#10b981';
+  if (score >= 65) return '#3b82f6';
+  if (score >= 45) return '#f59e0b';
+  if (score >= 25) return '#f97316';
+  return '#ef4444';
+}
+
+/** A compact ring gauge + re-score control for the header's action row —
+ *  real score/color/label from scoreColor, same as before, just drawn as a
+ *  proportional arc instead of a flat ring-bordered circle. */
 function AiScoreCard({ lead }: { lead: Lead }) {
   const scoreLead = useScoreLead();
   const [error, setError] = useState('');
@@ -44,41 +54,53 @@ function AiScoreCard({ lead }: { lead: Lead }) {
 
   const hasScore = lead.aiScore !== null;
   const colors = hasScore ? scoreColor(lead.aiScore!) : null;
-  const scoredDate = lead.aiScoredAt ? new Date(lead.aiScoredAt).toLocaleDateString() : null;
+  const hex = hasScore ? scoreHex(lead.aiScore!) : '#5B6275';
+  const radius = 14;
+  const circumference = 2 * Math.PI * radius;
+  const offset = hasScore ? circumference * (1 - lead.aiScore! / 100) : circumference;
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      {hasScore && colors ? (
-        <div className="flex items-center gap-2.5">
-          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 ${colors.ring} bg-surface-2`}>
-            <span className={`text-[15px] font-bold ${colors.text}`}>{lead.aiScore}</span>
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5 text-[12px] font-semibold text-text">
-              <Sparkles size={12} className={colors.text} />
-              AI Lead Score
-              <span className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ${colors.bg} text-white`}>{colors.label}</span>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2.5 rounded-md border border-border-2 bg-surface-3 py-1.5 pl-1.5 pr-3">
+        <svg width="36" height="36" className="-rotate-90 shrink-0" aria-hidden="true">
+          <circle cx="18" cy="18" r={radius} fill="none" stroke="#262C40" strokeWidth="4" />
+          {hasScore && (
+            <circle
+              cx="18"
+              cy="18"
+              r={radius}
+              fill="none"
+              stroke={hex}
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+            />
+          )}
+        </svg>
+        {hasScore && colors ? (
+          <div className="text-[12.5px] leading-tight">
+            <div>
+              <b className="font-mono text-text">{lead.aiScore}</b> <span style={{ color: hex }} className="font-semibold">{colors.label}</span>
             </div>
-            {scoredDate && <div className="text-[10.5px] text-text-3">Scored {scoredDate}</div>}
+            <button
+              onClick={handleScore}
+              disabled={scoreLead.isPending}
+              className="text-[11px] font-medium text-text-3 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {scoreLead.isPending ? 'Scoring…' : 'Re-score'}
+            </button>
           </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5 text-[12px] text-text-3">
-          <Sparkles size={13} className="text-primary" />
-          No AI score yet
-        </div>
-      )}
-      <button
-        onClick={handleScore}
-        disabled={scoreLead.isPending}
-        className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {scoreLead.isPending ? (
-          <><RefreshCw size={11} className="animate-spin" /> Scoring…</>
         ) : (
-          hasScore ? 'Re-score' : 'Score with AI'
+          <button
+            onClick={handleScore}
+            disabled={scoreLead.isPending}
+            className="text-[12px] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {scoreLead.isPending ? 'Scoring…' : 'Score with AI'}
+          </button>
         )}
-      </button>
+      </div>
       {error && <div className="text-[11px] text-danger">{error}</div>}
     </div>
   );
@@ -250,10 +272,10 @@ function ShareMenu({
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setMenuOpen((o) => !o)}
-        className="btn !p-2"
-        title={pendingShare ? 'Pending admin approval' : 'Share this lead'}
+        className="btn !px-2.5"
+        title={pendingShare ? 'Pending admin approval' : 'More actions'}
       >
-        <Share2 size={15} className={pendingShare ? 'text-warning' : undefined} />
+        <MoreHorizontal size={16} className={pendingShare ? 'text-warning' : undefined} />
       </button>
       {menuOpen && (
         <div className="absolute right-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-lg border border-border-2 bg-surface shadow-lg">
@@ -297,6 +319,80 @@ function ShareMenu({
   );
 }
 
+// A stable (hashed from id, not random) color per lead for the header
+// avatar — same approach used on the Leads table so avatars read
+// consistently across the app.
+const AVATAR_PALETTE = [
+  { bg: 'rgba(255,181,71,.15)', text: '#FFC46B' },
+  { bg: 'rgba(110,123,255,.18)', text: '#A9B1FF' },
+  { bg: 'rgba(61,214,181,.14)', text: '#4FE0BF' },
+  { bg: 'rgba(90,184,255,.14)', text: '#7CC6FF' },
+  { bg: 'rgba(180,140,255,.15)', text: '#C7A8FF' },
+  { bg: 'rgba(255,107,107,.13)', text: '#FF8A8A' },
+];
+function avatarColorFor(id: string): { bg: string; text: string } {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+// The real pipeline's main path (STAGE_ORDER minus the three off-path
+// states — onhold/dead_declined/others never sit "between" two real
+// stages, so a lead in one of those gets a plain badge instead of forced
+// into this stepper). Post-contract stages are admin-only, same gate the
+// stage <select> already uses via visibleStagesFor.
+const MAIN_PATH_STAGES: LeadStage[] = STAGE_ORDER.filter((s) => s !== 'voicemail' && s !== 'onhold' && s !== 'dead_declined' && s !== 'others');
+const OFF_PATH_STAGES: LeadStage[] = ['onhold', 'dead_declined', 'others'];
+
+/** Real stage progress, not the mockup's invented "Appointment" step — this
+ * CRM's own STAGE_ORDER/STAGE_CONFIG, done/current/todo against the lead's
+ * actual stage, with "day N" on the current step computed from this lead's
+ * own stage_change activity log (the same timestamp the backend itself
+ * records, not an estimate). */
+function StageStepper({ lead, isAdmin, activities }: { lead: Lead; isAdmin: boolean; activities: Array<{ type: string; meta: Record<string, unknown>; createdAt: string }> }) {
+  const path = isAdmin ? MAIN_PATH_STAGES : MAIN_PATH_STAGES.filter((s) => !['inspection_walkthrough', 'in_title', 'closed'].includes(s));
+  const isOffPath = OFF_PATH_STAGES.includes(lead.stage);
+  const currentIdx = path.indexOf(lead.stage);
+
+  const daysInStage = useMemo(() => {
+    const changes = activities.filter((a) => a.type === 'stage_change');
+    const entered = [...changes].reverse().find((a) => (a.meta as { to?: string })?.to === lead.stage)?.createdAt ?? lead.createdAt;
+    return Math.max(0, Math.floor((Date.now() - new Date(entered).getTime()) / 86400000));
+  }, [activities, lead.stage, lead.createdAt]);
+
+  if (isOffPath) {
+    return (
+      <div className="flex items-center gap-2 text-[13px] text-text-3">
+        Currently <StageBadge stage={lead.stage} />
+      </div>
+    );
+  }
+
+  return (
+    <ol aria-label="Deal stage" className="flex flex-wrap items-center gap-1.5">
+      {path.map((s, i) => {
+        const done = currentIdx >= 0 && i < currentIdx;
+        const current = i === currentIdx;
+        return (
+          <li key={s} className="flex items-center gap-1.5">
+            {i > 0 && <span aria-hidden="true" className="h-px w-3.5 bg-border-2" />}
+            <span
+              className={cn(
+                'flex min-h-[32px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12.5px] font-semibold',
+                done ? 'border-transparent bg-surface-3 text-success' : current ? 'border-transparent bg-primary text-primary-text' : 'border-border-2 text-text-3',
+              )}
+            >
+              {done && <Check size={11} />}
+              {STAGE_CONFIG[s].label}
+              {current && daysInStage > 0 && <span className="opacity-80">· day {daysInStage}</span>}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 const TABS = ['overview', 'sms', 'property', 'underwriting', 'deal', 'activity'] as const;
 type TabKey = (typeof TABS)[number];
 const TAB_LABELS: Record<TabKey, string> = {
@@ -334,123 +430,147 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   // string changes underneath an already-open profile.
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<TabKey>(isAdmin && searchParams.get('openSms') === '1' ? 'sms' : 'overview');
+  const { data: activities = [] } = useActivities(lead?.id);
   if (isLoading) return <div className="text-text-3">Loading…</div>;
   if (!lead) return <div className="text-text-3">Lead not found.</div>;
+  const avatar = avatarColorFor(lead.id);
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3">
         <button onClick={() => navigate(backTo)} className="inline-flex items-center gap-1.5 text-[13px] text-text-3 hover:text-text">
           <ArrowLeft size={14} /> Back to Leads
         </button>
-        <ShareMenu leadId={lead.id} stage={lead.stage} isAdmin={isAdmin} allowShare={allowShare} currentOwnerId={lead.userId} />
       </div>
 
-      <div className="card mb-5">
+      <div className="card mb-5 flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-semibold text-text">
-                {lead.firstName} {lead.lastName}
-              </h1>
-              <StageBadge stage={lead.stage} />
-              {lead.leadNum && <span className="text-[12px] text-text-3">#{lead.leadNum}</span>}
-              <button
-                className="text-text-3 hover:text-primary"
-                title="Edit contact info"
-                onClick={() => setEditContactOpen(true)}
-              >
-                <Pencil size={13} />
-              </button>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-text-2">
-              {lead.phone && (
-                <button
-                  onClick={() => handleCall(lead.phone)}
-                  className="inline-flex items-center gap-1 rounded hover:text-primary"
-                  title={`Call ${formatPhone(lead.phone)}`}
-                >
-                  <PhoneCall size={13} /> {formatPhone(lead.phone)}
-                </button>
-              )}
-              {lead.phone2 && (
-                <>
-                  <span className="text-text-3">·</span>
-                  <button
-                    onClick={() => handleCall(lead.phone2)}
-                    className="inline-flex items-center gap-1 rounded hover:text-primary"
-                    title={`Call ${formatPhone(lead.phone2)}`}
-                  >
-                    <PhoneCall size={13} /> {formatPhone(lead.phone2)}
-                  </button>
-                </>
-              )}
-              {lead.email && (
-                <>
-                  <span className="text-text-3">·</span>
-                  <span>{lead.email}</span>
-                </>
-              )}
-            </div>
-            {lead.address && (
-              <div className="mt-0.5 text-sm text-text-3">
-                {lead.address}
-                {lead.city ? `, ${lead.city}` : ''}
-                {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
-              </div>
-            )}
-            {lead.scheduledCallbackAt && (() => {
-              const sellerTimeZone = resolveUsTimeZone(lead.state, lead.address);
-              const sellerTime = sellerTimeZone ? formatTimeInZone(lead.scheduledCallbackAt, sellerTimeZone) : null;
-              return (
-                <div
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-info-dim px-2 py-1 text-[12px] font-medium text-info"
-                  title={lead.scheduledCallbackNote ?? undefined}
-                >
-                  <PhoneCall size={12} />
-                  Callback scheduled: {formatPakistanTime(lead.scheduledCallbackAt)} PKT
-                  {sellerTime ? ` (seller's time: ${sellerTime})` : ''}
-                  {lead.scheduledCallbackNote ? ` — "${lead.scheduledCallbackNote}"` : ''}
-                </div>
-              );
-            })()}
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <select
-              className="input !w-auto !py-1.5 text-[12px]"
-              value={lead.stage}
-              onChange={(e) => updateLead.mutate({ id: lead.id, stage: e.target.value as LeadStage })}
+          <div className="flex min-w-0 items-start gap-3.5">
+            <span
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-[16px] font-bold"
+              style={{ background: avatar.bg, color: avatar.text }}
             >
-              {(() => {
-                const stages = visibleStagesFor(isAdmin);
-                // Always include the lead's current stage even if it'd
-                // otherwise be filtered out for this viewer (e.g. an admin
-                // looking at a lead a caller left in Voicemail) — dropping
-                // it would leave the select showing nothing selected.
-                if (!stages.includes(lead.stage)) stages.push(lead.stage);
-                return stages.map((s) => (
-                  <option key={s} value={s}>
-                    {STAGE_CONFIG[s].label}
-                  </option>
-                ));
+              {initials(lead.firstName, lead.lastName)}
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <h1 className="text-[22px] font-extrabold tracking-tight text-text">
+                  {lead.firstName} {lead.lastName}
+                </h1>
+                {lead.leadNum && <span className="text-[12px] text-text-3">#{lead.leadNum}</span>}
+                <button className="text-text-3 hover:text-primary" title="Edit contact info" onClick={() => setEditContactOpen(true)}>
+                  <Pencil size={13} />
+                </button>
+              </div>
+
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {lead.tagIds.map((tid) => {
+                  const tag = tags.find((t) => t.id === tid);
+                  return tag ? (
+                    <TagPill
+                      key={tid}
+                      tag={tag}
+                      onRemove={() => setLeadTags.mutate({ leadId: lead.id, tagIds: lead.tagIds.filter((x) => x !== tid) })}
+                    />
+                  ) : null;
+                })}
+                <TagPicker lead={lead} tags={tags} />
+              </div>
+
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13.5px] text-text-2">
+                {lead.phone && (
+                  <button
+                    onClick={() => handleCall(lead.phone)}
+                    className="inline-flex items-center gap-1 rounded hover:text-primary"
+                    title={`Call ${formatPhone(lead.phone)}`}
+                  >
+                    <PhoneCall size={13} /> {formatPhone(lead.phone)}
+                  </button>
+                )}
+                {lead.phone2 && (
+                  <>
+                    <span className="text-text-3">·</span>
+                    <button
+                      onClick={() => handleCall(lead.phone2)}
+                      className="inline-flex items-center gap-1 rounded hover:text-primary"
+                      title={`Call ${formatPhone(lead.phone2)}`}
+                    >
+                      <PhoneCall size={13} /> {formatPhone(lead.phone2)}
+                    </button>
+                  </>
+                )}
+                {lead.email && (
+                  <>
+                    <span className="text-text-3">·</span>
+                    <span>{lead.email}</span>
+                  </>
+                )}
+              </div>
+              {lead.address && (
+                <div className="mt-0.5 text-[13.5px] text-text-3">
+                  {lead.address}
+                  {lead.city ? `, ${lead.city}` : ''}
+                  {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
+                </div>
+              )}
+              {lead.scheduledCallbackAt && (() => {
+                const sellerTimeZone = resolveUsTimeZone(lead.state, lead.address);
+                const sellerTime = sellerTimeZone ? formatTimeInZone(lead.scheduledCallbackAt, sellerTimeZone) : null;
+                return (
+                  <div
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-info-dim px-2 py-1 text-[12px] font-medium text-info"
+                    title={lead.scheduledCallbackNote ?? undefined}
+                  >
+                    <PhoneCall size={12} />
+                    Callback scheduled: {formatPakistanTime(lead.scheduledCallbackAt)} PKT
+                    {sellerTime ? ` (seller's time: ${sellerTime})` : ''}
+                    {lead.scheduledCallbackNote ? ` — "${lead.scheduledCallbackNote}"` : ''}
+                  </div>
+                );
               })()}
-            </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <AiScoreCard lead={lead} />
+            {lead.phone && (
+              <button onClick={() => handleCall(lead.phone)} className="btn btn-primary">
+                <PhoneCall size={14} /> Call
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={() => setTab('sms')} className="btn">
+                <MessageSquareText size={14} /> Text
+              </button>
+            )}
+            <button onClick={() => setTab('deal')} className="btn">
+              Send contract
+            </button>
+            <ShareMenu leadId={lead.id} stage={lead.stage} isAdmin={isAdmin} allowShare={allowShare} currentOwnerId={lead.userId} />
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {lead.tagIds.map((tid) => {
-            const tag = tags.find((t) => t.id === tid);
-            return tag ? (
-              <TagPill
-                key={tid}
-                tag={tag}
-                onRemove={() => setLeadTags.mutate({ leadId: lead.id, tagIds: lead.tagIds.filter((x) => x !== tid) })}
-              />
-            ) : null;
-          })}
-          <TagPicker lead={lead} tags={tags} />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-2 pt-3.5">
+          <StageStepper lead={lead} isAdmin={isAdmin} activities={activities} />
+          <select
+            className="input !w-auto !py-1 text-[12px]"
+            value={lead.stage}
+            onChange={(e) => updateLead.mutate({ id: lead.id, stage: e.target.value as LeadStage })}
+          >
+            {(() => {
+              const stages = visibleStagesFor(isAdmin);
+              // Always include the lead's current stage even if it'd
+              // otherwise be filtered out for this viewer (e.g. an admin
+              // looking at a lead a caller left in Voicemail) — dropping
+              // it would leave the select showing nothing selected.
+              if (!stages.includes(lead.stage)) stages.push(lead.stage);
+              return stages.map((s) => (
+                <option key={s} value={s}>
+                  {STAGE_CONFIG[s].label}
+                </option>
+              ));
+            })()}
+          </select>
         </div>
       </div>
 
@@ -459,9 +579,10 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 py-2 text-[13px] font-medium transition-colors ${
-              tab === t ? 'border-b-2 border-primary text-primary' : 'text-text-3 hover:text-text'
-            }`}
+            className={cn(
+              'px-3.5 py-2.5 text-[14px] font-semibold transition-colors',
+              tab === t ? 'border-b-2 border-primary text-text' : 'border-b-2 border-transparent text-text-3 hover:text-text',
+            )}
           >
             {TAB_LABELS[t]}
           </button>
