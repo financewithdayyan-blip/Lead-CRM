@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, Bell, Check, ChevronDown, Download, Eye, Loader2, Pencil, Send, Trash2, type LucideIcon } from 'lucide-react';
 import { useContractAuditEvents, useSendContractReminder, type ContractInstance } from '@/hooks/useContractInstances';
 import { CASH_DEAL_ADDRESS_FIELD_ID, CASH_DEAL_TEMPLATE_ID } from '@/components/bluedocs/FillCashDealContractModal';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { formatDate, formatDateTime } from '@/lib/utils';
 
 const AVATAR_PALETTE = [
@@ -52,44 +53,39 @@ function MoreActionsMenu({
   onVoid?: () => void;
   onDelete: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button className="flex h-7 w-7 items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text" onClick={() => setOpen((v) => !v)}>
-        <ChevronDown size={14} />
-      </button>
-      {open && (
-        <div className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-border bg-surface py-1 shadow-popover">
-          <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3" onClick={() => { setOpen(false); onPreview(); }}>
+    <DropdownMenu
+      trigger={({ onClick, ref }) => (
+        <button
+          ref={ref}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text"
+          onClick={onClick}
+        >
+          <ChevronDown size={14} />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3" onClick={() => { close(); onPreview(); }}>
             <Eye size={12} /> Preview
           </button>
           {onEdit && (
-            <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3" onClick={() => { setOpen(false); onEdit(); }}>
+            <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3" onClick={() => { close(); onEdit(); }}>
               <Pencil size={12} /> Edit terms
             </button>
           )}
           {onVoid && (
-            <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3" onClick={() => { setOpen(false); onVoid(); }}>
+            <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3" onClick={() => { close(); onVoid(); }}>
               <Ban size={12} /> Void
             </button>
           )}
-          <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-danger hover:bg-surface-3" onClick={() => { setOpen(false); onDelete(); }}>
+          <button className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-danger hover:bg-surface-3" onClick={() => { close(); onDelete(); }}>
             <Trash2 size={12} /> Delete
           </button>
-        </div>
+        </>
       )}
-    </div>
+    </DropdownMenu>
   );
 }
 

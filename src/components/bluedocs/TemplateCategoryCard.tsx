@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, Download, FilePlus2, FileText, Loader2, Map, Pencil, Plus, Send, Trash2, Upload } from 'lucide-react';
 import {
   useUploadDocTemplate,
@@ -6,41 +6,32 @@ import {
   type ContractType,
   type DocTemplate,
 } from '@/hooks/useDocTemplates';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
 
 /** Small overflow menu tucked into a tile's corner — Download/Edit/Delete,
  * kept out of the tile's main action slot so that stays reserved for the
  * one primary next step (Map Fields or Invite to Sign). */
 function MoreMenu({ onEdit, onDownload, onDelete }: { onEdit?: () => void; onDownload: () => void; onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        className="flex h-6 w-6 items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-      >
-        <ChevronDown size={14} />
-      </button>
-      {open && (
-        <div className="absolute right-0 z-10 mt-1 w-36 rounded-md border border-border bg-surface py-1 shadow-popover" onClick={(e) => e.stopPropagation()}>
+    <DropdownMenu
+      width="w-36"
+      trigger={({ onClick, ref }) => (
+        <button
+          ref={ref}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-3 hover:bg-surface-2 hover:text-text"
+          onClick={onClick}
+        >
+          <ChevronDown size={14} />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
           {onEdit && (
             <button
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3"
               onClick={() => {
-                setOpen(false);
+                close();
                 onEdit();
               }}
             >
@@ -50,7 +41,7 @@ function MoreMenu({ onEdit, onDownload, onDelete }: { onEdit?: () => void; onDow
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text hover:bg-surface-3"
             onClick={() => {
-              setOpen(false);
+              close();
               onDownload();
             }}
           >
@@ -59,15 +50,15 @@ function MoreMenu({ onEdit, onDownload, onDelete }: { onEdit?: () => void; onDow
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-danger hover:bg-surface-3"
             onClick={() => {
-              setOpen(false);
+              close();
               onDelete();
             }}
           >
             <Trash2 size={12} /> Delete
           </button>
-        </div>
+        </>
       )}
-    </div>
+    </DropdownMenu>
   );
 }
 
