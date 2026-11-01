@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronDown, Download, FilePlus2, FileText, Loader2, Map, Pencil, Plus, Send, Trash2, Upload } from 'lucide-react';
+import { ChevronDown, Download, FilePlus2, Loader2, Map, Pencil, Plus, Send, Trash2, Upload } from 'lucide-react';
 import {
   useUploadDocTemplate,
   useSignedTemplateUrl,
@@ -62,6 +62,20 @@ function MoreMenu({ onEdit, onDownload, onDelete }: { onEdit?: () => void; onDow
   );
 }
 
+/** The page-with-text-lines icon from the mockup — a tinted rounded "page"
+ * with four short bars standing in for lines of text, instead of a generic
+ * document icon. Pixel offsets match the mockup's own 44x52 artwork. */
+function DocThumbnail({ color }: { color: string }) {
+  return (
+    <div className="relative h-[52px] w-11 shrink-0 rounded-md" style={{ background: `${color}26` }}>
+      <span className="absolute left-2 right-2 top-3 h-[3px] rounded-full" style={{ background: color }} />
+      <span className="absolute left-2 right-3.5 top-5 h-[3px] rounded-full" style={{ background: color, opacity: 0.45 }} />
+      <span className="absolute left-2 right-2.5 top-7 h-[3px] rounded-full" style={{ background: color, opacity: 0.45 }} />
+      <span className="absolute bottom-2 left-2 h-[3px] w-3.5 rounded-full" style={{ background: color }} />
+    </div>
+  );
+}
+
 function TemplateTile({
   t,
   color,
@@ -91,9 +105,7 @@ function TemplateTile({
       onClick={() => (t.mapped ? onSend(t) : onOpenMapper(t))}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md" style={{ background: `${color}1f`, color }}>
-          <FileText size={20} />
-        </span>
+        <DocThumbnail color={color} />
         <MoreMenu
           onEdit={t.mapped ? () => onOpenMapper(t) : undefined}
           onDownload={() => t.storagePath && onDownload(t.storagePath, t.fileName || t.name)}
