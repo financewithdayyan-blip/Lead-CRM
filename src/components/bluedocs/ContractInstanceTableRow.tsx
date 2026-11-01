@@ -145,10 +145,6 @@ export function ContractInstanceTableRow({
   const canVoid = !!onVoid && !signed && !voidedOrDeclined && c.status !== 'expired';
   const canEdit = !!onEdit && c.templateId === CASH_DEAL_TEMPLATE_ID && c.status === 'sent' && !c.parties.some((p) => isSellerSide(p.role) && p.status === 'signed');
 
-  const displayParty = signed
-    ? [...orderedParties].reverse().find((p) => p.status === 'signed') ?? orderedParties[orderedParties.length - 1]
-    : (pendingParty ?? c.parties.find((p) => p.status === 'declined') ?? orderedParties[0]);
-
   let statusText: string;
   let statusClass: string;
   if (c.status === 'signed') {
@@ -207,8 +203,6 @@ export function ContractInstanceTableRow({
     };
   }
 
-  const avatar = displayParty ? avatarColorFor(displayParty.id) : null;
-
   return (
     <tr className="border-b border-border-2 last:border-0 hover:bg-surface-3">
       <td className="px-3 py-3">
@@ -231,15 +225,22 @@ export function ContractInstanceTableRow({
         </div>
       </td>
       <td className="px-3 py-3">
-        {displayParty ? (
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold"
-              style={avatar ? { background: avatar.bg, color: avatar.text } : undefined}
-            >
-              {initialsOf(displayParty.name)}
-            </span>
-            <span className="truncate text-[13px] text-text-2">{displayParty.name}</span>
+        {orderedParties.length > 0 ? (
+          <div className="flex min-w-0 flex-col gap-1.5">
+            {orderedParties.map((p) => {
+              const avatar = avatarColorFor(p.id);
+              return (
+                <div key={p.id} className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                    style={{ background: avatar.bg, color: avatar.text }}
+                  >
+                    {initialsOf(p.name)}
+                  </span>
+                  <span className="truncate text-[12.5px] text-text-2">{p.name}</span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <span className="text-text-3">—</span>
