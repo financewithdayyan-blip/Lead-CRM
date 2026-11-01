@@ -90,10 +90,13 @@ function TemplateTile({
 }) {
   const fieldCount = t.fields.filter((f) => f.type !== 'signature').length;
   const signerCount = 2 + t.partyRoles.length;
+  // Cosmetic only — the stored name/upload filename is untouched, this
+  // just reads better than a raw "Assignment_of_Purchase_Contract.pdf".
+  const displayName = t.name.replace(/\.(pdf|docx?|png|jpe?g)$/i, '').replace(/_/g, ' ').trim();
 
   return (
     <div
-      className="flex w-[210px] shrink-0 cursor-pointer snap-start flex-col gap-3 rounded-lg border border-border-2 bg-surface-3 p-4 transition-colors hover:border-border hover:bg-surface-2"
+      className="flex w-[210px] shrink-0 cursor-pointer snap-start flex-col rounded-lg border border-border-2 bg-surface-3 p-4 transition-colors hover:border-border hover:bg-surface-2"
       onClick={() => (t.mapped ? onSend(t) : onOpenMapper(t))}
     >
       <div className="flex items-start justify-between gap-2">
@@ -107,30 +110,27 @@ function TemplateTile({
         />
       </div>
 
-      <div className="min-w-0">
-        <div className="truncate text-[14.5px] font-semibold text-text">{t.name}</div>
+      <div className="mt-3 min-h-[52px] min-w-0">
+        <div className="line-clamp-2 text-[14px] font-semibold leading-snug text-text" title={displayName}>{displayName}</div>
         <div className="mt-1 text-[12px] text-text-3">
           {fieldCount} field{fieldCount === 1 ? '' : 's'}, {signerCount} signer{signerCount === 1 ? '' : 's'}
         </div>
-        {!t.mapped && (
-          <span className="mt-2 inline-block rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning">Not mapped</span>
-        )}
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-        {usageCount > 0 ? (
-          <span className="text-[12px] font-semibold" style={{ color }}>
-            Used {usageCount} time{usageCount === 1 ? '' : 's'}
-          </span>
-        ) : (
-          <span />
-        )}
+      {!t.mapped && (
+        <span className="mt-2 inline-block w-fit rounded-full bg-warning-dim px-1.5 py-0.5 text-[10px] font-semibold text-warning">Not mapped</span>
+      )}
+
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-2 pt-3">
+        <span className="min-w-0 truncate text-[11.5px] font-semibold" style={{ color }}>
+          {usageCount > 0 ? `Used ${usageCount}×` : ''}
+        </span>
         {t.mapped ? (
-          <button className="btn btn-primary !px-2.5 !py-1.5 text-[11px]" onClick={(e) => { e.stopPropagation(); onSend(t); }}>
-            <Send size={11} /> Invite to Sign
+          <button className="btn btn-primary shrink-0 !px-2.5 !py-1.5 text-[11px]" onClick={(e) => { e.stopPropagation(); onSend(t); }}>
+            <Send size={11} /> Invite
           </button>
         ) : (
-          <button className="btn btn-primary !px-2.5 !py-1.5 text-[11px]" onClick={(e) => { e.stopPropagation(); onOpenMapper(t); }}>
+          <button className="btn btn-primary shrink-0 !px-2.5 !py-1.5 text-[11px]" onClick={(e) => { e.stopPropagation(); onOpenMapper(t); }}>
             <Map size={11} /> Map Fields
           </button>
         )}
