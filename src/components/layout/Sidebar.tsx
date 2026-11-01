@@ -218,14 +218,14 @@ function SidebarFooterProfile({ collapsed }: { collapsed: boolean }) {
             Dark Mode
             <span
               className={cn(
-                'ml-auto flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
+                'ml-auto inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
                 theme === 'dark' ? 'bg-primary' : 'bg-sidebar',
               )}
             >
               <span
                 className={cn(
-                  'h-3 w-3 rounded-full bg-white shadow-sm transition-transform',
-                  theme === 'dark' ? 'translate-x-3.5' : 'translate-x-0.5',
+                  'h-3 w-3 shrink-0 rounded-full bg-white shadow-sm transition-transform',
+                  theme === 'dark' ? 'translate-x-3' : 'translate-x-0',
                 )}
               />
             </span>

@@ -1,4 +1,5 @@
 import { useAiReviewSettings, useSaveAiReviewSettings } from '@/hooks/useAiReviewSettings';
+import { Switch } from '@/components/ui/Switch';
 
 /** Turns the nightly AI reply self-review job on or off. It runs quietly —
  * no report is shown here or anywhere else by design — this is purely a
@@ -20,17 +21,7 @@ export function AiReviewSettingsEditor() {
               : 'Off — the nightly review won\'t run, so it costs nothing until turned back on. The AI still replies normally either way, it just won\'t learn from that day\'s conversations.'}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={enabled}
-          onClick={() => save.mutate(!enabled)}
-          disabled={save.isPending}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-border-2'}`}
-        >
-          <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`}
-          />
-        </button>
+        <Switch checked={enabled} onChange={() => save.mutate(!enabled)} disabled={save.isPending} label="AI reply self-review" />
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useAiReplyConfig';
 import { useAiSettings, useSetAiEnabled } from '@/hooks/useAiSettings';
 import { TagPill } from '@/components/ui/TagPill';
+import { Switch } from '@/components/ui/Switch';
 
 /** One framework text box — Default or a specific tag — with its own save state. */
 function FrameworkBox({
@@ -96,17 +97,7 @@ export function AiFrameworkEditor() {
               : 'Off — inbound texts are still logged and leads still move across the pipeline, but nothing is drafted or sent. Reply manually from each lead\'s SMS tab.'}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={enabled}
-          onClick={() => setAiEnabled.mutate(!enabled)}
-          disabled={setAiEnabled.isPending}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-border-2'}`}
-        >
-          <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`}
-          />
-        </button>
+        <Switch checked={enabled} onChange={() => setAiEnabled.mutate(!enabled)} disabled={setAiEnabled.isPending} label="AI auto-reply" />
       </div>
 
       <div className="my-4 border-t border-border" />
