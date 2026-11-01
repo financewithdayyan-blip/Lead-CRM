@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Archive, NotebookText, Send } from 'lucide-react';
+import { Archive, Images, NotebookText, Send } from 'lucide-react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { useActivities, useAddActivity } from '@/hooks/useActivities';
 import { EditableField } from '@/components/leadProfile/EditableField';
-import { currencyDigitsOnly, formatCurrency, formatDateTime, formatPhone, isImageFile } from '@/lib/utils';
+import { currencyDigitsOnly, formatCurrency, formatDate, formatDateTime, isImageFile } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
 const TEMPERATURE_LABEL = ['Cold', 'Warm', 'Hot'];
@@ -13,6 +13,29 @@ const TEMPERATURE_OPTIONS = [
   { value: '1', label: 'Warm' },
   { value: '2', label: 'Hot' },
 ];
+
+const OCCUPANCY_LABEL: Record<string, string> = {
+  owner_occupied: 'Owner occupied',
+  tenant_occupied: 'Tenant occupied',
+  vacant: 'Vacant',
+};
+const OCCUPANCY_OPTIONS = [
+  { value: '', label: '—' },
+  { value: 'owner_occupied', label: 'Owner occupied' },
+  { value: 'tenant_occupied', label: 'Tenant occupied' },
+  { value: 'vacant', label: 'Vacant' },
+];
+
+/** One boxed cell in the Lead Information grid — same EditableField
+ * click-to-edit behavior as before, just given its own tinted box instead
+ * of sitting bare in the grid, to read as a set of distinct facts. */
+function InfoCell(props: React.ComponentProps<typeof EditableField>) {
+  return (
+    <div className="rounded-md bg-surface-3 px-3.5 py-3">
+      <EditableField {...props} />
+    </div>
+  );
+}
 
 function LeadInformationCard({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
@@ -30,32 +53,19 @@ function LeadInformationCard({ lead }: { lead: Lead }) {
       <div className="border-b border-border pb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
         Lead Information
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5">
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {/* One mutation shared by every field below — disabling the whole
          *  set while any single save is in flight stops a fast second edit
          *  from computing off a lead snapshot that doesn't have the first
          *  edit's change yet (see EditableField's own disabled comment). */}
         <fieldset disabled={updateLead.isPending} className="contents">
-          <EditableField
-            label="Phone"
-            value={lead.phone ?? ''}
-            display={lead.phone ? formatPhone(lead.phone) : ''}
-            onSave={(v) => saveField({ phone: formatPhone(v.trim()) })}
-          />
-          <EditableField label="Situation" value={lead.motivation ?? ''} onSave={(v) => saveField({ motivation: v.trim() || null })} />
-          <EditableField
+          <InfoCell label="Situation" value={lead.motivation ?? ''} onSave={(v) => saveField({ motivation: v.trim() || null })} />
+          <InfoCell
             label="Timeline"
             value={lead.scriptAnswers?.timeline ?? ''}
             onSave={(v) => saveScriptAnswer('timeline', v.trim())}
           />
-          <EditableField label="Solution" value={lead.solution ?? ''} onSave={(v) => saveField({ solution: v.trim() || null })} />
-          <EditableField label="Source" value={lead.source ?? ''} onSave={(v) => saveField({ source: v.trim() || null })} />
-          <EditableField
-            label="Owner"
-            value={lead.scriptAnswers?.confirmation_owner ?? ''}
-            onSave={(v) => saveScriptAnswer('confirmation_owner', v.trim())}
-          />
-          <EditableField
+          <InfoCell
             label="Temperature"
             type="select"
             options={TEMPERATURE_OPTIONS}
@@ -63,7 +73,29 @@ function LeadInformationCard({ lead }: { lead: Lead }) {
             display={TEMPERATURE_LABEL[lead.rating] ?? 'Cold'}
             onSave={(v) => saveField({ rating: Number(v) })}
           />
-          <EditableField label="Next Step" value={lead.nextStep ?? ''} onSave={(v) => saveField({ nextStep: v.trim() || null })} />
+          <InfoCell
+            label="Asking"
+            value={lead.askingPrice?.toString() ?? ''}
+            display={lead.askingPrice != null ? formatCurrency(lead.askingPrice) : ''}
+            filter={currencyDigitsOnly}
+            onSave={(v) => saveField({ askingPrice: v ? Number(v) : null })}
+          />
+          <InfoCell
+            label="Occupancy"
+            type="select"
+            options={OCCUPANCY_OPTIONS}
+            value={lead.occupancy ?? ''}
+            display={lead.occupancy ? OCCUPANCY_LABEL[lead.occupancy] : ''}
+            onSave={(v) => saveField({ occupancy: (v || null) as Lead['occupancy'] })}
+          />
+          <InfoCell label="Source" value={lead.source ?? ''} onSave={(v) => saveField({ source: v.trim() || null })} />
+          <InfoCell
+            label="Owner"
+            value={lead.scriptAnswers?.confirmation_owner ?? ''}
+            onSave={(v) => saveScriptAnswer('confirmation_owner', v.trim())}
+          />
+          <InfoCell label="Solution" value={lead.solution ?? ''} onSave={(v) => saveField({ solution: v.trim() || null })} />
+          <InfoCell label="Next Step" value={lead.nextStep ?? ''} onSave={(v) => saveField({ nextStep: v.trim() || null })} />
         </fieldset>
       </div>
     </div>
@@ -76,38 +108,54 @@ function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToP
   const { data: urls = {} } = useSignedFileUrls(hero ? [hero.storagePath] : []);
   const heroUrl = hero ? urls[hero.storagePath] : undefined;
 
+  const specs: Array<{ label: string; value: string; danger?: boolean }> = [
+    { label: 'Beds', value: lead.beds != null ? String(lead.beds) : '—' },
+    { label: 'Baths', value: lead.baths != null ? String(lead.baths) : '—' },
+    { label: 'Living area', value: lead.sqft != null ? `${lead.sqft.toLocaleString()} sqft` : '—' },
+    { label: 'Lot size', value: lead.lotSize || '—' },
+    { label: 'Year built', value: lead.yearBuilt ? String(lead.yearBuilt) : '—' },
+    { label: 'As-is value', value: lead.asIs != null ? formatCurrency(lead.asIs) : '—' },
+    { label: 'Repairs', value: lead.estRepairs != null ? formatCurrency(lead.estRepairs) : '—' },
+    { label: 'Auction', value: lead.auctionDate ? formatDate(lead.auctionDate) : '—', danger: !!lead.auctionDate },
+  ];
+
   return (
-    <div className="card overflow-hidden !p-0">
-      <div className="relative aspect-[16/9] bg-surface-3">
+    <button type="button" onClick={onJumpToProperty} className="card flex flex-wrap items-stretch gap-4 overflow-hidden !p-3.5 text-left">
+      <div className="relative h-[190px] w-full shrink-0 overflow-hidden rounded-lg bg-surface-3 sm:w-60">
         {heroUrl ? (
           <img src={heroUrl} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[12px] text-text-3">No photos yet</div>
         )}
+        {images.length > 0 && (
+          <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-bg/80 px-2 py-0.5 text-[11px] font-medium text-text">
+            <Images size={11} /> {images.length} photo{images.length === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
-      <div className="p-4">
-        <div className="text-[15px] font-semibold text-text">{lead.address || 'No address on file'}</div>
-        <div className="mt-1 text-[13px] text-text-3">
-          {[
-            lead.beds != null ? `${lead.beds} bd` : null,
-            lead.baths != null ? `${lead.baths} ba` : null,
-            lead.sqft != null ? `${lead.sqft.toLocaleString()} sqft` : null,
-            lead.propType,
-            lead.yearBuilt ? `built ${lead.yearBuilt}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ') || '—'}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-[16px] font-semibold text-text">{lead.address || 'No address on file'}</div>
+          {lead.propType && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11.5px] font-medium text-primary">{lead.propType}</span>
+          )}
         </div>
         {lead.condition && (
-          <div className="mt-1 text-[13px] text-text-3">
-            Condition: <span className="font-medium text-text">{lead.condition}</span>
+          <div className="mt-1 text-[12.5px] text-text-3">
+            Condition: <span className="font-medium text-text-2">{lead.condition}</span>
           </div>
         )}
-        <button className="mt-2 text-[12.5px] font-medium text-primary hover:underline" onClick={onJumpToProperty}>
-          Full property details
-        </button>
+        <div className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4">
+          {specs.map((s) => (
+            <div key={s.label} className={`rounded-md px-2.5 py-2 ${s.danger ? 'bg-danger-dim' : 'bg-surface-3'}`}>
+              <div className={`text-[10.5px] font-semibold uppercase tracking-wide ${s.danger ? 'text-danger/80' : 'text-text-3'}`}>{s.label}</div>
+              <div className={`mt-0.5 font-mono text-[13.5px] font-semibold ${s.danger ? 'text-danger' : 'text-text'}`}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-[12.5px] font-medium text-primary">Full property details ›</div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -273,10 +321,8 @@ export function OverviewTab({
         </fieldset>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <LeadInformationCard lead={lead} />
-        <PropertySummaryCard lead={lead} onJumpToProperty={onJumpToProperty} />
-      </div>
+      <PropertySummaryCard lead={lead} onJumpToProperty={onJumpToProperty} />
+      <LeadInformationCard lead={lead} />
 
       <NotesCard lead={lead} onJumpToActivity={onJumpToActivity} />
     </div>
