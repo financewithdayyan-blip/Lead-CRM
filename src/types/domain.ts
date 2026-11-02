@@ -292,6 +292,28 @@ export interface Lead {
    *  here. Shown on the Property tab and, once a Deal Packet is created,
    *  seeded onto it too (see useCreatePacket). */
   propertyListingInfo: string | null;
+  /** The Rehab Cost Estimator's full input scope (RehabCostEstimator.tsx) —
+   *  saved alongside estRepairs/lead_repairs when "Use as Est. Repairs" is
+   *  clicked, so reopening the lead shows what was actually scoped instead
+   *  of a blank form with just the resulting total left to explain it. */
+  rehabEstimatorConfig: RehabEstimatorConfig | null;
+}
+
+export interface RehabEstimatorConfig {
+  sqft: number;
+  finish: 'economy' | 'standard' | 'premium';
+  kitchen: 'none' | 'refresh' | 'full';
+  bathrooms: number;
+  flooringSqft: number;
+  interiorPaint: boolean;
+  windows: number;
+  roof: boolean;
+  hvac: boolean;
+  electrical: boolean;
+  plumbing: boolean;
+  exteriorPaint: boolean;
+  foundation: boolean;
+  contingencyPct: number;
 }
 
 export type TitleChecklistKey =

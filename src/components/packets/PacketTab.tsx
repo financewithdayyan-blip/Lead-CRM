@@ -6,7 +6,7 @@ import { DealPacketBuilder } from './DealPacketBuilder';
 import { PacketAnalytics } from './PacketAnalytics';
 import { PacketComments } from './PacketComments';
 import {
-  packetUrl, useCreatePacket, useDeletePacket, useLeadPackets, usePacketEmailShares, useSendPacketEmail,
+  packetUrl, useCreatePacket, useDeletePacket, useLeadPackets, usePacketEmailShares, useSavePacket, useSendPacketEmail,
 } from '@/hooks/useDealPackets';
 import { formatDate } from '@/lib/utils';
 import type { DealPacket, Lead, PacketStatus } from '@/types/domain';
@@ -249,6 +249,7 @@ function PacketRow({
   // a second request, just reads whether there's anyone to resend to.
   const { data: emailShares = [] } = usePacketEmailShares(packet.id);
   const hasBeenEmailed = emailShares.length > 0;
+  const savePacket = useSavePacket();
 
   function copy() {
     navigator.clipboard.writeText(url).then(() => {
@@ -276,6 +277,21 @@ function PacketRow({
       </button>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        {/* Flips the link live without opening the full edit form — most of
+         *  a packet's content is already pulled off the lead automatically,
+         *  so Active/Draft/Archived is usually the only decision actually
+         *  left to make before sharing it. */}
+        <select
+          className="input !h-auto !w-auto !py-1 text-[12px]"
+          value={packet.status}
+          disabled={savePacket.isPending}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => savePacket.mutate({ id: packet.id, fields: { status: e.target.value as PacketStatus } })}
+        >
+          <option value="draft">Draft</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
         {packet.status === 'active' && (
           <>
             <button onClick={copy} className="btn !px-2 !py-1 text-[12px]" title="Copy shareable link">
@@ -317,11 +333,16 @@ export function PacketTab({ lead }: { lead: Lead }) {
   const [resendTarget, setResendTarget] = useState<DealPacket | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Everything real (property facts, repairs, comps, photos, videos) is
+  // already pulled off the lead by useCreatePacket — the full edit form is
+  // for the fields that genuinely need a human (narrative, condition
+  // ratings, deal types, pricing display), not something every packet needs
+  // opened for. Land on the row itself, with its inline status dropdown and
+  // Email/Analytics, instead of forcing a review of the whole form first.
   async function handleCreate() {
     setError(null);
     try {
-      const id = await createPacket.mutateAsync(lead);
-      setOpenId(id);
+      await createPacket.mutateAsync(lead);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create the packet.');
     }

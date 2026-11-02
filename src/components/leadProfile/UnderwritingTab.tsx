@@ -15,7 +15,11 @@ import type { Lead } from '@/types/domain';
  * Cost Estimator's "Use as Est. Repairs" button writes to, and the one the
  * Property tab / Overview specs grid already show — not the itemized
  * lead_repairs table, which no longer has an editing UI anywhere on this
- * page since the Repair Estimate card was removed. */
+ * page since the Repair Estimate card was removed. The fee deduction uses
+ * the real lead.assignmentFee (the Overview stat card of the same name)
+ * once one's been entered — MAO_MIN_FEE is only a floor for before that
+ * negotiated number is known, not a fee that stays $10k forever regardless
+ * of what the deal actually pays. */
 function MaoWaterfallCard({ lead }: { lead: Lead }) {
   const totalRepairs = lead.estRepairs ?? 0;
 
@@ -27,7 +31,7 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
 
   const arv = lead.arv;
   const repairsCost = MAO_REPAIR_MULTIPLIER * totalRepairs;
-  const fee = MAO_MIN_FEE;
+  const fee = lead.assignmentFee ?? MAO_MIN_FEE;
   const mao = arv * MAO_ARV_PCT - repairsCost - fee;
   const asking = lead.askingPrice;
 
@@ -42,7 +46,7 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
   const pct = (v: number) => Math.max(0, Math.min(100, (v / scaleMax) * 100));
   const segments = [
     { label: 'MAO', from: 0, to: mao, color: '#10b981' },
-    { label: 'Fee', from: mao, to: mao + fee, color: '#8b5cf6' },
+    { label: 'Wholesale Fee', from: mao, to: mao + fee, color: '#8b5cf6' },
     { label: 'Rehab ×2', from: mao + fee, to: mao + fee + repairsCost, color: '#f59e0b' },
     { label: 'Holding & closing', from: mao + fee + repairsCost, to: arv, color: '#38bdf8' },
   ];
@@ -60,7 +64,7 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
   type LabelItem = { key: string; pos: number; title: string; amount: number; color: string };
   const labelItems: LabelItem[] = [
     { key: 'mao', pos: maoPct, title: 'MAO', amount: mao, color: '#10b981' },
-    { key: 'fee', pos: (pct(mao) + pct(mao + fee)) / 2, title: 'Fee', amount: fee, color: '#8b5cf6' },
+    { key: 'fee', pos: (pct(mao) + pct(mao + fee)) / 2, title: 'Wholesale Fee', amount: fee, color: '#8b5cf6' },
     { key: 'rehab', pos: (pct(mao + fee) + pct(mao + fee + repairsCost)) / 2, title: 'Rehab ×2', amount: repairsCost, color: '#f59e0b' },
     { key: 'holding', pos: (pct(mao + fee + repairsCost) + pct(arv)) / 2, title: 'Holding & closing', amount: arv - (mao + fee + repairsCost), color: '#38bdf8' },
   ];

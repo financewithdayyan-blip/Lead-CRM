@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useReplaceLeadRepairs } from '@/hooks/useLeadRepairs';
 import { formatCurrency } from '@/lib/utils';
-import type { Lead } from '@/types/domain';
+import type { Lead, RehabEstimatorConfig } from '@/types/domain';
 
 // Same cost model as rfphomes.com's renovation cost estimator (reverse
 // engineered from its deployed bundle — the site itself never publishes the
@@ -45,29 +45,33 @@ const KITCHEN_OPTIONS: Array<{ value: Kitchen; label: string }> = [
 
 /** Rehab budget calculator, same scope-based inputs and formula as the
  *  rfphomes.com tool this was copied from — a planning estimate, not a
- *  contractor bid. Purely local state until "Use as Est. Repairs" is
- *  clicked, which writes the total into lead.estRepairs (the single number
- *  the Property tab and Overview specs grid show) AND replaces this lead's
- *  itemized lead_repairs rows with its own 10-category breakdown
- *  (repairCatalog.ts) — the one real source a Deal Packet's own repairs
- *  then seed from (useCreatePacket) instead of starting empty. */
+ *  contractor bid. Initialized from lead.rehabEstimatorConfig when one's
+ *  already on file, so reopening the lead shows what was actually scoped
+ *  last time instead of a blank form with only the resulting total to show
+ *  for it. "Use as Est. Repairs" saves that full config back (alongside the
+ *  total, on lead.estRepairs — the single number the Property tab and
+ *  Overview specs grid show) AND replaces this lead's itemized
+ *  lead_repairs rows with its own 10-category breakdown (repairCatalog.ts)
+ *  — the one real source a Deal Packet's own repairs then seed from
+ *  (useCreatePacket) instead of starting empty. */
 export function RehabCostEstimator({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
   const replaceRepairs = useReplaceLeadRepairs();
-  const [sqft, setSqft] = useState(lead.sqft ?? 1600);
-  const [finish, setFinish] = useState<Finish>('standard');
-  const [kitchen, setKitchen] = useState<Kitchen>('none');
-  const [bathrooms, setBathrooms] = useState(0);
-  const [flooringSqft, setFlooringSqft] = useState(0);
-  const [interiorPaint, setInteriorPaint] = useState(false);
-  const [windows, setWindows] = useState(0);
-  const [roof, setRoof] = useState(false);
-  const [hvac, setHvac] = useState(false);
-  const [electrical, setElectrical] = useState(false);
-  const [plumbing, setPlumbing] = useState(false);
-  const [exteriorPaint, setExteriorPaint] = useState(false);
-  const [foundation, setFoundation] = useState(false);
-  const [contingencyPct, setContingencyPct] = useState(15);
+  const saved = lead.rehabEstimatorConfig;
+  const [sqft, setSqft] = useState(saved?.sqft ?? lead.sqft ?? 1600);
+  const [finish, setFinish] = useState<Finish>(saved?.finish ?? 'standard');
+  const [kitchen, setKitchen] = useState<Kitchen>(saved?.kitchen ?? 'none');
+  const [bathrooms, setBathrooms] = useState(saved?.bathrooms ?? 0);
+  const [flooringSqft, setFlooringSqft] = useState(saved?.flooringSqft ?? 0);
+  const [interiorPaint, setInteriorPaint] = useState(saved?.interiorPaint ?? false);
+  const [windows, setWindows] = useState(saved?.windows ?? 0);
+  const [roof, setRoof] = useState(saved?.roof ?? false);
+  const [hvac, setHvac] = useState(saved?.hvac ?? false);
+  const [electrical, setElectrical] = useState(saved?.electrical ?? false);
+  const [plumbing, setPlumbing] = useState(saved?.plumbing ?? false);
+  const [exteriorPaint, setExteriorPaint] = useState(saved?.exteriorPaint ?? false);
+  const [foundation, setFoundation] = useState(saved?.foundation ?? false);
+  const [contingencyPct, setContingencyPct] = useState(saved?.contingencyPct ?? 15);
   const [applied, setApplied] = useState(false);
 
   const f = FINISH_MULTIPLIER[finish];
@@ -276,8 +280,12 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
             className="btn btn-primary mt-3 w-full !py-1.5 text-[12.5px]"
             disabled={updateLead.isPending || replaceRepairs.isPending}
             onClick={() => {
+              const config: RehabEstimatorConfig = {
+                sqft, finish, kitchen, bathrooms, flooringSqft, interiorPaint,
+                windows, roof, hvac, electrical, plumbing, exteriorPaint, foundation, contingencyPct,
+              };
               updateLead.mutate(
-                { id: lead.id, estRepairs: Math.round(total) },
+                { id: lead.id, estRepairs: Math.round(total), rehabEstimatorConfig: config },
                 { onSuccess: () => { setApplied(true); setTimeout(() => setApplied(false), 2000); } },
               );
               replaceRepairs.mutate({ leadId: lead.id, items: catalogItems });

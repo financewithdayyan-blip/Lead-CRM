@@ -117,6 +117,7 @@ export function dbToLead(row: any): Lead {
     offerTerms: row.offer_terms ?? null,
     titleChecklist: row.title_checklist ?? {},
     propertyListingInfo: row.property_listing_info ?? null,
+    rehabEstimatorConfig: row.rehab_estimator_config ?? null,
   };
 }
 
@@ -226,6 +227,7 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['offerTerms', 'offer_terms'],
   ['titleChecklist', 'title_checklist'],
   ['propertyListingInfo', 'property_listing_info'],
+  ['rehabEstimatorConfig', 'rehab_estimator_config'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {
