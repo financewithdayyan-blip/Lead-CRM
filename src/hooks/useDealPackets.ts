@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { isImageFile, isVideoFile } from '@/lib/utils';
 import type {
   ConditionRatings,
   DealPacket,
@@ -604,7 +605,9 @@ export function useAllDealPackets() {
   });
 }
 
-/** Seeds a draft packet from the lead so the builder opens pre-filled. */
+/** Seeds a draft packet from the lead so the builder opens pre-filled —
+ *  property facts, repairs, comps, and the lead's own photos/videos, not
+ *  just the handful of scalar fields on deal_packets itself. */
 export function useCreatePacket() {
   const { session } = useAuth();
   const qc = useQueryClient();
@@ -637,17 +640,82 @@ export function useCreatePacket() {
       if (error) throw error;
       const packetId = data.id as string;
 
-      // Also seed this packet's own repairs from the lead's real itemized
-      // lead_repairs (what the Rehab Cost Estimator's "Use as Est. Repairs"
-      // writes) so a fresh packet opens with the same breakdown and icons
-      // instead of an empty list — best-effort: a packet is still useful
-      // without repairs pre-filled, so a failure here shouldn't block the
-      // packet itself from being created.
-      const { data: repairs } = await supabase.from('lead_repairs').select('item, cost').eq('lead_id', lead.id).order('sort_order');
-      if (repairs?.length) {
-        await supabase
-          .from('packet_repairs')
-          .insert(repairs.map((r, i) => ({ packet_id: packetId, item: r.item, cost: r.cost, sort_order: i })));
+      // Seed everything else real that already exists on the lead, so the
+      // builder opens pre-filled instead of asking for it all over again —
+      // every piece here is best-effort (caught, not thrown) since a packet
+      // is still useful without any one of them; only the deal_packets row
+      // above has to succeed.
+
+      // Repairs — what the Rehab Cost Estimator's "Use as Est. Repairs"
+      // writes to lead_repairs, same breakdown and icons.
+      try {
+        const { data: repairs } = await supabase.from('lead_repairs').select('item, cost').eq('lead_id', lead.id).order('sort_order');
+        if (repairs?.length) {
+          await supabase
+            .from('packet_repairs')
+            .insert(repairs.map((r, i) => ({ packet_id: packetId, item: r.item, cost: r.cost, sort_order: i })));
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      // Comps — already on the full-detail `lead` object (lead_comps), no
+      // extra fetch needed. No lat/lng on a LeadComp (only on PacketComp),
+      // so those stay null here same as a comp the admin types in by hand —
+      // this just carries over the real address/price/sqft/beds/baths.
+      try {
+        if (lead.comps?.length) {
+          await supabase.from('packet_comps').insert(
+            lead.comps.map((c, i) => ({
+              packet_id: packetId,
+              kind: c.kind,
+              address: c.address,
+              sale_price: c.price,
+              sale_date: c.saleDate,
+              sqft: c.sqft,
+              beds: c.beds,
+              baths: c.baths,
+              sort_order: i,
+            })),
+          );
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      // Photos/videos — lead-files is a private bucket (owner/overseer only)
+      // while packet-images/packet-videos are public (an unauthenticated
+      // investor views the packet), so each file has to be downloaded and
+      // re-uploaded rather than just referenced — same copy this mutation's
+      // own useCopyLeadFileToPacket/useCopyLeadFileToPacketVideo already do
+      // for a one-at-a-time manual pick, just run automatically for every
+      // file already on the lead. Run in parallel since this is the slow
+      // part (a real download+upload round trip per file).
+      try {
+        const images = (lead.files ?? []).filter((f) => isImageFile(f.fileType, f.fileName));
+        const videos = (lead.files ?? []).filter((f) => isVideoFile(f.fileType, f.fileName));
+        await Promise.all([
+          ...images.map(async (f, i) => {
+            const { data: blob } = await supabase.storage.from('lead-files').download(f.storagePath);
+            if (!blob) return;
+            const ext = f.fileName.split('.').pop()?.toLowerCase() || 'jpg';
+            const path = `${packetId}/${crypto.randomUUID()}.${ext}`;
+            const { error: upErr } = await supabase.storage.from('packet-images').upload(path, blob, { cacheControl: '3600', upsert: false });
+            if (upErr) return;
+            await supabase.from('packet_images').insert({ packet_id: packetId, storage_path: path, caption: null, sort_order: i });
+          }),
+          ...videos.map(async (f, i) => {
+            const { data: blob } = await supabase.storage.from('lead-files').download(f.storagePath);
+            if (!blob) return;
+            const ext = f.fileName.split('.').pop()?.toLowerCase() || 'mp4';
+            const path = `${packetId}/${crypto.randomUUID()}.${ext}`;
+            const { error: upErr } = await supabase.storage.from('packet-videos').upload(path, blob, { cacheControl: '3600', upsert: false });
+            if (upErr) return;
+            await supabase.from('packet_videos').insert({ packet_id: packetId, storage_path: path, caption: null, sort_order: i });
+          }),
+        ]);
+      } catch {
+        /* best-effort */
       }
 
       return packetId;
