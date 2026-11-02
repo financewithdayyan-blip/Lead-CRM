@@ -10,10 +10,12 @@ import type { Lead } from '@/types/domain';
 
 // MAO = ARV x 90% - (2x repairs — a conservative multiplier since actual
 // rehab cost commonly runs double the initial estimate) - a flat $10k
-// minimum wholesale fee.
-const MAO_ARV_PCT = 0.9;
-const MAO_REPAIR_MULTIPLIER = 2;
-const MAO_MIN_FEE = 10000;
+// minimum wholesale fee. Exported so the Underwriting tab's waterfall
+// breakdown (MaoWaterfallCard) uses this exact same formula rather than a
+// second copy that could drift from it.
+export const MAO_ARV_PCT = 0.9;
+export const MAO_REPAIR_MULTIPLIER = 2;
+export const MAO_MIN_FEE = 10000;
 
 /** Local-buffered so typing a cost doesn't fire a mutation (and a cache
  *  invalidation + refetch) on every keystroke — committing on blur means one

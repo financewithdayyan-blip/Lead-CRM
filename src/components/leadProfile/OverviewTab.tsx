@@ -102,6 +102,15 @@ function LeadInformationCard({ lead }: { lead: Lead }) {
   );
 }
 
+/** lead.lotSize is free text from CSV import — usually a bare number like
+ * "3200.0" (sqft, no unit) rather than something already meant for display.
+ * Trims a trailing ".0" and adds "sqft" for that common case; anything else
+ * (e.g. "0.25 acres") is already self-describing and passes through as-is. */
+function formatLotSize(raw: string): string {
+  const trimmed = raw.trim();
+  return /^\d+(\.0+)?$/.test(trimmed) ? `${Math.round(parseFloat(trimmed)).toLocaleString()} sqft` : trimmed;
+}
+
 function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToProperty: () => void }) {
   const images = useMemo(() => (lead.files ?? []).filter((f) => isImageFile(f.fileType, f.fileName)), [lead.files]);
   const hero = images[0];
@@ -112,7 +121,7 @@ function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToP
     { label: 'Beds', value: lead.beds != null ? String(lead.beds) : '—' },
     { label: 'Baths', value: lead.baths != null ? String(lead.baths) : '—' },
     { label: 'Living area', value: lead.sqft != null ? `${lead.sqft.toLocaleString()} sqft` : '—' },
-    { label: 'Lot size', value: lead.lotSize || '—' },
+    { label: 'Lot size', value: lead.lotSize ? formatLotSize(lead.lotSize) : '—' },
     { label: 'Year built', value: lead.yearBuilt ? String(lead.yearBuilt) : '—' },
     { label: 'As-is value', value: lead.asIs != null ? formatCurrency(lead.asIs) : '—' },
     { label: 'Repairs', value: lead.estRepairs != null ? formatCurrency(lead.estRepairs) : '—' },

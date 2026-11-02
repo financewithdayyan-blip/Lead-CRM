@@ -344,12 +344,56 @@ function avatarColorFor(id: string): { bg: string; text: string } {
 const MAIN_PATH_STAGES: LeadStage[] = STAGE_ORDER.filter((s) => s !== 'voicemail' && s !== 'onhold' && s !== 'dead_declined' && s !== 'others');
 const OFF_PATH_STAGES: LeadStage[] = ['onhold', 'dead_declined', 'others'];
 
+/** A real native <select>, styled to sit inline as the stepper's own
+ * current-stage pill instead of a separate control next to it — picking
+ * any option (including an off-path one like On Hold) changes the lead's
+ * real stage. Replaces what used to be a second <select> floating beside
+ * the stepper, which wrapped onto its own ugly row once the stepper (up to
+ * 10 stages for an admin) wrapped first. */
+function CurrentStagePill({ lead, onChange }: { lead: Lead; onChange: (stage: LeadStage) => void }) {
+  const { profile } = useAuth();
+  const stages = visibleStagesFor(profile?.role === 'admin');
+  if (!stages.includes(lead.stage)) stages.push(lead.stage);
+  return (
+    <select
+      aria-label="Change stage"
+      value={lead.stage}
+      onChange={(e) => onChange(e.target.value as LeadStage)}
+      className="min-h-[32px] shrink-0 cursor-pointer appearance-none whitespace-nowrap rounded-full border-0 bg-primary pl-3 pr-6 text-[12.5px] font-semibold text-primary-text outline-none"
+      style={{
+        backgroundImage:
+          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 4l3 3 3-3' fill='none' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E\")",
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 8px center',
+      }}
+    >
+      {stages.map((s) => (
+        <option key={s} value={s} className="bg-surface text-text">
+          {STAGE_CONFIG[s].label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /** Real stage progress, not the mockup's invented "Appointment" step — this
  * CRM's own STAGE_ORDER/STAGE_CONFIG, done/current/todo against the lead's
  * actual stage, with "day N" on the current step computed from this lead's
  * own stage_change activity log (the same timestamp the backend itself
- * records, not an estimate). */
-function StageStepper({ lead, isAdmin, activities }: { lead: Lead; isAdmin: boolean; activities: Array<{ type: string; meta: Record<string, unknown>; createdAt: string }> }) {
+ * records, not an estimate). The current step doubles as the real stage
+ * picker (see CurrentStagePill) so there's no separate control to wrap
+ * onto its own line once this row wraps. */
+function StageStepper({
+  lead,
+  isAdmin,
+  activities,
+  onStageChange,
+}: {
+  lead: Lead;
+  isAdmin: boolean;
+  activities: Array<{ type: string; meta: Record<string, unknown>; createdAt: string }>;
+  onStageChange: (stage: LeadStage) => void;
+}) {
   const path = isAdmin ? MAIN_PATH_STAGES : MAIN_PATH_STAGES.filter((s) => !['inspection_walkthrough', 'in_title', 'closed'].includes(s));
   const isOffPath = OFF_PATH_STAGES.includes(lead.stage);
   const currentIdx = path.indexOf(lead.stage);
@@ -362,8 +406,8 @@ function StageStepper({ lead, isAdmin, activities }: { lead: Lead; isAdmin: bool
 
   if (isOffPath) {
     return (
-      <div className="flex items-center gap-2 text-[13px] text-text-3">
-        Currently <StageBadge stage={lead.stage} />
+      <div className="flex flex-wrap items-center gap-2 text-[13px] text-text-3">
+        Currently <CurrentStagePill lead={lead} onChange={onStageChange} />
       </div>
     );
   }
@@ -375,17 +419,21 @@ function StageStepper({ lead, isAdmin, activities }: { lead: Lead; isAdmin: bool
         const current = i === currentIdx;
         return (
           <li key={s} className="flex items-center gap-1.5">
-            {i > 0 && <span aria-hidden="true" className="h-px w-3.5 bg-border-2" />}
-            <span
-              className={cn(
-                'flex min-h-[32px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12.5px] font-semibold',
-                done ? 'border-transparent bg-surface-3 text-success' : current ? 'border-transparent bg-primary text-primary-text' : 'border-border-2 text-text-3',
-              )}
-            >
-              {done && <Check size={11} />}
-              {STAGE_CONFIG[s].label}
-              {current && daysInStage > 0 && <span className="opacity-80">· day {daysInStage}</span>}
-            </span>
+            {i > 0 && <span aria-hidden="true" className="h-px w-3.5 shrink-0 bg-border-2" />}
+            {current ? (
+              <CurrentStagePill lead={lead} onChange={onStageChange} />
+            ) : (
+              <span
+                className={cn(
+                  'flex min-h-[32px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12.5px] font-semibold',
+                  done ? 'border-transparent bg-surface-3 text-success' : 'border-border-2 text-text-3',
+                )}
+              >
+                {done && <Check size={11} />}
+                {STAGE_CONFIG[s].label}
+              </span>
+            )}
+            {current && daysInStage > 0 && <span className="whitespace-nowrap text-[11px] text-text-3">day {daysInStage}</span>}
           </li>
         );
       })}
@@ -550,27 +598,13 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-2 pt-3.5">
-          <StageStepper lead={lead} isAdmin={isAdmin} activities={activities} />
-          <select
-            className="input !w-auto !py-1 text-[12px]"
-            value={lead.stage}
-            onChange={(e) => updateLead.mutate({ id: lead.id, stage: e.target.value as LeadStage })}
-          >
-            {(() => {
-              const stages = visibleStagesFor(isAdmin);
-              // Always include the lead's current stage even if it'd
-              // otherwise be filtered out for this viewer (e.g. an admin
-              // looking at a lead a caller left in Voicemail) — dropping
-              // it would leave the select showing nothing selected.
-              if (!stages.includes(lead.stage)) stages.push(lead.stage);
-              return stages.map((s) => (
-                <option key={s} value={s}>
-                  {STAGE_CONFIG[s].label}
-                </option>
-              ));
-            })()}
-          </select>
+        <div className="border-t border-border-2 pt-3.5">
+          <StageStepper
+            lead={lead}
+            isAdmin={isAdmin}
+            activities={activities}
+            onStageChange={(stage) => updateLead.mutate({ id: lead.id, stage })}
+          />
         </div>
       </div>
 
