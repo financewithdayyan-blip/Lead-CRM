@@ -251,7 +251,9 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
               ) : (
                 <div key={item.key} className={`flex ${item.msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[75%] rounded-md px-3 py-2 text-[13px] ${
+                    className={`max-w-[75%] rounded-[18px] px-3.5 py-2 text-[13px] ${
+                      item.msg.direction === 'outbound' ? 'rounded-br-[4px]' : 'rounded-bl-[4px]'
+                    } ${
                       item.msg.isReaction
                         ? 'border border-dashed border-border-2 bg-surface text-text-3 italic'
                         : item.msg.direction === 'outbound'
