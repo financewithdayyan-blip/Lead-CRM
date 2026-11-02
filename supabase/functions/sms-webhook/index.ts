@@ -55,7 +55,14 @@ function guessContentType(name: string): string {
  * bucket the lead's Files tab already uses, keyed by storage_path instead
  * of the dead Zoom URL, so it can be signed on demand whenever the thread
  * is actually viewed. Best-effort per attachment — one failed download
- * shouldn't lose the rest or fail the whole webhook. */
+ * shouldn't lose the rest or fail the whole webhook.
+ *
+ * An image attachment also gets a matching lead_files row pointing at that
+ * same storage_path — no second upload, just a second pointer to the bytes
+ * already sitting in the bucket — so a seller's MMS photo shows up in the
+ * Property tab's gallery automatically instead of the admin having to
+ * download it from the thread and re-upload it by hand. Non-image
+ * attachments (vCards, etc.) stay thread-only; the gallery is photos. */
 async function rehostAttachments(
   admin: ReturnType<typeof createClient>,
   attachments: any[],
@@ -71,10 +78,17 @@ async function rehostAttachments(
         const bytes = new Uint8Array(await res.arrayBuffer());
         const safeName = (att.name as string) || `attachment-${i}`;
         const path = `${userId}/${leadId}/mms-${messageId}-${i}-${safeName}`;
+        const contentType = guessContentType(safeName);
         const { error: uploadErr } = await admin.storage
           .from('lead-files')
-          .upload(path, bytes, { contentType: guessContentType(safeName), upsert: true });
+          .upload(path, bytes, { contentType, upsert: true });
         if (uploadErr) throw uploadErr;
+        if (contentType.startsWith('image/')) {
+          const { error: fileRowErr } = await admin
+            .from('lead_files')
+            .insert({ lead_id: leadId, user_id: userId, storage_path: path, file_name: safeName, file_type: contentType });
+          if (fileRowErr) console.error(`lead_files insert failed for message ${messageId} attachment ${i}:`, fileRowErr);
+        }
         const { download_url: _dropped, ...rest } = att;
         return { ...rest, storage_path: path };
       } catch (e) {
