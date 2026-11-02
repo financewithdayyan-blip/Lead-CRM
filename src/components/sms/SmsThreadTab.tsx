@@ -257,14 +257,14 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
                         : item.msg.direction === 'outbound'
                           ? item.msg.aiGenerated
                             ? 'border border-dashed border-primary/50 bg-primary/15 text-text'
-                            : 'bg-primary text-primary-text'
+                            : 'bg-primary text-white'
                           : 'border border-border-2 bg-surface text-text'
                     }`}
                   >
                     {item.msg.isReaction && <ThumbsUp size={11} className="mb-1 inline-block opacity-60" />}
                     <div className="whitespace-pre-wrap">{item.msg.body}</div>
                     {item.msg.hasAttachments && item.msg.attachments.length === 0 && (
-                      <div className={`mt-1 flex items-center gap-1 text-[11px] ${item.msg.direction === 'outbound' && !item.msg.aiGenerated ? 'text-primary-text/70' : 'text-text-3'}`}>
+                      <div className={`mt-1 flex items-center gap-1 text-[11px] ${item.msg.direction === 'outbound' && !item.msg.aiGenerated ? 'text-white/70' : 'text-text-3'}`}>
                         <ImageIcon size={11} /> Attachment (MMS)
                       </div>
                     )}
@@ -279,7 +279,7 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
                           ) : (
                             <div
                               key={i}
-                              className={`flex items-center gap-1 text-[11px] ${item.msg.direction === 'outbound' && !item.msg.aiGenerated ? 'text-primary-text/70' : 'text-text-3'}`}
+                              className={`flex items-center gap-1 text-[11px] ${item.msg.direction === 'outbound' && !item.msg.aiGenerated ? 'text-white/70' : 'text-text-3'}`}
                               title={att.storage_path === undefined ? 'Sent before MMS viewing was supported — no longer retrievable.' : undefined}
                             >
                               <ImageIcon size={11} /> Attachment (MMS)
@@ -290,7 +290,7 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
                     )}
                     <div
                       className={`mt-1 flex items-center gap-1 text-[10px] ${
-                        item.msg.direction === 'outbound' && !item.msg.aiGenerated ? 'text-primary-text/60' : item.msg.aiGenerated ? 'text-primary-hover' : 'text-text-3'
+                        item.msg.direction === 'outbound' && !item.msg.aiGenerated ? 'text-white/60' : item.msg.aiGenerated ? 'text-primary-hover' : 'text-text-3'
                       }`}
                     >
                       {item.msg.aiGenerated && <Bot size={10} />}
