@@ -201,6 +201,7 @@ function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToP
     { label: 'Living area', value: lead.sqft != null ? `${lead.sqft.toLocaleString()} sqft` : '—' },
     { label: 'Lot size', value: lead.lotSize ? formatLotSize(lead.lotSize) : '—' },
     { label: 'Year built', value: lead.yearBuilt ? String(lead.yearBuilt) : '—' },
+    { label: 'Condition', value: lead.condition || '—' },
     { label: 'As-is value', value: lead.asIs != null ? formatCurrency(lead.asIs) : '—' },
     { label: 'Repairs', value: lead.estRepairs != null ? formatCurrency(lead.estRepairs) : '—' },
     { label: 'Auction', value: lead.auctionDate ? formatDate(lead.auctionDate) : '—', danger: !!lead.auctionDate },
@@ -227,12 +228,7 @@ function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToP
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11.5px] font-medium text-primary">{lead.propType}</span>
           )}
         </div>
-        {lead.condition && (
-          <div className="mt-1 text-[12.5px] text-text-3">
-            Condition: <span className="font-medium text-text-2">{lead.condition}</span>
-          </div>
-        )}
-        <div className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
           {specs.map((s) => (
             <div key={s.label} className={`rounded-md px-2.5 py-2 ${s.danger ? 'bg-danger-dim' : 'bg-surface-3'}`}>
               <div className={`text-[10.5px] font-semibold uppercase tracking-wide ${s.danger ? 'text-danger/80' : 'text-text-3'}`}>{s.label}</div>
