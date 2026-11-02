@@ -726,6 +726,34 @@ export function useCreatePacket() {
   });
 }
 
+/** Re-pulls this packet's repairs from the lead's current lead_repairs —
+ *  useCreatePacket only seeds repairs once, at creation, so a packet made
+ *  before the Rehab Cost Estimator was ever run on this lead (or before it
+ *  was last re-run) never picks up the breakdown on its own. Replaces
+ *  wholesale (delete then insert), same as useReplaceLeadRepairs, so this
+ *  is safe to click more than once rather than piling up duplicates. */
+export function useSyncPacketRepairsFromLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ packetId, leadId }: { packetId: string; leadId: string }) => {
+      const { data: repairs } = await supabase.from('lead_repairs').select('item, cost').eq('lead_id', leadId).order('sort_order');
+      await supabase.from('packet_repairs').delete().eq('packet_id', packetId);
+      if (repairs?.length) {
+        const { error } = await supabase
+          .from('packet_repairs')
+          .insert(repairs.map((r, i) => ({ packet_id: packetId, item: r.item, cost: r.cost, sort_order: i })));
+        if (error) throw error;
+      }
+      // Returned (not just invalidated) so the builder's own local repairs
+      // state — hydrated once from the packet when it first opened, not
+      // re-read from the query automatically — can be updated in place
+      // without the admin having to close and reopen the builder.
+      return (repairs ?? []).map((r) => ({ item: r.item, cost: Number(r.cost ?? 0) }));
+    },
+    onSuccess: (_items, { packetId }) => qc.invalidateQueries({ queryKey: ['deal_packet', packetId] }),
+  });
+}
+
 type PacketFields = Partial<
   Pick<
     DealPacket,

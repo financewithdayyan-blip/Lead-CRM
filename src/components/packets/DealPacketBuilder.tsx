@@ -12,6 +12,7 @@ import {
   Loader2,
   Mail,
   Plus,
+  RefreshCw,
   Trash2,
   Upload,
   Video,
@@ -33,6 +34,7 @@ import {
   useCopyLeadFileToPacket,
   useCopyLeadFileToPacketVideo,
   useSavePacket,
+  useSyncPacketRepairsFromLead,
   useUploadPacketImage,
   useUploadPacketVideo,
   usePacket,
@@ -94,6 +96,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const copyLeadFile = useCopyLeadFileToPacket();
   const uploadVideo = useUploadPacketVideo();
   const copyLeadVideoFile = useCopyLeadFileToPacketVideo();
+  const syncRepairs = useSyncPacketRepairsFromLead();
   const fileRef = useRef<HTMLInputElement>(null);
   const videoFileRef = useRef<HTMLInputElement>(null);
   const [showLeadFiles, setShowLeadFiles] = useState(false);
@@ -857,7 +860,22 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
 
           {/* ── Repairs ─────────────────────────────────────────────────── */}
           <Section title="Repair estimate" hint="Search to add a common repair, or type one that isn't listed.">
-            <div className="space-y-2">
+            <button
+              type="button"
+              className="btn !px-2.5 !py-1.5 text-[12px]"
+              disabled={syncRepairs.isPending}
+              onClick={() =>
+                syncRepairs.mutate(
+                  { packetId, leadId: lead.id },
+                  { onSuccess: (items) => setRepairs(items) },
+                )
+              }
+              title="Re-pull this lead's current itemized repairs (Rehab Cost Estimator / lead_repairs) — replaces what's below"
+            >
+              <RefreshCw size={13} className={syncRepairs.isPending ? 'animate-spin' : ''} />
+              {syncRepairs.isPending ? 'Syncing…' : "Sync from lead's repairs"}
+            </button>
+            <div className="mt-2 space-y-2">
               {repairs.map((r, i) => {
                 const Icon = repairIcon(r.item);
                 return (
