@@ -1,22 +1,22 @@
 import { LeadCompsSection } from './LeadCompsSection';
 import { MAO_ARV_PCT, MAO_REPAIR_MULTIPLIER, MAO_MIN_FEE } from './RepairEstimateSection';
 import { RehabCostEstimator } from './RehabCostEstimator';
-import { useLeadRepairs } from '@/hooks/useLeadRepairs';
 import { formatCurrency } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
-/** Visual breakdown of the exact same MAO formula RepairEstimateSection
- * already computes and lets you apply as the Cash Offer — this card adds
- * nothing new to the math, it just shows the real breakdown behind the
- * number (as one scale from $0 to ARV, same bar-with-tick-marks language
- * as the Overview tab's "Where the deal stands" card) instead of a single
- * inline line of text, plus a what-if preview. The seller's asking price
- * (lead.askingPrice, the same real field that card uses) is plotted on the
- * same scale so it's clear at a glance whether the ask leaves room under
- * the max offer or sits over it. */
+/** Visual breakdown of the MAO formula — shows the real breakdown behind
+ * the number (as one scale from $0 to ARV, same bar-with-tick-marks
+ * language as the Overview tab's "Where the deal stands" card) instead of
+ * a single inline line of text. The seller's asking price (lead.askingPrice,
+ * the same real field that card uses) is plotted on the same scale so it's
+ * clear at a glance whether the ask leaves room under the max offer or sits
+ * over it. Repairs comes from lead.estRepairs — the same field the Rehab
+ * Cost Estimator's "Use as Est. Repairs" button writes to, and the one the
+ * Property tab / Overview specs grid already show — not the itemized
+ * lead_repairs table, which no longer has an editing UI anywhere on this
+ * page since the Repair Estimate card was removed. */
 function MaoWaterfallCard({ lead }: { lead: Lead }) {
-  const { data: repairs = [] } = useLeadRepairs(lead.id);
-  const totalRepairs = repairs.reduce((sum, r) => sum + r.cost, 0);
+  const totalRepairs = lead.estRepairs ?? 0;
 
   if (lead.arv == null) {
     return (
