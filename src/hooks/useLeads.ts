@@ -576,6 +576,15 @@ export function useUpdateLead() {
       // Instant, optimistic-feeling patch first — every cache gets exactly
       // what this call itself sent, with no round trip to wait on.
       patchLeadInCaches(qc, id, (l) => ({ ...l, ...updates }));
+      // patchLeadInCaches only touches the 'leads'-prefixed list caches
+      // (Kanban/table) — the Lead Profile page's own full-detail cache lives
+      // at ['lead', id] separately. refetchAndPatchLead below only
+      // reconciles LEAD_LIST_SELECT's trimmed columns into that cache (by
+      // design — see its own comment), so a detail-only field like
+      // occupancy/beds/repairs/etc wouldn't otherwise show up on the profile
+      // page itself until a reload. `updates` is exactly what was just sent
+      // and saved, so patching it straight in here is always safe.
+      qc.setQueryData(['lead', id], (old: Lead | undefined) => (old ? { ...old, ...updates } : old));
       qc.invalidateQueries({ queryKey: ['activities', id] });
       // A stage move writes its own lead_activities row via the DB trigger
       // (log_lead_stage_change), invisible to the client-side cache patch
