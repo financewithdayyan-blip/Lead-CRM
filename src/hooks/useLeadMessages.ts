@@ -25,6 +25,10 @@ export interface ThreadMessage {
   hasAttachments: boolean;
   attachments: ThreadAttachment[];
   isReaction: boolean;
+  /** Set by ai-reply on its own sends (meta.aiGenerated), absent on manual/
+   * bulk sends (send-sms never sets it) — the real signal for whether this
+   * specific outbound message was the AI or a human, not a guess. */
+  aiGenerated: boolean;
 }
 
 /** Inbound texts and outbound sends merged into one chronological thread. */
@@ -91,6 +95,7 @@ export function useLeadThread(leadId: string | undefined) {
         hasAttachments: m.has_attachments,
         attachments: (m.attachments as ThreadAttachment[] | null) ?? [],
         isReaction: m.is_reaction,
+        aiGenerated: false,
       }));
 
       // Outbound is read from lead_activities rather than send_log — send_log
@@ -107,6 +112,7 @@ export function useLeadThread(leadId: string | undefined) {
           hasAttachments: false,
           attachments: [],
           isReaction: false,
+          aiGenerated: !!(a.meta as any)?.aiGenerated,
         }));
 
       return [...inbound, ...outbound].sort((a, b) => a.at.localeCompare(b.at));
@@ -213,6 +219,7 @@ export function useSendManualReply() {
         hasAttachments: false,
         attachments: [],
         isReaction: false,
+        aiGenerated: false,
       };
       qc.setQueryData<ThreadMessage[]>(['lead_thread', leadId], (old) => [...(old ?? []), optimistic]);
       return { previous };

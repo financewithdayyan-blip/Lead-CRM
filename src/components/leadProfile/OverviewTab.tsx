@@ -37,6 +37,84 @@ function InfoCell(props: React.ComponentProps<typeof EditableField>) {
   );
 }
 
+/** The mockup's "Where the deal stands" shows a 3-point bar — your current
+ * offer, their asking price, and your max offer — but this CRM has no field
+ * for a live "current offer" distinct from Max Offer, so this is the honest
+ * 2-point version: Asking vs. Max Offer, both real lead fields already
+ * shown elsewhere on this tab (just not compared against each other). */
+function DealStandsCard({ lead }: { lead: Lead }) {
+  const asking = lead.askingPrice;
+  const maxOffer = lead.maxOffer;
+  if (asking == null && maxOffer == null) return null;
+
+  if (asking == null || maxOffer == null) {
+    return (
+      <div className="card !p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Where the deal stands</div>
+        <div className="mt-1.5 text-[13px] text-text-2">
+          {asking != null ? (
+            <>Asking <b className="font-mono text-text">{formatCurrency(asking)}</b></>
+          ) : (
+            <>Max offer <b className="font-mono text-text">{formatCurrency(maxOffer)}</b></>
+          )}
+          {' — set '}
+          {asking == null ? 'an asking price' : 'a max offer'} to see the gap.
+        </div>
+      </div>
+    );
+  }
+
+  const gap = asking - maxOffer;
+  const over = gap > 0;
+  const gapColor = over ? '#ef4444' : '#10b981';
+  const lo = Math.min(asking, maxOffer);
+  const hi = Math.max(asking, maxOffer);
+  const span = Math.max(hi - lo, 1);
+  const pad = span * 0.35 + 2000;
+  const scaleMin = lo - pad;
+  const scaleMax = hi + pad;
+  const pct = (v: number) => ((v - scaleMin) / (scaleMax - scaleMin)) * 100;
+
+  return (
+    <div className="card !p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Where the deal stands</div>
+        <div className="font-mono text-[11px] text-text-3">
+          {formatCurrency(scaleMin)} to {formatCurrency(scaleMax)}
+        </div>
+      </div>
+
+      <div className="relative mt-5 h-2 rounded-full bg-surface-3">
+        <div
+          className="absolute h-2 rounded-full"
+          style={{ left: `${pct(lo)}%`, width: `${pct(hi) - pct(lo)}%`, background: `${gapColor}55` }}
+        />
+        <div className="absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-primary" style={{ left: `${pct(maxOffer)}%` }} />
+        <div className="absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full" style={{ left: `${pct(asking)}%`, background: gapColor }} />
+      </div>
+
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+        <span className="flex items-center gap-1.5 text-text-2">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+          Max offer <b className="font-mono text-text">{formatCurrency(maxOffer)}</b>
+        </span>
+        <span className="flex items-center gap-1.5 text-text-2">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: gapColor }} />
+          Asking <b className="font-mono text-text">{formatCurrency(asking)}</b>
+        </span>
+      </div>
+
+      <div className="mt-2 text-[12.5px] font-medium" style={{ color: gapColor }}>
+        {gap === 0
+          ? 'Asking matches your max offer exactly.'
+          : over
+            ? `Asking is ${formatCurrency(gap)} over your max offer.`
+            : `${formatCurrency(-gap)} of room between your max offer and asking.`}
+      </div>
+    </div>
+  );
+}
+
 function LeadInformationCard({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
 
@@ -330,6 +408,7 @@ export function OverviewTab({
         </fieldset>
       </div>
 
+      <DealStandsCard lead={lead} />
       <PropertySummaryCard lead={lead} onJumpToProperty={onJumpToProperty} />
       <LeadInformationCard lead={lead} />
 
