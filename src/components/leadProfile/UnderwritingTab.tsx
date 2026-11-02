@@ -1,5 +1,5 @@
 import { LeadCompsSection } from './LeadCompsSection';
-import { RepairEstimateSection, MAO_ARV_PCT, MAO_REPAIR_MULTIPLIER, MAO_MIN_FEE } from './RepairEstimateSection';
+import { MAO_ARV_PCT, MAO_REPAIR_MULTIPLIER, MAO_MIN_FEE } from './RepairEstimateSection';
 import { RehabCostEstimator } from './RehabCostEstimator';
 import { useLeadRepairs } from '@/hooks/useLeadRepairs';
 import { formatCurrency } from '@/lib/utils';
@@ -119,7 +119,6 @@ export function UnderwritingTab({ lead }: { lead: Lead }) {
       <MaoWaterfallCard lead={lead} />
       <RehabCostEstimator lead={lead} />
       <LeadCompsSection lead={lead} />
-      <RepairEstimateSection lead={lead} />
     </div>
   );
 }
