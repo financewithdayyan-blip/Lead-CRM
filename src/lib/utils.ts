@@ -26,6 +26,22 @@ export function isVideoFile(fileType: string | null, fileName: string): boolean 
   return /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(fileName);
 }
 
+/** Turns a plain option list into EditableField's {value, label} shape, with
+ *  a blank "—" first and the record's own current free-text value appended
+ *  at the end (if it's set and doesn't already match one of the real
+ *  options) — real leads have years of free-typed values in fields being
+ *  switched from text to a dropdown, so the switch can't silently make an
+ *  existing value disappear from view just because it's not one of the
+ *  standard choices. Shared by PropertyTab (Type/Condition) and OverviewTab
+ *  (Owner/Solution) rather than each keeping its own copy. */
+export function selectOptions(options: string[], current: string | null): Array<{ value: string; label: string }> {
+  const list = [{ value: '', label: '—' }, ...options.map((o) => ({ value: o, label: o }))];
+  if (current && !options.some((o) => o.toLowerCase() === current.toLowerCase())) {
+    list.push({ value: current, label: current });
+  }
+  return list;
+}
+
 /** Admins often paste a bare "facebook.com/..." without a scheme — this makes
  *  it a clickable href either way instead of a relative-path 404. */
 export function externalHref(url: string): string {

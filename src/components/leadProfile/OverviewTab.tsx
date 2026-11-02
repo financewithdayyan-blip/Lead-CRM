@@ -4,8 +4,18 @@ import { useUpdateLead } from '@/hooks/useLeads';
 import { useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { useActivities, useAddActivity } from '@/hooks/useActivities';
 import { EditableField } from '@/components/leadProfile/EditableField';
-import { currencyDigitsOnly, formatCurrency, formatDate, formatDateTime, isImageFile } from '@/lib/utils';
+import { currencyDigitsOnly, formatCurrency, formatDate, formatDateTime, isImageFile, selectOptions } from '@/lib/utils';
+import { DEAL_TYPE_CONFIG } from '@/types/domain';
 import type { Lead } from '@/types/domain';
+
+// Common wholesaling ownership-confirmation categories from the call
+// script — not an existing enum elsewhere in the app.
+const OWNER_TYPE_OPTIONS = ['Individual', 'Multiple Owners', 'Trust', 'LLC / Company', 'Estate / Inheritance', 'Bank-Owned (REO)'];
+
+// Same vocabulary as a Deal Packet's own dealTypes — "Cash Offer" here and
+// "Cash Offer" on the packet mean the same real deal structure, not two
+// independently-typed descriptions of it.
+const SOLUTION_OPTIONS = Object.values(DEAL_TYPE_CONFIG).map((d) => d.label);
 
 const TEMPERATURE_LABEL = ['Cold', 'Warm', 'Hot'];
 const TEMPERATURE_OPTIONS = [
@@ -91,10 +101,18 @@ function LeadInformationCard({ lead }: { lead: Lead }) {
           <InfoCell label="Source" value={lead.source ?? ''} onSave={(v) => saveField({ source: v.trim() || null })} />
           <InfoCell
             label="Owner"
+            type="select"
             value={lead.scriptAnswers?.confirmation_owner ?? ''}
-            onSave={(v) => saveScriptAnswer('confirmation_owner', v.trim())}
+            options={selectOptions(OWNER_TYPE_OPTIONS, lead.scriptAnswers?.confirmation_owner ?? null)}
+            onSave={(v) => saveScriptAnswer('confirmation_owner', v)}
           />
-          <InfoCell label="Solution" value={lead.solution ?? ''} onSave={(v) => saveField({ solution: v.trim() || null })} />
+          <InfoCell
+            label="Solution"
+            type="select"
+            value={lead.solution ?? ''}
+            options={selectOptions(SOLUTION_OPTIONS, lead.solution)}
+            onSave={(v) => saveField({ solution: v || null })}
+          />
           <InfoCell label="Next Step" value={lead.nextStep ?? ''} onSave={(v) => saveField({ nextStep: v.trim() || null })} />
         </fieldset>
       </div>

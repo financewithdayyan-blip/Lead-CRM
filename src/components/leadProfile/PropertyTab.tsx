@@ -3,7 +3,7 @@ import { ExternalLink, Loader2, Trash2, Upload, Video } from 'lucide-react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl, useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { EditableField } from '@/components/leadProfile/EditableField';
-import { currencyDigitsOnly, formatCurrency, formatDateTime, isImageFile, isVideoFile } from '@/lib/utils';
+import { currencyDigitsOnly, formatCurrency, formatDateTime, isImageFile, isVideoFile, selectOptions } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
 const OCCUPANCY_LABEL: Record<NonNullable<Lead['occupancy']>, string> = {
@@ -22,20 +22,6 @@ const PROP_TYPE_OPTIONS = ['Single Family', 'Multi-Family', 'Townhome', 'Condo',
 // the app (BuyerCondition is a buyer's own fixer/turnkey/either preference,
 // not a property's condition), so this is a first-class list of its own.
 const CONDITION_OPTIONS = ['Turnkey', 'Light Rehab', 'Moderate Rehab', 'Major Rehab', 'Tear Down'];
-
-/** Turns a plain option list into EditableField's {value, label} shape, with
- *  a blank "—" first and the record's own current free-text value appended
- *  at the end (if it's set and doesn't already match one of the real
- *  options) — real leads have years of free-typed values in these fields,
- *  so switching to a dropdown can't silently make an existing one disappear
- *  from view just because it's not one of the standard choices. */
-function selectOptions(options: string[], current: string | null): Array<{ value: string; label: string }> {
-  const list = [{ value: '', label: '—' }, ...options.map((o) => ({ value: o, label: o }))];
-  if (current && !options.some((o) => o.toLowerCase() === current.toLowerCase())) {
-    list.push({ value: current, label: current });
-  }
-  return list;
-}
 
 const REPAIR_FLAGS: Array<{ key: keyof Lead['repairs']; label: string }> = [
   { key: 'cosmetics', label: 'Cosmetics' },
