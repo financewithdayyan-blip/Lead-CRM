@@ -12,6 +12,31 @@ const OCCUPANCY_LABEL: Record<NonNullable<Lead['occupancy']>, string> = {
   vacant: 'Vacant',
 };
 
+// Same property-type vocabulary as BUYER_PROPERTY_TYPE_LABELS (Disposition's
+// cash-buyer matching) — reused here rather than inventing a second, slightly
+// different one for leads, so "this buyer wants Multi-Family" and "this
+// lead's Type is Multi-Family" mean the same thing.
+const PROP_TYPE_OPTIONS = ['Single Family', 'Multi-Family', 'Townhome', 'Condo', 'Land', 'Mobile / Manufactured', 'Other'];
+
+// Standard wholesaling rehab-scope terms — not an existing enum elsewhere in
+// the app (BuyerCondition is a buyer's own fixer/turnkey/either preference,
+// not a property's condition), so this is a first-class list of its own.
+const CONDITION_OPTIONS = ['Turnkey', 'Light Rehab', 'Moderate Rehab', 'Major Rehab', 'Tear Down'];
+
+/** Turns a plain option list into EditableField's {value, label} shape, with
+ *  a blank "—" first and the record's own current free-text value appended
+ *  at the end (if it's set and doesn't already match one of the real
+ *  options) — real leads have years of free-typed values in these fields,
+ *  so switching to a dropdown can't silently make an existing one disappear
+ *  from view just because it's not one of the standard choices. */
+function selectOptions(options: string[], current: string | null): Array<{ value: string; label: string }> {
+  const list = [{ value: '', label: '—' }, ...options.map((o) => ({ value: o, label: o }))];
+  if (current && !options.some((o) => o.toLowerCase() === current.toLowerCase())) {
+    list.push({ value: current, label: current });
+  }
+  return list;
+}
+
 const REPAIR_FLAGS: Array<{ key: keyof Lead['repairs']; label: string }> = [
   { key: 'cosmetics', label: 'Cosmetics' },
   { key: 'hvac', label: 'HVAC' },
@@ -141,7 +166,13 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
        *  lost-update race). */}
       <fieldset disabled={updateLead.isPending} className="contents">
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5 sm:grid-cols-3 lg:grid-cols-4">
-          <EditableField label="Type" value={lead.propType ?? ''} onSave={(v) => saveField({ propType: v.trim() || null })} />
+          <EditableField
+            label="Type"
+            type="select"
+            value={lead.propType ?? ''}
+            options={selectOptions(PROP_TYPE_OPTIONS, lead.propType)}
+            onSave={(v) => saveField({ propType: v || null })}
+          />
           <EditableField
             label="Bedrooms"
             type="number"
@@ -167,7 +198,13 @@ function PropertyDetailsCard({ lead }: { lead: Lead }) {
             value={lead.yearBuilt?.toString() ?? ''}
             onSave={(v) => saveField({ yearBuilt: v ? Number(v) : null })}
           />
-          <EditableField label="Condition" value={lead.condition ?? ''} onSave={(v) => saveField({ condition: v.trim() || null })} />
+          <EditableField
+            label="Condition"
+            type="select"
+            value={lead.condition ?? ''}
+            options={selectOptions(CONDITION_OPTIONS, lead.condition)}
+            onSave={(v) => saveField({ condition: v || null })}
+          />
           <EditableField
             label="Occupancy"
             type="select"
