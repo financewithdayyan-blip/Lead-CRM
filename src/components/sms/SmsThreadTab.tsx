@@ -150,11 +150,13 @@ function TemplatesMenu({ lead, onPick }: { lead: Lead; onPick: (body: string) =>
 type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'msg'; key: string; msg: ThreadMessage };
 
 // A WhatsApp-style wallpaper for the thread itself — dark base + a faint
-// tiled line pattern, always dark regardless of the app's light/dark theme
+// tiled pattern, always dark regardless of the app's light/dark theme
 // (purely decorative, so it doesn't need to track the theme tokens the rest
-// of the UI does).
+// of the UI does). Small rings kept well clear of the tile edges (instead
+// of continuous lines crossing them) so repeats never produce a visible
+// seam — every shape is fully self-contained inside its own tile.
 const CHAT_BG_PATTERN =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23262c40' stroke-width='1.4' stroke-linecap='round' stroke-opacity='0.6'%3E%3Cpath d='M-10 20 C 20 0, 40 40, 70 20 S 130 0, 160 20 S 220 40, 210 20'/%3E%3Cpath d='M-10 60 C 15 85, 50 40, 80 60 S 140 90, 170 60 S 215 35, 210 60'/%3E%3Cpath d='M-10 100 C 25 120, 55 75, 90 100 S 150 130, 175 100 S 210 70, 210 100'/%3E%3Cpath d='M-10 140 C 20 160, 50 115, 85 140 S 145 170, 175 140 S 215 110, 210 140'/%3E%3Cpath d='M-10 180 C 15 200, 60 155, 95 180 S 150 210, 180 180 S 210 150, 210 180'/%3E%3Cpath d='M20 -10 C 0 20, 40 40, 20 70 S 0 130, 20 160 S 40 195, 20 200'/%3E%3Cpath d='M100 -10 C 80 20, 120 40, 100 70 S 80 130, 100 160 S 120 195, 100 200'/%3E%3Cpath d='M180 -10 C 160 20, 200 40, 180 70 S 160 130, 180 160 S 200 195, 180 200'/%3E%3C/g%3E%3C/svg%3E";
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23242939' stroke-width='1.1' stroke-opacity='0.45'%3E%3Ccircle cx='18' cy='18' r='9'/%3E%3Ccircle cx='68' cy='14' r='5'/%3E%3Ccircle cx='96' cy='52' r='11'/%3E%3Ccircle cx='44' cy='58' r='6'/%3E%3Ccircle cx='14' cy='88' r='8'/%3E%3Ccircle cx='64' cy='94' r='12'/%3E%3Ccircle cx='100' cy='100' r='5'/%3E%3C/g%3E%3C/svg%3E";
 
 export function SmsThreadTab({ lead }: { lead: Lead }) {
   const { data: thread = [], isLoading } = useLeadThread(lead.id);
