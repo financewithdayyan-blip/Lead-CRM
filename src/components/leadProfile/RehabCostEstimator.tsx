@@ -22,6 +22,10 @@ const HVAC_COST = 9500;
 const ELECTRICAL_COST = 6500;
 const PLUMBING_COST = 6000;
 const EXTERIOR_PAINT_COST = 6500;
+// Not part of the rfphomes.com source formula — added per the user's own
+// number for this line item, same flat-cost pattern as HVAC/Electrical/
+// Plumbing/Exterior paint above.
+const FOUNDATION_COST = 12000;
 const RANGE_PCT = 0.12;
 
 type Finish = keyof typeof FINISH_MULTIPLIER;
@@ -59,6 +63,7 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
   const [electrical, setElectrical] = useState(false);
   const [plumbing, setPlumbing] = useState(false);
   const [exteriorPaint, setExteriorPaint] = useState(false);
+  const [foundation, setFoundation] = useState(false);
   const [contingencyPct, setContingencyPct] = useState(15);
   const [applied, setApplied] = useState(false);
 
@@ -74,6 +79,7 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
     { label: 'Electrical', amount: electrical ? ELECTRICAL_COST * f : 0 },
     { label: 'Plumbing', amount: plumbing ? PLUMBING_COST * f : 0 },
     { label: 'Exterior paint', amount: exteriorPaint ? EXTERIOR_PAINT_COST * f : 0 },
+    { label: 'Foundation', amount: foundation ? FOUNDATION_COST * f : 0 },
   ];
   const subtotal = items.reduce((sum, i) => sum + i.amount, 0);
   const contingency = subtotal * (contingencyPct / 100);
@@ -89,6 +95,7 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
     ['Electrical', electrical, setElectrical],
     ['Plumbing', plumbing, setPlumbing],
     ['Exterior paint', exteriorPaint, setExteriorPaint],
+    ['Foundation', foundation, setFoundation],
   ];
 
   return (
