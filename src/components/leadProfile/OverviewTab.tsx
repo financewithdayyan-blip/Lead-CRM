@@ -316,7 +316,7 @@ export function OverviewTab({
           <div className="card !p-3.5">
             <EditableField
               variant="stat"
-              label="Max Offer"
+              label="Offered Price"
               value={lead.maxOffer?.toString() ?? ''}
               display={lead.maxOffer != null ? formatCurrency(lead.maxOffer) : '—'}
               filter={currencyDigitsOnly}
