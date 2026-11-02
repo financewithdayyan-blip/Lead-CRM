@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRightLeft, Check, MessageSquareText, MoreHorizontal, Pencil, PhoneCall, Share2 } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, Check, MessageSquareText, MoreHorizontal, Pencil, PhoneCall, Plus, Share2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLead, useUpdateLead, useSetLeadTags } from '@/hooks/useLeads';
 import { useTags, useCreateTag, nextTagColor } from '@/hooks/useTags';
@@ -11,8 +11,9 @@ import { useScoreLead } from '@/hooks/useScoreLead';
 import { StageBadge } from '@/components/ui/StageBadge';
 import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { STAGE_CONFIG, STAGE_ORDER, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
-import { cn, formatPhone, initials, toE164 } from '@/lib/utils';
+import { cn, formatPhone, initials, titleCase, toE164 } from '@/lib/utils';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { scoreColor } from '@/lib/aiScore';
 import { ContactSidebarCard } from '@/components/leadProfile/ContactSidebarCard';
@@ -413,23 +414,27 @@ function StageStepper({
   }
 
   return (
-    <ol aria-label="Deal stage" className="flex flex-wrap items-center gap-1.5">
+    <ol
+      aria-label="Deal stage"
+      className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5 [&::-webkit-scrollbar]:hidden"
+      style={{ scrollbarWidth: 'none' }}
+    >
       {path.map((s, i) => {
         const done = currentIdx >= 0 && i < currentIdx;
         const current = i === currentIdx;
         return (
-          <li key={s} className="flex items-center gap-1.5">
-            {i > 0 && <span aria-hidden="true" className="h-px w-3.5 shrink-0 bg-border-2" />}
+          <li key={s} className="flex shrink-0 items-center gap-1.5">
+            {i > 0 && <span aria-hidden="true" className="h-px w-3 shrink-0 bg-border-2" />}
             {current ? (
               <CurrentStagePill lead={lead} onChange={onStageChange} />
             ) : (
               <span
                 className={cn(
-                  'flex min-h-[32px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12.5px] font-semibold',
+                  'flex min-h-[28px] items-center gap-1 whitespace-nowrap rounded-full border px-2.5 text-[12px] font-semibold',
                   done ? 'border-transparent bg-surface-3 text-success' : 'border-border-2 text-text-3',
                 )}
               >
-                {done && <Check size={11} />}
+                {done && <Check size={10} />}
                 {STAGE_CONFIG[s].label}
               </span>
             )}
@@ -502,8 +507,8 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <h1 className="text-[22px] font-extrabold tracking-tight text-text">
-                  {lead.firstName} {lead.lastName}
+                <h1 className="text-[21px] font-bold tracking-tight text-text" title={`${lead.firstName} ${lead.lastName}`}>
+                  {titleCase(lead.firstName)} {titleCase(lead.lastName)}
                 </h1>
                 {lead.leadNum && <span className="text-[12px] text-text-3">#{lead.leadNum}</span>}
                 <button className="text-text-3 hover:text-primary" title="Edit contact info" onClick={() => setEditContactOpen(true)}>
@@ -653,61 +658,88 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
   );
 }
 
+/** One "+" affordance instead of two separate controls (a select for
+ * existing tags, a text link for a new one) sitting side by side in the
+ * header — a dashed circle matching the mockup's own add-tag button, opening
+ * a single popover that covers both. */
 function TagPicker({ lead, tags }: { lead: Lead; tags: Tag[] }) {
   const setLeadTags = useSetLeadTags();
   const createTag = useCreateTag();
   const available = tags.filter((t) => !lead.tagIds.includes(t.id));
-  const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
-  if (adding) {
-    return (
-      <div className="flex items-center gap-1">
-        <input
-          autoFocus
-          className="input !w-auto !py-1 text-[12px]"
-          placeholder="New tag name"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={async (e) => {
-            if (e.key !== 'Enter' || !newName.trim()) return;
-            const c = nextTagColor(tags.length);
-            const tag = await createTag.mutateAsync({ name: newName.trim(), colorBg: c.bg, colorText: c.text });
-            setLeadTags.mutate({ leadId: lead.id, tagIds: [...lead.tagIds, tag.id] });
-            setNewName('');
-            setAdding(false);
-          }}
-        />
-        <button className="text-[11px] text-text-3 hover:text-text" onClick={() => setAdding(false)}>
-          Cancel
-        </button>
-      </div>
-    );
+  async function addNew() {
+    const name = newName.trim();
+    if (!name) return;
+    const c = nextTagColor(tags.length);
+    const tag = await createTag.mutateAsync({ name, colorBg: c.bg, colorText: c.text });
+    setLeadTags.mutate({ leadId: lead.id, tagIds: [...lead.tagIds, tag.id] });
+    setNewName('');
   }
 
   return (
-    <div className="flex items-center gap-1.5">
-      {available.length > 0 && (
-        <select
-          className="input !w-auto !py-1 text-[12px]"
-          value=""
-          onChange={(e) => {
-            if (!e.target.value) return;
-            setLeadTags.mutate({ leadId: lead.id, tagIds: [...lead.tagIds, e.target.value] });
-          }}
+    <DropdownMenu
+      align="start"
+      width="w-60"
+      trigger={({ onClick, ref }) => (
+        <button
+          ref={ref}
+          type="button"
+          onClick={onClick}
+          aria-label="Add tag"
+          title="Add tag"
+          className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-dashed border-border-2 text-text-3 hover:border-primary hover:text-primary"
         >
-          <option value="">+ Add tag</option>
-          {available.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+          <Plus size={12} />
+        </button>
       )}
-      <button className="text-[11px] text-text-3 hover:text-primary" onClick={() => setAdding(true)}>
-        + New tag
-      </button>
-    </div>
+    >
+      {(close) => (
+        <div className="p-1.5">
+          {available.length > 0 && (
+            <div className="max-h-48 overflow-y-auto">
+              {available.map((t) => (
+                <button
+                  key={t.id}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12.5px] text-text hover:bg-surface-3"
+                  onClick={() => {
+                    setLeadTags.mutate({ leadId: lead.id, tagIds: [...lead.tagIds, t.id] });
+                    close();
+                  }}
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: t.colorText }} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className={available.length > 0 ? 'mt-1.5 flex items-center gap-1.5 border-t border-border-2 px-1 pt-1.5' : 'flex items-center gap-1.5 px-1'}>
+            <input
+              autoFocus
+              className="input !w-auto flex-1 !py-1 text-[12px]"
+              placeholder="New tag name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key !== 'Enter' || !newName.trim()) return;
+                await addNew();
+                close();
+              }}
+            />
+            <button
+              className="btn btn-primary !px-2 !py-1 text-[11px]"
+              disabled={!newName.trim()}
+              onClick={async () => {
+                await addNew();
+                close();
+              }}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+    </DropdownMenu>
   );
 }
 

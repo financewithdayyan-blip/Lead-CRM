@@ -62,45 +62,33 @@ function aiStatusFor(lead: Lead, globalEnabled: boolean): { state: AiState; labe
   };
 }
 
-function AiStatusChip({ lead, globalEnabled }: { lead: Lead; globalEnabled: boolean }) {
-  const status = aiStatusFor(lead, globalEnabled);
-  const cls =
-    status.state === 'optedOut'
-      ? 'bg-danger-dim text-danger'
-      : status.state === 'off'
-        ? 'bg-border-2 text-text-2'
-        : status.state === 'pausedLead'
-          ? 'bg-warning-dim text-warning'
-          : 'bg-success/15 text-success';
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`} title={status.detail}>
-      {status.label}
-    </span>
-  );
-}
-
-/** Real toggle for this lead's own ai_reply_paused flag — disabled (with an
- * explanation) whenever flipping it genuinely wouldn't change anything,
- * same cases the old inline "Resume AI" button only rendered for. */
-function AiAutoReplyCard({ lead, globalEnabled }: { lead: Lead; globalEnabled: boolean }) {
+/** A real toggle for this lead's own ai_reply_paused flag sitting right
+ * where the status used to be a plain pill — no separate card needed for
+ * one switch. Disabled (with the reason in its title) whenever flipping it
+ * genuinely wouldn't change anything, same cases the old "Resume AI" link
+ * only rendered for. */
+function AiStatusToggle({ lead, globalEnabled }: { lead: Lead; globalEnabled: boolean }) {
   const updateLead = useUpdateLead();
   const status = aiStatusFor(lead, globalEnabled);
   const checked = status.state === 'active';
+  const textCls =
+    status.state === 'optedOut'
+      ? 'text-danger'
+      : status.state === 'off'
+        ? 'text-text-2'
+        : status.state === 'pausedLead'
+          ? 'text-warning'
+          : 'text-success';
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[14px] font-semibold text-text">
-          <Bot size={15} className="text-text-3" /> AI auto-reply
-        </div>
-        <Switch
-          checked={checked}
-          disabled={!status.canToggle || updateLead.isPending}
-          onChange={() => updateLead.mutate({ id: lead.id, aiReplyPaused: checked })}
-          label="AI auto-reply for this lead"
-        />
-      </div>
-      <p className="mt-2 text-[12.5px] leading-relaxed text-text-3">{status.detail}</p>
+    <div className="flex items-center gap-2" title={status.detail}>
+      <Switch
+        checked={checked}
+        disabled={!status.canToggle || updateLead.isPending}
+        onChange={() => updateLead.mutate({ id: lead.id, aiReplyPaused: checked })}
+        label="AI auto-reply for this lead"
+      />
+      <span className={`text-[11.5px] font-semibold ${textCls}`}>{status.label}</span>
     </div>
   );
 }
@@ -233,14 +221,13 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div className="card min-w-0 flex-1 !p-0 overflow-hidden">
+    <div className="card !p-0 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-2 px-4 py-3">
           <h2 className="flex items-center gap-1.5 text-[15px] font-semibold text-text">
             <MessageSquare size={15} /> SMS Thread
           </h2>
-          <div className="flex items-center gap-2 text-[12px] text-text-3">
-            <AiStatusChip lead={lead} globalEnabled={aiSettings?.autoReplyEnabled ?? true} />
+          <div className="flex flex-wrap items-center gap-3 text-[12px] text-text-3">
+            <AiStatusToggle lead={lead} globalEnabled={aiSettings?.autoReplyEnabled ?? true} />
             <span>
               {realMessages.filter((m) => m.direction === 'inbound').length} repl
               {realMessages.filter((m) => m.direction === 'inbound').length === 1 ? 'y' : 'ies'}
@@ -389,10 +376,5 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
           </div>
         )}
       </div>
-
-      <div className="w-full shrink-0 lg:w-[300px]">
-        <AiAutoReplyCard lead={lead} globalEnabled={aiSettings?.autoReplyEnabled ?? true} />
-      </div>
-    </div>
   );
 }

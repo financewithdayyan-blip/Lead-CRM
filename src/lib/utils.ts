@@ -263,6 +263,13 @@ export function initials(firstName: string, lastName: string): string {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
 
+/** Title-cases a name for display only — real CSV-imported leads often
+ * arrive stored in inconsistent casing (all caps, all lowercase). Never
+ * touches the stored value, just how it reads on screen. */
+export function titleCase(raw: string): string {
+  return raw.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (c) => c.toUpperCase());
+}
+
 /** The caller's own name for the call script opener: profile full name, else their email username. */
 export function callerDisplayName(fullName: string | null | undefined, email: string | null | undefined): string {
   if (fullName && fullName.trim()) return fullName.trim();
