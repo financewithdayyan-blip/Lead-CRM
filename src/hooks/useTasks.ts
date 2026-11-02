@@ -20,8 +20,15 @@ export function useTasks(targetUserId?: string) {
     if (!userId) return;
     let channel: ReturnType<typeof supabase.channel> | undefined;
     try {
+      // Suffixed with a random id — this hook mounts more than once for the
+      // same userId at a time (NotificationsContext's global instance plus
+      // TasksSidebarCard's per-lead one, whenever a lead is assigned to the
+      // viewer themselves). Supabase's client treats two `.channel()` calls
+      // with the same topic as the same channel, and calling `.on()` on one
+      // that's already subscribed throws — a unique topic per instance keeps
+      // every mount independent regardless of how many share this userId.
       channel = supabase
-        .channel(`tasks:${userId}`)
+        .channel(`tasks:${userId}:${Math.random().toString(36).slice(2)}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` },
