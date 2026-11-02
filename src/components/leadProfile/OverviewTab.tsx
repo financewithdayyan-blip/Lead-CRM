@@ -208,7 +208,7 @@ function PropertySummaryCard({ lead, onJumpToProperty }: { lead: Lead; onJumpToP
   ];
 
   return (
-    <button type="button" onClick={onJumpToProperty} className="card flex flex-wrap items-stretch gap-4 overflow-hidden !p-3.5 text-left">
+    <button type="button" onClick={onJumpToProperty} className="card flex w-full flex-wrap items-stretch gap-4 overflow-hidden !p-3.5 text-left">
       <div className="relative h-[190px] w-full shrink-0 overflow-hidden rounded-lg bg-surface-3 sm:w-60">
         {heroUrl ? (
           <img src={heroUrl} alt="" className="h-full w-full object-cover" />
