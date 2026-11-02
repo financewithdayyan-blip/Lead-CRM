@@ -150,14 +150,15 @@ function TemplatesMenu({ lead, onPick }: { lead: Lead; onPick: (body: string) =>
 type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'msg'; key: string; msg: ThreadMessage };
 
 // A WhatsApp-style wallpaper for the thread itself — dark base + a sparse
-// tiled sprig motif (scattered small shapes with generous breathing room,
-// same idea as a seamless fabric/wallpaper print), always dark regardless
-// of the app's light/dark theme (purely decorative, so it doesn't need to
-// track the theme tokens the rest of the UI does). Every sprig's anchor sits
-// well inside the tile with enough margin for its own rotated bounding box,
-// so nothing ever touches a tile edge and repeats never show a seam.
+// tiled branch-and-leaf motif (a curved stem with four tapering pointed
+// leaves, scattered with generous breathing room, same idea as a seamless
+// fabric/wallpaper print), always dark regardless of the app's light/dark
+// theme (purely decorative, so it doesn't need to track the theme tokens
+// the rest of the UI does). Every sprig's anchor sits well inside the tile
+// with enough margin for its own rotated bounding box, so nothing ever
+// touches a tile edge and repeats never show a seam.
 const CHAT_BG_PATTERN =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cdefs%3E%3Cg id='s'%3E%3Cpath d='M0 0 L10 -14' stroke='%232e3448' stroke-width='1.6' stroke-linecap='round' fill='none'/%3E%3Cellipse cx='4' cy='-5' rx='3' ry='1.6' fill='%232e3448' transform='rotate(-30 4 -5)'/%3E%3Cellipse cx='7' cy='-10' rx='3' ry='1.6' fill='%232e3448' transform='rotate(-30 7 -10)'/%3E%3C/g%3E%3C/defs%3E%3Cuse href='%23s' transform='translate(25,35) rotate(15)'/%3E%3Cuse href='%23s' transform='translate(90,25) rotate(-20)'/%3E%3Cuse href='%23s' transform='translate(135,70) rotate(40)'/%3E%3Cuse href='%23s' transform='translate(50,80) rotate(-10)'/%3E%3Cuse href='%23s' transform='translate(100,115) rotate(25)'/%3E%3Cuse href='%23s' transform='translate(25,125) rotate(-35)'/%3E%3Cuse href='%23s' transform='translate(130,130) rotate(10)'/%3E%3C/svg%3E";
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170' viewBox='0 0 170 170'%3E%3Cdefs%3E%3Cpath id='lf' d='M0,0 C-2.4,-2.6 -2.4,-5.4 0,-8 C2.4,-5.4 2.4,-2.6 0,0 Z'/%3E%3Cg id='s'%3E%3Cpath d='M0 0 Q 5 -8 2 -17' stroke='%232e3448' stroke-width='1.3' stroke-linecap='round' fill='none'/%3E%3Cuse href='%23lf' fill='%232e3448' transform='translate(1,-4) rotate(-50) scale(0.9)'/%3E%3Cuse href='%23lf' fill='%232e3448' transform='translate(4,-9) rotate(55) scale(0.8)'/%3E%3Cuse href='%23lf' fill='%232e3448' transform='translate(2,-14) rotate(-35) scale(0.6)'/%3E%3Cuse href='%23lf' fill='%232e3448' transform='translate(2.5,-17.5) rotate(10) scale(0.55)'/%3E%3C/g%3E%3C/defs%3E%3Cuse href='%23s' transform='translate(30,42) rotate(10)'/%3E%3Cuse href='%23s' transform='translate(100,30) rotate(-15)'/%3E%3Cuse href='%23s' transform='translate(140,78) rotate(30)'/%3E%3Cuse href='%23s' transform='translate(58,88) rotate(-20)'/%3E%3Cuse href='%23s' transform='translate(105,125) rotate(15)'/%3E%3Cuse href='%23s' transform='translate(30,130) rotate(-30)'/%3E%3C/svg%3E";
 
 export function SmsThreadTab({ lead }: { lead: Lead }) {
   const { data: thread = [], isLoading } = useLeadThread(lead.id);
