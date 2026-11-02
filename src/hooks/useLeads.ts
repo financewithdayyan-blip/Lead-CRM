@@ -530,8 +530,37 @@ export async function refetchAndPatchLead(qc: QueryClient, id: string) {
   const { data, error } = await supabase.from('leads').select(LEAD_LIST_SELECT).eq('id', id).single();
   if (error || !data) return;
   const fresh = dbToLead(data);
-  patchLeadInCaches(qc, id, (l) => ({ ...l, ...fresh }));
-  qc.setQueryData(['lead', id], (old: Lead | undefined) => (old ? { ...old, ...fresh } : fresh));
+  // dbToLead always builds the *full* Lead shape — every column
+  // LEAD_LIST_SELECT didn't fetch (property specs, repairs, notes, ...)
+  // comes back undefined/null/[] on `fresh`. Spreading that whole object
+  // onto a cache (especially the profile page's own full-detail cache at
+  // ['lead', id]) would blank out every field this trimmed query doesn't
+  // carry — this picks out only the columns LEAD_LIST_SELECT actually
+  // fetched, matching the comment below's original intent.
+  const trimmed: Partial<Lead> = {
+    id: fresh.id,
+    firstName: fresh.firstName,
+    lastName: fresh.lastName,
+    phone: fresh.phone,
+    phone2: fresh.phone2,
+    email: fresh.email,
+    address: fresh.address,
+    city: fresh.city,
+    state: fresh.state,
+    zip: fresh.zip,
+    source: fresh.source,
+    stage: fresh.stage,
+    leadNum: fresh.leadNum,
+    aiScore: fresh.aiScore,
+    auctionDate: fresh.auctionDate,
+    createdAt: fresh.createdAt,
+    assignmentFee: fresh.assignmentFee,
+    optedOut: fresh.optedOut,
+    qualifiedAt: fresh.qualifiedAt,
+    tagIds: fresh.tagIds,
+  };
+  patchLeadInCaches(qc, id, (l) => ({ ...l, ...trimmed }));
+  qc.setQueryData(['lead', id], (old: Lead | undefined) => (old ? { ...old, ...trimmed } : fresh));
 }
 
 export function useUpdateLead() {
