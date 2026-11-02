@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useReplaceLeadRepairs } from '@/hooks/useLeadRepairs';
 import { formatCurrency } from '@/lib/utils';
@@ -73,6 +73,37 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
   const [foundation, setFoundation] = useState(saved?.foundation ?? false);
   const [contingencyPct, setContingencyPct] = useState(saved?.contingencyPct ?? 15);
   const [applied, setApplied] = useState(false);
+
+  // useState's initializer above only ever runs once, on mount — but the
+  // Lead Profile page seeds `lead` from the trimmed list cache first (no
+  // rehab_estimator_config on it) and fetches the full record a moment
+  // later in the background, so this component routinely mounts BEFORE
+  // the saved config has actually arrived. Without this effect, the form
+  // would permanently lock in blank defaults the instant it mounted and
+  // never pick up the real saved scope once it loads. hydratedRef makes
+  // this a one-time sync (don't fight the admin's own edits afterward),
+  // already-true at mount if the config happened to be there in time for
+  // the useState initializer to use it correctly on its own.
+  const hydratedRef = useRef(!!saved);
+  useEffect(() => {
+    if (hydratedRef.current || !lead.rehabEstimatorConfig) return;
+    hydratedRef.current = true;
+    const c = lead.rehabEstimatorConfig;
+    setSqft(c.sqft);
+    setFinish(c.finish);
+    setKitchen(c.kitchen);
+    setBathrooms(c.bathrooms);
+    setFlooringSqft(c.flooringSqft);
+    setInteriorPaint(c.interiorPaint);
+    setWindows(c.windows);
+    setRoof(c.roof);
+    setHvac(c.hvac);
+    setElectrical(c.electrical);
+    setPlumbing(c.plumbing);
+    setExteriorPaint(c.exteriorPaint);
+    setFoundation(c.foundation);
+    setContingencyPct(c.contingencyPct);
+  }, [lead.rehabEstimatorConfig]);
 
   const f = FINISH_MULTIPLIER[finish];
   const kitchenCost = KITCHEN_BASE[kitchen] * f;
