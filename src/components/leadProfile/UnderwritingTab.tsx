@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { LeadCompsSection } from './LeadCompsSection';
 import { RepairEstimateSection, MAO_ARV_PCT, MAO_REPAIR_MULTIPLIER, MAO_MIN_FEE } from './RepairEstimateSection';
 import { useLeadRepairs } from '@/hooks/useLeadRepairs';
@@ -13,17 +12,10 @@ import type { Lead } from '@/types/domain';
  * inline line of text, plus a what-if preview. The seller's asking price
  * (lead.askingPrice, the same real field that card uses) is plotted on the
  * same scale so it's clear at a glance whether the ask leaves room under
- * the max offer or sits over it.
- * The what-if sliders are exploration only: real ARV lives on the lead
- * (edit it on Overview) and real repairs are the itemized list below, so
- * "using" a hypothetical number here would mean overwriting either with a
- * guess — instead, applying the real ARV already has its own control on
- * Overview, and applying real repairs means editing the actual line items. */
+ * the max offer or sits over it. */
 function MaoWaterfallCard({ lead }: { lead: Lead }) {
   const { data: repairs = [] } = useLeadRepairs(lead.id);
   const totalRepairs = repairs.reduce((sum, r) => sum + r.cost, 0);
-  const [whatIfArv, setWhatIfArv] = useState<number | null>(null);
-  const [whatIfRepairs, setWhatIfRepairs] = useState<number | null>(null);
 
   if (lead.arv == null) {
     return (
@@ -51,11 +43,6 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
     { label: 'Holding & closing', from: mao + fee + repairsCost, to: arv, color: '#ef444433' },
   ];
   const askingColor = asking == null ? null : asking > mao ? '#ff6b6b' : asking < mao ? '#3dd6b5' : '#10b981';
-
-  const previewArv = whatIfArv ?? arv;
-  const previewRepairs = whatIfRepairs ?? totalRepairs;
-  const previewMao = previewArv * MAO_ARV_PCT - MAO_REPAIR_MULTIPLIER * previewRepairs - MAO_MIN_FEE;
-  const isExploring = whatIfArv !== null || whatIfRepairs !== null;
 
   return (
     <div className="card">
@@ -121,62 +108,6 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
       ) : (
         <div className="mt-2 text-[12.5px] text-text-3">Set an asking price on Overview to see it against your max offer.</div>
       )}
-
-      <div className="mt-4 border-t border-border pt-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">What if</div>
-        <p className="mt-1 text-[11.5px] text-text-3">
-          Drag to see how the max offer moves — nothing saves until you edit the real ARV or repair items.
-        </p>
-        <div className="mt-2.5 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
-          <label className="text-[12px] text-text-2">
-            <div className="flex items-center justify-between">
-              <span>ARV</span>
-              <span className="font-mono font-semibold text-text">{formatCurrency(previewArv)}</span>
-            </div>
-            <input
-              type="range"
-              min={Math.round(arv * 0.5)}
-              max={Math.max(Math.round(arv * 1.5), arv + 50000)}
-              step={1000}
-              value={previewArv}
-              onChange={(e) => setWhatIfArv(Number(e.target.value))}
-              className="mt-1.5 w-full accent-primary"
-            />
-          </label>
-          <label className="text-[12px] text-text-2">
-            <div className="flex items-center justify-between">
-              <span>Repairs</span>
-              <span className="font-mono font-semibold text-text">{formatCurrency(previewRepairs)}</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(Math.round(totalRepairs * 2), 50000)}
-              step={500}
-              value={previewRepairs}
-              onChange={(e) => setWhatIfRepairs(Number(e.target.value))}
-              className="mt-1.5 w-full accent-primary"
-            />
-          </label>
-        </div>
-        {isExploring && (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-surface-3 px-3 py-2">
-            <div className="text-[12.5px] text-text-2">
-              Max offer would be <span className="font-mono font-semibold text-text">{formatCurrency(previewMao)}</span>
-            </div>
-            <button
-              type="button"
-              className="text-[11.5px] font-medium text-text-3 hover:text-primary"
-              onClick={() => {
-                setWhatIfArv(null);
-                setWhatIfRepairs(null);
-              }}
-            >
-              Reset
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
