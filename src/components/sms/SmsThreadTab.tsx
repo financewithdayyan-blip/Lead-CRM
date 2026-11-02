@@ -149,6 +149,13 @@ function TemplatesMenu({ lead, onPick }: { lead: Lead; onPick: (body: string) =>
 
 type ThreadItem = { kind: 'day'; key: string; label: string } | { kind: 'msg'; key: string; msg: ThreadMessage };
 
+// A WhatsApp-style wallpaper for the thread itself — dark base + a faint
+// tiled line pattern, always dark regardless of the app's light/dark theme
+// (purely decorative, so it doesn't need to track the theme tokens the rest
+// of the UI does).
+const CHAT_BG_PATTERN =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23262c40' stroke-width='1.4' stroke-linecap='round' stroke-opacity='0.6'%3E%3Cpath d='M-10 20 C 20 0, 40 40, 70 20 S 130 0, 160 20 S 220 40, 210 20'/%3E%3Cpath d='M-10 60 C 15 85, 50 40, 80 60 S 140 90, 170 60 S 215 35, 210 60'/%3E%3Cpath d='M-10 100 C 25 120, 55 75, 90 100 S 150 130, 175 100 S 210 70, 210 100'/%3E%3Cpath d='M-10 140 C 20 160, 50 115, 85 140 S 145 170, 175 140 S 215 110, 210 140'/%3E%3Cpath d='M-10 180 C 15 200, 60 155, 95 180 S 150 210, 180 180 S 210 150, 210 180'/%3E%3Cpath d='M20 -10 C 0 20, 40 40, 20 70 S 0 130, 20 160 S 40 195, 20 200'/%3E%3Cpath d='M100 -10 C 80 20, 120 40, 100 70 S 80 130, 100 160 S 120 195, 100 200'/%3E%3Cpath d='M180 -10 C 160 20, 200 40, 180 70 S 160 130, 180 160 S 200 195, 180 200'/%3E%3C/g%3E%3C/svg%3E";
+
 export function SmsThreadTab({ lead }: { lead: Lead }) {
   const { data: thread = [], isLoading } = useLeadThread(lead.id);
   const { data: aiSettings } = useAiSettings();
@@ -242,11 +249,14 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
         ) : thread.length === 0 ? (
           <div className="px-4 py-8 text-center text-[13px] text-text-3">No texts with this lead yet.</div>
         ) : (
-          <div className="max-h-[480px] space-y-2.5 overflow-y-auto bg-surface-3 px-4 py-3.5">
+          <div
+            className="max-h-[480px] space-y-2.5 overflow-y-auto px-4 py-3.5"
+            style={{ backgroundColor: '#0a0c11', backgroundImage: `url("${CHAT_BG_PATTERN}")` }}
+          >
             {items.map((item) =>
               item.kind === 'day' ? (
                 <div key={item.key} className="flex items-center justify-center py-1">
-                  <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[11px] font-semibold text-text-3">{item.label}</span>
+                  <span className="rounded-full bg-black/40 px-2.5 py-0.5 text-[11px] font-semibold text-white/70">{item.label}</span>
                 </div>
               ) : (
                 <div key={item.key} className={`flex ${item.msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
