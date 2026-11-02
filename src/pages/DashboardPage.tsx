@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
 import {
@@ -195,6 +195,40 @@ function timeOfDayGreeting(): string {
   return 'Good evening';
 }
 
+/** A stat tile's "trend" figure (marks-and-anatomy.md's stat-tile contract)
+ *  — a thin 2px line, round join/cap, a ~10%-opacity area wash underneath
+ *  (the mark spec's "wash, never a saturated block"), and a small filled
+ *  end-dot marking the current/most-recent point. No axes, gridlines, or
+ *  legend: a single real series this small, sitting right next to its own
+ *  labeled value, needs none of those to read. useId keeps each card's
+ *  gradient def from colliding with every other sparkline on the page. */
+function Sparkline({ series, color, width = 72, height = 22 }: { series: number[]; color: string; width?: number; height?: number }) {
+  const gradId = useId();
+  if (series.length < 2) return null;
+  const max = Math.max(...series, 1);
+  const min = Math.min(...series, 0);
+  const range = Math.max(max - min, 1);
+  const stepX = width / (series.length - 1);
+  const points = series.map((v, i) => [i * stepX, height - ((v - min) / range) * height] as const);
+  const linePath = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L${width},${height} L0,${height} Z`;
+  const [lastX, lastY] = points[points.length - 1];
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0 overflow-visible" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${gradId})`} stroke="none" />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="2.5" fill={color} />
+    </svg>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -203,6 +237,7 @@ function StatCard({
   icon: Icon,
   hero,
   compact,
+  trend,
 }: {
   label: string;
   value: string | number;
@@ -216,6 +251,11 @@ function StatCard({
   /** Tighter padding/type for a denser grid (e.g. 2-col × 4-row next to a
    * chart) — same visual language as the regular size, just smaller. */
   compact?: boolean;
+  /** Real period-over-period series (weekly or monthly buckets, whatever
+   *  that KPI's own underlying event data supports) — omitted entirely for
+   *  a card with no real trend to show rather than drawing a flat/fake
+   *  line just to fill the space. */
+  trend?: number[];
 }) {
   if (hero) {
     // hero is a solid-color block, so it needs a real background color
@@ -236,7 +276,10 @@ function StatCard({
           )}
         </div>
         <div className={`font-mono font-semibold tabular-nums text-white ${compact ? 'mt-1 text-lg' : 'mt-2 text-2xl'}`}>{value}</div>
-        <div className={`text-white/75 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
+        <div className="flex items-end justify-between gap-2">
+          <div className={`text-white/75 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
+          {trend && trend.length >= 2 && <Sparkline series={trend} color="#ffffff" />}
+        </div>
       </div>
     );
   }
@@ -265,7 +308,10 @@ function StatCard({
       >
         {value}
       </div>
-      <div className={`text-text-3 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className={`text-text-3 ${compact ? 'text-[11px]' : 'mt-0.5 text-[12px]'}`}>{sub}</div>
+        {trend && trend.length >= 2 && <Sparkline series={trend} color={color ?? '#6E7BFF'} width={56} height={18} />}
+      </div>
     </div>
   );
 }
@@ -1326,6 +1372,7 @@ export function DashboardView({
                     value={money(revenueCard.value)}
                     sub={`${revenueCard.trendPct >= 0 ? '▲' : '▼'} ${Math.abs(revenueCard.trendPct).toFixed(1)}% vs last month`}
                     color="#6E7BFF"
+                    trend={revenueCard.series}
                   />
                   <StatCard
                     compact
@@ -1334,6 +1381,7 @@ export function DashboardView({
                     value={heroMetrics.newLeads.value.toLocaleString()}
                     sub="last 4 weeks"
                     color="#3DD6B5"
+                    trend={heroMetrics.newLeads.series}
                   />
                   <StatCard
                     compact
@@ -1350,6 +1398,7 @@ export function DashboardView({
                     value={heroMetrics.negotiation.value.toLocaleString()}
                     sub="live right now"
                     color="#5AB8FF"
+                    trend={heroMetrics.negotiation.series}
                   />
                   <StatCard
                     compact
@@ -1358,6 +1407,7 @@ export function DashboardView({
                     value={`${heroMetrics.underContract.value} deals`}
                     sub={`${money(heroMetrics.underContract.fees)} in fees`}
                     color="#FFB547"
+                    trend={heroMetrics.underContract.series}
                   />
                   <StatCard
                     compact
