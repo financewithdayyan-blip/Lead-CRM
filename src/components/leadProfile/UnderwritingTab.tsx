@@ -25,16 +25,15 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
   }
 
   const arv = lead.arv;
-  const holding = arv * (1 - MAO_ARV_PCT);
   const repairsCost = MAO_REPAIR_MULTIPLIER * totalRepairs;
   const fee = MAO_MIN_FEE;
   const mao = arv * MAO_ARV_PCT - repairsCost - fee;
   const asking = lead.askingPrice;
 
   // Segments read left to right as "building back up" from the max offer to
-  // the full ARV by adding back everything that was subtracted — mirrors the
-  // formula sentence above it. Scale stretches past ARV when the asking
-  // price is higher, so an over-ask is never clipped off the edge.
+  // the full ARV by adding back everything that was subtracted. Scale
+  // stretches past ARV when the asking price is higher, so an over-ask is
+  // never clipped off the edge.
   const scaleMax = Math.max(arv, asking ?? 0, 1);
   const pct = (v: number) => Math.max(0, Math.min(100, (v / scaleMax) * 100));
   const segments = [
@@ -45,41 +44,64 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
   ];
   const askingColor = asking == null ? null : asking > mao ? '#ff6b6b' : asking < mao ? '#3dd6b5' : '#10b981';
 
+  // Whichever of MAO/asking sits further left on the scale gets its label
+  // right-aligned so the text ends at the tick (extends leftward); the other
+  // gets left-aligned so it starts at the tick (extends rightward) — same
+  // convention the mockup's own "Your offer"/"She's asking" callouts use,
+  // keeps the two labels from colliding into each other above the bar.
+  const maoPct = pct(mao);
+  const askingPct = asking != null ? pct(asking) : null;
+  const maoEndsAtTick = askingPct != null && maoPct <= askingPct;
+
   return (
     <div className="card">
-      <div className="border-b border-border pb-2.5">
-        <div className="text-[15px] font-semibold text-text">How we got to {formatCurrency(mao)}</div>
-        <div className="text-[12px] text-text-3">ARV × 90%, minus repairs twice, minus our $10k fee</div>
-      </div>
-
-      <p className="mt-3 text-[13px] leading-relaxed text-text-2">
-        <b className="font-mono text-text">{formatCurrency(arv)}</b> ARV
-        <span className="text-text-3"> − </span>
-        <span className="font-mono">{formatCurrency(holding)}</span> holding &amp; closing (10%)
-        <span className="text-text-3"> − </span>
-        <span className="font-mono">{formatCurrency(repairsCost)}</span> repairs ×2
-        <span className="text-text-3"> − </span>
-        <span className="font-mono">{formatCurrency(fee)}</span> fee
-        <span className="text-text-3"> = </span>
-        <b className="font-mono text-success">{formatCurrency(mao)}</b> max offer
-      </p>
-
-      <div className="relative mt-5 h-2.5 rounded-full bg-surface-3">
-        {segments.map((s) => (
+      <div className="relative">
+        <div
+          className="absolute top-0 whitespace-nowrap"
+          style={
+            askingPct == null
+              ? { left: `${maoPct}%`, transform: 'translateX(-50%)', textAlign: 'center' }
+              : maoEndsAtTick
+                ? { left: `${maoPct}%`, transform: 'translateX(-100%)', paddingRight: 8, textAlign: 'right' }
+                : { left: `${maoPct}%`, paddingLeft: 8, textAlign: 'left' }
+          }
+        >
+          <div className="text-[11.5px] font-semibold text-success">Max offer</div>
+          <div className="font-mono text-[15px] font-extrabold text-text">{formatCurrency(mao)}</div>
+        </div>
+        {askingPct != null && askingColor && (
           <div
-            key={s.label}
-            className="absolute inset-y-0 rounded-full"
-            style={{ left: `${pct(s.from)}%`, width: `${pct(s.to) - pct(s.from)}%`, background: s.color }}
-          />
-        ))}
-        <div className="absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-success" style={{ left: `${pct(mao)}%` }} />
-        {asking != null && askingColor && (
-          <div className="absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full" style={{ left: `${pct(asking)}%`, background: askingColor }} />
+            className="absolute top-0 whitespace-nowrap"
+            style={
+              maoEndsAtTick
+                ? { left: `${askingPct}%`, paddingLeft: 8, textAlign: 'left' }
+                : { left: `${askingPct}%`, transform: 'translateX(-100%)', paddingRight: 8, textAlign: 'right' }
+            }
+          >
+            <div className="text-[11.5px] font-semibold" style={{ color: askingColor }}>
+              Seller asking
+            </div>
+            <div className="font-mono text-[15px] font-extrabold text-text">{formatCurrency(asking)}</div>
+          </div>
         )}
-      </div>
-      <div className="mt-1 flex items-center justify-between text-[11px] text-text-3">
-        <span>$0</span>
-        <span className="font-mono">ARV {formatCurrency(arv)}</span>
+
+        <div className="relative mt-9 h-2.5 rounded-full bg-surface-3">
+          {segments.map((s) => (
+            <div
+              key={s.label}
+              className="absolute inset-y-0 rounded-full"
+              style={{ left: `${pct(s.from)}%`, width: `${pct(s.to) - pct(s.from)}%`, background: s.color }}
+            />
+          ))}
+          <div className="absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-success" style={{ left: `${maoPct}%` }} />
+          {askingPct != null && askingColor && (
+            <div className="absolute top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full" style={{ left: `${askingPct}%`, background: askingColor }} />
+          )}
+        </div>
+        <div className="mt-1 flex items-center justify-between text-[11px] text-text-3">
+          <span>$0</span>
+          <span className="font-mono">ARV {formatCurrency(arv)}</span>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-text-2">
@@ -96,19 +118,6 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
           </span>
         )}
       </div>
-
-      {asking != null ? (
-        <div className="mt-2 text-[12.5px] font-medium" style={{ color: askingColor ?? undefined }}>
-          Seller asking <span className="font-mono">{formatCurrency(asking)}</span>
-          {asking === mao
-            ? ' — matches your max offer exactly.'
-            : asking > mao
-              ? ` — ${formatCurrency(asking - mao)} over your max offer.`
-              : ` — ${formatCurrency(mao - asking)} of room under your max offer.`}
-        </div>
-      ) : (
-        <div className="mt-2 text-[12.5px] text-text-3">Set an asking price on Overview to see it against your max offer.</div>
-      )}
     </div>
   );
 }
