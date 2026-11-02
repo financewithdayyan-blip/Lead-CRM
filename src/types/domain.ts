@@ -287,6 +287,11 @@ export interface Lead {
   /** The terms line shown on the Deal tab's offer strip, e.g. "All cash, 21-day close, as-is". */
   offerTerms: string | null;
   titleChecklist: TitleChecklist;
+  /** Freeform paste from Zillow (or any listing site) — description, lot/
+   *  parking/school details, tax history, anything without its own field
+   *  here. Shown on the Property tab and, once a Deal Packet is created,
+   *  seeded onto it too (see useCreatePacket). */
+  propertyListingInfo: string | null;
 }
 
 export type TitleChecklistKey =
@@ -559,6 +564,10 @@ export interface DealPacket {
 
   dealTypes: DealType[];
   narrative: string | null;
+  /** Freeform listing details (Zillow paste, etc.) — seeded from the lead's
+   *  own propertyListingInfo at packet creation, editable here too. Shown
+   *  on the public packet, ungated (see get_public_packet). */
+  propertyListingInfo: string | null;
   requireLeadCapture: boolean;
 
   createdAt: string;

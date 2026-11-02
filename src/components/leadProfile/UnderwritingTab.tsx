@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { LeadCompsSection } from './LeadCompsSection';
 import { MAO_ARV_PCT, MAO_REPAIR_MULTIPLIER, MAO_MIN_FEE } from './RepairEstimateSection';
 import { RehabCostEstimator } from './RehabCostEstimator';
@@ -46,51 +47,54 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
     { label: 'Holding & closing', from: mao + fee + repairsCost, to: arv, color: '#38bdf8' },
   ];
   const askingColor = asking == null ? null : asking > mao ? '#ef4444' : asking < mao ? '#3dd6b5' : '#10b981';
-
-  // Whichever of MAO/asking sits further left on the scale gets its label
-  // right-aligned so the text ends at the tick (extends leftward); the other
-  // gets left-aligned so it starts at the tick (extends rightward) — same
-  // convention the mockup's own "Your offer"/"She's asking" callouts use,
-  // keeps the two labels from colliding into each other above the bar.
   const maoPct = pct(mao);
   const askingPct = asking != null ? pct(asking) : null;
-  const maoEndsAtTick = askingPct != null && maoPct <= askingPct;
+
+  // Every amount gets its own floating label above the bar instead of being
+  // legend-only text below it — a point (MAO, Seller asking) labels at its
+  // own tick; a span (Fee, Rehab, Holding & closing) labels at its span's
+  // midpoint. Sorted left to right, then alternated onto two stacked rows so
+  // two labels that land close together (a thin Fee sliver next to MAO, say)
+  // don't overlap — a label never knows what's next to it, only its own
+  // row, so alternating by sort order is what actually keeps neighbors apart.
+  type LabelItem = { key: string; pos: number; title: string; amount: number; color: string };
+  const labelItems: LabelItem[] = [
+    { key: 'mao', pos: maoPct, title: 'MAO', amount: mao, color: '#10b981' },
+    { key: 'fee', pos: (pct(mao) + pct(mao + fee)) / 2, title: 'Fee', amount: fee, color: '#8b5cf6' },
+    { key: 'rehab', pos: (pct(mao + fee) + pct(mao + fee + repairsCost)) / 2, title: 'Rehab ×2', amount: repairsCost, color: '#f59e0b' },
+    { key: 'holding', pos: (pct(mao + fee + repairsCost) + pct(arv)) / 2, title: 'Holding & closing', amount: arv - (mao + fee + repairsCost), color: '#38bdf8' },
+  ];
+  if (askingPct != null && askingColor) {
+    labelItems.push({ key: 'asking', pos: askingPct, title: 'Seller asking', amount: asking!, color: askingColor });
+  }
+  labelItems.sort((a, b) => a.pos - b.pos);
+  const ROW_HEIGHT = 34;
+
+  function labelStyle(pos: number): CSSProperties {
+    if (pos <= 8) return { left: '0%' };
+    if (pos >= 92) return { left: '100%', transform: 'translateX(-100%)' };
+    return { left: `${pos}%`, transform: 'translateX(-50%)' };
+  }
 
   return (
     <div className="card">
-      {/* pt-9 reserves the floating labels' own height above the bar — a
-       *  margin-top on the bar itself would collapse through this wrapper
-       *  (no padding/border of its own to stop it) and land the bar right
-       *  on top of the labels instead of below them. */}
-      <div className="relative pt-9">
-        <div
-          className="absolute top-0 whitespace-nowrap"
-          style={
-            askingPct == null
-              ? { left: `${maoPct}%`, transform: 'translateX(-50%)', textAlign: 'center' }
-              : maoEndsAtTick
-                ? { left: `${maoPct}%`, transform: 'translateX(-100%)', paddingRight: 8, textAlign: 'right' }
-                : { left: `${maoPct}%`, paddingLeft: 8, textAlign: 'left' }
-          }
-        >
-          <div className="text-[11.5px] font-semibold text-success">MAO</div>
-          <div className="font-mono text-[15px] font-extrabold text-text">{formatCurrency(mao)}</div>
-        </div>
-        {askingPct != null && askingColor && (
+      {/* Padding (not margin) reserves the floating labels' own height above
+       *  the bar — a margin-top on the bar itself would collapse through
+       *  this wrapper (no padding/border of its own to stop it) and land
+       *  the bar right on top of the labels instead of below them. */}
+      <div className="relative" style={{ paddingTop: ROW_HEIGHT * 2 + 4 }}>
+        {labelItems.map((item, i) => (
           <div
-            className="absolute top-0 whitespace-nowrap"
-            style={
-              maoEndsAtTick
-                ? { left: `${askingPct}%`, paddingLeft: 8, textAlign: 'left' }
-                : { left: `${askingPct}%`, transform: 'translateX(-100%)', paddingRight: 8, textAlign: 'right' }
-            }
+            key={item.key}
+            className="absolute whitespace-nowrap"
+            style={{ top: (i % 2) * ROW_HEIGHT, ...labelStyle(item.pos) }}
           >
-            <div className="text-[11.5px] font-semibold" style={{ color: askingColor }}>
-              Seller asking
+            <div className="text-[11px] font-semibold" style={{ color: item.color }}>
+              {item.title}
             </div>
-            <div className="font-mono text-[15px] font-extrabold text-text">{formatCurrency(asking)}</div>
+            <div className="font-mono text-[14px] font-extrabold text-text">{formatCurrency(item.amount)}</div>
           </div>
-        )}
+        ))}
 
         <div className="relative h-2.5 rounded-full bg-surface-3">
           {segments.map((s) => (
@@ -114,24 +118,11 @@ function MaoWaterfallCard({ lead }: { lead: Lead }) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-3 text-[11.5px] text-text-2">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: '#94a3b8' }} />
-          ARV <b className="font-mono text-text">{formatCurrency(arv)}</b>
-        </span>
-        {segments.map((s) => (
-          <span key={s.label} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
-            {s.label} <b className="font-mono text-text">{formatCurrency(s.to - s.from)}</b>
-          </span>
-        ))}
-        {asking != null && askingColor && (
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: askingColor }} />
-            Seller asking <b className="font-mono text-text">{formatCurrency(asking)}</b>
-          </span>
-        )}
-      </div>
+      {asking == null && (
+        <div className="mt-3 border-t border-border pt-3 text-[12px] text-text-3">
+          Set an asking price on Overview to see it plotted against your MAO here.
+        </div>
+      )}
     </div>
   );
 }

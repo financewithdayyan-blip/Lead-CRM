@@ -317,12 +317,56 @@ function OtherFilesSection({ lead }: { lead: Lead }) {
   );
 }
 
+/** A big paste field for whatever an admin finds on Zillow (or any other
+ *  public listing site) that doesn't have its own structured field here —
+ *  description text, lot/parking/school details, tax history, etc.
+ *  Local-buffered like RepairCostInput above (one save on blur, not one per
+ *  keystroke) since this is often a large paste. Also shown on the Deal
+ *  Packet once one exists — see useCreatePacket, which seeds it from this
+ *  same field at creation time. */
+function ListingInfoCard({ lead }: { lead: Lead }) {
+  const updateLead = useUpdateLead();
+  const [value, setValue] = useState(lead.propertyListingInfo ?? '');
+  const dirty = value !== (lead.propertyListingInfo ?? '');
+
+  function save() {
+    if (!dirty) return;
+    updateLead.mutate({ id: lead.id, propertyListingInfo: value.trim() || null });
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-2.5">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Other Property Info</div>
+          <p className="mt-0.5 text-[12px] text-text-3">
+            Paste anything from Zillow or another listing site — description, lot/parking/school details, tax history, etc.
+          </p>
+        </div>
+        {dirty && (
+          <button onClick={save} disabled={updateLead.isPending} className="btn btn-primary shrink-0 !px-3 !py-1.5 text-[12px]">
+            {updateLead.isPending ? 'Saving…' : 'Save'}
+          </button>
+        )}
+      </div>
+      <textarea
+        className="input mt-3 min-h-[160px] w-full resize-y text-[13px] leading-relaxed"
+        placeholder="Paste the Zillow listing details here…"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+      />
+    </div>
+  );
+}
+
 export function PropertyTab({ lead }: { lead: Lead }) {
   return (
     <div className="space-y-5">
       <PhotoGallery lead={lead} />
       <PropertyDetailsCard lead={lead} />
       <OtherFilesSection lead={lead} />
+      <ListingInfoCard lead={lead} />
     </div>
   );
 }

@@ -52,6 +52,7 @@ function dbToPacket(row: any): DealPacket {
     showAssignmentFee: row.show_assignment_fee ?? false,
     dealTypes: (row.deal_types ?? []) as DealType[],
     narrative: row.narrative,
+    propertyListingInfo: row.property_listing_info,
     requireLeadCapture: row.require_lead_capture ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -634,6 +635,7 @@ export function useCreatePacket() {
           zip: lead.zip,
           purchase_price: lead.askingPrice,
           arv: lead.arv,
+          property_listing_info: lead.propertyListingInfo,
         })
         .select('id')
         .single();
@@ -732,7 +734,7 @@ type PacketFields = Partial<
     | 'compRadiusMiles' | 'compRecencyMonths'
     | 'purchasePrice' | 'closingCost' | 'arv'
     | 'arvIsManual' | 'assignmentFee' | 'showAssignmentFee' | 'dealTypes'
-    | 'narrative' | 'requireLeadCapture' | 'conditionRatings'
+    | 'narrative' | 'propertyListingInfo' | 'requireLeadCapture' | 'conditionRatings'
   >
 >;
 
@@ -768,7 +770,7 @@ export function useSavePacket() {
         compRadiusMiles: 'comp_radius_miles', compRecencyMonths: 'comp_recency_months',
         purchasePrice: 'purchase_price', closingCost: 'closing_cost', arv: 'arv', arvIsManual: 'arv_is_manual', assignmentFee: 'assignment_fee',
         showAssignmentFee: 'show_assignment_fee', dealTypes: 'deal_types',
-        narrative: 'narrative', requireLeadCapture: 'require_lead_capture',
+        narrative: 'narrative', propertyListingInfo: 'property_listing_info', requireLeadCapture: 'require_lead_capture',
         conditionRatings: 'condition_ratings',
       };
       for (const [k, v] of Object.entries(fields)) {

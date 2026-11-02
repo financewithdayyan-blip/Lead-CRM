@@ -45,6 +45,7 @@ export interface PublicPacket {
   showAssignmentFee: boolean;
   dealTypes: DealType[];
   narrative: string | null;
+  propertyListingInfo: string | null;
   requireLeadCapture: boolean;
   createdAt: string;
   // Coordinates only, never the street address — draws a proximity circle

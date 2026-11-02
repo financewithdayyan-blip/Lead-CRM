@@ -125,6 +125,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
   const [showAssignmentFee, setShowAssignmentFee] = useState(false);
   const [dealTypes, setDealTypes] = useState<DealType[]>([]);
   const [narrative, setNarrative] = useState('');
+  const [propertyListingInfo, setPropertyListingInfo] = useState('');
   const [requireLeadCapture, setRequireLeadCapture] = useState(false);
   const [compRadiusMiles, setCompRadiusMiles] = useState<0.5 | 1>(1);
   const [compRecencyMonths, setCompRecencyMonths] = useState<6 | 12>(12);
@@ -165,6 +166,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
     setShowAssignmentFee(packet.showAssignmentFee);
     setDealTypes(packet.dealTypes);
     setNarrative(packet.narrative ?? '');
+    setPropertyListingInfo(packet.propertyListingInfo ?? '');
     setRequireLeadCapture(packet.requireLeadCapture);
     setCompRadiusMiles(packet.compRadiusMiles === 0.5 ? 0.5 : 1);
     setCompRecencyMonths(packet.compRecencyMonths === 6 ? 6 : 12);
@@ -419,6 +421,7 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
           showAssignmentFee,
           dealTypes,
           narrative: narrative || null,
+          propertyListingInfo: propertyListingInfo || null,
           requireLeadCapture,
           compRadiusMiles,
           compRecencyMonths,
@@ -1033,6 +1036,12 @@ export function DealPacketBuilder({ packetId, lead, onClose }: { packetId: strin
                 ))}
               </ul>
             </div>
+          </Section>
+
+          {/* ── Listing info ────────────────────────────────────────────── */}
+          <Section title="Other property info" hint="Pasted from Zillow or another listing site — description, lot/parking/school details, tax history, etc. Seeded from the lead's own Property tab, editable here too.">
+            <textarea className="input min-h-[120px]" value={propertyListingInfo} onChange={(e) => setPropertyListingInfo(e.target.value)}
+                      placeholder="Paste the Zillow listing details here…" />
           </Section>
 
           {/* ── Narrative ───────────────────────────────────────────────── */}

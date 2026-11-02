@@ -1059,6 +1059,17 @@ export function PublicPacketPage() {
     ),
   });
 
+  if (packet.propertyListingInfo) {
+    sections.push({
+      title: 'Listing Details',
+      body: (
+        <Panel>
+          <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-text-2">{packet.propertyListingInfo}</p>
+        </Panel>
+      ),
+    });
+  }
+
   if (packet.dealTypes.length > 0) {
     sections.push({
       title: 'Deal Structures Available',

@@ -116,6 +116,7 @@ export function dbToLead(row: any): Lead {
     bestTimeToContact: row.best_time_to_contact ?? null,
     offerTerms: row.offer_terms ?? null,
     titleChecklist: row.title_checklist ?? {},
+    propertyListingInfo: row.property_listing_info ?? null,
   };
 }
 
@@ -224,6 +225,7 @@ const LEAD_UPDATE_FIELDS: Array<[keyof Lead, string]> = [
   ['bestTimeToContact', 'best_time_to_contact'],
   ['offerTerms', 'offer_terms'],
   ['titleChecklist', 'title_checklist'],
+  ['propertyListingInfo', 'property_listing_info'],
 ];
 
 export function leadToDbUpdate(lead: Partial<Lead>) {
