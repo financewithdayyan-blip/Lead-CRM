@@ -490,15 +490,16 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
 
   return (
     <div>
-      <div className="mb-3">
-        <button onClick={() => navigate(backTo)} className="inline-flex items-center gap-1.5 text-[13px] text-text-3 hover:text-text">
-          <ArrowLeft size={14} /> Back to Leads
-        </button>
-      </div>
-
       <div className="card mb-5 flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3.5">
+            <button
+              onClick={() => navigate(backTo)}
+              aria-label="Back to leads"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border-2 text-text-3 hover:border-primary/40 hover:text-primary"
+            >
+              <ArrowLeft size={16} />
+            </button>
             <span
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-[16px] font-bold"
               style={{ background: avatar.bg, color: avatar.text }}
@@ -558,14 +559,17 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                     <span>{lead.email}</span>
                   </>
                 )}
+                {lead.address && (
+                  <>
+                    <span className="text-text-3">·</span>
+                    <span className="text-text-3">
+                      {lead.address}
+                      {lead.city ? `, ${lead.city}` : ''}
+                      {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
+                    </span>
+                  </>
+                )}
               </div>
-              {lead.address && (
-                <div className="mt-0.5 text-[13.5px] text-text-3">
-                  {lead.address}
-                  {lead.city ? `, ${lead.city}` : ''}
-                  {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
-                </div>
-              )}
               {lead.scheduledCallbackAt && (() => {
                 const sellerTimeZone = resolveUsTimeZone(lead.state, lead.address);
                 const sellerTime = sellerTimeZone ? formatTimeInZone(lead.scheduledCallbackAt, sellerTimeZone) : null;
