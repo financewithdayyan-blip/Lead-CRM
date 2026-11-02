@@ -635,7 +635,22 @@ export function useCreatePacket() {
         .select('id')
         .single();
       if (error) throw error;
-      return data.id as string;
+      const packetId = data.id as string;
+
+      // Also seed this packet's own repairs from the lead's real itemized
+      // lead_repairs (what the Rehab Cost Estimator's "Use as Est. Repairs"
+      // writes) so a fresh packet opens with the same breakdown and icons
+      // instead of an empty list — best-effort: a packet is still useful
+      // without repairs pre-filled, so a failure here shouldn't block the
+      // packet itself from being created.
+      const { data: repairs } = await supabase.from('lead_repairs').select('item, cost').eq('lead_id', lead.id).order('sort_order');
+      if (repairs?.length) {
+        await supabase
+          .from('packet_repairs')
+          .insert(repairs.map((r, i) => ({ packet_id: packetId, item: r.item, cost: r.cost, sort_order: i })));
+      }
+
+      return packetId;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deal_packets'] }),
   });

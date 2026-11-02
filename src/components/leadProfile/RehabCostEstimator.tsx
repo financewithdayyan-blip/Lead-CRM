@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUpdateLead } from '@/hooks/useLeads';
+import { useReplaceLeadRepairs } from '@/hooks/useLeadRepairs';
 import { formatCurrency } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
@@ -45,12 +46,14 @@ const KITCHEN_OPTIONS: Array<{ value: Kitchen; label: string }> = [
 /** Rehab budget calculator, same scope-based inputs and formula as the
  *  rfphomes.com tool this was copied from — a planning estimate, not a
  *  contractor bid. Purely local state until "Use as Est. Repairs" is
- *  clicked, which writes the total into the real lead.estRepairs field
- *  (the same single number the Property tab and Overview specs grid show)
- *  — it doesn't touch the itemized repair list below, which is for real
- *  per-line contractor costs rather than a scoped-out planning number. */
+ *  clicked, which writes the total into lead.estRepairs (the single number
+ *  the Property tab and Overview specs grid show) AND replaces this lead's
+ *  itemized lead_repairs rows with its own 10-category breakdown
+ *  (repairCatalog.ts) — the one real source a Deal Packet's own repairs
+ *  then seed from (useCreatePacket) instead of starting empty. */
 export function RehabCostEstimator({ lead }: { lead: Lead }) {
   const updateLead = useUpdateLead();
+  const replaceRepairs = useReplaceLeadRepairs();
   const [sqft, setSqft] = useState(lead.sqft ?? 1600);
   const [finish, setFinish] = useState<Finish>('standard');
   const [kitchen, setKitchen] = useState<Kitchen>('none');
@@ -68,18 +71,30 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
   const [applied, setApplied] = useState(false);
 
   const f = FINISH_MULTIPLIER[finish];
+  const kitchenCost = KITCHEN_BASE[kitchen] * f;
+  const bathroomsCost = bathrooms * BATHROOM_COST * f;
+  const flooringCost = flooringSqft * FLOORING_PER_SQFT * f;
+  const interiorPaintCost = interiorPaint ? sqft * INTERIOR_PAINT_PER_SQFT * f : 0;
+  const windowsCost = windows * WINDOW_COST * f;
+  const roofCost = roof ? Math.max(sqft * ROOF_PER_SQFT, ROOF_MIN) * f : 0;
+  const hvacCost = hvac ? HVAC_COST * f : 0;
+  const electricalCost = electrical ? ELECTRICAL_COST * f : 0;
+  const plumbingCost = plumbing ? PLUMBING_COST * f : 0;
+  const exteriorPaintCost = exteriorPaint ? EXTERIOR_PAINT_COST * f : 0;
+  const foundationCost = foundation ? FOUNDATION_COST * f : 0;
+
   const items = [
-    { label: 'Kitchen', amount: KITCHEN_BASE[kitchen] * f },
-    { label: 'Bathrooms', amount: bathrooms * BATHROOM_COST * f },
-    { label: 'Flooring', amount: flooringSqft * FLOORING_PER_SQFT * f },
-    { label: 'Interior paint', amount: interiorPaint ? sqft * INTERIOR_PAINT_PER_SQFT * f : 0 },
-    { label: 'Windows', amount: windows * WINDOW_COST * f },
-    { label: 'Roof', amount: roof ? Math.max(sqft * ROOF_PER_SQFT, ROOF_MIN) * f : 0 },
-    { label: 'HVAC', amount: hvac ? HVAC_COST * f : 0 },
-    { label: 'Electrical', amount: electrical ? ELECTRICAL_COST * f : 0 },
-    { label: 'Plumbing', amount: plumbing ? PLUMBING_COST * f : 0 },
-    { label: 'Exterior paint', amount: exteriorPaint ? EXTERIOR_PAINT_COST * f : 0 },
-    { label: 'Foundation', amount: foundation ? FOUNDATION_COST * f : 0 },
+    { label: 'Kitchen', amount: kitchenCost },
+    { label: 'Bathrooms', amount: bathroomsCost },
+    { label: 'Flooring', amount: flooringCost },
+    { label: 'Interior paint', amount: interiorPaintCost },
+    { label: 'Windows', amount: windowsCost },
+    { label: 'Roof', amount: roofCost },
+    { label: 'HVAC', amount: hvacCost },
+    { label: 'Electrical', amount: electricalCost },
+    { label: 'Plumbing', amount: plumbingCost },
+    { label: 'Exterior paint', amount: exteriorPaintCost },
+    { label: 'Foundation', amount: foundationCost },
   ];
   const subtotal = items.reduce((sum, i) => sum + i.amount, 0);
   const contingency = subtotal * (contingencyPct / 100);
@@ -87,6 +102,25 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
   const low = total * (1 - RANGE_PCT);
   const high = total * (1 + RANGE_PCT);
   const perSqft = sqft > 0 ? total / sqft : 0;
+
+  // Collapsed onto the repair catalog's own 10 categories (repairCatalog.ts)
+  // for the real lead_repairs rows "Use as Est. Repairs" writes — Windows
+  // has no matching bucket there, so it folds into Miscellaneous alongside
+  // the contingency instead of being silently dropped.
+  const catalogItems = [
+    { item: 'Kitchen', cost: kitchenCost },
+    { item: 'Bathroom', cost: bathroomsCost },
+    { item: 'Flooring', cost: flooringCost },
+    { item: 'HVAC', cost: hvacCost },
+    { item: 'Plumbing', cost: plumbingCost },
+    { item: 'Electrical', cost: electricalCost },
+    { item: 'Foundation', cost: foundationCost },
+    { item: 'Roof', cost: roofCost },
+    { item: 'Paint', cost: interiorPaintCost + exteriorPaintCost },
+    { item: 'Miscellaneous', cost: windowsCost + contingency },
+  ]
+    .filter((i) => i.cost > 0)
+    .map((i) => ({ ...i, cost: Math.round(i.cost) }));
 
   const checkboxes: Array<[string, boolean, (v: boolean) => void]> = [
     ['Interior paint', interiorPaint, setInteriorPaint],
@@ -240,13 +274,14 @@ export function RehabCostEstimator({ lead }: { lead: Lead }) {
           <button
             type="button"
             className="btn btn-primary mt-3 w-full !py-1.5 text-[12.5px]"
-            disabled={updateLead.isPending}
-            onClick={() =>
+            disabled={updateLead.isPending || replaceRepairs.isPending}
+            onClick={() => {
               updateLead.mutate(
                 { id: lead.id, estRepairs: Math.round(total) },
                 { onSuccess: () => { setApplied(true); setTimeout(() => setApplied(false), 2000); } },
-              )
-            }
+              );
+              replaceRepairs.mutate({ leadId: lead.id, items: catalogItems });
+            }}
           >
             {applied ? '✓ Saved to Repairs' : 'Use as Est. Repairs'}
           </button>

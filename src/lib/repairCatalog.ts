@@ -1,35 +1,4 @@
-import {
-  AppWindow,
-  Biohazard,
-  Bug,
-  CloudRain,
-  Construction,
-  Droplets,
-  Fan,
-  Fence,
-  Flame,
-  Hammer,
-  Home,
-  Layers,
-  Lightbulb,
-  PaintBucket,
-  PanelTop,
-  PanelsTopLeft,
-  Refrigerator,
-  ShieldAlert,
-  Siren,
-  Snowflake,
-  Sparkles,
-  Square,
-  Trash2,
-  TreePine,
-  Warehouse,
-  Waves,
-  Wrench,
-  DoorOpen,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bath, Droplets, Fan, Home, Layers, PaintBucket, Refrigerator, Square, Wrench, Zap, type LucideIcon } from 'lucide-react';
 
 export interface RepairCatalogItem {
   label: string;
@@ -37,61 +6,27 @@ export interface RepairCatalogItem {
   group: string;
 }
 
-// Common wholesaling repair line items, major and minor, grouped for a
-// scannable dropdown rather than one long flat list. Not exhaustive by
-// design — a picked or typed item that isn't here still works fine (see
-// repairIcon's fallback below), this just covers what comes up often enough
-// to be worth one click instead of typing it out every time.
+// Matches the Rehab Cost Estimator's own line items exactly (see
+// RehabCostEstimator.tsx) — its "Use as Est. Repairs" button writes real
+// lead_repairs rows under these exact labels, and a new Deal Packet seeds
+// its own repairs from that same table (useCreatePacket), so this catalog
+// has to use the identical strings for repairIcon() to match them up and
+// for quick-add here to stay consistent with what the estimator produces.
+// Used to cover 30+ generic wholesaling line items (Deck/Porch, Fencing,
+// Landscaping, Pool, ...) — narrowed to just these so every repair on a
+// lead traces back to one real, calculated source instead of two
+// independent, driftable lists.
 export const REPAIR_CATALOG: RepairCatalogItem[] = [
-  // Major systems & structural
-  { label: 'Roof Replacement', icon: Home, group: 'Major Systems' },
-  { label: 'Foundation Repair', icon: Layers, group: 'Major Systems' },
-  { label: 'Structural / Framing Repair', icon: Construction, group: 'Major Systems' },
-  { label: 'HVAC System', icon: Fan, group: 'Major Systems' },
-  { label: 'Electrical Rewiring', icon: Zap, group: 'Major Systems' },
-  { label: 'Plumbing Repipe', icon: Droplets, group: 'Major Systems' },
-  { label: 'Water Heater', icon: Flame, group: 'Major Systems' },
-  { label: 'Sewer Line Repair', icon: Droplets, group: 'Major Systems' },
-  { label: 'Septic System', icon: Droplets, group: 'Major Systems' },
-  { label: 'Well / Water System', icon: Droplets, group: 'Major Systems' },
-  { label: 'Sump Pump', icon: Droplets, group: 'Major Systems' },
-  { label: 'Chimney Repair', icon: Flame, group: 'Major Systems' },
-
-  // Hazard & damage remediation
-  { label: 'Mold Remediation', icon: Biohazard, group: 'Hazard & Damage' },
-  { label: 'Asbestos Abatement', icon: ShieldAlert, group: 'Hazard & Damage' },
-  { label: 'Lead Paint Remediation', icon: ShieldAlert, group: 'Hazard & Damage' },
-  { label: 'Pest / Termite Treatment', icon: Bug, group: 'Hazard & Damage' },
-  { label: 'Fire / Smoke Damage', icon: Flame, group: 'Hazard & Damage' },
-  { label: 'Water Damage Restoration', icon: Droplets, group: 'Hazard & Damage' },
-
-  // Exterior
-  { label: 'Siding Repair / Replacement', icon: PanelsTopLeft, group: 'Exterior' },
-  { label: 'Window Replacement', icon: AppWindow, group: 'Exterior' },
-  { label: 'Exterior Doors', icon: DoorOpen, group: 'Exterior' },
-  { label: 'Garage Door', icon: Warehouse, group: 'Exterior' },
-  { label: 'Gutters & Downspouts', icon: CloudRain, group: 'Exterior' },
-  { label: 'Exterior Paint', icon: PaintBucket, group: 'Exterior' },
-  { label: 'Driveway / Concrete', icon: Square, group: 'Exterior' },
-  { label: 'Fencing', icon: Fence, group: 'Exterior' },
-  { label: 'Deck / Porch Repair', icon: Hammer, group: 'Exterior' },
-  { label: 'Landscaping / Tree Removal', icon: TreePine, group: 'Exterior' },
-  { label: 'Pool Repair / Removal', icon: Waves, group: 'Exterior' },
-
-  // Interior & cosmetic — kitchen, bath, flooring, paint, cabinets, and trim
-  // all fold into one lump-sum "Cosmetic Rehab & Remodeling" line rather
-  // than separate per-room entries: at deal-analysis stage this is one
-  // estimate, not a room-by-room contractor bid.
-  { label: 'Cosmetic Rehab & Remodeling', icon: Sparkles, group: 'Interior & Cosmetic' },
-  { label: 'Drywall Repair', icon: PanelTop, group: 'Interior & Cosmetic' },
-  { label: 'Insulation', icon: Snowflake, group: 'Interior & Cosmetic' },
-  { label: 'Appliances', icon: Refrigerator, group: 'Interior & Cosmetic' },
-  { label: 'Lighting & Electrical Fixtures', icon: Lightbulb, group: 'Interior & Cosmetic' },
-  { label: 'Smoke / CO Detectors', icon: Siren, group: 'Interior & Cosmetic' },
-
-  // General
-  { label: 'Junk Removal / Debris', icon: Trash2, group: 'General' },
-  { label: 'Miscellaneous / Other', icon: Wrench, group: 'General' },
+  { label: 'Kitchen', icon: Refrigerator, group: 'Rehab Scope' },
+  { label: 'Bathroom', icon: Bath, group: 'Rehab Scope' },
+  { label: 'Flooring', icon: Square, group: 'Rehab Scope' },
+  { label: 'HVAC', icon: Fan, group: 'Rehab Scope' },
+  { label: 'Plumbing', icon: Droplets, group: 'Rehab Scope' },
+  { label: 'Electrical', icon: Zap, group: 'Rehab Scope' },
+  { label: 'Foundation', icon: Layers, group: 'Rehab Scope' },
+  { label: 'Roof', icon: Home, group: 'Rehab Scope' },
+  { label: 'Paint', icon: PaintBucket, group: 'Rehab Scope' },
+  { label: 'Miscellaneous', icon: Wrench, group: 'Rehab Scope' },
 ];
 
 const DEFAULT_REPAIR_ICON: LucideIcon = Wrench;
@@ -101,9 +36,7 @@ const catalogByLabel = new Map(REPAIR_CATALOG.map((r) => [r.label.toLowerCase(),
 // The "5 majors" — standard wholesaling shorthand for the highest-cost
 // systems that drive a rehab budget on nearly every deal, worth a one-click
 // shortcut instead of searching for each one every time.
-export const MAJOR_FIVE = REPAIR_CATALOG.filter((r) =>
-  ['Roof Replacement', 'HVAC System', 'Electrical Rewiring', 'Plumbing Repipe', 'Foundation Repair'].includes(r.label),
-);
+export const MAJOR_FIVE = REPAIR_CATALOG.filter((r) => ['Roof', 'HVAC', 'Electrical', 'Plumbing', 'Foundation'].includes(r.label));
 
 /** Icon for a repair line — exact (case-insensitive) match against the
  * catalog, falling back to a generic wrench for anything typed freehand

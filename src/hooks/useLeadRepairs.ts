@@ -41,6 +41,30 @@ export function useUpdateLeadRepair() {
   });
 }
 
+/** Wholesale replace rather than diff — same approach useSavePacket already
+ *  takes for packet_repairs. Used by the Rehab Cost Estimator's "Use as Est.
+ *  Repairs" button: its own scope (Kitchen/Bathroom/Flooring/HVAC/Plumbing/
+ *  Electrical/Foundation/Roof/Paint/Miscellaneous) is the single source of
+ *  truth for this lead's itemized repairs, so re-running it should replace
+ *  whatever was there before rather than append another copy alongside it. */
+export function useReplaceLeadRepairs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ leadId, items }: { leadId: string; items: Array<{ item: string; cost: number }> }) => {
+      const { error: delErr } = await supabase.from('lead_repairs').delete().eq('lead_id', leadId);
+      if (delErr) throw delErr;
+      if (items.length) {
+        const { error } = await supabase
+          .from('lead_repairs')
+          .insert(items.map((it, i) => ({ lead_id: leadId, item: it.item, cost: it.cost, sort_order: i })));
+        if (error) throw error;
+      }
+      return leadId;
+    },
+    onSuccess: (leadId) => qc.invalidateQueries({ queryKey: ['lead_repairs', leadId] }),
+  });
+}
+
 export function useDeleteLeadRepair() {
   const qc = useQueryClient();
   return useMutation({
