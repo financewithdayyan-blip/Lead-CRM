@@ -12,6 +12,11 @@ interface Step {
   skippable?: boolean;
 }
 
+interface CapturedPhoto {
+  step: Step;
+  blob: Blob;
+}
+
 const REPEATABLE_COPY: Record<'room' | 'bathroom', { title: string; hint: string }> = {
   room: { title: 'A room', hint: 'A bedroom, living room, dining room — any room not covered already.' },
   bathroom: { title: 'A bathroom', hint: 'Make sure the whole bathroom is visible.' },
@@ -33,7 +38,24 @@ function buildInitialQueue(): Step[] {
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.85;
 
-type Phase = 'intro' | 'requesting-camera' | 'permission-error' | 'live' | 'preview' | 'uploading' | 'upload-error' | 'repeat-prompt' | 'finishing' | 'done';
+// Captures are now kept entirely in memory and only sent once the whole
+// shot list is done (see uploadAllAndFinish) — so every step-to-step
+// transition is instant with zero network wait, and the seller only sits
+// through one single upload wait at the very end instead of a small one
+// after every photo. Trade-off, explicitly accepted: if they abandon the
+// page partway through, nothing captured so far has actually reached the
+// server yet (the old per-photo-upload design didn't have this gap).
+type Phase =
+  | 'intro'
+  | 'requesting-camera'
+  | 'permission-error'
+  | 'live'
+  | 'preview'
+  | 'repeat-prompt'
+  | 'uploading-all'
+  | 'upload-error'
+  | 'finishing'
+  | 'done';
 
 // Phases where the camera has already been granted and should stay mounted
 // and streaming underneath whatever overlay that phase shows — the whole
@@ -41,7 +63,7 @@ type Phase = 'intro' | 'requesting-camera' | 'permission-error' | 'live' | 'prev
 // camera starts, and never torn down/recreated again (that remount is what
 // produced the multi-second black flash between steps: a fresh <video> has
 // no frame to show until it's reattached and the browser decodes one).
-const CAMERA_MOUNTED_PHASES = new Set<Phase>(['live', 'preview', 'uploading', 'upload-error', 'repeat-prompt', 'finishing']);
+const CAMERA_MOUNTED_PHASES = new Set<Phase>(['live', 'preview', 'repeat-prompt', 'uploading-all', 'upload-error', 'finishing']);
 
 export function CapturePage() {
   const { token } = useParams<{ token: string }>();
@@ -56,6 +78,11 @@ export function CapturePage() {
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [captured, setCaptured] = useState<CapturedPhoto[]>([]);
+  // How many of `captured` have actually made it to the server — lets a
+  // Retry after a batch-upload failure resume from there instead of
+  // re-sending photos that already succeeded.
+  const [uploadedCount, setUploadedCount] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -144,37 +171,35 @@ export function CapturePage() {
     setPhase('live');
   }
 
-  async function advancePast(step: Step) {
+  function advancePast(step: Step) {
     if (step.repeatableType) {
       setPhase('repeat-prompt');
       return;
     }
-    await moveToNextIndex();
+    moveToNextIndex();
   }
 
-  async function moveToNextIndex() {
+  function moveToNextIndex() {
     const next = index + 1;
     if (next >= queue.length) {
-      await finish();
+      uploadAllAndFinish();
       return;
     }
     setIndex(next);
     setPhase('live');
   }
 
-  async function usePhoto() {
-    if (!capturedBlob || !token || !currentStep) return;
-    setPhase('uploading');
-    try {
-      await submitPhoto.mutateAsync({ token, category: currentStep.category, blob: capturedBlob });
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-      setCapturedBlob(null);
-      await advancePast(currentStep);
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
-      setPhase('upload-error');
-    }
+  // Just keeps the captured blob in memory and advances immediately — no
+  // network call here at all, which is the whole point: step-to-step is
+  // instant, and the one real upload wait happens once, in
+  // uploadAllAndFinish, after the seller is done with the camera entirely.
+  function usePhoto() {
+    if (!capturedBlob || !currentStep) return;
+    setCaptured((prev) => [...prev, { step: currentStep, blob: capturedBlob }]);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setCapturedBlob(null);
+    advancePast(currentStep);
   }
 
   function addAnother() {
@@ -190,17 +215,34 @@ export function CapturePage() {
     setPhase('live');
   }
 
-  async function skipStep() {
-    await moveToNextIndex();
+  function skipStep() {
+    moveToNextIndex();
   }
 
-  async function finish() {
+  // Uploads every captured photo in order, one at a time (gentler on a
+  // seller's mobile connection than firing them all at once, and gives a
+  // clean "3 of 9" progress readout). Resumes from uploadedCount on retry
+  // rather than re-sending ones that already succeeded.
+  async function uploadAllAndFinish() {
+    setPhase('uploading-all');
+    if (!token) return;
+    try {
+      for (let i = uploadedCount; i < captured.length; i++) {
+        await submitPhoto.mutateAsync({ token, category: captured[i].step.category, blob: captured[i].blob });
+        setUploadedCount(i + 1);
+      }
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
+      setPhase('upload-error');
+      return;
+    }
     setPhase('finishing');
     try {
-      if (token) await completeSession.mutateAsync(token);
+      await completeSession.mutateAsync(token);
     } catch {
-      // Photos are already safely uploaded one-by-one — a failure here is
-      // just the "mark complete + notify" courtesy step, not data loss.
+      // Photos already made it to the server one by one above — a failure
+      // here is just the "mark complete + notify" courtesy step, not data
+      // loss.
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     setPhase('done');
@@ -280,17 +322,25 @@ export function CapturePage() {
               <img src={previewUrl} alt={currentStep.title} className="absolute inset-0 h-full w-full bg-black object-contain" />
             )}
 
-            {(phase === 'uploading' || phase === 'finishing') && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/55">
-                <p className="text-[14px] font-medium text-white/85">{phase === 'uploading' ? 'Uploading…' : 'Finishing up…'}</p>
+            {(phase === 'uploading-all' || phase === 'finishing') && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 px-6 text-center">
+                <p className="text-[15px] font-semibold text-white">
+                  {phase === 'uploading-all' ? 'Uploading your photos…' : 'Finishing up…'}
+                </p>
+                {phase === 'uploading-all' && (
+                  <p className="text-[13px] text-white/60">
+                    {Math.min(uploadedCount + 1, captured.length)} of {captured.length}
+                  </p>
+                )}
               </div>
             )}
 
             {phase === 'upload-error' && (
-              <div className="absolute inset-x-0 bottom-4 mx-auto w-fit rounded-full bg-danger px-4 py-2 text-[13px] font-medium text-white">
-                {errorMsg ?? 'Upload failed'} —{' '}
-                <button className="underline" onClick={usePhoto}>
-                  Retry
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 px-6 text-center">
+                <p className="text-[15px] font-semibold">Upload ran into a problem</p>
+                <p className="max-w-xs text-[13px] text-white/60">{errorMsg ?? 'Please check your connection and try again.'}</p>
+                <button onClick={uploadAllAndFinish} className="mt-1 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-black">
+                  Retry upload
                 </button>
               </div>
             )}
@@ -312,7 +362,7 @@ export function CapturePage() {
             )}
           </div>
 
-          {(phase === 'live' || phase === 'uploading' || phase === 'upload-error') && currentStep && (
+          {phase === 'live' && currentStep && (
             <div className="flex items-center justify-center gap-8 bg-black px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-5">
               {currentStep.skippable ? (
                 <button onClick={skipStep} className="text-[13px] font-medium text-white/60">
@@ -323,8 +373,7 @@ export function CapturePage() {
               )}
               <button
                 onClick={takePhoto}
-                disabled={phase !== 'live'}
-                className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white/80 bg-white/10 active:scale-95 disabled:opacity-50"
+                className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white/80 bg-white/10 active:scale-95"
                 aria-label="Take photo"
               >
                 <div className="h-14 w-14 rounded-full bg-white" />
