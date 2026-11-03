@@ -48,6 +48,15 @@ export function externalHref(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
+/** Zillow's own search box lands on this same `/homes/<query>_rb/` pattern
+ *  (spaces as dashes) for a free-text query, not just its canonical per-listing
+ *  slug — so this works as a direct search without needing to know whether
+ *  the address actually matches an active Zillow listing. */
+export function zillowSearchUrl(parts: { address?: string | null; city?: string | null; state?: string | null; zip?: string | null }): string {
+  const query = [parts.address, parts.city, parts.state, parts.zip].filter(Boolean).join(' ').trim().replace(/\s+/g, '-');
+  return `https://www.zillow.com/homes/${encodeURIComponent(query)}_rb/`;
+}
+
 /** Collapses the trivial formatting differences (scheme, www, trailing
  *  slash, case) between two Facebook links that point at the same real
  *  profile — used to catch duplicate cash-buyer entries. */

@@ -13,7 +13,8 @@ import { TagPill } from '@/components/ui/TagPill';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DropdownMenu } from '@/components/ui/DropdownMenu';
 import { STAGE_CONFIG, STAGE_ORDER, visibleStagesFor, type Lead, type LeadStage, type Tag } from '@/types/domain';
-import { cn, formatPhone, initials, titleCase, toE164 } from '@/lib/utils';
+import { cn, formatPhone, initials, titleCase, toE164, zillowSearchUrl } from '@/lib/utils';
+import { ZillowIcon } from '@/components/icons/ZillowIcon';
 import { formatPakistanTime, formatTimeInZone, resolveUsTimeZone } from '@/lib/timezone';
 import { scoreColor } from '@/lib/aiScore';
 import { ContactSidebarCard } from '@/components/leadProfile/ContactSidebarCard';
@@ -560,10 +561,21 @@ export function LeadProfileView({ id, backTo, allowShare = false }: { id: string
                 )}
               </div>
               {lead.address && (
-                <div className="mt-0.5 text-[13.5px] text-text-3">
-                  {lead.address}
-                  {lead.city ? `, ${lead.city}` : ''}
-                  {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px] text-text-3">
+                  <span>
+                    {lead.address}
+                    {lead.city ? `, ${lead.city}` : ''}
+                    {lead.state ? `, ${lead.state}` : ''} {lead.zip ?? ''}
+                  </span>
+                  <a
+                    href={zillowSearchUrl(lead)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[12px] font-medium text-text-2 hover:border-[#006AFF]/50 hover:text-[#006AFF]"
+                    title="Search this address on Zillow"
+                  >
+                    <ZillowIcon size={12} /> Zillow
+                  </a>
                 </div>
               )}
               {lead.scheduledCallbackAt && (() => {
