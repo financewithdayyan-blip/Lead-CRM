@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Camera, Check, Home, RotateCcw } from 'lucide-react';
 import { usePublicCaptureSession, useSubmitCapturePhoto, useCompleteCaptureSession } from '@/hooks/usePhotoCapture';
@@ -8,8 +8,51 @@ interface Step {
   category: string;
   title: string;
   hint: string;
-  repeatableType?: 'room' | 'bathroom';
+  /** The big centered on-camera label — a category-level word (EXTERIOR,
+   *  KITCHEN) for fixed steps, a numbered one (ROOM 2, BATH 1) for the
+   *  property-count-driven steps, so it's visible at a glance without
+   *  reading the smaller hint text. */
+  watermark: string;
   skippable?: boolean;
+}
+
+// Room/Bath step counts come straight from the lead's own beds/baths —
+// deterministic, no "add another?" prompt. Falls back to 1 of each when
+// the property details aren't filled in yet, rather than skipping the
+// step entirely. Baths round up (ceil) so a 2.5-bath property still gets
+// 3 distinct bathroom-ish spaces captured, including the half bath.
+function buildQueue(beds: number | null | undefined, baths: number | null | undefined): Step[] {
+  const roomCount = beds && beds > 0 ? Math.round(beds) : 1;
+  const bathCount = baths && baths > 0 ? Math.ceil(baths) : 1;
+
+  const steps: Step[] = [
+    { id: 'ext-front', category: 'Exterior - Front', title: 'Front of the house', hint: 'Stand back so the whole front of the house fits in frame.', watermark: 'EXTERIOR' },
+    { id: 'ext-side', category: 'Exterior - Side', title: 'Side of the house', hint: 'Either side — whichever shows the most.', watermark: 'EXTERIOR' },
+    { id: 'ext-back', category: 'Exterior - Back', title: 'Back of the house', hint: 'The backyard and rear of the house.', watermark: 'EXTERIOR' },
+    { id: 'kitchen-1', category: 'Kitchen 1', title: 'Kitchen', hint: 'The whole kitchen in frame, including the appliances.', watermark: 'KITCHEN' },
+    { id: 'kitchen-2', category: 'Kitchen 2', title: 'Kitchen', hint: 'A second angle — counters and cabinets up close.', watermark: 'KITCHEN' },
+    { id: 'hallway-1', category: 'Hallway 1', title: 'Hallway', hint: 'The main hallway.', watermark: 'HALLWAY' },
+    { id: 'hallway-2', category: 'Hallway 2', title: 'Hallway', hint: 'Another hallway or a different angle, if there is one.', watermark: 'HALLWAY' },
+    { id: 'hallway-3', category: 'Hallway 3', title: 'Hallway', hint: 'Any remaining hallway or landing area.', watermark: 'HALLWAY' },
+  ];
+
+  for (let i = 1; i <= roomCount; i++) {
+    steps.push({ id: `room-${i}`, category: `Room ${i}`, title: `Room ${i}`, hint: 'A bedroom or living area — the whole room in frame.', watermark: `ROOM ${i}` });
+  }
+  for (let i = 1; i <= bathCount; i++) {
+    steps.push({ id: `bath-${i}`, category: `Bath ${i}`, title: `Bath ${i}`, hint: 'Make sure the whole bathroom is visible.', watermark: `BATH ${i}` });
+  }
+
+  steps.push({
+    id: 'basement',
+    category: 'Basement',
+    title: 'Basement',
+    hint: "If there is one — skip this if your home doesn't have a basement.",
+    watermark: 'BASEMENT',
+    skippable: true,
+  });
+
+  return steps;
 }
 
 interface CapturedPhoto {
@@ -17,41 +60,21 @@ interface CapturedPhoto {
   blob: Blob;
 }
 
-const REPEATABLE_COPY: Record<'room' | 'bathroom', { title: string; hint: string }> = {
-  room: { title: 'A room', hint: 'A bedroom, living room, dining room — any room not covered already.' },
-  bathroom: { title: 'A bathroom', hint: 'Make sure the whole bathroom is visible.' },
-};
-
-function buildInitialQueue(): Step[] {
-  return [
-    { id: 'ext-front', category: 'Exterior - Front', title: 'Front of the house', hint: 'Stand back so the whole front of the house fits in frame.' },
-    { id: 'ext-side', category: 'Exterior - Side', title: 'Side of the house', hint: 'Either side — whichever shows the most.' },
-    { id: 'ext-back', category: 'Exterior - Back', title: 'Back of the house', hint: 'The backyard and rear of the house.' },
-    { id: 'kitchen', category: 'Kitchen', title: 'Kitchen', hint: 'The whole kitchen, including the appliances.' },
-    { id: 'hallway', category: 'Hallway', title: 'Hallway', hint: 'The main hallway.' },
-    { id: 'room-1', category: 'Room 1', title: REPEATABLE_COPY.room.title, hint: REPEATABLE_COPY.room.hint, repeatableType: 'room' },
-    { id: 'bathroom-1', category: 'Bathroom 1', title: REPEATABLE_COPY.bathroom.title, hint: REPEATABLE_COPY.bathroom.hint, repeatableType: 'bathroom' },
-    { id: 'basement', category: 'Basement', title: 'Basement', hint: "If there is one — skip this if your home doesn't have a basement.", skippable: true },
-  ];
-}
-
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.85;
 
-// Captures are now kept entirely in memory and only sent once the whole
-// shot list is done (see uploadAllAndFinish) — so every step-to-step
-// transition is instant with zero network wait, and the seller only sits
-// through one single upload wait at the very end instead of a small one
-// after every photo. Trade-off, explicitly accepted: if they abandon the
-// page partway through, nothing captured so far has actually reached the
-// server yet (the old per-photo-upload design didn't have this gap).
+// Captures are kept entirely in memory and only sent once the whole shot
+// list is done (see uploadAllAndFinish) — so every step-to-step transition
+// is instant with zero network wait, and the seller only sits through one
+// single upload wait at the very end instead of a small one after every
+// photo. Trade-off, explicitly accepted: if they abandon the page partway
+// through, nothing captured so far has actually reached the server yet.
 type Phase =
   | 'intro'
   | 'requesting-camera'
   | 'permission-error'
   | 'live'
   | 'preview'
-  | 'repeat-prompt'
   | 'uploading-all'
   | 'upload-error'
   | 'finishing'
@@ -61,9 +84,9 @@ type Phase =
 // and streaming underneath whatever overlay that phase shows — the whole
 // point being the <video> element is created exactly once, right when the
 // camera starts, and never torn down/recreated again (that remount is what
-// produced the multi-second black flash between steps: a fresh <video> has
+// produced a multi-second black flash between steps: a fresh <video> has
 // no frame to show until it's reattached and the browser decodes one).
-const CAMERA_MOUNTED_PHASES = new Set<Phase>(['live', 'preview', 'repeat-prompt', 'uploading-all', 'upload-error', 'finishing']);
+const CAMERA_MOUNTED_PHASES = new Set<Phase>(['live', 'preview', 'uploading-all', 'upload-error', 'finishing']);
 
 export function CapturePage() {
   const { token } = useParams<{ token: string }>();
@@ -73,7 +96,6 @@ export function CapturePage() {
 
   const [phase, setPhase] = useState<Phase>('intro');
   const [cameraStarted, setCameraStarted] = useState(false);
-  const [queue, setQueue] = useState<Step[]>(() => buildInitialQueue());
   const [index, setIndex] = useState(0);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -88,6 +110,10 @@ export function CapturePage() {
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Derived straight from the lead's own beds/baths the moment the session
+  // loads — see buildQueue's own comment on why this replaced an
+  // interactive "add another?" prompt.
+  const queue = useMemo(() => buildQueue(session?.beds, session?.baths), [session?.beds, session?.baths]);
   const currentStep = queue[index];
   const totalSteps = queue.length;
   const cameraMounted = cameraStarted && CAMERA_MOUNTED_PHASES.has(phase);
@@ -171,14 +197,6 @@ export function CapturePage() {
     setPhase('live');
   }
 
-  function advancePast(step: Step) {
-    if (step.repeatableType) {
-      setPhase('repeat-prompt');
-      return;
-    }
-    moveToNextIndex();
-  }
-
   function moveToNextIndex() {
     const next = index + 1;
     if (next >= queue.length) {
@@ -199,20 +217,7 @@ export function CapturePage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setCapturedBlob(null);
-    advancePast(currentStep);
-  }
-
-  function addAnother() {
-    const type = currentStep.repeatableType!;
-    const existingOfType = queue.filter((s) => s.repeatableType === type).length;
-    const n = existingOfType + 1;
-    const copy = REPEATABLE_COPY[type];
-    const newStep: Step = { id: `${type}-${n}`, category: `${type === 'room' ? 'Room' : 'Bathroom'} ${n}`, title: copy.title, hint: copy.hint, repeatableType: type };
-    const next = [...queue];
-    next.splice(index + 1, 0, newStep);
-    setQueue(next);
-    setIndex(index + 1);
-    setPhase('live');
+    moveToNextIndex();
   }
 
   function skipStep() {
@@ -307,15 +312,25 @@ export function CapturePage() {
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
 
             {phase === 'live' && currentStep && (
-              <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent px-4 pb-8 pt-[max(16px,env(safe-area-inset-top))]">
-                <div className="mb-2 flex gap-1">
-                  {queue.map((s, i) => (
-                    <div key={s.id} className={`h-1 flex-1 rounded-full ${i < index ? 'bg-white' : i === index ? 'bg-white/70' : 'bg-white/20'}`} />
-                  ))}
+              <>
+                <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent px-4 pb-8 pt-[max(16px,env(safe-area-inset-top))]">
+                  <div className="mb-2 flex gap-1">
+                    {queue.map((s, i) => (
+                      <div key={s.id} className={`h-1 flex-1 rounded-full ${i < index ? 'bg-white' : i === index ? 'bg-white/70' : 'bg-white/20'}`} />
+                    ))}
+                  </div>
+                  <div className="text-[12px] font-medium uppercase tracking-wide text-white/60">{progressLabel}</div>
+                  <div className="mt-0.5 text-[13px] text-white/80">{currentStep.hint}</div>
                 </div>
-                <div className="text-[12px] font-medium uppercase tracking-wide text-white/60">{progressLabel}</div>
-                <div className="mt-0.5 text-[13px] text-white/80">{currentStep.hint}</div>
-              </div>
+                {/* The big watermark — a ghosted label so it's always
+                    legible against any background without blocking the
+                    shot itself. Not tappable, sits behind the shutter. */}
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+                  <span className="select-none text-center text-[15vw] font-extrabold uppercase leading-none tracking-tight text-white/25 [text-shadow:0_2px_12px_rgba(0,0,0,0.35)]">
+                    {currentStep.watermark}
+                  </span>
+                </div>
+              </>
             )}
 
             {phase === 'preview' && previewUrl && currentStep && (
@@ -342,22 +357,6 @@ export function CapturePage() {
                 <button onClick={uploadAllAndFinish} className="mt-1 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-black">
                   Retry upload
                 </button>
-              </div>
-            )}
-
-            {phase === 'repeat-prompt' && currentStep && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center">
-                <div className="flex flex-col items-center gap-4">
-                  <p className="text-[17px] font-semibold">Got it! Add another {currentStep.repeatableType}?</p>
-                  <div className="flex gap-3">
-                    <button onClick={addAnother} className="rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-black">
-                      Yes, add another
-                    </button>
-                    <button onClick={moveToNextIndex} className="rounded-full border border-white/30 px-5 py-2.5 text-[14px] font-semibold text-white">
-                      No, continue
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
           </div>

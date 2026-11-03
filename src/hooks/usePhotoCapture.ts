@@ -66,6 +66,8 @@ export interface PublicCaptureSession {
   address: string | null;
   city: string | null;
   state: string | null;
+  beds: number | null;
+  baths: number | null;
 }
 
 export function usePublicCaptureSession(token: string | undefined) {
