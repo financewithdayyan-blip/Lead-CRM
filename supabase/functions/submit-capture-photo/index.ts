@@ -53,7 +53,13 @@ Deno.serve(async (req) => {
     if (!leadUserId) return json({ error: 'Lead not found' }, 404);
 
     const bytes = new Uint8Array(await image.arrayBuffer());
-    const path = `${session.lead_id}/capture-${slugify(category)}-${Date.now()}.jpg`;
+    // Storage RLS on lead-files (0001_init) requires the FIRST path folder
+    // to equal the uploader's own auth.uid(), same "<user_id>/<lead_id>/..."
+    // convention sms-webhook's rehostAttachments and useUploadLeadFile both
+    // already follow — a lead-id-first path silently fails every signed-URL
+    // request, which is exactly what left these photos spinning forever in
+    // the Property tab gallery (DB row existed, storage object unreadable).
+    const path = `${leadUserId}/${session.lead_id}/capture-${slugify(category)}-${Date.now()}.jpg`;
 
     const { error: uploadErr } = await admin.storage.from('lead-files').upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
     if (uploadErr) throw uploadErr;
