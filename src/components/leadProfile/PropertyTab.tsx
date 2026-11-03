@@ -3,6 +3,7 @@ import { ExternalLink, Loader2, Trash2, Upload, Video } from 'lucide-react';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { useUploadLeadFile, useDeleteLeadFile, useSignedFileUrl, useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { EditableField } from '@/components/leadProfile/EditableField';
+import { RequestPhotosButton } from '@/components/leadProfile/RequestPhotosModal';
 import { currencyDigitsOnly, formatCurrency, formatDateTime, isImageFile, isVideoFile, selectOptions } from '@/lib/utils';
 import type { Lead } from '@/types/domain';
 
@@ -74,12 +75,15 @@ function PhotoGallery({ lead }: { lead: Lead }) {
 
   return (
     <div className="card">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-text">Property Photos</h3>
-        <label className={`btn cursor-pointer ${uploadFile.isPending ? 'pointer-events-none opacity-60' : ''}`}>
-          <Upload size={14} /> {uploadFile.isPending ? 'Uploading…' : 'Add Photos'}
-          <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
-        </label>
+        <div className="flex items-center gap-2">
+          <RequestPhotosButton lead={lead} />
+          <label className={`btn cursor-pointer ${uploadFile.isPending ? 'pointer-events-none opacity-60' : ''}`}>
+            <Upload size={14} /> {uploadFile.isPending ? 'Uploading…' : 'Add Photos'}
+            <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
+          </label>
+        </div>
       </div>
       <p className="mb-3 text-[12px] text-text-3">
         {pasteHint ? 'Pasted — uploading…' : 'Tip: copy an image and press Ctrl+V anywhere on this tab to upload it directly.'}

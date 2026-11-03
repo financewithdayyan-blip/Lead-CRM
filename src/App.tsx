@@ -35,6 +35,7 @@ const PublicPacketPage = lazy(() => import('@/pages/PublicPacketPage').then((m) 
 const BlueDocsPage = lazy(() => import('@/pages/BlueDocsPage').then((m) => ({ default: m.BlueDocsPage })));
 const SignContractPage = lazy(() => import('@/pages/SignContractPage').then((m) => ({ default: m.SignContractPage })));
 const VerifyContractPage = lazy(() => import('@/pages/VerifyContractPage').then((m) => ({ default: m.VerifyContractPage })));
+const CapturePage = lazy(() => import('@/pages/CapturePage').then((m) => ({ default: m.CapturePage })));
 const DispositionPage = lazy(() => import('@/pages/DispositionPage').then((m) => ({ default: m.DispositionPage })));
 const BuyerProfilePage = lazy(() => import('@/pages/BuyerProfilePage').then((m) => ({ default: m.BuyerProfilePage })));
 
@@ -79,6 +80,9 @@ export default function App() {
                   <Route path="/deal/:slug" element={<ForceLightTheme><PublicPacketPage /></ForceLightTheme>} />
                   <Route path="/sign/:token" element={<ForceLightTheme><SignContractPage /></ForceLightTheme>} />
                   <Route path="/verify/:instanceId" element={<ForceLightTheme><VerifyContractPage /></ForceLightTheme>} />
+                  {/* Guided seller photo capture — a full-screen dark camera UI of its
+                      own, not the light public-document look the other public routes use. */}
+                  <Route path="/capture/:token" element={<CapturePage />} />
                   <Route element={<ProtectedRoute />}>
                     <Route element={<AppShell />}>
                       <Route path="/" element={<DashboardPage />} />
