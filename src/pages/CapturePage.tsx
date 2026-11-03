@@ -68,16 +68,34 @@ export function CapturePage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      // Flips phase to 'live', which is what actually mounts the <video>
+      // element below (it doesn't exist yet during 'requesting-camera') —
+      // the effect below attaches the stream once that element is real.
       setPhase('live');
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Camera access was blocked.');
       setPhase('permission-error');
     }
   }
+
+  // Attaches the already-acquired stream once the <video> element actually
+  // exists in the DOM (it's conditionally rendered on phase === 'live', so
+  // it isn't there yet at the moment startCamera's getUserMedia resolves).
+  // Re-runs on every phase flip back to 'live' (e.g. after a retake) in
+  // case the element was unmounted/remounted, which is a harmless no-op
+  // when the stream's already attached. Sets .muted as a real DOM property,
+  // not just React's muted prop — iOS Safari only honors the property for
+  // inline autoplay of a live camera stream.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (phase !== 'live' || !video || !streamRef.current) return;
+    video.muted = true;
+    video.srcObject = streamRef.current;
+    video.play().catch((e) => {
+      setErrorMsg(e instanceof Error ? e.message : 'Could not start the camera preview.');
+      setPhase('permission-error');
+    });
+  }, [phase]);
 
   useEffect(() => {
     return () => {
