@@ -69,9 +69,12 @@ Deno.serve(async (req) => {
       .insert({ lead_id: session.lead_id, user_id: leadUserId, storage_path: path, file_name: `${category}.jpg`, file_type: 'image/jpeg' });
     if (insertErr) throw insertErr;
 
+    // last_activity_at (0188) is what lets send-capture-reminders tell a
+    // session that's genuinely stalled apart from one still actively in
+    // progress — bumped on every photo, not just the first.
     const { error: updateErr } = await admin
       .from('photo_capture_sessions')
-      .update({ status: 'in_progress', photos_count: session.photos_count + 1 })
+      .update({ status: 'in_progress', photos_count: session.photos_count + 1, last_activity_at: new Date().toISOString() })
       .eq('id', session.id);
     if (updateErr) throw updateErr;
 
