@@ -61,7 +61,7 @@ interface UploadItem {
   step: Step;
   blob: Blob;
   thumbUrl: string;
-  status: 'uploading' | 'done' | 'error';
+  status: 'queued' | 'uploading' | 'done' | 'error';
 }
 
 const MAX_DIMENSION = 1600;
@@ -70,6 +70,13 @@ const JPEG_QUALITY = 0.85;
 // before it fades out of the stack — long enough to register as "done",
 // short enough not to clutter the corner on a long shot list.
 const DONE_LINGER_MS = 1400;
+// Caps how many photos upload at once rather than firing every confirmed
+// shot in parallel unbounded — a weak mobile connection serving 8-10
+// simultaneous multipart uploads is exactly what makes individual requests
+// stall. A queued item starts the moment a slot frees up (see the
+// scheduler effect below), so this never blocks taking the next photo,
+// only how many uploads are actually in flight together.
+const MAX_CONCURRENT_UPLOADS = 3;
 
 // Each photo uploads in the background the instant it's confirmed — never
 // awaited, so advancing to the next step is always instant regardless of
@@ -194,10 +201,11 @@ export function CapturePage() {
     setPhase('live');
   }
 
-  // Fires the upload and returns immediately — the caller never awaits
-  // this, which is what keeps step-to-step navigation instant regardless
-  // of how long the actual network call takes.
-  function uploadInBackground(item: UploadItem) {
+  // Actually fires the network request for an item the scheduler effect
+  // below has already flipped to 'uploading' — returns immediately itself
+  // (never awaited by its caller), which is what keeps step-to-step
+  // navigation instant regardless of how long the upload takes.
+  function startUpload(item: UploadItem) {
     if (!token) return;
     submitPhoto.mutate(
       { token, category: item.step.category, blob: item.blob },
@@ -216,10 +224,28 @@ export function CapturePage() {
     );
   }
 
+  // Back to the queue rather than straight to 'uploading' — lets the
+  // scheduler below start it respecting the same concurrency cap instead
+  // of bypassing it on a retry.
   function retryUpload(item: UploadItem) {
-    setUploads((prev) => prev.map((u) => (u.id === item.id ? { ...u, status: 'uploading' } : u)));
-    uploadInBackground(item);
+    setUploads((prev) => prev.map((u) => (u.id === item.id ? { ...u, status: 'queued' } : u)));
   }
+
+  // The upload scheduler: whenever `uploads` changes (a new photo queued,
+  // or an in-flight one finishing frees a slot), starts as many queued
+  // items as fit under MAX_CONCURRENT_UPLOADS. Self-perpetuating — each
+  // startUpload's own onSuccess/onError flips that item's status, which
+  // re-triggers this effect and lets the next queued one begin.
+  useEffect(() => {
+    const inFlight = uploads.filter((u) => u.status === 'uploading').length;
+    const slots = MAX_CONCURRENT_UPLOADS - inFlight;
+    if (slots <= 0) return;
+    const toStart = uploads.filter((u) => u.status === 'queued').slice(0, slots);
+    if (toStart.length === 0) return;
+    setUploads((prev) => prev.map((u) => (toStart.some((t) => t.id === u.id) ? { ...u, status: 'uploading' } : u)));
+    toStart.forEach(startUpload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploads]);
 
   function moveToNextIndex() {
     const next = index + 1;
@@ -231,8 +257,9 @@ export function CapturePage() {
     setPhase('live');
   }
 
-  // Kicks off this photo's upload in the background and advances
-  // immediately — the upload itself is never awaited here.
+  // Queues this photo's upload (the scheduler effect above starts it,
+  // respecting MAX_CONCURRENT_UPLOADS) and advances immediately — the
+  // upload itself is never awaited here.
   function usePhoto() {
     if (!capturedBlob || !currentStep) return;
     const item: UploadItem = {
@@ -240,7 +267,7 @@ export function CapturePage() {
       step: currentStep,
       blob: capturedBlob,
       thumbUrl: URL.createObjectURL(capturedBlob),
-      status: 'uploading',
+      status: 'queued',
     };
     setUploads((prev) => [...prev, item]);
     // previewUrl was its own separate object URL over the same blob (see
@@ -250,7 +277,6 @@ export function CapturePage() {
     setPreviewUrl(null);
     setCapturedBlob(null);
     moveToNextIndex();
-    uploadInBackground(item);
   }
 
   function skipStep() {
@@ -264,7 +290,7 @@ export function CapturePage() {
   // `uploads` changes while sitting in 'finishing'.
   useEffect(() => {
     if (phase !== 'finishing' || !token) return;
-    if (uploads.some((u) => u.status === 'uploading')) return;
+    if (uploads.some((u) => u.status === 'uploading' || u.status === 'queued')) return;
     if (uploads.some((u) => u.status === 'error')) {
       setPhase('upload-error');
       return;
@@ -289,7 +315,7 @@ export function CapturePage() {
   }, [phase, uploads, token]);
 
   const progressLabel = currentStep ? `Step ${index + 1} of ${totalSteps} — ${currentStep.title}` : '';
-  const stillUploading = uploads.filter((u) => u.status === 'uploading').length;
+  const stillUploading = uploads.filter((u) => u.status === 'uploading' || u.status === 'queued').length;
   const failedUploads = uploads.filter((u) => u.status === 'error');
   const visibleUploads = uploads.slice(-2);
 
@@ -392,7 +418,7 @@ export function CapturePage() {
                     )}
                   >
                     <img src={u.thumbUrl} alt="" className="h-full w-full object-cover" />
-                    {u.status === 'uploading' && (
+                    {(u.status === 'uploading' || u.status === 'queued') && (
                       <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border-2 border-success border-t-transparent bg-black/40 animate-spin" />
                     )}
                     {u.status === 'done' && (

@@ -90,7 +90,12 @@ export function useSubmitCapturePhoto() {
       form.append('token', token);
       form.append('category', category);
       form.append('image', blob, `${category}.jpg`);
-      const { data, error } = await supabase.functions.invoke('submit-capture-photo', { body: form });
+      // Without a timeout a hung request on a flaky mobile connection never
+      // resolves at all — the item sits at 'uploading' forever and the
+      // capture page's "finishing up" screen waits on it indefinitely with
+      // no way to recover. 25s is generous for a single compressed photo
+      // even on a slow connection, but still bounded.
+      const { data, error } = await supabase.functions.invoke('submit-capture-photo', { body: form, timeout: 25_000 });
       if (error) {
         const errBody = await error.context?.json?.().catch(() => null);
         throw new Error(errBody?.error || error.message);
