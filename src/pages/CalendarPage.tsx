@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Clock, MapPin, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, FileSignature, Home, Key, MapPin, Phone, Plus, Trash2, type LucideIcon } from 'lucide-react';
 import { addDays, addMonths, addWeeks, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns';
 import { useCalendarEvents, useDeleteCalendarEvent } from '@/hooks/useCalendarEvents';
 import { AddCalendarEventModal } from '@/components/calendar/AddCalendarEventModal';
@@ -11,6 +11,15 @@ import { cn } from '@/lib/utils';
 import { CALENDAR_EVENT_TYPE_CONFIG, type CalendarEvent, type CalendarEventType } from '@/types/domain';
 
 const ALL_TYPES = Object.keys(CALENDAR_EVENT_TYPE_CONFIG) as CalendarEventType[];
+
+// A small icon per type, on top of its color, so identity never rests on
+// hue alone (two event types at a glance, not just two tints).
+const EVENT_TYPE_ICON: Record<CalendarEventType, LucideIcon> = {
+  walkthrough: Home,
+  call: Phone,
+  signing: FileSignature,
+  closing: Key,
+};
 // The work day runs evenings into the night (Pakistan time), covering US
 // Eastern business hours — 9am Eastern lands around 6:30-7pm Pakistan —
 // not a typical 9-to-5. Defaulting to 6pm-6am means the grid opens on the
@@ -249,6 +258,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
         <div className="flex flex-wrap gap-2">
           {ALL_TYPES.map((t) => {
             const cfg = CALENDAR_EVENT_TYPE_CONFIG[t];
+            const Icon = EVENT_TYPE_ICON[t];
             const active = visibleTypes.has(t);
             return (
               <button
@@ -260,7 +270,7 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
                 )}
                 style={active ? { background: `${cfg.color}1f`, borderColor: `${cfg.color}66`, color: cfg.color } : undefined}
               >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cfg.color }} />
+                <Icon size={13} strokeWidth={2.5} className="shrink-0" />
                 {cfg.label}
               </button>
             );
@@ -329,25 +339,31 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
                     ))}
                     {laidOut.map((item) => {
                       const cfg = CALENDAR_EVENT_TYPE_CONFIG[item.event.eventType];
+                      const Icon = EVENT_TYPE_ICON[item.event.eventType];
                       const top = ((item.startMin - gridStartMin) / 60) * HOUR_HEIGHT;
                       const height = Math.max(((item.endMin - item.startMin) / 60) * HOUR_HEIGHT, 22);
                       const widthPct = 100 / item.cols;
+                      const roomy = height >= 34;
                       return (
                         <button
                           key={item.event.id}
                           onClick={() => setSelected(item.event)}
-                          className="absolute overflow-hidden rounded-md pl-2 pr-1.5 py-1 text-left shadow-sm transition-transform hover:z-10 hover:scale-[1.02] hover:shadow-md"
+                          className="absolute overflow-hidden rounded-lg pl-2 pr-1.5 py-1 text-left transition-all hover:z-10 hover:scale-[1.02] hover:brightness-110"
                           style={{
                             top,
                             height,
                             left: `${item.col * widthPct}%`,
                             width: `calc(${widthPct}% - 3px)`,
-                            background: `${cfg.color}24`,
+                            background: `linear-gradient(180deg, ${cfg.color}2e, ${cfg.color}1c)`,
                             borderLeft: `3px solid ${cfg.color}`,
+                            boxShadow: `0 1px 4px -1px ${cfg.color}40, 0 1px 2px rgba(0,0,0,0.3)`,
                           }}
                         >
-                          <div className="truncate text-[11px] font-semibold leading-tight text-text">{item.event.title}</div>
-                          {height >= 34 && (
+                          <div className="flex items-center gap-1">
+                            {roomy && <Icon size={10} strokeWidth={2.75} className="shrink-0" style={{ color: cfg.color }} />}
+                            <div className="truncate text-[11px] font-semibold leading-tight text-text">{item.event.title}</div>
+                          </div>
+                          {roomy && (
                             <div className="truncate text-[10px] leading-tight text-text-3">{fmtTime(item.event.startsAt)}</div>
                           )}
                         </button>
