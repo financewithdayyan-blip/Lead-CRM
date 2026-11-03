@@ -255,12 +255,12 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
                 key={t}
                 onClick={() => toggleType(t)}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-all',
                   !active && 'border-border text-text-3 opacity-50 hover:opacity-80',
                 )}
-                style={active ? { background: `${cfg.color}1a`, borderColor: cfg.color, color: cfg.color } : undefined}
+                style={active ? { background: `${cfg.color}1f`, borderColor: `${cfg.color}66`, color: cfg.color } : undefined}
               >
-                <span className="h-2 w-2 rounded-full" style={{ background: cfg.color }} />
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cfg.color }} />
                 {cfg.label}
               </button>
             );
@@ -336,18 +336,20 @@ export function CalendarView({ targetUserId, viewOnly = false }: { targetUserId?
                         <button
                           key={item.event.id}
                           onClick={() => setSelected(item.event)}
-                          className="absolute overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] font-medium leading-tight shadow-sm transition-transform hover:z-10 hover:scale-[1.02]"
+                          className="absolute overflow-hidden rounded-md pl-2 pr-1.5 py-1 text-left shadow-sm transition-transform hover:z-10 hover:scale-[1.02] hover:shadow-md"
                           style={{
                             top,
                             height,
                             left: `${item.col * widthPct}%`,
                             width: `calc(${widthPct}% - 3px)`,
-                            background: `${cfg.color}1f`,
-                            borderColor: cfg.color,
-                            color: cfg.color,
+                            background: `${cfg.color}24`,
+                            borderLeft: `3px solid ${cfg.color}`,
                           }}
                         >
-                          <div className="truncate">{item.event.title}</div>
+                          <div className="truncate text-[11px] font-semibold leading-tight text-text">{item.event.title}</div>
+                          {height >= 34 && (
+                            <div className="truncate text-[10px] leading-tight text-text-3">{fmtTime(item.event.startsAt)}</div>
+                          )}
                         </button>
                       );
                     })}

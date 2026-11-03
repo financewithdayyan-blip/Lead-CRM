@@ -75,13 +75,16 @@ export const STAGE_CONFIG: Record<LeadStage, { label: string; color: string }> =
 export type CalendarEventType = 'walkthrough' | 'call' | 'signing' | 'closing';
 
 export const CALENDAR_EVENT_TYPE_CONFIG: Record<CalendarEventType, { label: string; color: string }> = {
-  // Colors reuse the matching Kanban stage's own color where one exists, so
-  // the same concept (a walkthrough, a signed contract, a closed deal) reads
-  // the same on the calendar as it does on the board.
-  walkthrough: { label: 'Walkthrough', color: '#ec4899' },
+  // Four genuinely distinct hues on the dark calendar surface — the same
+  // quad already settled on for the Underwriting MAO bar's segments (green/
+  // violet/amber/sky), reused here instead of inheriting straight from the
+  // Kanban stage colors: inspection_walkthrough's hot pink and closed's
+  // muddy gold read fine as a small stage badge but clash/wash out as a
+  // repeated calendar accent color.
+  walkthrough: { label: 'Walkthrough', color: '#8b5cf6' },
   call: { label: 'Call', color: '#38bdf8' },
   signing: { label: 'Signing', color: '#10b981' },
-  closing: { label: 'Closing', color: '#C9A24B' },
+  closing: { label: 'Closing', color: '#f59e0b' },
 };
 
 export interface CalendarEvent {
