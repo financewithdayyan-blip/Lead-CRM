@@ -118,6 +118,10 @@ export function dbToLead(row: any): Lead {
     titleChecklist: row.title_checklist ?? {},
     propertyListingInfo: row.property_listing_info ?? null,
     rehabEstimatorConfig: row.rehab_estimator_config ?? null,
+    lastMessageAt: row.last_message_at ?? null,
+    lastMessagePreview: row.last_message_preview ?? null,
+    lastMessageDirection: row.last_message_direction ?? null,
+    hasUnreadSms: row.has_unread_sms ?? false,
   };
 }
 

@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { Bot, Image as ImageIcon, Loader2, MessageSquare, Send, ThumbsUp } from 'lucide-react';
 import { useLeadThread, useSendManualReply, type ThreadMessage } from '@/hooks/useLeadMessages';
+import { useMarkThreadRead } from '@/hooks/useInbox';
 import { useSignedFileUrls } from '@/hooks/useLeadFiles';
 import { useAiSettings } from '@/hooks/useAiSettings';
 import { useUpdateLead } from '@/hooks/useLeads';
@@ -165,6 +166,13 @@ export function SmsThreadTab({ lead }: { lead: Lead }) {
   const { data: aiSettings } = useAiSettings();
   const { data: numberLabels } = useSmsNumberLabels();
   const sendReply = useSendManualReply();
+  const markRead = useMarkThreadRead();
+  // Opening this thread — from the Lead Profile page, same as from the
+  // Inbox — is what "reading" it means; clears has_unread_sms either way.
+  useEffect(() => {
+    if (lead.hasUnreadSms) markRead.mutate(lead.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, lead.hasUnreadSms]);
   const [message, setMessage] = useState('');
   const [fromKey, setFromKey] = useState<SmsNumberKey>('1');
   const [error, setError] = useState<string | null>(null);

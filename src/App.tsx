@@ -17,6 +17,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage').then((m) => ({ 
 const LeadsPage = lazy(() => import('@/pages/LeadsPage').then((m) => ({ default: m.LeadsPage })));
 const LeadProfilePage = lazy(() => import('@/pages/LeadProfilePage').then((m) => ({ default: m.LeadProfilePage })));
 const KanbanPage = lazy(() => import('@/pages/KanbanPage').then((m) => ({ default: m.KanbanPage })));
+const InboxPage = lazy(() => import('@/pages/InboxPage').then((m) => ({ default: m.InboxPage })));
 const CalendarPage = lazy(() => import('@/pages/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const BulkSmsPage = lazy(() => import('@/pages/BulkSmsPage').then((m) => ({ default: m.BulkSmsPage })));
 const SmsLevelsPage = lazy(() => import('@/pages/SmsLevelsPage').then((m) => ({ default: m.SmsLevelsPage })));
@@ -94,6 +95,10 @@ export default function App() {
                       <Route path="/notifications" element={<NotificationsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route element={<ProtectedRoute requireOverseer />}>
+                        {/* Inbox reads inbound_messages, which (same as the
+                            per-lead SMS tab) is RLS-gated to admins only —
+                            callers are cold-calling only, not texting. */}
+                        <Route path="/inbox" element={<InboxPage />} />
                         {/* Bulk SMS is admin-only — callers are cold-calling
                             only, so this sits behind the same guard as /team. */}
                         <Route path="/bulk-sms" element={<BulkSmsPage />} />

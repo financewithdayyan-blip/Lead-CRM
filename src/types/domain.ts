@@ -273,6 +273,12 @@ export interface Lead {
   scheduledCallbackAt: string | null;
   /** The callback time in the seller's own words (e.g. "Tomorrow around 3pm"), kept alongside the parsed timestamp for context. */
   scheduledCallbackNote: string | null;
+  /** Trigger-maintained (0190) from inbound_messages/lead_activities inserts —
+   *  powers the Inbox list without re-aggregating every message per lead. */
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  lastMessageDirection: 'inbound' | 'outbound' | null;
+  hasUnreadSms: boolean;
   /** Structured Property Details fields (Lead Profile redesign) — distinct
    *  from the free-text mortgage_balance/mortgage_payment call-script
    *  answers in scriptAnswers, which capture what the seller said rather

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users,
   Kanban,
+  Inbox,
   History,
   Send,
   FileSignature,
@@ -25,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTeamMembers } from '@/hooks/useTeam';
 import { usePresence } from '@/contexts/PresenceContext';
 import { useNotificationsContext } from '@/contexts/NotificationsContext';
+import { useInboxConversations } from '@/hooks/useInbox';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn, initials } from '@/lib/utils';
 
@@ -34,7 +36,24 @@ const COLLAPSE_KEY = 'sidebar_collapsed';
  * matches the reference dashboards, and reads unambiguously at a glance
  * which page is open. Collapsed mode centers the icon and drops the label
  * instead of shrinking text illegibly. */
-function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label: string; icon: LucideIcon; end?: boolean; collapsed: boolean }) {
+function NavItem({
+  to,
+  label,
+  icon: Icon,
+  end,
+  collapsed,
+  badge,
+}: {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+  collapsed: boolean;
+  /** Unread-style count — same treatment as the Notifications bell's own
+   *  badge: a numbered pill expanded, a plain dot collapsed (no room for
+   *  the number once the label itself is gone). */
+  badge?: number;
+}) {
   return (
     <NavLink
       to={to}
@@ -42,7 +61,7 @@ function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label:
       title={collapsed ? label : undefined}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2.5 rounded-md py-2.5 text-sm font-medium transition-colors',
+          'relative flex items-center gap-2.5 rounded-md py-2.5 text-sm font-medium transition-colors',
           collapsed ? 'justify-center px-0' : 'px-3',
           isActive ? 'bg-primary-dim text-sidebar-textActive' : 'text-sidebar-text hover:bg-sidebar-2 hover:text-sidebar-textActive',
         )
@@ -52,6 +71,12 @@ function NavItem({ to, label, icon: Icon, end, collapsed }: { to: string; label:
         <>
           <Icon size={18} strokeWidth={1.6} className={cn('shrink-0', isActive && 'text-primary-hover')} />
           {!collapsed && label}
+          {!!badge && badge > 0 && !collapsed && (
+            <span className="ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold text-white">{badge}</span>
+          )}
+          {!!badge && badge > 0 && collapsed && (
+            <span className="absolute right-1 top-1.5 h-2 w-2 rounded-full bg-danger ring-2 ring-sidebar" />
+          )}
         </>
       )}
     </NavLink>
@@ -270,6 +295,10 @@ export function Sidebar() {
   const isOverseer = profile?.role === 'admin';
   const match = useMatch('/team/:memberId/*');
   const viewingId = match?.params.memberId;
+  // Only admins can ever reach /inbox (same RLS gate as the per-lead SMS
+  // tab) — see useInboxConversations' own note on why this is gated here.
+  const { data: inboxConversations = [] } = useInboxConversations(isOverseer && !viewingId);
+  const unreadInboxCount = inboxConversations.filter((l) => l.hasUnreadSms).length;
 
   // Persisted across reloads — a preference, not session state, same reason
   // theme/collapse toggles anywhere else always remember the last choice.
@@ -293,6 +322,7 @@ export function Sidebar() {
         { to: '/', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/leads', label: 'Leads', icon: Users },
         { to: '/kanban', label: 'Kanban', icon: Kanban },
+        ...(isOverseer ? [{ to: '/inbox', label: 'Inbox', icon: Inbox, badge: unreadInboxCount }] : []),
         { to: '/calendar', label: 'Calendar', icon: CalendarDays },
         { to: '/calls', label: 'Call History', icon: History },
       ];
