@@ -23,7 +23,9 @@ export function RequestPhotosButton({ lead }: { lead: Lead }) {
     setSent(false);
     setCopied(false);
     const { token } = await createSession.mutateAsync(lead.id);
-    setLink(`${window.location.origin}/capture/${token}`);
+    // The SPA is served under the /crm basename (BrowserRouter basename="/crm",
+    // see App.tsx) — location.origin alone is just the bare domain.
+    setLink(`${window.location.origin}/crm/capture/${token}`);
   }
 
   function copyLink() {

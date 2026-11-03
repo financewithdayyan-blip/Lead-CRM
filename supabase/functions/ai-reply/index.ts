@@ -250,6 +250,13 @@ const CALLBACK_ADDENDUM = `
 
 CALLBACK STEP — required for every lead regardless of anything else above: after motivation, condition, timeline, price (and mortgage, if this is a lien-adjacent lead) are established, the decision question has been asked, and you've asked for interior photos, ask one more thing before the interview counts as complete: what's a good time to call them back tomorrow. This is not done just by asking — wait for them to actually name a real day and time. Only once they do can fully_qualified be true (assuming everything else required is also already established). When they give you a time, fill in scheduled_callback_at and scheduled_callback_note on the same turn.`;
 
+// Unconditional, same reasoning as CALLBACK_ADDENDUM above — applies
+// regardless of whether this is the Default framework or a saved
+// tag/account-specific one, since none of those know this link exists.
+const PHOTO_LINK_ADDENDUM = `
+
+HOW TO ASK FOR PHOTOS: don't just ask them to text some photos over. Tell them, in your own words, that you're sending a link that'll walk them through taking a few real-time photos right from their phone's camera — quick and guided, nothing to upload or attach by hand. Then, as its own separate message in reply_parts, send this exact link with nothing added, removed, or reworded: {{CAPTURE_LINK}}. Send it once, the first time you ask for photos in this conversation — if you already sent it earlier and they haven't used it yet, a plain-text nudge ("whenever you get a chance!") is enough, no need to repeat the raw link unless they ask for it again or say they lost it.`;
+
 // ── Photo-wait mode — a lead sitting in Partial Qualified (initial_contact).
 // Everything the regular framework asks for is already answered; the only
 // open item is interior photos, so this replaces the framework prompt
@@ -266,7 +273,7 @@ WHAT YOU ACTUALLY KNOW ABOUT THIS LEAD:
 This lead already answered every qualification question — motivation, condition, price, timeline, and mortgage or back taxes if applicable. Two things are still outstanding, in order: interior photos of the property, then a specific day and time to call them and go over the offer. Never ask about motivation, condition, price, timeline, mortgage, or taxes again — all of that is already settled, and re-asking will only confuse them.
 
 Read their message and the conversation so far, then reply naturally, the way a real person texts:
-- If photos haven't come in yet (not in this message, not earlier in the conversation): respond naturally to whatever they actually said — a delay, a question, chit-chat. Don't ask for a callback time yet, that comes after photos. If they suggest you (or anyone from the company) visit, drive by, or see the property in person instead: never agree to this or imply it will happen, under any circumstance — say you don't need to see it in person, photos work fine. If they say they can't get the photos themselves (out of state, no access, etc.) and you haven't already suggested this: ask once whether someone local — an ex, a neighbor, a property manager, a tenant, anyone nearby — could walk through and send some instead. If that's also not possible, or you already asked and they said no, stop pushing for photos — move straight into asking for a callback time instead, same as if photos had arrived.
+- If photos haven't come in yet (not in this message, not earlier in the conversation): respond naturally to whatever they actually said — a delay, a question, chit-chat. Don't ask for a callback time yet, that comes after photos. If you haven't sent them the capture link anywhere earlier in this conversation, don't just ask them to text photos over — tell them, in your own words, that you're sending a link that'll walk them through taking a few real-time photos right from their phone's camera, quick and guided, nothing to upload or attach by hand, then send this exact link as its own message in reply_parts, nothing added, removed, or reworded: {{CAPTURE_LINK}}. If you already sent that link earlier in this conversation and they just haven't used it yet, a plain-text nudge is enough — no need to repeat the raw link unless they ask for it again or say they lost it. If they suggest you (or anyone from the company) visit, drive by, or see the property in person instead: never agree to this or imply it will happen, under any circumstance — say you don't need to see it in person, photos work fine. If they say they can't get the photos themselves (out of state, no access, etc.) and you haven't already suggested this: ask once whether someone local — an ex, a neighbor, a property manager, a tenant, anyone nearby — could walk through and take them instead, and send that same link to do it. If that's also not possible, or you already asked and they said no, stop pushing for photos — move straight into asking for a callback time instead, same as if photos had arrived.
 - Once photos are in (this message or already in the conversation) and they have NOT yet given a real day/time to call about the offer: if this message is what just delivered the photos, thank them briefly, then ask what's a good time to call them to go over the offer. If photos already came in earlier and you haven't asked yet, ask now. If you already asked and they're just chatting, respond naturally and don't re-ask.
 - Once they actually give a specific day and time to call about the offer: fill in scheduled_callback_at and scheduled_callback_note — an ISO 8601 date-time (YYYY-MM-DDTHH:MM:SS, no timezone) computed from TODAY'S DATE above. If they gave a day but no specific time (or vice versa), use your best reasonable estimate (e.g. "tomorrow morning" -> 09:00:00) rather than leaving it blank. This is not done just by asking — only fill these in once they've actually given a real answer.
 - If they're declining or asking not to be contacted again, in any phrasing: reply "Sorry to bother you, I won't reach out again." and set negative_reply true. Set hard_decline false only if the decline is clearly and specifically about the price/offer amount and nothing else; true for every other kind of decline, including if unsure. Separately, set explicit_opt_out true only if they said something equivalent to "never contact me again" or explicitly claimed their number is on a do-not-call list — false for every other decline, no matter how firm or final-sounding, since this one blocks every future campaign account-wide, not just this conversation.
@@ -579,6 +586,39 @@ Deno.serve(async (req) => {
       ? leadContextLines.join('\n')
       : 'No address or name on file for this lead in the CRM yet. Before going further into the framework, ask them directly to confirm their name and the property address you\'re texting about, so their file is accurate. Never guess at either.';
 
+  // Real, already-working link for the PHOTOS step — same table/page the
+  // Property tab's own "Request Photos" button uses (CapturePage, a
+  // live-camera-only guided flow). Resolved here, server-side, as a known
+  // fact handed to the model exactly like {{AGENT_NAME}}/{{TODAY}} above,
+  // never left for the model to template or invent — SYSTEM_RULES already
+  // treats a literal {{placeholder}} in its own output as a fabricated
+  // fact. Reuses this lead's existing not-yet-completed session rather
+  // than minting a new one on every turn, so re-sending the link later in
+  // the same conversation still points at the same, already-in-progress
+  // capture. Only looked up once photos are actually still outstanding.
+  let captureLink = 'N/A — photos already received, do not mention a link';
+  if (!hasPhotos) {
+    const { data: existingSession } = await admin
+      .from('photo_capture_sessions')
+      .select('token')
+      .eq('lead_id', leadId)
+      .neq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let token = existingSession?.token as string | undefined;
+    if (!token) {
+      const { data: newSession, error: sessionErr } = await admin
+        .from('photo_capture_sessions')
+        .insert({ lead_id: leadId, created_by: lead.user_id })
+        .select('token')
+        .single();
+      if (sessionErr) throw sessionErr;
+      token = newSession.token;
+    }
+    captureLink = `https://www.bluebirdacquisition.com/crm/capture/${token}`;
+  }
+
   let system: string;
   if (isPhotoWaitMode) {
     // Step 5 (photo-wait mode): no framework to resolve — the interview is
@@ -586,7 +626,8 @@ Deno.serve(async (req) => {
     // account-specific layered on.
     system = PHOTO_WAIT_SYSTEM.replace('{{AGENT_NAME}}', agentName)
       .replace('{{LEAD_CONTEXT}}', leadContext)
-      .replace('{{TODAY}}', todayLabel);
+      .replace('{{TODAY}}', todayLabel)
+      .replace('{{CAPTURE_LINK}}', captureLink);
   } else {
     // Step 5: resolve the framework — first tag carrying its own saved text,
     // else Default, else the hardcoded fallback if nothing has been saved at
@@ -613,6 +654,7 @@ Deno.serve(async (req) => {
     // Unconditional — every framework, Default or any tag's own custom text,
     // gets the callback step appended regardless of what it already says.
     framework += CALLBACK_ADDENDUM;
+    framework += PHOTO_LINK_ADDENDUM;
 
     // Rules the nightly ai-reply-review job has added after finding a real
     // mistake in a past conversation (see 0076_ai_reply_learned_rules.sql) —
@@ -633,7 +675,11 @@ Deno.serve(async (req) => {
       .replace('{{LEAD_CONTEXT}}', leadContext)
       .replace('{{TODAY}}', todayLabel)
       .replace('{{FRAMEWORK}}', framework)
-      .replace('{{LEARNED_CASES}}', learnedCasesBlock);
+      .replace('{{LEARNED_CASES}}', learnedCasesBlock)
+      // {{FRAMEWORK}} just carried PHOTO_LINK_ADDENDUM's own {{CAPTURE_LINK}}
+      // token into `system` above — resolved here, after that substitution,
+      // not before it.
+      .replace('{{CAPTURE_LINK}}', captureLink);
   }
 
   // Step 6: draft, via forced tool-call output so the three fields are
