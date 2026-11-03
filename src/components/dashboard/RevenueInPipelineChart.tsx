@@ -60,8 +60,15 @@ export function RevenueInPipelineChart({ data }: { data: RevenuePipelinePoint[] 
     return data.slice(-opt.months);
   }, [data, range]);
 
-  const totalActual = visible.reduce((s, d) => s + d.actual, 0);
-  const totalExpected = visible.reduce((s, d) => s + d.expected, 0);
+  // expected/actual are running snapshots ("total as of that month-end"),
+  // not that month's own new revenue — a lead that closed once and stayed
+  // closed shows up as "actual" in every month since. Summing across
+  // visible months would double/triple-count the same closed deal once
+  // per month it's shown as closed, so the header reads the latest
+  // (rightmost/current) point only, same as the hero "Revenue this month"
+  // card above (revenueCard) does.
+  const totalActual = visible.length ? visible[visible.length - 1].actual : 0;
+  const totalExpected = visible.length ? visible[visible.length - 1].expected : 0;
   const sinceLabel = visible.length ? visible[0].label : '';
   // A sparse account (few/no leads reaching Contract+ in this window) makes
   // both series genuine flat lines — Recharts' default auto-domain then
