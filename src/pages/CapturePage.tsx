@@ -35,6 +35,14 @@ const JPEG_QUALITY = 0.85;
 
 type Phase = 'intro' | 'requesting-camera' | 'permission-error' | 'live' | 'preview' | 'uploading' | 'upload-error' | 'repeat-prompt' | 'finishing' | 'done';
 
+// Phases where the camera has already been granted and should stay mounted
+// and streaming underneath whatever overlay that phase shows — the whole
+// point being the <video> element is created exactly once, right when the
+// camera starts, and never torn down/recreated again (that remount is what
+// produced the multi-second black flash between steps: a fresh <video> has
+// no frame to show until it's reattached and the browser decodes one).
+const CAMERA_MOUNTED_PHASES = new Set<Phase>(['live', 'preview', 'uploading', 'upload-error', 'repeat-prompt', 'finishing']);
+
 export function CapturePage() {
   const { token } = useParams<{ token: string }>();
   const { data: session, isLoading, isError } = usePublicCaptureSession(token);
@@ -42,6 +50,7 @@ export function CapturePage() {
   const completeSession = useCompleteCaptureSession();
 
   const [phase, setPhase] = useState<Phase>('intro');
+  const [cameraStarted, setCameraStarted] = useState(false);
   const [queue, setQueue] = useState<Step[]>(() => buildInitialQueue());
   const [index, setIndex] = useState(0);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
@@ -54,6 +63,7 @@ export function CapturePage() {
 
   const currentStep = queue[index];
   const totalSteps = queue.length;
+  const cameraMounted = cameraStarted && CAMERA_MOUNTED_PHASES.has(phase);
 
   // Session already completed before (link reused, or opened twice after
   // finishing) — skip straight to the done screen rather than letting them
@@ -68,9 +78,12 @@ export function CapturePage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       streamRef.current = stream;
-      // Flips phase to 'live', which is what actually mounts the <video>
-      // element below (it doesn't exist yet during 'requesting-camera') —
-      // the effect below attaches the stream once that element is real.
+      // cameraMounted flips true on this same render (phase -> 'live'),
+      // which is what actually mounts the <video> element below — the
+      // effect right under this one attaches the stream once it's real,
+      // and from here on the element is never unmounted again, so every
+      // later step/preview/upload transition is just an overlay change.
+      setCameraStarted(true);
       setPhase('live');
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Camera access was blocked.');
@@ -78,24 +91,20 @@ export function CapturePage() {
     }
   }
 
-  // Attaches the already-acquired stream once the <video> element actually
-  // exists in the DOM (it's conditionally rendered on phase === 'live', so
-  // it isn't there yet at the moment startCamera's getUserMedia resolves).
-  // Re-runs on every phase flip back to 'live' (e.g. after a retake) in
-  // case the element was unmounted/remounted, which is a harmless no-op
-  // when the stream's already attached. Sets .muted as a real DOM property,
-  // not just React's muted prop — iOS Safari only honors the property for
-  // inline autoplay of a live camera stream.
+  // Attaches the stream exactly once, the first time the <video> element
+  // exists (right as cameraStarted flips true). Sets .muted as a real DOM
+  // property, not just React's muted prop — iOS Safari only honors the
+  // property for inline autoplay of a live camera stream.
   useEffect(() => {
     const video = videoRef.current;
-    if (phase !== 'live' || !video || !streamRef.current) return;
+    if (!cameraStarted || !video || !streamRef.current) return;
     video.muted = true;
     video.srcObject = streamRef.current;
     video.play().catch((e) => {
       setErrorMsg(e instanceof Error ? e.message : 'Could not start the camera preview.');
       setPhase('permission-error');
     });
-  }, [phase]);
+  }, [cameraStarted]);
 
   useEffect(() => {
     return () => {
@@ -187,13 +196,13 @@ export function CapturePage() {
 
   async function finish() {
     setPhase('finishing');
-    streamRef.current?.getTracks().forEach((t) => t.stop());
     try {
       if (token) await completeSession.mutateAsync(token);
     } catch {
       // Photos are already safely uploaded one-by-one — a failure here is
       // just the "mark complete + notify" courtesy step, not data loss.
     }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
     setPhase('done');
   }
 
@@ -245,87 +254,103 @@ export function CapturePage() {
         </CenteredMessage>
       )}
 
-      {(phase === 'live' || phase === 'uploading' || phase === 'upload-error') && currentStep && (
+      {/* The camera layer: mounted once (see cameraMounted) and kept alive
+          for the rest of the flow. Every phase below layers its own
+          overlay and controls on top of it instead of replacing it, so
+          switching steps/previewing/uploading never shows a black
+          remount gap — only the overlay on top changes. */}
+      {cameraMounted && (
         <>
           <div className="relative flex-1 overflow-hidden bg-black">
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
-            <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent px-4 pb-8 pt-[max(16px,env(safe-area-inset-top))]">
-              <div className="mb-2 flex gap-1">
-                {queue.map((s, i) => (
-                  <div key={s.id} className={`h-1 flex-1 rounded-full ${i < index ? 'bg-white' : i === index ? 'bg-white/70' : 'bg-white/20'}`} />
-                ))}
+
+            {phase === 'live' && currentStep && (
+              <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 to-transparent px-4 pb-8 pt-[max(16px,env(safe-area-inset-top))]">
+                <div className="mb-2 flex gap-1">
+                  {queue.map((s, i) => (
+                    <div key={s.id} className={`h-1 flex-1 rounded-full ${i < index ? 'bg-white' : i === index ? 'bg-white/70' : 'bg-white/20'}`} />
+                  ))}
+                </div>
+                <div className="text-[12px] font-medium uppercase tracking-wide text-white/60">{progressLabel}</div>
+                <div className="mt-0.5 text-[13px] text-white/80">{currentStep.hint}</div>
               </div>
-              <div className="text-[12px] font-medium uppercase tracking-wide text-white/60">{progressLabel}</div>
-              <div className="mt-0.5 text-[13px] text-white/80">{currentStep.hint}</div>
-            </div>
-          </div>
-          <div className="flex items-center justify-center gap-8 bg-black px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-5">
-            {currentStep.skippable ? (
-              <button onClick={skipStep} className="text-[13px] font-medium text-white/60">
-                Skip
-              </button>
-            ) : (
-              <div className="w-10" />
             )}
-            <button
-              onClick={takePhoto}
-              disabled={phase === 'uploading'}
-              className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white/80 bg-white/10 active:scale-95"
-              aria-label="Take photo"
-            >
-              <div className="h-14 w-14 rounded-full bg-white" />
-            </button>
-            <div className="w-10" />
+
+            {phase === 'preview' && previewUrl && currentStep && (
+              <img src={previewUrl} alt={currentStep.title} className="absolute inset-0 h-full w-full bg-black object-contain" />
+            )}
+
+            {(phase === 'uploading' || phase === 'finishing') && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+                <p className="text-[14px] font-medium text-white/85">{phase === 'uploading' ? 'Uploading…' : 'Finishing up…'}</p>
+              </div>
+            )}
+
+            {phase === 'upload-error' && (
+              <div className="absolute inset-x-0 bottom-4 mx-auto w-fit rounded-full bg-danger px-4 py-2 text-[13px] font-medium text-white">
+                {errorMsg ?? 'Upload failed'} —{' '}
+                <button className="underline" onClick={usePhoto}>
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {phase === 'repeat-prompt' && currentStep && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-[17px] font-semibold">Got it! Add another {currentStep.repeatableType}?</p>
+                  <div className="flex gap-3">
+                    <button onClick={addAnother} className="rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-black">
+                      Yes, add another
+                    </button>
+                    <button onClick={moveToNextIndex} className="rounded-full border border-white/30 px-5 py-2.5 text-[14px] font-semibold text-white">
+                      No, continue
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-          {phase === 'upload-error' && (
-            <div className="absolute inset-x-0 bottom-28 mx-auto w-fit rounded-full bg-danger px-4 py-2 text-[13px] font-medium text-white">
-              {errorMsg ?? 'Upload failed'} — <button className="underline" onClick={usePhoto}>Retry</button>
+
+          {(phase === 'live' || phase === 'uploading' || phase === 'upload-error') && currentStep && (
+            <div className="flex items-center justify-center gap-8 bg-black px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-5">
+              {currentStep.skippable ? (
+                <button onClick={skipStep} className="text-[13px] font-medium text-white/60">
+                  Skip
+                </button>
+              ) : (
+                <div className="w-10" />
+              )}
+              <button
+                onClick={takePhoto}
+                disabled={phase !== 'live'}
+                className="flex h-[72px] w-[72px] items-center justify-center rounded-full border-[4px] border-white/80 bg-white/10 active:scale-95 disabled:opacity-50"
+                aria-label="Take photo"
+              >
+                <div className="h-14 w-14 rounded-full bg-white" />
+              </button>
+              <div className="w-10" />
+            </div>
+          )}
+
+          {phase === 'preview' && (
+            <div className="flex items-center justify-center gap-10 bg-black px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-5">
+              <button onClick={retake} className="flex flex-col items-center gap-1.5 text-white/70">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
+                  <RotateCcw size={22} />
+                </span>
+                <span className="text-[12px] font-medium">Retake</span>
+              </button>
+              <button onClick={usePhoto} className="flex flex-col items-center gap-1.5">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success">
+                  <Check size={24} className="text-white" />
+                </span>
+                <span className="text-[12px] font-medium">Use photo</span>
+              </button>
             </div>
           )}
         </>
       )}
-
-      {phase === 'preview' && previewUrl && currentStep && (
-        <>
-          <div className="relative flex-1 overflow-hidden bg-black">
-            <img src={previewUrl} alt={currentStep.title} className="h-full w-full object-contain" />
-          </div>
-          <div className="flex items-center justify-center gap-10 bg-black px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-5">
-            <button onClick={retake} className="flex flex-col items-center gap-1.5 text-white/70">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
-                <RotateCcw size={22} />
-              </span>
-              <span className="text-[12px] font-medium">Retake</span>
-            </button>
-            <button onClick={usePhoto} className="flex flex-col items-center gap-1.5">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success">
-                <Check size={24} className="text-white" />
-              </span>
-              <span className="text-[12px] font-medium">Use photo</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {phase === 'uploading' && !currentStep && <CenteredMessage>Uploading…</CenteredMessage>}
-
-      {phase === 'repeat-prompt' && currentStep && (
-        <CenteredMessage>
-          <div className="flex flex-col items-center gap-4 px-6 text-center">
-            <p className="text-[17px] font-semibold">Got it! Add another {currentStep.repeatableType}?</p>
-            <div className="flex gap-3">
-              <button onClick={addAnother} className="rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-black">
-                Yes, add another
-              </button>
-              <button onClick={moveToNextIndex} className="rounded-full border border-white/30 px-5 py-2.5 text-[14px] font-semibold text-white">
-                No, continue
-              </button>
-            </div>
-          </div>
-        </CenteredMessage>
-      )}
-
-      {phase === 'finishing' && <CenteredMessage>Finishing up…</CenteredMessage>}
 
       {phase === 'done' && (
         <CenteredMessage>
