@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Handshake, Mail, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Handshake, Mail, MessageSquare, Plus, Upload } from 'lucide-react';
 import { geoAlbersUsa, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
 import usStates from 'us-atlas/states-10m.json';
-import { useCashBuyers, useDeleteCashBuyer } from '@/hooks/useCashBuyers';
+import { useCashBuyers } from '@/hooks/useCashBuyers';
 import { useBuyerMarketMap } from '@/hooks/useDisposition';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
 import { BuyerStateMap } from '@/components/disposition/BuyerStateMap';
 import { SendDealPacketModal } from '@/components/disposition/SendDealPacketModal';
 import { DispositionMessagesTab } from '@/components/disposition/DispositionMessagesTab';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ImportBuyersCsvModal } from '@/components/disposition/ImportBuyersCsvModal';
 import { STATE_FIPS } from '@/lib/placeBoundaries';
 import { US_STATE_OPTIONS } from '@/data/usGeo';
 import { BUYER_TYPE_CONFIG, BUYER_TYPE_ORDER, type CashBuyer, type BuyerType } from '@/types/domain';
@@ -61,74 +61,6 @@ function BuyerRow({ buyer, selected, onToggle }: { buyer: CashBuyer; selected: b
   );
 }
 
-function BuyerRoster({ onAdd, onEdit }: { onAdd: () => void; onEdit: (b: CashBuyer) => void }) {
-  const { data: buyers = [], isLoading } = useCashBuyers();
-  const deleteCashBuyer = useDeleteCashBuyer();
-  const [deleteTarget, setDeleteTarget] = useState<CashBuyer | null>(null);
-  const [search, setSearch] = useState('');
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return buyers;
-    return buyers.filter((b) => `${b.name} ${b.marketStates.join(' ')} ${b.marketCities.join(' ')}`.toLowerCase().includes(q));
-  }, [buyers, search]);
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <input className="input max-w-xs" placeholder="Search buyers…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button className="btn btn-primary" onClick={onAdd}>
-          <Plus size={14} /> Add Buyer
-        </button>
-      </div>
-      {isLoading ? (
-        <div className="py-12 text-center text-sm text-text-3">Loading buyers…</div>
-      ) : (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((b) => (
-            <div key={b.id} className="card !p-3.5">
-              <div className="flex items-start justify-between gap-2">
-                <span className="truncate font-semibold text-text">{b.name}</span>
-                <div className="flex shrink-0 gap-1">
-                  <button className="btn !p-1.5" onClick={() => onEdit(b)}>
-                    <Pencil size={12} />
-                  </button>
-                  <button className="btn !p-1.5" onClick={() => setDeleteTarget(b)}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-              <div className="mt-1 truncate text-[12px] text-text-3">{[b.phone ? formatPhone(b.phone) : null, b.email].filter(Boolean).join(' · ') || 'No contact info'}</div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {b.buyerTypes.map((t) => (
-                  <span key={t} className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: `${BUYER_TYPE_CONFIG[t].color}22`, color: BUYER_TYPE_CONFIG[t].color }}>
-                    {BUYER_TYPE_CONFIG[t].label}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-2 border-t border-border-2 pt-2 text-[12px] text-text-3">
-                {b.marketCities.slice(0, 3).join(', ') || 'Any city'} · {b.marketStates.join(', ') || 'Any state'}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="Delete buyer?"
-        message={`Remove ${deleteTarget?.name ?? 'this buyer'} from the roster? This can't be undone.`}
-        confirmLabel="Delete"
-        danger
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (deleteTarget) deleteCashBuyer.mutate(deleteTarget.id);
-          setDeleteTarget(null);
-        }}
-      />
-    </div>
-  );
-}
-
 /** Disposition — a map-first buyer browser: national state totals, drill
  *  into a state to see every buyer's city as a pin, lasso-select an area (or
  *  pick a city from the list) and send a deal packet to everyone selected
@@ -139,13 +71,13 @@ export function DispositionPage() {
   const navigate = useNavigate();
   const { data: buyers = [] } = useCashBuyers();
   const { stateCounts, pins } = useBuyerMarketMap(buyers);
-  const [tab, setTab] = useState<'map' | 'roster' | 'messages'>('map');
+  const [tab, setTab] = useState<'map' | 'messages'>('map');
+  const [showImport, setShowImport] = useState(false);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [selectedBuyerIds, setSelectedBuyerIds] = useState<Set<string>>(new Set());
   const [cityFilter, setCityFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<BuyerType | 'all'>('all');
   const [showAdd, setShowAdd] = useState(false);
-  const [editTarget, setEditTarget] = useState<CashBuyer | null>(null);
   const [showSend, setShowSend] = useState(false);
 
   const { statePaths } = useMemo(() => {
@@ -224,21 +156,26 @@ export function DispositionPage() {
             <button className={cn('rounded-md px-3 py-1.5 text-[12.5px] font-medium', tab === 'map' ? 'bg-surface text-text shadow-sm' : 'text-text-3')} onClick={() => setTab('map')}>
               Map
             </button>
-            <button className={cn('rounded-md px-3 py-1.5 text-[12.5px] font-medium', tab === 'roster' ? 'bg-surface text-text shadow-sm' : 'text-text-3')} onClick={() => setTab('roster')}>
-              Roster
-            </button>
             <button className={cn('rounded-md px-3 py-1.5 text-[12.5px] font-medium', tab === 'messages' ? 'bg-surface text-text shadow-sm' : 'text-text-3')} onClick={() => setTab('messages')}>
               Messages
             </button>
           </div>
           <span className="rounded-full bg-surface-3 px-2.5 py-1.5 text-[12px] font-medium text-text-2">{stateCounts.length} markets</span>
           <span className="rounded-full bg-surface-3 px-2.5 py-1.5 text-[12px] font-medium text-text-2">{buyers.length} cash buyers</span>
+          {tab === 'map' && (
+            <>
+              <button className="btn !px-2.5 !py-1.5 text-[12.5px]" onClick={() => setShowImport(true)}>
+                <Upload size={13} /> Import CSV
+              </button>
+              <button className="btn btn-primary !px-2.5 !py-1.5 text-[12.5px]" onClick={() => setShowAdd(true)}>
+                <Plus size={13} /> Add Buyer
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {tab === 'roster' ? (
-        <BuyerRoster onAdd={() => setShowAdd(true)} onEdit={setEditTarget} />
-      ) : tab === 'messages' ? (
+      {tab === 'messages' ? (
         <DispositionMessagesTab />
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row">
@@ -394,7 +331,7 @@ export function DispositionPage() {
       )}
 
       {showAdd && <CashBuyerModal onClose={() => setShowAdd(false)} />}
-      {editTarget && <CashBuyerModal buyer={editTarget} onClose={() => setEditTarget(null)} />}
+      {showImport && <ImportBuyersCsvModal onClose={() => setShowImport(false)} />}
       {showSend && selectedBuyers.length > 0 && (
         <SendDealPacketModal buyers={selectedBuyers} stateLabel={selectedState ? CODE_TO_NAME.get(selectedState) ?? selectedState : ''} onClose={() => setShowSend(false)} />
       )}

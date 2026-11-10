@@ -575,6 +575,10 @@ export interface PacketSummary {
   purchasePrice: number | null;
   arv: number | null;
   estRepairs: number | null;
+  /** The lead's final contracted price with the seller — "Your contract" on
+   *  the Disposition deal panel. Distinct from purchasePrice, which is the
+   *  packet's own (sometimes still-estimated) figure. */
+  finalPrice: number | null;
   dealTypes: DealType[];
   status: PacketStatus;
   createdAt: string;
@@ -591,7 +595,7 @@ export function useAllDealPackets() {
       const { data, error } = await supabase
         .from('deal_packets')
         .select(
-          'id, lead_id, slug, prop_type, city, state, beds, baths, purchase_price, arv, deal_types, status, created_at, leads(first_name, last_name, address, est_repairs)',
+          'id, lead_id, slug, prop_type, city, state, beds, baths, purchase_price, arv, deal_types, status, created_at, leads(first_name, last_name, address, est_repairs, final_price)',
         )
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -610,6 +614,7 @@ export function useAllDealPackets() {
           purchasePrice: r.purchase_price,
           arv: r.arv,
           estRepairs: r.leads?.est_repairs != null ? Number(r.leads.est_repairs) : null,
+          finalPrice: r.leads?.final_price != null ? Number(r.leads.final_price) : null,
           dealTypes: (r.deal_types ?? []) as DealType[],
           status: r.status as PacketStatus,
           createdAt: r.created_at,

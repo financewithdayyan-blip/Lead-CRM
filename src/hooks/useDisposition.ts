@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { geocodeAddress } from '@/lib/geocode';
 import { useCityGeocodes, useUpsertCityGeocode, cityGeoKey } from '@/hooks/useCityGeocodes';
@@ -92,6 +92,80 @@ export function useBuyerMarketMap(buyers: CashBuyer[]) {
   return { stateCounts, pins, activeBuyers: active };
 }
 
+export interface BuyerDealRecipient {
+  id: string;
+  sendId: string;
+  packetId: string;
+  leadId: string;
+  committedPrice: number | null;
+  committedAt: string | null;
+  assignmentSignedAt: string | null;
+  sentToTcAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+}
+
+/** A buyer's most recent "sent a deal packet to them" record — backs the
+ *  Disposition Messages tab's deal panel. Only the most recent send is
+ *  shown; a buyer who received several packets over time only ever sees
+ *  the latest one here (matching "what are we actively working with this
+ *  buyer on right now", not a full history). */
+export function useLatestBuyerDealRecipient(buyerId: string | undefined) {
+  return useQuery({
+    queryKey: ['buyer_deal_recipient', buyerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('disposition_send_recipients')
+        .select('id, send_id, committed_price, committed_at, assignment_signed_at, sent_to_tc_at, closed_at, created_at, disposition_sends(packet_id, lead_id)')
+        .eq('buyer_id', buyerId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const send = data.disposition_sends as unknown as { packet_id: string; lead_id: string } | null;
+      if (!send) return null;
+      return {
+        id: data.id,
+        sendId: data.send_id,
+        packetId: send.packet_id,
+        leadId: send.lead_id,
+        committedPrice: data.committed_price != null ? Number(data.committed_price) : null,
+        committedAt: data.committed_at,
+        assignmentSignedAt: data.assignment_signed_at,
+        sentToTcAt: data.sent_to_tc_at,
+        closedAt: data.closed_at,
+        createdAt: data.created_at,
+      } as BuyerDealRecipient;
+    },
+    enabled: !!buyerId,
+  });
+}
+
+export type DealStage = 'committed' | 'assignment_signed' | 'sent_to_tc' | 'closed';
+
+/** Manually marks a deal-progress stage — there's no real e-sign/TC
+ *  integration behind this yet (see migration 0193's own note), so this is
+ *  an admin recording a real decision, not automation inferring one. */
+export function useMarkDealStage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ recipientId, stage, price }: { recipientId: string; stage: DealStage; price?: number }) => {
+      const column: Record<DealStage, string> = {
+        committed: 'committed_at',
+        assignment_signed: 'assignment_signed_at',
+        sent_to_tc: 'sent_to_tc_at',
+        closed: 'closed_at',
+      };
+      const patch: Record<string, unknown> = { [column[stage]]: new Date().toISOString() };
+      if (stage === 'committed' && price != null) patch.committed_price = price;
+      const { error } = await supabase.from('disposition_send_recipients').update(patch).eq('id', recipientId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['buyer_deal_recipient'] }),
+  });
+}
+
 export function useSendDispositionPacket() {
   const qc = useQueryClient();
   return useMutation({
@@ -104,6 +178,9 @@ export function useSendDispositionPacket() {
       if ((data as any)?.error) throw new Error((data as any).error);
       return data as { ok: true; sendId: string; sent: number; failed: number };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cash_buyers'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cash_buyers'] });
+      qc.invalidateQueries({ queryKey: ['buyer_deal_recipient'] });
+    },
   });
 }

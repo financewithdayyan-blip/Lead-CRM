@@ -3,6 +3,7 @@ import { Mail, MessageSquare, MessagesSquare } from 'lucide-react';
 import { useCashBuyers } from '@/hooks/useCashBuyers';
 import { useLatestBuyerMessages, type LatestBuyerMessage } from '@/hooks/useBuyerMessages';
 import { BuyerSmsThread } from '@/components/disposition/BuyerSmsThread';
+import { BuyerDealPanel } from '@/components/disposition/BuyerDealPanel';
 import { formatDateTime } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import type { CashBuyer } from '@/types/domain';
@@ -74,6 +75,12 @@ export function DispositionMessagesTab() {
           </div>
         )}
       </div>
+
+      {selected && (
+        <div className="w-[300px] shrink-0">
+          <BuyerDealPanel buyerId={selected.id} />
+        </div>
+      )}
     </div>
   );
 }

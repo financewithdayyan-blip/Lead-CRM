@@ -131,6 +131,20 @@ export function useUpdateCashBuyer() {
   });
 }
 
+/** Bulk insert for the CSV importer — one request for the whole file
+ *  rather than looping useCreateCashBuyer per row. */
+export function useBulkCreateCashBuyers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (inputs: CashBuyerInput[]) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { error } = await supabase.from('cash_buyers').insert(inputs.map((b) => ({ ...toDbRow(b), created_by: userData.user?.id ?? null })));
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cash_buyers'] }),
+  });
+}
+
 export function useDeleteCashBuyer() {
   const qc = useQueryClient();
   return useMutation({
