@@ -21,7 +21,7 @@ const InboxPage = lazy(() => import('@/pages/InboxPage').then((m) => ({ default:
 const CalendarPage = lazy(() => import('@/pages/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const BulkSmsPage = lazy(() => import('@/pages/BulkSmsPage').then((m) => ({ default: m.BulkSmsPage })));
 const SmsLevelsPage = lazy(() => import('@/pages/SmsLevelsPage').then((m) => ({ default: m.SmsLevelsPage })));
-const CallHistoryPage = lazy(() => import('@/pages/CallHistoryPage').then((m) => ({ default: m.CallHistoryPage })));
+const DialerPage = lazy(() => import('@/pages/DialerPage').then((m) => ({ default: m.DialerPage })));
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const TeamPage = lazy(() => import('@/pages/TeamPage').then((m) => ({ default: m.TeamPage })));
@@ -91,7 +91,7 @@ export default function App() {
                       <Route path="/leads/:id" element={<LeadProfilePage />} />
                       <Route path="/kanban" element={<KanbanPage />} />
                       <Route path="/calendar" element={<CalendarPage />} />
-                      <Route path="/calls" element={<CallHistoryPage />} />
+                      <Route path="/calls" element={<DialerPage />} />
                       <Route path="/notifications" element={<NotificationsPage />} />
                       <Route path="/settings" element={<SettingsPage />} />
                       <Route element={<ProtectedRoute requireOverseer />}>

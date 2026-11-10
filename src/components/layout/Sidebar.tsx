@@ -8,7 +8,7 @@ import {
   Users,
   Kanban,
   Inbox,
-  History,
+  Phone,
   Send,
   FileSignature,
   Handshake,
@@ -324,7 +324,7 @@ export function Sidebar() {
         { to: '/kanban', label: 'Kanban', icon: Kanban },
         ...(isOverseer ? [{ to: '/inbox', label: 'Inbox', icon: Inbox, badge: unreadInboxCount }] : []),
         { to: '/calendar', label: 'Calendar', icon: CalendarDays },
-        { to: '/calls', label: 'Call History', icon: History },
+        { to: '/calls', label: 'Dialer', icon: Phone },
       ];
 
   const adminItems = isOverseer && !viewingId
