@@ -69,6 +69,13 @@ export function BuyerStateMap({
     const map = L.map(containerRef.current, { scrollWheelZoom: true, dragging: true });
     mapRef.current = map;
     maplibreGL({ style: MAP_STYLE }).addTo(map);
+    // Mounting inside a flex layout means the container's final width isn't
+    // settled on the frame Leaflet first measures it — without this, the
+    // map's internal panes compute against a stale size and their tiles/
+    // controls paint past the rounded box into whatever sits next to it
+    // (the buyer list card). A couple of staggered invalidateSize() calls
+    // catch it once layout has actually settled.
+    const resizeTimers = [50, 250].map((ms) => setTimeout(() => map.invalidateSize(), ms));
 
     const jittered = new Map<string, [number, number]>();
     const byCity = new Map<string, Pin[]>();
@@ -133,6 +140,7 @@ export function BuyerStateMap({
     map.on('mouseup', handleUp);
 
     return () => {
+      resizeTimers.forEach(clearTimeout);
       map.off('mousedown', handleDown);
       map.off('mousemove', handleMove);
       map.off('mouseup', handleUp);
@@ -175,7 +183,7 @@ export function BuyerStateMap({
           <span className="text-[12.5px] text-text-3">{selectedIds.size} selected</span>
         )}
       </div>
-      <div ref={containerRef} className="h-[420px] w-full rounded-xl border border-border" />
+      <div ref={containerRef} className="relative isolate h-[420px] w-full overflow-hidden rounded-xl border border-border" />
     </div>
   );
 }
