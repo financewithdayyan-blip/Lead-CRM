@@ -135,6 +135,9 @@ export interface Comp {
   baths: number | null;
   distance: string | null;
   notes: string | null;
+  /** Only set for comps pulled via AI Comping (RentCast) — null for manually-typed rows. */
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface LeadRepair {

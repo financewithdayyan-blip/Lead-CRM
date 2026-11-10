@@ -92,6 +92,8 @@ export function dbToLead(row: any): Lead {
       baths: c.baths,
       distance: c.distance,
       notes: c.notes,
+      lat: c.lat ?? null,
+      lng: c.lng ?? null,
     })),
     files: row.lead_files?.map(dbToLeadFile),
     aiScore: row.ai_score ?? null,

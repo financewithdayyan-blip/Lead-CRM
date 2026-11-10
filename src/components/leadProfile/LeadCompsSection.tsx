@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useUpdateLead, useUpsertComps } from '@/hooks/useLeads';
 import { estimateComparableArv } from '@/hooks/useDealPackets';
 import { formatCurrency } from '@/lib/utils';
+import { CompPickerModal, type AddedComp } from './CompPickerModal';
 import type { Comp, CompKind, Lead } from '@/types/domain';
 
 type CompRow = {
@@ -15,12 +16,14 @@ type CompRow = {
   baths: number | null;
   distance: string | null;
   notes: string | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 const KIND_LABEL: Record<CompKind, string> = { as_is: 'As-Is', sold: 'Sold', listing: 'Listing' };
 
 function toRow(c: Comp): CompRow {
-  return { kind: c.kind, address: c.address, price: c.price, sale_date: c.saleDate, sqft: c.sqft, beds: c.beds, baths: c.baths, distance: c.distance, notes: c.notes };
+  return { kind: c.kind, address: c.address, price: c.price, sale_date: c.saleDate, sqft: c.sqft, beds: c.beds, baths: c.baths, distance: c.distance, notes: c.notes, lat: c.lat, lng: c.lng };
 }
 
 function num(v: string): number | null {
@@ -36,6 +39,11 @@ export function LeadCompsSection({ lead }: { lead: Lead }) {
   const [rows, setRows] = useState<CompRow[]>(() => (lead.comps ?? []).map(toRow));
   const [saved, setSaved] = useState(false);
   const [arvApplied, setArvApplied] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  function handleAddRentcastComps(comps: AddedComp[]) {
+    setRows((prev) => [...prev, ...comps.map((c) => ({ ...c, notes: 'Added via AI Comping (RentCast)' }))]);
+  }
 
   const suggested = useMemo(
     () => estimateComparableArv(rows.map((r) => ({ kind: r.kind, salePrice: r.price, sqft: r.sqft })), lead.sqft),
@@ -62,10 +70,17 @@ export function LeadCompsSection({ lead }: { lead: Lead }) {
     <div className="card">
       <div className="flex items-center justify-between gap-2 border-b border-border pb-2.5">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Comparable Sales</div>
-        <button className="btn btn-primary !px-3 !py-1 text-[12px]" onClick={handleSave} disabled={upsertComps.isPending}>
-          {saved ? '✓ Saved' : upsertComps.isPending ? 'Saving…' : 'Save Comps'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button className="btn !px-3 !py-1 text-[12px]" onClick={() => setPickerOpen(true)}>
+            <Sparkles size={13} /> AI Comping
+          </button>
+          <button className="btn btn-primary !px-3 !py-1 text-[12px]" onClick={handleSave} disabled={upsertComps.isPending}>
+            {saved ? '✓ Saved' : upsertComps.isPending ? 'Saving…' : 'Save Comps'}
+          </button>
+        </div>
       </div>
+
+      {pickerOpen && <CompPickerModal lead={lead} onClose={() => setPickerOpen(false)} onAddComps={handleAddRentcastComps} />}
 
       <p className="mt-2 text-[12px] text-text-3">
         As-Is and Sold comps anchor the suggested ARV; Listings are asking prices shown for reference only.

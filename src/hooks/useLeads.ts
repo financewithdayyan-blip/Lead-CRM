@@ -714,6 +714,8 @@ export function useUpsertComps() {
         baths: number | null;
         distance: string | null;
         notes: string | null;
+        lat?: number | null;
+        lng?: number | null;
       }>;
     }) => {
       await supabase.from('lead_comps').delete().eq('lead_id', leadId);
