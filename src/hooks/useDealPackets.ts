@@ -560,7 +560,13 @@ export function usePacket(packetId: string | undefined) {
 
 export interface PacketSummary {
   id: string;
+  leadId: string;
+  slug: string;
   leadName: string | null;
+  /** The lead's real street address — fine to show here since this is the
+   *  internal admin wizard's deal picker, not the public packet page (which
+   *  deliberately withholds it for privacy). */
+  address: string | null;
   propType: string | null;
   city: string | null;
   state: string | null;
@@ -568,6 +574,7 @@ export interface PacketSummary {
   baths: number | null;
   purchasePrice: number | null;
   arv: number | null;
+  estRepairs: number | null;
   dealTypes: DealType[];
   status: PacketStatus;
   createdAt: string;
@@ -583,13 +590,18 @@ export function useAllDealPackets() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deal_packets')
-        .select('id, prop_type, city, state, beds, baths, purchase_price, arv, deal_types, status, created_at, leads(first_name, last_name)')
+        .select(
+          'id, lead_id, slug, prop_type, city, state, beds, baths, purchase_price, arv, deal_types, status, created_at, leads(first_name, last_name, address, est_repairs)',
+        )
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data as any[]).map(
         (r): PacketSummary => ({
           id: r.id,
+          leadId: r.lead_id,
+          slug: r.slug,
           leadName: r.leads ? `${r.leads.first_name ?? ''} ${r.leads.last_name ?? ''}`.trim() || null : null,
+          address: r.leads?.address ?? null,
           propType: r.prop_type,
           city: r.city,
           state: r.state,
@@ -597,6 +609,7 @@ export function useAllDealPackets() {
           baths: r.baths,
           purchasePrice: r.purchase_price,
           arv: r.arv,
+          estRepairs: r.leads?.est_repairs != null ? Number(r.leads.est_repairs) : null,
           dealTypes: (r.deal_types ?? []) as DealType[],
           status: r.status as PacketStatus,
           createdAt: r.created_at,

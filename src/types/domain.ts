@@ -685,6 +685,20 @@ export const BUYER_CONDITION_LABELS: Record<BuyerCondition, string> = {
   either: 'Either',
 };
 
+/** Investor strategy, not deal structure (that's DealType — what financing
+ *  shape a buyer will accept). This is what kind of buyer they are, and
+ *  drives the Disposition map's pin color legend. */
+export type BuyerType = 'fix_flip' | 'brrrr' | 'buy_hold' | 'wholetailer' | 'developer';
+
+export const BUYER_TYPE_CONFIG: Record<BuyerType, { label: string; color: string }> = {
+  fix_flip: { label: 'Fix & Flip', color: '#f97316' },
+  brrrr: { label: 'BRRRR', color: '#a855f7' },
+  buy_hold: { label: 'Buy & Hold', color: '#3b82f6' },
+  wholetailer: { label: 'Wholetailer', color: '#22c55e' },
+  developer: { label: 'Developer', color: '#eab308' },
+};
+export const BUYER_TYPE_ORDER: BuyerType[] = ['fix_flip', 'brrrr', 'buy_hold', 'wholetailer', 'developer'];
+
 export interface CashBuyer {
   id: string;
   name: string;
@@ -695,6 +709,7 @@ export interface CashBuyer {
   marketCounties: string[];
   marketCities: string[];
   propertyTypes: BuyerPropertyType[];
+  buyerTypes: BuyerType[];
   priceMin: number | null;
   priceMax: number | null;
   minBeds: number | null;
@@ -707,4 +722,16 @@ export interface CashBuyer {
   assignedSmsNumber: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type DispositionChannel = 'sms' | 'email' | 'both';
+
+export interface DispositionSend {
+  id: string;
+  packetId: string;
+  leadId: string;
+  channel: DispositionChannel;
+  message: string;
+  recipientCount: number;
+  createdAt: string;
 }

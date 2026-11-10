@@ -8,9 +8,12 @@ import { externalHref, getErrorMessage, normalizeFacebookUrl } from '@/lib/utils
 import {
   BUYER_CONDITION_LABELS,
   BUYER_PROPERTY_TYPE_LABELS,
+  BUYER_TYPE_CONFIG,
+  BUYER_TYPE_ORDER,
   DEAL_TYPE_CONFIG,
   type BuyerCondition,
   type BuyerPropertyType,
+  type BuyerType,
   type CashBuyer,
   type DealType,
 } from '@/types/domain';
@@ -37,6 +40,7 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
   const [marketCounties, setMarketCounties] = useState<string[]>(buyer?.marketCounties ?? []);
   const [marketCities, setMarketCities] = useState<string[]>(buyer?.marketCities ?? []);
   const [propertyTypes, setPropertyTypes] = useState<BuyerPropertyType[]>(buyer?.propertyTypes ?? []);
+  const [buyerTypes, setBuyerTypes] = useState<BuyerType[]>(buyer?.buyerTypes ?? []);
   const [priceMin, setPriceMin] = useState(buyer?.priceMin?.toString() ?? '');
   const [priceMax, setPriceMax] = useState(buyer?.priceMax?.toString() ?? '');
   const [minBeds, setMinBeds] = useState(buyer?.minBeds?.toString() ?? '');
@@ -80,6 +84,7 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
       marketCounties,
       marketCities,
       propertyTypes,
+      buyerTypes,
       priceMin: priceMin ? Number(priceMin) : null,
       priceMax: priceMax ? Number(priceMax) : null,
       minBeds: minBeds ? Number(minBeds) : null,
@@ -211,6 +216,31 @@ export function CashBuyerModal({ buyer, onClose }: { buyer?: CashBuyer; onClose:
             ))}
           </div>
           <p className="mt-1 text-[11px] text-text-3">Leave all unselected for no property-type restriction.</p>
+        </div>
+
+        <div>
+          <label className="label">Investor strategy</label>
+          <div className="flex flex-wrap gap-1.5">
+            {BUYER_TYPE_ORDER.map((t) => {
+              const active = buyerTypes.includes(t);
+              const color = BUYER_TYPE_CONFIG[t].color;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setBuyerTypes((prev) => toggle(prev, t))}
+                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                    active ? '' : 'border-border-2 bg-surface text-text-2 hover:bg-surface-3'
+                  }`}
+                  style={active ? { borderColor: color, background: `${color}22`, color } : undefined}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+                  {BUYER_TYPE_CONFIG[t].label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-[11px] text-text-3">Drives the pin color on the Disposition map. Leave unselected if unknown.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

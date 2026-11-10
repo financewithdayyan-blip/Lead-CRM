@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { BuyerCondition, BuyerPropertyType, CashBuyer, DealType } from '@/types/domain';
+import type { BuyerCondition, BuyerPropertyType, BuyerType, CashBuyer, DealType } from '@/types/domain';
 import { normalizeStateToCode } from '@/data/usGeo';
 import type { PacketSummary } from './useDealPackets';
 
@@ -39,6 +39,7 @@ function fromRow(r: any): CashBuyer {
     marketCounties: r.market_counties ?? [],
     marketCities: r.markets ?? [],
     propertyTypes: (r.property_types ?? []) as BuyerPropertyType[],
+    buyerTypes: (r.buyer_types ?? []) as BuyerType[],
     priceMin: r.price_min != null ? Number(r.price_min) : null,
     priceMax: r.price_max != null ? Number(r.price_max) : null,
     minBeds: r.min_beds != null ? Number(r.min_beds) : null,
@@ -74,6 +75,7 @@ export interface CashBuyerInput {
   marketCounties: string[];
   marketCities: string[];
   propertyTypes: BuyerPropertyType[];
+  buyerTypes: BuyerType[];
   priceMin: number | null;
   priceMax: number | null;
   minBeds: number | null;
@@ -94,6 +96,7 @@ function toDbRow(b: CashBuyerInput) {
     market_counties: b.marketCounties,
     markets: b.marketCities,
     property_types: b.propertyTypes,
+    buyer_types: b.buyerTypes,
     price_min: b.priceMin,
     price_max: b.priceMax,
     min_beds: b.minBeds,
