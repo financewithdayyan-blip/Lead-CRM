@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ClipboardList, History, Phone, PhoneCall } from 'lucide-react';
+import { Check, ClipboardList, Delete, History, Phone, PhoneCall, Search } from 'lucide-react';
 import { useTasks, useToggleTask } from '@/hooks/useTasks';
 import { useLeads } from '@/hooks/useLeads';
 import { useAddActivity } from '@/hooks/useActivities';
@@ -22,6 +22,23 @@ function avatarColorFor(id: string): { bg: string; text: string } {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+const DIALPAD_KEYS = [
+  ['1', ''], ['2', 'ABC'], ['3', 'DEF'],
+  ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'],
+  ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'],
+  ['*', ''], ['0', '+'], ['#', ''],
+] as const;
+
+/** Grouped digit display while typing — not formatPhone (which expects a
+ *  complete number), since this needs to look reasonable at every length
+ *  as digits are still being entered. */
+function formatDialDigits(digits: string): string {
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `+${digits.slice(0, digits.length - 10)} (${digits.slice(-10, -7)}) ${digits.slice(-7, -4)}-${digits.slice(-4)}`;
 }
 
 function formatDueTime(dueTime: string | null): string {
@@ -48,6 +65,8 @@ export function DialerPage() {
   const [view, setView] = useState<'dialer' | 'history'>('dialer');
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [justCalled, setJustCalled] = useState<string | null>(null);
+  const [dialDigits, setDialDigits] = useState('');
+  const [leadSearch, setLeadSearch] = useState('');
 
   const leadsById = useMemo(() => new Map(leads.map((l) => [l.id, l])), [leads]);
 
@@ -61,12 +80,43 @@ export function DialerPage() {
   const activeTask = queue.find((t) => t.id === activeTaskId) ?? queue[0] ?? null;
   const activeLead: Lead | undefined = activeTask?.leadId ? leadsById.get(activeTask.leadId) : undefined;
 
+  // A number typed on the dialpad that happens to match a known lead gets
+  // the same Deal Numbers treatment as a scheduled call — real caller-ID
+  // off real data, not a fabricated match.
+  const dialedE164 = dialDigits.length >= 10 ? toE164(dialDigits) : null;
+  const matchedLead = dialedE164 ? leads.find((l) => toE164(l.phone) === dialedE164) : undefined;
+
+  const leadResults = useMemo(() => {
+    const q = leadSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return leads
+      .filter((l) => `${l.firstName} ${l.lastName} ${l.phone}`.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [leads, leadSearch]);
+
   function handleCall(lead: Lead) {
     addActivity.mutate({ leadId: lead.id, type: 'call', body: 'Call started from Dialer' });
     setJustCalled(lead.id);
     setTimeout(() => setJustCalled((prev) => (prev === lead.id ? null : prev)), 1500);
     const e164 = toE164(lead.phone);
     if (e164) window.location.href = `zoomphonecall://${e164}`;
+  }
+
+  function handleDialpadCall() {
+    const e164 = toE164(dialDigits);
+    if (!e164) return;
+    if (matchedLead) {
+      addActivity.mutate({ leadId: matchedLead.id, type: 'call', body: 'Call started from Dialer' });
+      setJustCalled(matchedLead.id);
+      setTimeout(() => setJustCalled((prev) => (prev === matchedLead.id ? null : prev)), 1500);
+    }
+    window.location.href = `zoomphonecall://${e164}`;
+  }
+
+  function pickLeadForDial(lead: Lead) {
+    const digits = lead.phone.replace(/[^0-9]/g, '');
+    setDialDigits(digits);
+    setLeadSearch('');
   }
 
   function handleMarkDone(taskId: string) {
@@ -143,10 +193,74 @@ export function DialerPage() {
 
           <div className="min-w-0 flex-1">
             {!activeLead ? (
-              <div className="card flex h-full min-h-[400px] flex-col items-center justify-center gap-2 text-center text-text-3">
-                <Phone size={28} />
-                <div className="font-medium text-text-2">Nothing scheduled right now</div>
-                <div className="text-[12.5px]">Calls you schedule as tasks on a lead's profile show up here on the day they're due.</div>
+              <div className="card flex h-full min-h-[400px] flex-col items-center gap-4 py-6 text-center">
+                <div>
+                  <div className="font-medium text-text-2">Nothing scheduled right now</div>
+                  <div className="text-[12.5px] text-text-3">Dial any number manually, or look up a lead below.</div>
+                </div>
+
+                <div className="relative w-full max-w-[220px]">
+                  <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3" />
+                  <input
+                    className="input w-full !pl-7 text-[12.5px]"
+                    placeholder="Find a lead to dial…"
+                    value={leadSearch}
+                    onChange={(e) => setLeadSearch(e.target.value)}
+                  />
+                  {leadResults.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-surface shadow-popover">
+                      {leadResults.map((l) => (
+                        <button
+                          key={l.id}
+                          onClick={() => pickLeadForDial(l)}
+                          className="block w-full truncate px-3 py-1.5 text-left text-[12.5px] hover:bg-surface-3"
+                        >
+                          {l.firstName} {l.lastName} <span className="text-text-3">· {formatPhone(l.phone)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-h-[26px] font-mono text-[22px] font-semibold tracking-wide text-text">
+                  {dialDigits ? formatDialDigits(dialDigits) : <span className="text-text-3">Enter a number</span>}
+                </div>
+                {matchedLead && (
+                  <button className="-mt-2 text-[12.5px] font-medium text-primary hover:underline" onClick={() => navigate(`/leads/${matchedLead.id}`)}>
+                    {matchedLead.firstName} {matchedLead.lastName}
+                  </button>
+                )}
+
+                <div className="grid grid-cols-3 gap-3">
+                  {DIALPAD_KEYS.map(([digit, letters]) => (
+                    <button
+                      key={digit}
+                      onClick={() => setDialDigits((d) => (d.length < 15 ? d + digit : d))}
+                      className="flex h-14 w-14 flex-col items-center justify-center rounded-full bg-surface-3 text-[18px] font-semibold text-text transition-colors hover:bg-surface-2 active:bg-primary-dim"
+                    >
+                      {digit}
+                      {letters && <span className="text-[9px] font-normal tracking-wide text-text-3">{letters}</span>}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleDialpadCall}
+                    disabled={!toE164(dialDigits)}
+                    className="flex h-14 w-14 items-center justify-center rounded-full bg-success text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                  >
+                    <PhoneCall size={20} />
+                  </button>
+                  {dialDigits && (
+                    <button
+                      onClick={() => setDialDigits((d) => d.slice(0, -1))}
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-3 text-text-2 hover:bg-surface-2"
+                    >
+                      <Delete size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="card flex flex-col items-center py-8 text-center">
@@ -192,24 +306,26 @@ export function DialerPage() {
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-text-3">Deal Numbers</div>
                 <span className="text-[10.5px] font-medium text-success">From Underwriting</span>
               </div>
-              {!activeLead ? (
-                <div className="text-[12.5px] text-text-3">Select a scheduled call to see its numbers.</div>
-              ) : (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-border pb-2">
-                    <span className="text-[12.5px] text-text-3">ARV</span>
-                    <span className="font-mono text-[13.5px] font-semibold text-text">{formatCurrency(activeLead.arv)}</span>
+              {(() => {
+                const numbersLead = activeLead ?? matchedLead;
+                if (!numbersLead) return <div className="text-[12.5px] text-text-3">Select a scheduled call, or dial a known lead's number, to see their numbers.</div>;
+                return (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-border pb-2">
+                      <span className="text-[12.5px] text-text-3">ARV</span>
+                      <span className="font-mono text-[13.5px] font-semibold text-text">{formatCurrency(numbersLead.arv)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-border pb-2">
+                      <span className="text-[12.5px] text-text-3">Est. repairs</span>
+                      <span className="font-mono text-[13.5px] font-semibold text-text">{formatCurrency(numbersLead.estRepairs)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="text-[12.5px] text-text-3">Max allowable offer</span>
+                      <span className="font-mono text-[13.5px] font-semibold text-text">{formatCurrency(numbersLead.maxOffer)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between border-b border-border pb-2">
-                    <span className="text-[12.5px] text-text-3">Est. repairs</span>
-                    <span className="font-mono text-[13.5px] font-semibold text-text">{formatCurrency(activeLead.estRepairs)}</span>
-                  </div>
-                  <div className="flex items-center justify-between pb-1">
-                    <span className="text-[12.5px] text-text-3">Max allowable offer</span>
-                    <span className="font-mono text-[13.5px] font-semibold text-text">{formatCurrency(activeLead.maxOffer)}</span>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>
