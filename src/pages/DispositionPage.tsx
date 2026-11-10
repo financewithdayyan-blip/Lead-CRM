@@ -10,6 +10,7 @@ import { useBuyerMarketMap } from '@/hooks/useDisposition';
 import { CashBuyerModal } from '@/components/disposition/CashBuyerModal';
 import { BuyerStateMap } from '@/components/disposition/BuyerStateMap';
 import { SendDealPacketModal } from '@/components/disposition/SendDealPacketModal';
+import { DispositionMessagesTab } from '@/components/disposition/DispositionMessagesTab';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { STATE_FIPS } from '@/lib/placeBoundaries';
 import { US_STATE_OPTIONS } from '@/data/usGeo';
@@ -138,7 +139,7 @@ export function DispositionPage() {
   const navigate = useNavigate();
   const { data: buyers = [] } = useCashBuyers();
   const { stateCounts, pins } = useBuyerMarketMap(buyers);
-  const [tab, setTab] = useState<'map' | 'roster'>('map');
+  const [tab, setTab] = useState<'map' | 'roster' | 'messages'>('map');
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [selectedBuyerIds, setSelectedBuyerIds] = useState<Set<string>>(new Set());
   const [cityFilter, setCityFilter] = useState<string | null>(null);
@@ -226,6 +227,9 @@ export function DispositionPage() {
             <button className={cn('rounded-md px-3 py-1.5 text-[12.5px] font-medium', tab === 'roster' ? 'bg-surface text-text shadow-sm' : 'text-text-3')} onClick={() => setTab('roster')}>
               Roster
             </button>
+            <button className={cn('rounded-md px-3 py-1.5 text-[12.5px] font-medium', tab === 'messages' ? 'bg-surface text-text shadow-sm' : 'text-text-3')} onClick={() => setTab('messages')}>
+              Messages
+            </button>
           </div>
           <span className="rounded-full bg-surface-3 px-2.5 py-1.5 text-[12px] font-medium text-text-2">{stateCounts.length} markets</span>
           <span className="rounded-full bg-surface-3 px-2.5 py-1.5 text-[12px] font-medium text-text-2">{buyers.length} cash buyers</span>
@@ -234,6 +238,8 @@ export function DispositionPage() {
 
       {tab === 'roster' ? (
         <BuyerRoster onAdd={() => setShowAdd(true)} onEdit={setEditTarget} />
+      ) : tab === 'messages' ? (
+        <DispositionMessagesTab />
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row">
           <div className="min-w-0 flex-1">
