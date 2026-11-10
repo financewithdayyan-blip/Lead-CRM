@@ -12,14 +12,17 @@
 //   - /v1/avm/value's own `comparables` array is LISTING data only
 //     (status: Active/Inactive — currently or recently for-sale). No
 //     confirmed closed-sale price appears here at all.
-//   - /v1/properties by lat/lng/radius returns real recorded
-//     lastSaleDate/lastSalePrice per nearby property (county-recorder
-//     data) — genuine sold comps, but sparser and often older than the
-//     listing data, and lastSalePrice is frequently absent even when
-//     lastSaleDate is present.
-// So "Listing Comps" in the UI comes from the first call, "Sold Comps"
-// from the second, filtered here to rows that actually have both a sale
-// date and a sale price — a record with only a date is useless as a comp.
+//   - /v1/properties returns real recorded lastSaleDate/lastSalePrice per
+//     nearby property (county-recorder data) — genuine sold comps. Per
+//     RentCast's own recommendation (developers.rentcast.io/reference),
+//     this call uses `address` + `radius` (not raw lat/lng) plus
+//     `saleDateRange` (days) and the subject's own `propertyType` — an
+//     unfiltered radius-only call (the first version of this function)
+//     pulled in decade-old, often-implausible-price county records (a
+//     real $500 "sale" turned out to be a non-arms-length transfer, not a
+//     comp). Widens the date window progressively only if the tight
+//     recent window comes up thin, rather than defaulting straight to
+//     stale data.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -39,6 +42,23 @@ function json(body: unknown, status = 200) {
 const FETCH_TIMEOUT_MS = 15_000;
 const SOLD_RADIUS_MILES = 1;
 const SOLD_LIMIT = 25;
+// Tried in order until at least MIN_SOLD_RESULTS come back, or the list
+// runs out — 6 months first, widening only as far as actually needed.
+const SALE_DATE_RANGES_DAYS = [180, 365, 730];
+const MIN_SOLD_RESULTS = 5;
+// A recorded "sale" under this is essentially always a non-arms-length
+// transfer (quitclaim, foreclosure buy-back, intra-family transfer for
+// $1/$10/$500) — real county data, but not a usable comp.
+const MIN_PLAUSIBLE_SALE_PRICE = 10_000;
+
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
 
 async function rentcastFetch(path: string, params: Record<string, string>) {
   const url = new URL(`https://api.rentcast.io/v1${path}`);
@@ -105,29 +125,43 @@ Deno.serve(async (req) => {
         status: c.status ?? null,
       }));
 
+    const subjectPropertyType = avm.subjectProperty?.propertyType as string | undefined;
+
     let soldComps: NormalizedComp[] = [];
     try {
-      const nearby = (await rentcastFetch('/properties', {
-        latitude: String(subjectLat),
-        longitude: String(subjectLng),
-        radius: String(SOLD_RADIUS_MILES),
-        limit: String(SOLD_LIMIT),
-      })) as any[];
-      soldComps = nearby
-        .filter((p) => p.lastSalePrice != null && p.lastSaleDate != null && p.latitude != null && p.longitude != null)
-        .map((p) => ({
-          id: p.id,
-          address: p.formattedAddress ?? null,
-          price: p.lastSalePrice,
-          sqft: p.squareFootage ?? null,
-          beds: p.bedrooms ?? null,
-          baths: p.bathrooms ?? null,
-          lat: p.latitude,
-          lng: p.longitude,
-          distanceMiles: null, // /properties doesn't return distance — computed client-side if needed
-          date: p.lastSaleDate,
-          status: 'Sold',
-        }));
+      for (const days of SALE_DATE_RANGES_DAYS) {
+        const nearby = (await rentcastFetch('/properties', {
+          address,
+          radius: String(SOLD_RADIUS_MILES),
+          saleDateRange: String(days),
+          limit: String(SOLD_LIMIT),
+          ...(subjectPropertyType ? { propertyType: subjectPropertyType } : {}),
+        })) as any[];
+        soldComps = nearby
+          .filter(
+            (p) =>
+              p.lastSalePrice != null &&
+              p.lastSalePrice >= MIN_PLAUSIBLE_SALE_PRICE &&
+              p.lastSaleDate != null &&
+              p.latitude != null &&
+              p.longitude != null,
+          )
+          .map((p) => ({
+            id: p.id,
+            address: p.formattedAddress ?? null,
+            price: p.lastSalePrice,
+            sqft: p.squareFootage ?? null,
+            beds: p.bedrooms ?? null,
+            baths: p.bathrooms ?? null,
+            lat: p.latitude,
+            lng: p.longitude,
+            distanceMiles: Math.round(haversineMiles(subjectLat, subjectLng, p.latitude, p.longitude) * 100) / 100,
+            date: p.lastSaleDate,
+            status: 'Sold',
+          }))
+          .sort((a, b) => (a.distanceMiles ?? 0) - (b.distanceMiles ?? 0));
+        if (soldComps.length >= MIN_SOLD_RESULTS) break;
+      }
     } catch (e) {
       // Sold comps are a "nice to have" second call — a failure here
       // shouldn't take down the listing comps that already succeeded.
