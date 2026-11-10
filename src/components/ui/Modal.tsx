@@ -7,10 +7,10 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  width?: 'sm' | 'md' | 'lg' | 'xl';
+  width?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
-const widthClass = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
+const widthClass = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl', full: 'max-w-[1600px]' };
 
 export function Modal({ open, onClose, title, children, width = 'md' }: ModalProps) {
   useEffect(() => {

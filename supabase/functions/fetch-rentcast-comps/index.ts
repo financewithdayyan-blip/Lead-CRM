@@ -24,9 +24,10 @@
 //     earlier, unfiltered radius-only version of this call pulled in
 //     decade-old, often-implausible-price county records (a real $500
 //     "sale" turned out to be a non-arms-length transfer, not a comp).
-//     Fixed to the trailing 365 days and a high limit — confirmed this
-//     radius/window only ever has ~180 real records, nowhere near the
-//     500 cap, so nothing is being truncated here.
+//     radius and saleDateRange are now caller-configurable (the frontend
+//     exposes a radius selector and a timeline picker) instead of fixed,
+//     since a 1mi/365-day default was found to miss real nearby comps the
+//     user could see on Zillow.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -44,11 +45,7 @@ function json(body: unknown, status = 200) {
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
-const SOLD_RADIUS_MILES = 1;
 const SOLD_LIMIT = 500;
-// Trailing 12 months, not a shorter default — "show everything sold this
-// year" was the explicit ask, not a thin recent-only slice.
-const SALE_DATE_RANGE_DAYS = 365;
 // A recorded "sale" under this is essentially always a non-arms-length
 // transfer (quitclaim, foreclosure buy-back, intra-family transfer for
 // $1/$10/$500) — real county data, but not a usable comp.
@@ -81,6 +78,8 @@ interface NormalizedComp {
   sqft: number | null;
   beds: number | null;
   baths: number | null;
+  yearBuilt: number | null;
+  lotSize: number | null;
   lat: number;
   lng: number;
   distanceMiles: number | null;
@@ -102,8 +101,12 @@ Deno.serve(async (req) => {
     const { data: profile } = await admin.from('profiles').select('role').eq('id', userData.user.id).single();
     if (profile?.role !== 'admin') return json({ error: 'Admins only.' }, 403);
 
-    const { address } = await req.json();
+    const body = await req.json();
+    const address = body?.address as string | undefined;
     if (!address || typeof address !== 'string') return json({ error: 'Missing address' }, 400);
+
+    const radiusMiles = Number(body?.radiusMiles) > 0 ? Number(body.radiusMiles) : 1;
+    const saleDateRangeDays = Number(body?.saleDateRangeDays) > 0 ? Math.round(Number(body.saleDateRangeDays)) : 365;
 
     const avm = await rentcastFetch('/avm/value', { address, compCount: '25' });
     const subjectLat = avm.latitude as number | undefined;
@@ -121,6 +124,8 @@ Deno.serve(async (req) => {
         sqft: c.squareFootage ?? null,
         beds: c.bedrooms ?? null,
         baths: c.bathrooms ?? null,
+        yearBuilt: c.yearBuilt ?? null,
+        lotSize: c.lotSize ?? null,
         lat: c.latitude,
         lng: c.longitude,
         distanceMiles: typeof c.distance === 'number' ? Math.round(c.distance * 100) / 100 : null,
@@ -134,8 +139,8 @@ Deno.serve(async (req) => {
     try {
       const nearby = (await rentcastFetch('/properties', {
         address,
-        radius: String(SOLD_RADIUS_MILES),
-        saleDateRange: String(SALE_DATE_RANGE_DAYS),
+        radius: String(radiusMiles),
+        saleDateRange: String(saleDateRangeDays),
         limit: String(SOLD_LIMIT),
         ...(subjectPropertyType ? { propertyType: subjectPropertyType } : {}),
       })) as any[];
@@ -155,6 +160,8 @@ Deno.serve(async (req) => {
           sqft: p.squareFootage ?? null,
           beds: p.bedrooms ?? null,
           baths: p.bathrooms ?? null,
+          yearBuilt: p.yearBuilt ?? null,
+          lotSize: p.lotSize ?? null,
           lat: p.latitude,
           lng: p.longitude,
           distanceMiles: Math.round(haversineMiles(subjectLat, subjectLng, p.latitude, p.longitude) * 100) / 100,
@@ -180,6 +187,8 @@ Deno.serve(async (req) => {
           sqft: c.squareFootage ?? null,
           beds: c.bedrooms ?? null,
           baths: c.bathrooms ?? null,
+          yearBuilt: c.yearBuilt ?? null,
+          lotSize: c.lotSize ?? null,
           lat: c.latitude,
           lng: c.longitude,
           distanceMiles: typeof c.distance === 'number' ? Math.round(c.distance * 100) / 100 : null,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -70,12 +70,16 @@ export function CompPickerMap({
   selectedIds,
   activeId,
   onSelect,
+  overlay,
 }: {
   pins: PickerPin[];
   subject: { lat: number; lng: number } | null;
   selectedIds: Set<string>;
   activeId: string | null;
   onSelect: (id: string) => void;
+  /** Rendered absolutely-positioned on top of the map (Zillow-style detail
+   *  card), instead of pushing the map down. */
+  overlay?: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -134,7 +138,10 @@ export function CompPickerMap({
 
   return (
     <div>
-      <div ref={containerRef} className="isolate h-[560px] w-full rounded-xl border border-border" />
+      <div className="relative isolate">
+        <div ref={containerRef} className="h-[72vh] w-full rounded-xl border border-border" />
+        {overlay && <div className="absolute right-3 top-3 z-[1000] w-[320px] max-w-[calc(100%-24px)]">{overlay}</div>}
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-4 text-[12px] text-text-2">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: SUBJECT_COLOR }} />
