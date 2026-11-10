@@ -299,31 +299,6 @@ export function CompPickerModal({ lead, onClose, onAddComps }: { lead: Lead; onC
               overlay={activeComp && <DetailCard comp={activeComp} isAdded={selected.has(activeComp.id)} onToggle={() => toggle(activeComp.id)} />}
             />
 
-            <div className="max-h-[160px] divide-y divide-border overflow-y-auto rounded-md border border-border-2">
-              {filteredComps.length === 0 && <div className="px-3 py-6 text-center text-[12.5px] text-text-3">No comps match these filters.</div>}
-              {filteredComps.map((c) => {
-                const isAdded = selected.has(c.id);
-                const isActive = c.id === activeId;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setActiveId(c.id)}
-                    className={cn('flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors', isActive ? 'bg-primary-dim' : 'hover:bg-surface-3')}
-                  >
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: KIND_COLOR[c.kind] }} />
-                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-text">{c.address ?? 'Property'}</span>
-                    <span className="shrink-0 text-[12.5px] font-semibold text-text-2">
-                      {formatCurrency(c.price)}
-                      {c.kind === 'rental' ? '/mo' : ''}
-                    </span>
-                    <span className="hidden shrink-0 text-[11.5px] text-text-3 md:inline">{c.distanceMiles != null ? `${c.distanceMiles} mi` : ''}</span>
-                    {isAdded && <Check size={13} className="shrink-0 text-success" />}
-                  </button>
-                );
-              })}
-            </div>
-
             <div className="flex items-center justify-between border-t border-border pt-3">
               <p className="text-[11.5px] text-text-3">
                 Listed = currently/recently for-sale. Sold = real closed sales in the selected window. Rental = active rental listings, reference only.
