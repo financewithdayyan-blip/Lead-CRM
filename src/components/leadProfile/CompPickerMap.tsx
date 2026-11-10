@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
+export type PickerKind = 'sold' | 'listing' | 'rental';
+
 export interface PickerPin {
   id: string;
-  kind: 'sold' | 'listing';
+  kind: PickerKind;
   address: string | null;
   price: number | null;
   sqft: number | null;
@@ -14,22 +16,35 @@ export interface PickerPin {
   lng: number;
 }
 
-const COLOR = { listing: '#10b981', sold: '#f59e0b' } as const;
+// Sold = yellow, Listed (on market) = red, Rental = purple — per explicit
+// color spec, not the earlier green/amber scheme.
+export const KIND_COLOR: Record<PickerKind, string> = { sold: '#eab308', listing: '#ef4444', rental: '#a855f7' };
 const SUBJECT_COLOR = '#6E7BFF';
 
-const money = (n: number | null) =>
-  n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+function shortPrice(n: number | null): string {
+  if (n == null) return '—';
+  if (n < 10_000) return `$${(n / 1000).toFixed(1)}K`;
+  return `$${Math.round(n / 1000)}K`;
+}
 
-function pinIcon(color: string, selected: boolean) {
+/** A rounded price bubble rather than a plain pin — the price is the thing
+ *  worth seeing at a glance across a map full of comps, not just a dot's
+ *  color. `active` (its detail card is currently open) gets a bright ring;
+ *  `added` (already picked) gets a small check badge. */
+function priceIcon(color: string, price: number | null, active: boolean, added: boolean) {
+  const label = shortPrice(price);
   return L.divIcon({
     className: '',
-    html: `<span style="
-      display:block;width:${selected ? 20 : 16}px;height:${selected ? 20 : 16}px;border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg);background:${color};
-      border:${selected ? 3 : 2}px solid #fff;box-shadow:0 1px ${selected ? 6 : 4}px rgba(0,0,0,.5);"></span>`,
-    iconSize: [selected ? 20 : 16, selected ? 20 : 16],
-    iconAnchor: [selected ? 10 : 8, selected ? 20 : 16],
-    popupAnchor: [0, -16],
+    html: `<div style="position:relative;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;
+        padding:3px 8px;border-radius:999px;background:${color};color:#fff;font:700 11px system-ui;
+        border:2px solid ${active ? '#fff' : 'rgba(255,255,255,.85)'};
+        box-shadow:${active ? `0 0 0 3px ${color}99, 0 2px 6px rgba(0,0,0,.5)` : '0 1px 4px rgba(0,0,0,.4)'};
+        transform:${active ? 'scale(1.15)' : 'scale(1)'};">
+        ${label}
+        ${added ? `<span style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:50%;background:#10b981;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1;color:#fff;">✓</span>` : ''}
+      </div>`,
+    iconSize: [54, 24],
+    iconAnchor: [27, 24],
   });
 }
 
@@ -46,24 +61,26 @@ function subjectIcon() {
 
 /** AI Comping's own map, forked from PacketMap — unlike that one (which
  *  deliberately never plots the subject, since packets are public-facing),
- *  this is admin-only internal tooling, so the subject property IS shown,
- *  and every comp pin is clickable to toggle it in/out of the current
- *  selection instead of just being informational. */
+ *  this is admin-only internal tooling, so the subject property IS shown.
+ *  Clicking a pin opens that comp's detail card (CompPickerModal owns the
+ *  actual add/remove action) rather than toggling selection directly here. */
 export function CompPickerMap({
   pins,
   subject,
   selectedIds,
-  onToggle,
+  activeId,
+  onSelect,
 }: {
   pins: PickerPin[];
   subject: { lat: number; lng: number } | null;
   selectedIds: Set<string>;
-  onToggle: (id: string) => void;
+  activeId: string | null;
+  onSelect: (id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const onToggleRef = useRef(onToggle);
-  onToggleRef.current = onToggle;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   useEffect(() => {
     if (!containerRef.current || (!pins.length && !subject)) return;
@@ -81,38 +98,16 @@ export function CompPickerMap({
     if (subject) {
       L.marker([subject.lat, subject.lng], { icon: subjectIcon(), zIndexOffset: 1000 })
         .addTo(map)
-        .bindPopup('<div style="font:600 13px system-ui">Subject property</div>');
+        .bindTooltip('Subject property', { direction: 'top' });
       bounds.extend([subject.lat, subject.lng]);
     }
 
     for (const p of pins) {
-      const selected = selectedIds.has(p.id);
-      const marker = L.marker([p.lat, p.lng], { icon: pinIcon(COLOR[p.kind], selected) }).addTo(map);
-
-      const spec = [
-        p.beds != null ? `${p.beds} bd` : null,
-        p.baths != null ? `${p.baths} ba` : null,
-        p.sqft != null ? `${p.sqft.toLocaleString()} sq ft` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-
-      marker.bindPopup(
-        `<div style="font:500 13px system-ui;min-width:150px">
-           <div style="font-weight:600;margin-bottom:2px">${p.address ?? 'Property'}</div>
-           <div style="color:${COLOR[p.kind]};font-weight:600;font-size:12px">
-             ${p.kind === 'listing' ? 'Listed' : 'Sold'} · ${money(p.price)}
-           </div>
-           ${spec ? `<div style="color:#64748b;font-size:12px">${spec}</div>` : ''}
-           <button id="toggle-${p.id}" style="margin-top:6px;width:100%;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${selected ? '#ef4444' : COLOR[p.kind]};background:${selected ? '#ef444422' : `${COLOR[p.kind]}22`};color:${selected ? '#ef4444' : COLOR[p.kind]}">
-             ${selected ? 'Remove from selection' : 'Add to selection'}
-           </button>
-         </div>`,
-      );
-      marker.on('popupopen', () => {
-        document.getElementById(`toggle-${p.id}`)?.addEventListener('click', () => onToggleRef.current(p.id));
-      });
-      marker.on('click', () => onToggleRef.current(p.id));
+      const marker = L.marker([p.lat, p.lng], {
+        icon: priceIcon(KIND_COLOR[p.kind], p.price, p.id === activeId, selectedIds.has(p.id)),
+        zIndexOffset: p.id === activeId ? 900 : 0,
+      }).addTo(map);
+      marker.on('click', () => onSelectRef.current(p.id));
       bounds.extend([p.lat, p.lng]);
     }
 
@@ -128,8 +123,9 @@ export function CompPickerMap({
     // on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    JSON.stringify(pins.map((p) => [p.id, p.lat, p.lng])),
+    JSON.stringify(pins.map((p) => [p.id, p.lat, p.lng, p.price, p.kind])),
     JSON.stringify([...selectedIds]),
+    activeId,
     subject?.lat,
     subject?.lng,
   ]);
@@ -145,14 +141,18 @@ export function CompPickerMap({
           Subject property
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.listing }} />
-          Listing
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: KIND_COLOR.listing }} />
+          Listed
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR.sold }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: KIND_COLOR.sold }} />
           Sold
         </span>
-        <span className="text-text-3">Click a pin to add/remove it from your selection</span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: KIND_COLOR.rental }} />
+          Rental
+        </span>
+        <span className="text-text-3">Click a pin for details</span>
       </div>
     </div>
   );

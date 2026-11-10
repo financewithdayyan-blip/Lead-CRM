@@ -19,6 +19,7 @@ export interface RentcastCompsResult {
   subject: { lat: number; lng: number };
   listingComps: RentcastComp[];
   soldComps: RentcastComp[];
+  rentalComps: RentcastComp[];
 }
 
 /** RentCast bills per call, so this is a plain mutation triggered once per
